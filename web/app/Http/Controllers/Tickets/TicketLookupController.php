@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Tickets;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Ticket;
+use App\Models\Sales\Customer;
+use App\Models\Tickets\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 

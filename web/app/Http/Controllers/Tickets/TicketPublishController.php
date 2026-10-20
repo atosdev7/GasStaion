@@ -3,18 +3,18 @@
 namespace App\Http\Controllers\Tickets;
 
 use App\Http\Controllers\Controller;
-use App\Models\Ticket;
-use App\Models\TicketPublish;
-use App\Support\Audit;
-use App\Support\Barcode;
-use App\TicketStock;
+use App\Models\Tickets\Ticket;
+use App\Models\Tickets\TicketPublish;
+use App\Support\Admin\Audit;
+use App\Support\Tickets\Barcode;
+use App\Support\Tickets\TicketStock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 // Turn blank ticket stock (see TicketInboundController) into numbered tickets. Sign and code are
-// both fixed, non-admin-editable constants (see App\Support\Barcode) — the admin only picks the
+// both fixed, non-admin-editable constants (see App\Support\Tickets\Barcode) — the admin only picks the
 // fuel type + spec and enters the serial range.
 //
 // A batch can be looked at (its tickets), changed (the serial range and the date) or deleted while it is untouched: every ticket of it is still blank

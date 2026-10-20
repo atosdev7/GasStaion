@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Debts;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Support\Audit;
+use App\Models\Sales\Customer;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -131,7 +131,7 @@ class LoanController extends Controller
             ])->save();
 
             // Recomputed fresh from the ledger, not incremented — same reasoning as every other
-            // settled/paid total in this app (see App\Models\Debt).
+            // settled/paid total in this app (see App\Models\Debts\Debt).
             $loan->settled_amount_kg = TicketLoanSettlement::where('loan_id', $loan->id)->sum('amount_kg');
             $loan->save();
 

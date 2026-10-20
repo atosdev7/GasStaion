@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Device;
-use App\Models\SyncError;
-use App\Models\User;
-use App\Support\Audit;
+use App\Models\Admin\Device;
+use App\Models\Admin\SyncError;
+use App\Models\Admin\User;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 
 // Sync Status: when each Smart210 last synced, and the rows the server rejected or found in conflict.

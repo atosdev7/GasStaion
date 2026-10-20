@@ -10,7 +10,7 @@
             $values[] = $line->capacity * $lowPercent / 100;
         }
     }
-    $max = App\Support\DashboardData::niceMax(max($values));
+    $max = App\Support\Dashboard\DashboardData::niceMax(max($values));
     $y = function ($kg) use ($top, $plotH, $max) { return round($top + $plotH - max(0, min($kg, $max)) / $max * $plotH, 1); };
     $step = count($days) > 1 ? $plotW / (count($days) - 1) : 0;
     $colors = ['#007bff', '#fd7e14', '#28a745', '#6f42c1', '#dc3545', '#20c997', '#6c757d', '#e83e8c'];

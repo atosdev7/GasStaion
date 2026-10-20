@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
-use App\Support\DeviceHash;
+use App\Models\Admin\User;
+use App\Support\Admin\DeviceHash;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

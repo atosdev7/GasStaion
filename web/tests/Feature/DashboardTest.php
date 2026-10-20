@@ -2,21 +2,21 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Device;
-use App\Models\FuelInbound;
-use App\Models\InitialTankBalance;
-use App\Models\Nozzle;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\TicketInbound;
-use App\Models\TicketPublish;
-use App\Models\User;
-use App\Support\DashboardData;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
+use App\Models\Admin\User;
+use App\Support\Dashboard\DashboardData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -134,7 +134,7 @@ class DashboardTest extends TestCase
         FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 500, 'cost' => 1, 'inbound_date' => $d3, 'user_id' => 1]);
         $this->supplement($nozzle, 40, $d1);   // current = 100 + 500 - 40 = 560
 
-        $trend = DashboardData::tankTrend(\App\Support\TankLevels::all());
+        $trend = DashboardData::tankTrend(\App\Support\Dashboard\TankLevels::all());
         $levels = array_combine($trend->days, $trend->lines[0]->levels);
         $this->assertEquals(560, $levels[today()->toDateString()]);
         $this->assertEquals(600, $levels[today()->subDays(2)->toDateString()]);   // before the 40 kg went out

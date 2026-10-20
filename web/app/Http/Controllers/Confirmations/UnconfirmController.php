@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Confirmations;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Support\Audit;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;

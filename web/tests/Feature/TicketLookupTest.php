@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Device;
-use App\Models\Nozzle;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
+use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -145,8 +145,8 @@ class TicketLookupTest extends TestCase
         $this->as('manager');
         $this->post('/ticket-inbound', ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 10, 'inbound_date' => '2026-09-01']);
         $this->post('/ticket-publish', ['stock_item' => 'D:0', 'start_serial' => 1, 'end_serial' => 5, 'date' => '2026-09-18']);
-        $batch = \App\Models\TicketPublish::first();
-        $barcode = \App\Support\Barcode::make('D', 0, 3);
+        $batch = \App\Models\Tickets\TicketPublish::first();
+        $barcode = \App\Support\Tickets\Barcode::make('D', 0, 3);
 
         // the batch date, the batch number, its range, and a link to the batch for those who may see the stock
         $this->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()
@@ -162,7 +162,7 @@ class TicketLookupTest extends TestCase
         $this->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()->assertSee('2026-09-20')->assertDontSee('2026-09-18');
 
         // a ticket without a batch row (an old one) shows its own publish date
-        \App\Models\Ticket::forceCreate([
+        \App\Models\Tickets\Ticket::forceCreate([
             'barcode' => '0000006000000099', 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => 99, 'publish_id' => 9999,
             'publish_date' => '2026-08-05 10:00:00', 'status' => config('ticket_statuses.publish'),
         ]);
@@ -181,10 +181,10 @@ class TicketLookupTest extends TestCase
         $this->post('/ticket-inbound', ['fuel_type' => 'D', 'spec' => 1, 'quantity' => 50, 'inbound_date' => '2026-09-01']);
         $this->post('/ticket-publish', ['stock_item' => 'D:0', 'start_serial' => 1, 'end_serial' => 60, 'date' => '2026-09-10']);   // batch 1: 60 tickets
         $this->post('/ticket-publish', ['stock_item' => 'D:1', 'start_serial' => 1, 'end_serial' => 10, 'date' => '2026-09-20']);   // batch 2: 10 tickets
-        $this->batchIds = \App\Models\TicketPublish::orderBy('id')->pluck('id')->all();
-        \DB::table('tickets')->where('barcode', \App\Support\Barcode::make('D', 0, 3))->update(['status' => config('ticket_statuses.sale'), 'sale_date' => '2026-09-11 09:00:00']);
-        \DB::table('tickets')->where('barcode', \App\Support\Barcode::make('D', 0, 4))->update(['status' => config('ticket_statuses.supply'), 'supply_date' => '2026-09-12 10:00:00']);
-        \DB::table('tickets')->where('barcode', \App\Support\Barcode::make('D', 1, 2))->update(['status' => config('ticket_statuses.restrict')]);
+        $this->batchIds = \App\Models\Tickets\TicketPublish::orderBy('id')->pluck('id')->all();
+        \DB::table('tickets')->where('barcode', \App\Support\Tickets\Barcode::make('D', 0, 3))->update(['status' => config('ticket_statuses.sale'), 'sale_date' => '2026-09-11 09:00:00']);
+        \DB::table('tickets')->where('barcode', \App\Support\Tickets\Barcode::make('D', 0, 4))->update(['status' => config('ticket_statuses.supply'), 'supply_date' => '2026-09-12 10:00:00']);
+        \DB::table('tickets')->where('barcode', \App\Support\Tickets\Barcode::make('D', 1, 2))->update(['status' => config('ticket_statuses.restrict')]);
     }
 
     public function testThePageHasATableOfTicketsWithPagesAndCounts()
@@ -196,7 +196,7 @@ class TicketLookupTest extends TestCase
         $this->assertSame(70, $tickets->total());
         $this->assertCount(50, $tickets);              // one page
         $this->assertSame(2, $tickets->lastPage());
-        $page->assertSee(\App\Support\Barcode::make('D', 1, 10)); // newest batch first
+        $page->assertSee(\App\Support\Tickets\Barcode::make('D', 1, 10)); // newest batch first
         $page->assertSee('Published: 67')->assertSee('Sold: 1')->assertSee('Supplied: 1')->assertSee('Restricted: 1'); // counts per state
 
         $second = $this->get('/tickets/lookup?page=2')->assertOk()->viewData('tickets');
@@ -227,7 +227,7 @@ class TicketLookupTest extends TestCase
         $this->assertSame(1, $by('supplied=2026-09-12')->total());                    // supplied on that day
         $this->assertSame(1, $by('published=2026-09-10&supplied=2026-09-12')->total());
         $this->assertSame(0, $by('published=2026-09-20&supplied=2026-09-12')->total());
-        $this->assertSame(1, $by('q=' . \App\Support\Barcode::make('D', 1, 5))->total());   // part of a barcode (here the whole of it)
+        $this->assertSame(1, $by('q=' . \App\Support\Tickets\Barcode::make('D', 1, 5))->total());   // part of a barcode (here the whole of it)
         $this->assertSame(1, $by('status=' . config('ticket_statuses.supply') . '&batch=' . $this->batchIds[0])->total()); // together
 
         // the counts per state follow the other filters, not the state filter
@@ -238,7 +238,7 @@ class TicketLookupTest extends TestCase
         // the filters stay on the next page and in the links to a ticket
         $page = $this->get('/tickets/lookup?fuel_type=D&batch=' . $this->batchIds[0])->assertOk();
         $this->assertStringContainsString('batch=' . $this->batchIds[0], $page->viewData('tickets')->nextPageUrl());
-        $page->assertSee('barcode=' . \App\Support\Barcode::make('D', 0, 60), false);
+        $page->assertSee('barcode=' . \App\Support\Tickets\Barcode::make('D', 0, 60), false);
     }
 
     public function testTheDateColumnsShowTheDayOnly()
@@ -268,20 +268,20 @@ class TicketLookupTest extends TestCase
 
         $page = $this->as('cashier')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
         $this->assertSame(10, $page->viewData('tickets')->total());
-        $page->assertSee(\App\Support\Barcode::make('D', 1, 1))->assertDontSee(route('ticket-publish.show', $this->batchIds[1])); // no link to the batch page
+        $page->assertSee(\App\Support\Tickets\Barcode::make('D', 1, 1))->assertDontSee(route('ticket-publish.show', $this->batchIds[1])); // no link to the batch page
     }
 
     public function testTheTableHasAnActionsColumnWithDetailsAndRestrictOrLift()
     {
         $this->publishSome();
-        $restricted = \App\Support\Barcode::make('D', 1, 2);
-        $blank = \App\Support\Barcode::make('D', 0, 5);
+        $restricted = \App\Support\Tickets\Barcode::make('D', 1, 2);
+        $blank = \App\Support\Tickets\Barcode::make('D', 0, 5);
 
         $page = $this->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
         $page->assertSee(__('cards.actions'))->assertSee(__('tickets.ticket_details'));
-        $page->assertSee(route('tickets.restrict', \App\Support\Barcode::make('D', 1, 3)))       // a blank ticket can be restricted
+        $page->assertSee(route('tickets.restrict', \App\Support\Tickets\Barcode::make('D', 1, 3)))       // a blank ticket can be restricted
             ->assertSee(route('tickets.lift-restriction', $restricted))                        // a restricted one can be lifted
-            ->assertDontSee(route('tickets.lift-restriction', \App\Support\Barcode::make('D', 1, 3)));
+            ->assertDontSee(route('tickets.lift-restriction', \App\Support\Tickets\Barcode::make('D', 1, 3)));
 
         // restricting from the popup comes back to the same filtered list, with the message
         $filters = 'batch=' . $this->batchIds[0] . '&fuel_type=D';
@@ -303,19 +303,19 @@ class TicketLookupTest extends TestCase
         $page = $this->as('cashier')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
 
         $page->assertSee(__('tickets.ticket_details'))
-            ->assertDontSee(route('tickets.restrict', \App\Support\Barcode::make('D', 1, 3)))
-            ->assertDontSee(route('tickets.lift-restriction', \App\Support\Barcode::make('D', 1, 2)));
+            ->assertDontSee(route('tickets.restrict', \App\Support\Tickets\Barcode::make('D', 1, 3)))
+            ->assertDontSee(route('tickets.lift-restriction', \App\Support\Tickets\Barcode::make('D', 1, 2)));
     }
 
     public function testThePageHasNoBarcodeSearchFormAndDetailsOpenInAPopup()
     {
         $this->publishSome();
-        $barcode = \App\Support\Barcode::make('D', 0, 3);
+        $barcode = \App\Support\Tickets\Barcode::make('D', 0, 3);
 
         $page = $this->get('/tickets/lookup?batch=' . $this->batchIds[0])->assertOk();
         $page->assertDontSee('id="f_barcode"', false);                       // the separate barcode search form is gone
         $page->assertSee('id="ticket-modal"', false);                        // the popup
-        $page->assertSee('class="btn btn-sm btn-outline-secondary ticket-detail"', false)->assertSee('data-barcode="' . \App\Support\Barcode::make('D', 0, 60) . '"', false); // the newest ticket is on the first page
+        $page->assertSee('class="btn btn-sm btn-outline-secondary ticket-detail"', false)->assertSee('data-barcode="' . \App\Support\Tickets\Barcode::make('D', 0, 60) . '"', false); // the newest ticket is on the first page
 
         // the popup asks for the detail alone (no layout), with the forms that come back to the page it was opened from
         $detail = $this->get('/tickets/lookup?modal=1&barcode=' . $barcode . '&back=' . urlencode('batch=1&fuel_type=D'))->assertOk();

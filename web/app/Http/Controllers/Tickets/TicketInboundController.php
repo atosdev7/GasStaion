@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Tickets;
 
 use App\Http\Controllers\Controller;
-use App\Models\TicketInbound;
-use App\Support\Audit;
-use App\TicketStock;
+use App\Models\Tickets\TicketInbound;
+use App\Support\Admin\Audit;
+use App\Support\Tickets\TicketStock;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -36,7 +36,6 @@ class TicketInboundController extends Controller
             'spec' => ['required', Rule::in(array_keys(config('ticket_specs')))],
             'quantity' => 'required|integer|min:1|max:10000000',
             'inbound_date' => 'required|date',
-            'from_name' => 'nullable|string|max:100',
             'note' => 'nullable|string|max:255',
         ]);
 
@@ -57,7 +56,7 @@ class TicketInboundController extends Controller
         ]);
     }
 
-    // Changes the quantity, the date, where it came from and the note of a record. The fuel type and the spec stay: the published batches are numbered for them.
+    // Changes the quantity, the date and the note of a record. The fuel type and the spec stay: the published batches are numbered for them.
     // The quantity may not go so low that fewer blank tickets were received than were published already.
     public function update(Request $request, $id)
     {
@@ -65,7 +64,6 @@ class TicketInboundController extends Controller
         $data = $request->validate([
             'quantity' => 'required|integer|min:1|max:10000000',
             'inbound_date' => 'required|date',
-            'from_name' => 'nullable|string|max:100',
             'note' => 'nullable|string|max:255',
         ]);
 

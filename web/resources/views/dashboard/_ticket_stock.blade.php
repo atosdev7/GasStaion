@@ -2,7 +2,7 @@
 @php
     $w = 520; $h = 280; $left = 50; $right = 10; $top = 18; $bottom = 58;
     $plotW = $w - $left - $right; $plotH = $h - $top - $bottom;
-    $max = App\Support\DashboardData::niceMax(collect($ticketStock)->map(function ($s) { return max($s->blank, $s->ready); })->max() ?: 0);
+    $max = App\Support\Dashboard\DashboardData::niceMax(collect($ticketStock)->map(function ($s) { return max($s->blank, $s->ready); })->max() ?: 0);
     $y = function ($n) use ($top, $plotH, $max) { return round($top + $plotH - max(0, min($n, $max)) / $max * $plotH, 1); };
     $slot = $plotW / max(1, count($ticketStock));
     $barW = min(22, $slot * 0.34);

@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Supplements;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Reports\ReportController;
-use App\Models\FuelType;
-use App\Models\Nozzle;
-use App\Models\Remainder;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Support\Audit;
-use App\Support\RemainderMaker;
-use App\Support\SerialCounter;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Nozzle;
+use App\Models\Supplements\Remainder;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Support\Admin\Audit;
+use App\Support\Supplements\RemainderMaker;
+use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +70,7 @@ class SupplementController extends Controller
         return view($request->query('modal') ? 'supplement._detail' : 'supplement.show', [
             'supplement' => $supplement,
             'nozzle' => isset($labels[$supplement->nozzle_id]) ? $labels[$supplement->nozzle_id] : $supplement->nozzle_id,
-            'card' => $supplement->card_id ? optional(\App\Models\Card::withTrashed()->find($supplement->card_id))->label : null,   // a supply made with a card
+            'card' => $supplement->card_id ? optional(\App\Models\Cards\Card::withTrashed()->find($supplement->card_id))->label : null,   // a supply made with a card
             'fuels' => config('fuel_types'),
             'ticketCount' => Ticket::where('supplement_id', $supplement->id)->count(),
             'tickets' => Ticket::where('supplement_id', $supplement->id)->orderBy('barcode')->limit(200)->get(),

@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Support\Api;
-use App\Support\BackupRun;
+use App\Support\Sync\Api;
+use App\Support\Admin\BackupRun;
 use Closure;
 
 // While a backup exports and clears, sync waits: the Smart210 keeps its data and asks again shortly.

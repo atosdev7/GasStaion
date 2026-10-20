@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
-use App\Models\Card;
-use App\Models\Sale;
-use App\Models\User;
-use App\Support\Audit;
-use App\Support\CardSales;
+use App\Models\Cards\Card;
+use App\Models\Sales\Sale;
+use App\Models\Admin\User;
+use App\Support\Admin\Audit;
+use App\Support\Sales\CardSales;
 use Illuminate\Http\Request;
 
 // Card Sales (Sales Management): the sales of type card, that is the top-ups of the cards, in the layout of the other sales lists. A card sale is

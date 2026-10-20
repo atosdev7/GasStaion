@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Device;
-use App\Models\FuelInbound;
-use App\Models\FuelType;
-use App\Models\Nozzle;
-use App\Models\Tank;
-use App\Models\TicketPublish;
-use App\Models\TicketInbound;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Nozzle;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\TicketPublish;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

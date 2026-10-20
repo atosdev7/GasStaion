@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Setting;
-use App\Models\Ticket;
-use App\Support\Barcode;
-use App\Support\SerialCounter;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Setting;
+use App\Models\Tickets\Ticket;
+use App\Support\Tickets\Barcode;
+use App\Support\Tickets\SerialCounter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

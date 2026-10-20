@@ -28,11 +28,6 @@
                     @error('inbound_date') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
                 <div class="form-group">
-                    <label for="f_from_name">{{ __('tickets.from_name') }}</label>
-                    <input id="f_from_name" name="from_name" type="text" maxlength="100" value="{{ old('from_name', $inbound->from_name) }}" class="form-control @error('from_name') is-invalid @enderror">
-                    @error('from_name') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                </div>
-                <div class="form-group">
                     <label for="f_note">{{ __('tickets.note') }}</label>
                     <input id="f_note" name="note" type="text" value="{{ old('note', $inbound->note) }}" class="form-control @error('note') is-invalid @enderror">
                     @error('note') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror

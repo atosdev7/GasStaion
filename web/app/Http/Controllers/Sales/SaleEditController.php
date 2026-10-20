@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
-use App\Models\Card;
-use App\Models\Customer;
-use App\Models\Sale;
-use App\Models\SaleItem;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
-use App\Support\Audit;
+use App\Models\Cards\Card;
+use App\Models\Sales\Customer;
+use App\Models\Sales\Sale;
+use App\Models\Sales\SaleItem;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;

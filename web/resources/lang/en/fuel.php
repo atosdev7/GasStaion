@@ -50,4 +50,5 @@ return [
     'liters' => 'Litres',
     'no_data' => 'No data for this period.',
     'total' => 'Total',
+    'from_name' => 'From',
 ];

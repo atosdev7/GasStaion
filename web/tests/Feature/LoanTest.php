@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

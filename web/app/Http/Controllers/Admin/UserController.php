@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
-use App\Models\User;
-use App\Support\DeviceHash;
+use App\Models\Admin\User;
+use App\Support\Admin\DeviceHash;
 use Illuminate\Validation\Rule;
 
 class UserController extends CrudController

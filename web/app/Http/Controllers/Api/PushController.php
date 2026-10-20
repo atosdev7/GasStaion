@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\SyncError;
-use App\Support\Api;
-use App\Support\Push;
-use App\Support\RejectedRow;
+use App\Models\Admin\SyncError;
+use App\Support\Sync\Api;
+use App\Support\Sync\Push;
+use App\Support\Sync\RejectedRow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 

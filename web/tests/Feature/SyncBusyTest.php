@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Support\BackupRun;
+use App\Support\Admin\BackupRun;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\Concerns\RegistersDevice;

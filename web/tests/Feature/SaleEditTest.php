@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\Card;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
-use App\Support\CardPin;
+use App\Models\Cards\Card;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
+use App\Support\Cards\CardPin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;

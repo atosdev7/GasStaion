@@ -23,6 +23,7 @@
                 <thead>
                 <tr>
                     <th>{{ __('fuel.inbound_date') }}</th>
+                    <th>{{ __('fuel.from_name') }}</th>
                     <th>{{ __('fuel.tank_id') }}</th>
                     <th>{{ __('fuel.fuel_type') }}</th>
                     <th class="text-right">{{ __('fuel.amount_kg') }}</th>
@@ -38,6 +39,7 @@
                 @foreach ($rows as $row)
                     <tr>
                         <td>{{ $row->inbound_date }}</td>
+                        <td>{{ $row->from_name }}</td>
                         <td>{{ $tanks[$row->tank_id] ?? $row->tank_id }}</td>
                         <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
                         <td class="text-right">{{ number_format($row->amount_kg, 2) }}</td>

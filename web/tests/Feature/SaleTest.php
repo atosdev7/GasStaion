@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\Sale;
-use App\Models\SaleItem;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Sales\Sale;
+use App\Models\Sales\SaleItem;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -335,7 +335,7 @@ class SaleTest extends TestCase
 
         $response = $this->get('/ticket-sales/create')->assertOk();
         // the barcode is the sign and code (7 digits) and the serial padded to 9: the page gets the 7 digits of every fuel type and spec
-        $prefix = substr(\App\Support\Barcode::make($this->diesel, 0, 0), 0, 7);
+        $prefix = substr(\App\Support\Tickets\Barcode::make($this->diesel, 0, 0), 0, 7);
         $this->assertSame($prefix, $response->viewData('barcodePrefixes')[$this->diesel][0]);
         $this->assertStringContainsString("prefix + ('000000000' + serial).slice(-9)", $response->getContent());
         $this->assertStringContainsString('barcodeOf(item.spec, a.start)', $response->getContent());
@@ -496,8 +496,8 @@ class SaleTest extends TestCase
         // the popup gets the detail alone: the items of the sale (spec, count, start and end serial) and no list of the tickets
         $popup = $this->get('/ticket-sales/' . $sale->id . '?modal=1')->assertOk()->assertDontSee('<html', false)->assertSee('for the road')->assertSee('Items');
         // start and end are shown as full barcodes (sign, code and the serial of 9 digits)
-        $first = \App\Support\Barcode::make($this->diesel, 0, 1);
-        $last = \App\Support\Barcode::make($this->diesel, 0, 3);
+        $first = \App\Support\Tickets\Barcode::make($this->diesel, 0, 1);
+        $last = \App\Support\Tickets\Barcode::make($this->diesel, 0, 3);
         $this->assertSame(16, strlen($first));
         $this->assertRegExp('/<td class="text-right">3<\/td>\s*<td class="text-right">' . $first . '<\/td>\s*<td class="text-right">' . $last . '<\/td>\s*<td class="text-right">15\.00<\/td>/', $popup->getContent());
         $this->assertStringNotContainsString('<th>Barcode</th>', $popup->getContent());
@@ -535,7 +535,7 @@ class SaleTest extends TestCase
         // the detail shows them as they were entered, not the touching ones together
         $html = $this->get('/ticket-sales/' . $sale->id . '?modal=1')->assertOk()->getContent();
         $this->assertSame(3, substr_count($html, '<td>5 kg</td>'));
-        $code = function ($serial) { return \App\Support\Barcode::make($this->diesel, 0, $serial); };
+        $code = function ($serial) { return \App\Support\Tickets\Barcode::make($this->diesel, 0, $serial); };
         $this->assertRegExp('/<td class="text-right">3<\/td>\s*<td class="text-right">' . $code(1) . '<\/td>\s*<td class="text-right">' . $code(3) . '<\/td>\s*<td class="text-right">15\.00<\/td>.*?<td class="text-right">2<\/td>\s*<td class="text-right">' . $code(4) . '<\/td>\s*<td class="text-right">' . $code(5) . '<\/td>/s', $html);
 
         // a line without a start serial takes the lowest ones: its first and last serial are kept

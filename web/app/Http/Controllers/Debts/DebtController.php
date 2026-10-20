@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Debts;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Support\Audit;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 // Analysis screen (what's owed/settled/still open) plus recording extra DebtPayment rows against
 // an open debt — or, when it's unclear which of a customer's debts a payment belongs to, against
-// just the customer (debt_id left null; see App\Models\DebtPayment).
+// just the customer (debt_id left null; see App\Models\Debts\DebtPayment).
 class DebtController extends Controller
 {
     const PAYMENT_METHODS = ['cash', 'bank'];

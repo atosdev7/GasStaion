@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Support\Audit;
+use App\Support\Admin\Audit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;

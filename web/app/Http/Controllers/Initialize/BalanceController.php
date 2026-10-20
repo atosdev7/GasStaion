@@ -4,17 +4,17 @@ namespace App\Http\Controllers\Initialize;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Debts\DebtController;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\InitialTankBalance;
-use App\Models\Remainder;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Support\Audit;
-use App\Support\RemainderMaker;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Fuel\InitialTankBalance;
+use App\Models\Supplements\Remainder;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Support\Admin\Audit;
+use App\Support\Supplements\RemainderMaker;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 

@@ -7,7 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
-// The audit log: what the app writes with App\Support\Audit (one file a day, storage/logs/audit-YYYY-MM-DD.log, kept about 90 days). A line is
+// The audit log: what the app writes with App\Support\Admin\Audit (one file a day, storage/logs/audit-YYYY-MM-DD.log, kept about 90 days). A line is
 // "time - who - ACTION - detail". Read-only: the user picks a period (the last 7 days at first) and may narrow it to one user or one action.
 class AuditController extends Controller
 {

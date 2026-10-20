@@ -2,7 +2,7 @@
 
 namespace Tests\Concerns;
 
-use App\Models\Device;
+use App\Models\Admin\Device;
 use Illuminate\Support\Facades\DB;
 
 /**

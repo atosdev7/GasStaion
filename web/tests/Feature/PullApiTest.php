@@ -2,14 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Device;
-use App\Models\FuelType;
-use App\Models\Nozzle;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Nozzle;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\RegistersDevice;
@@ -89,11 +89,11 @@ class PullApiTest extends TestCase
             return ['id' => $id, 'sale_type' => 'spot', 'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 1, 'payment_method' => 'cash', 'total_amount' => 2,
                 'paid_amount' => 2, 'unpaid_amount' => 0, 'usage' => 'sale', 'sale_date' => '2026-10-04', 'user_id' => 1, 'confirmed_at' => $confirmed ? now() : null];
         };
-        $done = \App\Models\Sale::forceCreate($row('aaaaaaaa-0000-0000-0000-000000000001', true));
-        $open = \App\Models\Sale::forceCreate($row('aaaaaaaa-0000-0000-0000-000000000002', false));
+        $done = \App\Models\Sales\Sale::forceCreate($row('aaaaaaaa-0000-0000-0000-000000000001', true));
+        $open = \App\Models\Sales\Sale::forceCreate($row('aaaaaaaa-0000-0000-0000-000000000002', false));
         $nozzle = Nozzle::forceCreate(['device_id' => Device::first()->id, 'number' => 1, 'tank_id' => Tank::forceCreate(['name' => 'T', 'fuel_type' => 'D'])->id, 'fuel_type' => 'D']);
         $supplement = function ($id, $confirmed) use ($nozzle) {
-            return \App\Models\Supplement::forceCreate(['id' => $id, 'fuel_type' => 'D', 'nozzle_id' => $nozzle->id, 'out_amount_lt' => 1, 'out_amount_kg' => 1, 'preset_kg' => 1,
+            return \App\Models\Supplements\Supplement::forceCreate(['id' => $id, 'fuel_type' => 'D', 'nozzle_id' => $nozzle->id, 'out_amount_lt' => 1, 'out_amount_kg' => 1, 'preset_kg' => 1,
                 'supplied_at' => '2026-10-04 10:00:00', 'supply_date' => '2026-10-04', 'confirmed_at' => $confirmed ? now() : null]);
         };
         $supplement('bbbbbbbb-0000-0000-0000-000000000001', true);
@@ -115,8 +115,8 @@ class PullApiTest extends TestCase
 
     public function testTheCardLedgerIsPulledWithItsRunningBalances()
     {
-        $card = \App\Models\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + \App\Support\CardPin::make('1234'));
-        $sale = \App\Models\Sale::forceCreate([
+        $card = \App\Models\Cards\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + \App\Support\Cards\CardPin::make('1234'));
+        $sale = \App\Models\Sales\Sale::forceCreate([
             'card_id' => $card->id, 'sale_type' => 'card', 'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 100, 'payment_method' => 'cash', 'total_amount' => 200,
             'paid_amount' => 200, 'unpaid_amount' => 0, 'usage' => 'sale', 'sale_date' => '2026-10-04', 'user_id' => 1, 'created_at' => '2026-10-04 09:00:00',
         ]);
@@ -133,7 +133,7 @@ class PullApiTest extends TestCase
 
         // a fill that happened earlier arrives later: the balance after the top-up changes, and the entry is sent again
         $this->later();
-        \App\Models\Supplement::forceCreate(['card_id' => $card->id, 'fuel_type' => 'D', 'nozzle_id' => 1, 'preset_kg' => 30, 'out_amount_lt' => 30, 'out_amount_kg' => 30, 'supplied_at' => '2026-10-03 09:00:00']);
+        \App\Models\Supplements\Supplement::forceCreate(['card_id' => $card->id, 'fuel_type' => 'D', 'nozzle_id' => 1, 'preset_kg' => 30, 'out_amount_lt' => 30, 'out_amount_kg' => 30, 'supplied_at' => '2026-10-03 09:00:00']);
         $this->later();
         $again = $this->pull('card_transactions');
         $this->assertCount(2, $again['rows']);

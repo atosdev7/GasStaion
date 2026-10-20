@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Device;
-use App\Support\Api;
+use App\Models\Admin\Device;
+use App\Support\Sync\Api;
 use Illuminate\Http\Request;
 
 class PingController extends Controller

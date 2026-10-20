@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Tickets;
 
 use App\Http\Controllers\Controller;
-use App\Models\Sale;
-use App\Models\Ticket;
-use App\Support\Audit;
+use App\Models\Sales\Sale;
+use App\Models\Tickets\Ticket;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 

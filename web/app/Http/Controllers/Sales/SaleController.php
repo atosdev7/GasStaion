@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\FuelInbound;
-use App\Models\FuelType;
-use App\Models\Sale;
-use App\Models\SaleItem;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
-use App\Support\Audit;
-use App\Support\Barcode;
-use App\Support\SaleDeletion;
-use App\Support\SerialCounter;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelType;
+use App\Models\Sales\Sale;
+use App\Models\Sales\SaleItem;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
+use App\Support\Admin\Audit;
+use App\Support\Tickets\Barcode;
+use App\Support\Sales\SaleDeletion;
+use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +27,7 @@ use Illuminate\Validation\ValidationException;
 // FIFO by serial or an explicit start serial); a **spot** sale is an arbitrary weight with no
 // pre-existing ticket, so it mints one reserved-code 'direct' ticket on the fly (see
 // config/ticket_reserved_codes.php) and is always cash. `usage` = sale/self/other/ticket_loan (see
-// App\Models\Sale) applies the same way to both — only "sale" carries a real amount.
+// App\Models\Sales\Sale) applies the same way to both — only "sale" carries a real amount.
 class SaleController extends Controller
 {
     const USAGES = ['sale', 'self', 'other', 'ticket_loan'];
@@ -111,7 +111,7 @@ class SaleController extends Controller
         $sale = Sale::withTrashed()->findOrFail($id);
         $user = User::find($sale->user_id);
         $customer = Customer::withTrashed()->find($sale->customer_id);
-        $card = $sale->card_id ? \App\Models\Card::withTrashed()->find($sale->card_id) : null;
+        $card = $sale->card_id ? \App\Models\Cards\Card::withTrashed()->find($sale->card_id) : null;
 
         $data = [
             'sale' => $sale,
@@ -406,7 +406,7 @@ class SaleController extends Controller
     }
 
     // Shared by both sale types: a ticket_loan usage creates the linked loan, and any usage that
-    // leaves an unpaid balance creates a Debt — see App\Models\TicketLoan / App\Models\Debt.
+    // leaves an unpaid balance creates a Debt — see App\Models\Debts\TicketLoan / App\Models\Debts\Debt.
     private function afterSaleCreated($sale, $data, $fuelType, $amountKg, $unpaidAmount, $soldAt)
     {
         if ($data['usage'] === 'ticket_loan') {

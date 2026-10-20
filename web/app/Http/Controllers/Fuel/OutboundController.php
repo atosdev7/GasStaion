@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Fuel;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Reports\ReportController;
-use App\Models\Nozzle;
-use App\Models\Supplement;
-use App\Models\Tank;
+use App\Models\Fuel\Nozzle;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 

@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Supplements;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Reports\ReportController;
-use App\Models\Nozzle;
-use App\Models\Remainder;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Support\Audit;
-use App\Support\RemainderMaker;
+use App\Models\Fuel\Nozzle;
+use App\Models\Supplements\Remainder;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Support\Admin\Audit;
+use App\Support\Supplements\RemainderMaker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;

@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\Device;
-use App\Models\Nozzle;
-use App\Models\Tank;
-use App\Models\User;
+use App\Models\Admin\Device;
+use App\Models\Fuel\Nozzle;
+use App\Models\Fuel\Tank;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

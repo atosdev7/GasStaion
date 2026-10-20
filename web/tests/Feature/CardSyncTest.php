@@ -2,16 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\Card;
-use App\Models\Device;
-use App\Models\FuelType;
-use App\Models\Nozzle;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Tank;
-use App\Models\User;
-use App\Support\BackupRun;
-use App\Support\CardPin;
+use App\Models\Cards\Card;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
+use App\Models\Admin\User;
+use App\Support\Admin\BackupRun;
+use App\Support\Cards\CardPin;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;

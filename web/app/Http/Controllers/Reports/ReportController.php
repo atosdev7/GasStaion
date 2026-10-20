@@ -3,18 +3,18 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Nozzle;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Support\ReportSheets;
-use App\Support\TankLevels;
-use App\Support\XlsxWriter;
-use App\TicketStock;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Support\Reports\ReportSheets;
+use App\Support\Dashboard\TankLevels;
+use App\Support\Reports\XlsxWriter;
+use App\Support\Tickets\TicketStock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 

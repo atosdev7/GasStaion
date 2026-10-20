@@ -48,8 +48,8 @@
                     <tr>
                         <td>{{ config('ticket_specs.' . $item->spec) }} {{ __('sales.kg') }}</td>
                         <td class="text-right">{{ $item->quantity }}</td>
-                        <td class="text-right">{{ App\Support\Barcode::make($sale->fuel_type, $item->spec, $item->start_serial) }}</td>
-                        <td class="text-right">{{ App\Support\Barcode::make($sale->fuel_type, $item->spec, $item->end_serial) }}</td>
+                        <td class="text-right">{{ App\Support\Tickets\Barcode::make($sale->fuel_type, $item->spec, $item->start_serial) }}</td>
+                        <td class="text-right">{{ App\Support\Tickets\Barcode::make($sale->fuel_type, $item->spec, $item->end_serial) }}</td>
                         <td class="text-right">{{ number_format($item->amount_kg, 2) }}</td>
                     </tr>
                 @endforeach

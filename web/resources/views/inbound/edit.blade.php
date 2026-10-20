@@ -27,6 +27,11 @@
                     @error('inbound_date') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
                 <div class="form-group">
+                    <label for="f_from_name">{{ __('fuel.from_name') }}</label>
+                    <input id="f_from_name" name="from_name" type="text" maxlength="100" value="{{ old('from_name', $inbound->from_name) }}" class="form-control @error('from_name') is-invalid @enderror">
+                    @error('from_name') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                </div>
+                <div class="form-group">
                     <label for="f_amount_kg">{{ __('fuel.amount_kg') }}</label>
                     <input id="f_amount_kg" name="amount_kg" type="number" step="0.01" value="{{ old('amount_kg', $inbound->amount_kg) }}" class="form-control @error('amount_kg') is-invalid @enderror">
                     @error('amount_kg') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror

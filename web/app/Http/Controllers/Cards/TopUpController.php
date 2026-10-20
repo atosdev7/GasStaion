@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Cards;
 
 use App\Http\Controllers\Controller;
-use App\Models\Card;
-use App\Models\FuelType;
-use App\Models\Sale;
-use App\Models\User;
-use App\Support\Audit;
+use App\Models\Cards\Card;
+use App\Models\Fuel\FuelType;
+use App\Models\Sales\Sale;
+use App\Models\Admin\User;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;

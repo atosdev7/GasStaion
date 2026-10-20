@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Support\Barcode;
-use App\Models\TicketPublish;
-use App\TicketStock;
-use App\Models\User;
+use App\Support\Tickets\Barcode;
+use App\Models\Tickets\TicketPublish;
+use App\Support\Tickets\TicketStock;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -248,7 +248,7 @@ class TicketPublishTest extends TestCase
 
     private function batch()
     {
-        return \App\Models\TicketPublish::orderBy('id')->first();
+        return \App\Models\Tickets\TicketPublish::orderBy('id')->first();
     }
 
     public function testViewTicketsListsTheTicketsOfTheBatch()
@@ -283,7 +283,7 @@ class TicketPublishTest extends TestCase
         $this->assertSame(8, DB::table('tickets')->count());
         $this->assertNull(DB::table('tickets')->where('barcode', Barcode::make('D', 0, 3))->first()); // the old numbers are gone
         $this->assertNotNull(DB::table('tickets')->where('barcode', Barcode::make('D', 0, 105))->first());
-        $this->assertSame(12, \App\TicketStock::available('D', 0)); // 20 received, 8 published
+        $this->assertSame(12, \App\Support\Tickets\TicketStock::available('D', 0)); // 20 received, 8 published
 
         // a range that overlaps the old one of the same batch is fine
         $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 105, 'end_serial' => 110])->assertRedirect('/ticket-publish');
@@ -312,14 +312,14 @@ class TicketPublishTest extends TestCase
         $this->receive(20);
         $this->publish(1, 5);
         $batch = $this->batch();
-        $this->assertSame(15, \App\TicketStock::available('D', 0));
+        $this->assertSame(15, \App\Support\Tickets\TicketStock::available('D', 0));
 
         $this->delete('/ticket-publish/' . $batch->id)->assertRedirect('/ticket-publish');
 
-        $this->assertNull(\App\Models\TicketPublish::find($batch->id));
-        $this->assertNotNull(\App\Models\TicketPublish::onlyTrashed()->find($batch->id)); // kept as deleted
+        $this->assertNull(\App\Models\Tickets\TicketPublish::find($batch->id));
+        $this->assertNotNull(\App\Models\Tickets\TicketPublish::onlyTrashed()->find($batch->id)); // kept as deleted
         $this->assertSame(0, DB::table('tickets')->count());
-        $this->assertSame(20, \App\TicketStock::available('D', 0));
+        $this->assertSame(20, \App\Support\Tickets\TicketStock::available('D', 0));
 
         // its numbers stay reserved: nothing publishes over them, and the suggested start moves on
         $this->publish(3, 8)->assertSessionHasErrors('start_serial');
@@ -354,7 +354,7 @@ class TicketPublishTest extends TestCase
         DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 4)->delete();
         $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
 
-        $this->assertNotNull(\App\Models\TicketPublish::find($batch->id));
+        $this->assertNotNull(\App\Models\Tickets\TicketPublish::find($batch->id));
     }
 
     public function testBatchActionsNeedTheStockPermission()
@@ -372,7 +372,7 @@ class TicketPublishTest extends TestCase
 
         $this->as('assistant')->get('/ticket-publish')->assertOk()->assertSee(route('ticket-publish.edit', $batch->id));
         $this->as('cashier')->get('/ticket-publish/' . $batch->id)->assertForbidden();
-        $this->assertNotNull(\App\Models\TicketPublish::find($batch->id));
+        $this->assertNotNull(\App\Models\Tickets\TicketPublish::find($batch->id));
     }
 
     public function testABatchHasTheDateItWasPublishedAndTheListAndThePageShowIt()
@@ -404,7 +404,7 @@ class TicketPublishTest extends TestCase
         $this->post('/ticket-publish', ['stock_item' => 'D:0', 'start_serial' => 6, 'end_serial' => 8])->assertRedirect('/ticket-publish'); // no date: today
         $this->post('/ticket-publish', ['stock_item' => 'D:0', 'start_serial' => 9, 'end_serial' => 9, 'date' => 'nope'])->assertSessionHasErrors('date');
 
-        $batches = \App\Models\TicketPublish::orderBy('id')->get();
+        $batches = \App\Models\Tickets\TicketPublish::orderBy('id')->get();
         $this->assertCount(2, $batches);
         $this->assertSame('2026-09-18', substr((string) $batches[0]->date, 0, 10));
         $this->assertSame(today()->toDateString(), substr((string) $batches[1]->date, 0, 10));

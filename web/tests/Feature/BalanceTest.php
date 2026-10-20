@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\InitialTankBalance;
-use App\Models\Sale;
-use App\Models\Tank;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Fuel\InitialTankBalance;
+use App\Models\Sales\Sale;
+use App\Models\Fuel\Tank;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -202,12 +202,12 @@ class BalanceTest extends TestCase
         $this->as('accountant')->post('/balances/remainders', ['fuel_type' => 'D', 'amount_kg' => '3.5', 'remainder_date' => '2026-01-05', 'comment' => 'brought by Mr Li'])
             ->assertRedirect('/balances/remainders')->assertSessionHas('status');
 
-        $remainder = \App\Models\Remainder::first();
+        $remainder = \App\Models\Supplements\Remainder::first();
         $this->assertNull($remainder->supplement_id);
         $this->assertEquals(3.5, $remainder->amount_kg);
         $this->assertSame('brought by Mr Li', $remainder->comment);
         $this->assertSame('2026-01-05', substr((string) $remainder->remainder_date, 0, 10));
-        $ticket = \App\Models\Ticket::find($remainder->ticket_barcode);
+        $ticket = \App\Models\Tickets\Ticket::find($remainder->ticket_barcode);
         $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->status);       // already sold, ready to be supplied
         $this->assertSame(config('ticket_reserved_codes.remainder'), $ticket->code);
         $this->assertEquals(3.5, $ticket->amount_kg);
@@ -222,7 +222,7 @@ class BalanceTest extends TestCase
         $this->as('accountant')->post('/balances/remainders', ['fuel_type' => 'X', 'amount_kg' => '0'])->assertSessionHasErrors(['fuel_type', 'amount_kg']);
         $this->as('accountant')->post('/balances/remainders', ['fuel_type' => 'D', 'amount_kg' => '1', 'remainder_date' => '2999-01-01'])->assertSessionHasErrors('remainder_date');
         $this->as('accountant')->post('/balances/remainders', ['fuel_type' => 'D', 'amount_kg' => '1', 'comment' => str_repeat('x', 256)])->assertSessionHasErrors('comment');
-        $this->assertSame(0, \App\Models\Remainder::count());
+        $this->assertSame(0, \App\Models\Supplements\Remainder::count());
 
         $this->as('cashier')->get('/balances/remainders')->assertForbidden();
         $this->as('cashier')->post('/balances/remainders', ['fuel_type' => 'D', 'amount_kg' => '1'])->assertForbidden();

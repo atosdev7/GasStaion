@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Models\User;
+use App\Models\Admin\User;
 use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 

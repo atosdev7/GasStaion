@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Sale;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Support\DashboardData;
-use App\Support\TankLevels;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Sales\Sale;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Support\Dashboard\DashboardData;
+use App\Support\Dashboard\TankLevels;
 use Illuminate\Support\Facades\Gate;
 
 class DashboardController extends Controller

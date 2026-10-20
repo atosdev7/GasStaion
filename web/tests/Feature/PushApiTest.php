@@ -2,18 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Device;
-use App\Models\FuelInbound;
-use App\Models\Nozzle;
-use App\Models\Remainder;
-use App\Models\Sale;
-use App\Models\SyncError;
-use App\Models\Supplement;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\User;
-use App\Support\Barcode;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\Nozzle;
+use App\Models\Supplements\Remainder;
+use App\Models\Sales\Sale;
+use App\Models\Admin\SyncError;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Admin\User;
+use App\Support\Tickets\Barcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\Concerns\RegistersDevice;
@@ -113,7 +113,7 @@ class PushApiTest extends TestCase
         ]]);
 
         $this->assertSame([$row['id']], $this->push('sales', [$row])['saved']);
-        $items = \App\Models\SaleItem::where('sale_id', $row['id'])->orderBy('id')->get();
+        $items = \App\Models\Sales\SaleItem::where('sale_id', $row['id'])->orderBy('id')->get();
         $this->assertSame([[0, 11, 13, 3], [1, 5, 5, 1]], $items->map(function ($i) { return [(int) $i->spec, (int) $i->start_serial, (int) $i->end_serial, (int) $i->quantity]; })->all());
         $this->assertEquals(15, $items->first()->amount_kg);
 
@@ -121,7 +121,7 @@ class PushApiTest extends TestCase
         $row['comment'] = 'changed';
         $row['items'] = [['spec' => 0, 'start_serial' => 11, 'end_serial' => 13, 'quantity' => 3, 'amount_kg' => '15.00']];
         $this->push('sales', [$row]);
-        $this->assertSame(1, \App\Models\SaleItem::where('sale_id', $row['id'])->count());
+        $this->assertSame(1, \App\Models\Sales\SaleItem::where('sale_id', $row['id'])->count());
 
         // a sale sent without items (a spot sale, or an older terminal) is stored as before; a bad item rejects the sale
         $spot = $this->sale();
@@ -797,7 +797,7 @@ class PushApiTest extends TestCase
         $result = $this->push('ticket_loans', [$row + ['settled_amount_kg' => '99.00']]);
 
         $this->assertSame([$row['id']], $result['saved']);
-        $loan = \App\Models\TicketLoan::find($row['id']);
+        $loan = \App\Models\Debts\TicketLoan::find($row['id']);
         $this->assertEquals(30, $loan->amount_kg);
         $this->assertEquals(0, $loan->settled_amount_kg); // the ledger's total, not the device's
         $this->assertTrue((bool) $loan->synced);
@@ -813,23 +813,23 @@ class PushApiTest extends TestCase
         $result = $this->push('ticket_loan_settlements', [$a, $b]);
 
         $this->assertSame([$a['id'], $b['id']], $result['saved']);
-        $stored = \App\Models\TicketLoan::find($loan['id']);
+        $stored = \App\Models\Debts\TicketLoan::find($loan['id']);
         $this->assertEquals(15, $stored->settled_amount_kg);
         $this->assertFalse((bool) $stored->synced); // the new total reaches the device with its next pull
-        $this->assertSame(2, \App\Models\TicketLoanSettlement::count());
+        $this->assertSame(2, \App\Models\Debts\TicketLoanSettlement::count());
     }
 
     public function testASettlementDoneOnTheWebCountsToo()
     {
         $loan = $this->loanRow();
         $this->push('ticket_loans', [$loan]);
-        \App\Models\TicketLoanSettlement::forceCreate([
+        \App\Models\Debts\TicketLoanSettlement::forceCreate([
             'loan_id' => $loan['id'], 'ticket_barcode' => '0000006000000002', 'amount_kg' => 5, 'settled_at' => now(), 'user_id' => 1,
         ]);
 
         $this->push('ticket_loan_settlements', [$this->settlementRow($loan['id'], ['amount_kg' => '10.00'])]);
 
-        $this->assertEquals(15, \App\Models\TicketLoan::find($loan['id'])->settled_amount_kg);
+        $this->assertEquals(15, \App\Models\Debts\TicketLoan::find($loan['id'])->settled_amount_kg);
     }
 
     public function testPushingASettlementTwiceDoesNotCountItTwice()
@@ -841,8 +841,8 @@ class PushApiTest extends TestCase
         $this->push('ticket_loan_settlements', [$row]);
         $this->push('ticket_loan_settlements', [$row]);
 
-        $this->assertSame(1, \App\Models\TicketLoanSettlement::count());
-        $this->assertEquals(5, \App\Models\TicketLoan::find($loan['id'])->settled_amount_kg);
+        $this->assertSame(1, \App\Models\Debts\TicketLoanSettlement::count());
+        $this->assertEquals(5, \App\Models\Debts\TicketLoan::find($loan['id'])->settled_amount_kg);
     }
 
     public function testASettlementWaitsForItsLoan()
@@ -852,7 +852,7 @@ class PushApiTest extends TestCase
 
         $early = $this->push('ticket_loan_settlements', [$row]);
         $this->assertSame([], $early['saved']);
-        $this->assertSame(0, \App\Models\TicketLoanSettlement::count());
+        $this->assertSame(0, \App\Models\Debts\TicketLoanSettlement::count());
 
         $this->push('ticket_loans', [$loan]);
 
@@ -867,6 +867,6 @@ class PushApiTest extends TestCase
 
         $this->push('ticket_loans', [$loan]);
 
-        $this->assertEquals(12, \App\Models\TicketLoan::find($loan['id'])->settled_amount_kg);
+        $this->assertEquals(12, \App\Models\Debts\TicketLoan::find($loan['id'])->settled_amount_kg);
     }
 }

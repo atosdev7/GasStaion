@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Support\Audit;
+use App\Support\Admin\Audit;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;

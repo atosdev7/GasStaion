@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Device;
-use App\Models\SyncError;
-use App\Models\User;
+use App\Models\Admin\Device;
+use App\Models\Admin\SyncError;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Sale;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Sales\Sale;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -161,7 +161,7 @@ class DebtSummaryTest extends TestCase
         $this->assertStringContainsString('debt-summary/export?from=2026-10-01&amp;to=2026-10-31', $html);
 
         $response = $this->as('accountant')->get('/debt-summary/export?from=2026-10-01&to=2026-10-31')->assertOk();
-        $response->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+        $response->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
         $this->assertStringContainsString('debts-summary-2026-10-01_2026-10-31.xlsx', $response->headers->get('content-disposition'));
 
         $zip = new \ZipArchive();

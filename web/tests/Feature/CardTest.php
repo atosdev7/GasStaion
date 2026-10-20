@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\Card;
-use App\Models\FuelType;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Models\User;
-use App\Support\CardPin;
+use App\Models\Cards\Card;
+use App\Models\Fuel\FuelType;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Models\Admin\User;
+use App\Support\Cards\CardPin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -215,7 +215,7 @@ class CardTest extends TestCase
         $this->assertSame('cash', $sale->payment_method);
         $this->assertSame('sale', $sale->usage);
         $this->assertSame(today()->toDateString(), substr((string) $sale->sale_date, 0, 10));
-        $this->assertSame(0, \App\Models\Debt::count());
+        $this->assertSame(0, \App\Models\Debts\Debt::count());
         $this->assertEquals(40, $card->fresh()->balance());
         $this->assertFalse((bool) $card->fresh()->synced);                                           // the Smart210 pulls the new balance
 
@@ -355,7 +355,7 @@ class CardTest extends TestCase
         // the export: one sheet with the same figures and the totals of each fuel type
         $this->assertStringContainsString('card-summary/export?from=2026-10-01&amp;to=2026-10-31', $html);
         $file = $this->get('/card-summary/export?from=2026-10-01&to=2026-10-31')->assertOk();
-        $file->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+        $file->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
         $this->assertStringContainsString('cards-summary-2026-10-01_2026-10-31.xlsx', $file->headers->get('content-disposition'));
         $zip = new \ZipArchive();
         $zip->open($file->baseResponse->getFile()->getPathname());

@@ -4,7 +4,7 @@
 // number. NOT derived from the fuel type or the spec by any formula; assigned once at business
 // setup and looked up directly. Add an entry here whenever a fuel type starts selling tickets at
 // a spec it didn't before. Every code must be a plain 2-digit string outside 21-25 (reserved for
-// tickets the Smart210 creates itself — direct/self/other/ticket_loan/remainder, see App\Support\Barcode).
+// tickets the Smart210 creates itself — direct/self/other/ticket_loan/remainder, see App\Support\Tickets\Barcode).
 //
 // Keyed by config/fuel_types.php's letter, then by the spec key (config/ticket_specs.php).
 return [

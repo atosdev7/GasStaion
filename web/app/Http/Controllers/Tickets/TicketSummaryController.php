@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Tickets;
 
 use App\Http\Controllers\Controller;
-use App\Models\TicketInbound;
-use App\Models\TicketPublish;
-use App\Support\ReportSheets;
-use App\Support\XlsxWriter;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
+use App\Support\Reports\ReportSheets;
+use App\Support\Reports\XlsxWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;

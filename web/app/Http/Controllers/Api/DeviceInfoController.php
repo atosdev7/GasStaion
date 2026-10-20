@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Support\Api;
+use App\Support\Sync\Api;
 use Illuminate\Http\Request;
 
 class DeviceInfoController extends Controller

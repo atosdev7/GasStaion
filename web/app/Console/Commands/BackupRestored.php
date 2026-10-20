@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Setting;
-use App\Support\Audit;
+use App\Models\Admin\Setting;
+use App\Support\Admin\Audit;
 use Illuminate\Console\Command;
 
 // Run on the live server right after a dump was restored (and after any data that only the web app held has been entered again: users and

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Support\Audit;
-use App\Support\CardLedger;
+use App\Support\Admin\Audit;
+use App\Support\Cards\CardLedger;
 use Illuminate\Console\Command;
 
 // Makes the ledger entries of the top-ups and fills that have none (nothing is made twice, nothing is removed) and works the running balances out
@@ -17,7 +17,7 @@ class RebuildCardLedger extends Command
     public function handle()
     {
         $made = CardLedger::rebuild();
-        foreach (\App\Models\Card::withTrashed()->pluck('id') as $cardId) {
+        foreach (\App\Models\Cards\Card::withTrashed()->pluck('id') as $cardId) {
             CardLedger::recompute($cardId);
         }
         Audit::log('cards_rebuild_ledger', $made . ' entries made', 'system');

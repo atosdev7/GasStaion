@@ -23,7 +23,6 @@
                 <thead>
                 <tr>
                     <th>{{ __('tickets.inbound_date') }}</th>
-                    <th>{{ __('tickets.from_name') }}</th>
                     <th>{{ __('tickets.fuel_type') }}</th>
                     <th class="text-right">{{ __('tickets.spec') }}</th>
                     <th class="text-right">{{ __('tickets.quantity') }}</th>
@@ -37,7 +36,6 @@
                 @foreach ($rows as $row)
                     <tr>
                         <td>{{ $row->inbound_date }}</td>
-                        <td>{{ $row->from_name }}</td>
                         <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
                         <td class="text-right">{{ config('ticket_specs.' . $row->spec) }} {{ __('tickets.kg') }}</td>
                         <td class="text-right">{{ $row->quantity }}</td>

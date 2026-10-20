@@ -2,22 +2,22 @@
 
 namespace Tests\Feature;
 
-use App\Models\Backup;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Device;
-use App\Models\FuelInbound;
-use App\Models\InitialTankBalance;
-use App\Models\Nozzle;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
-use App\Support\TankLevels;
+use App\Models\Admin\Backup;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
+use App\Support\Dashboard\TankLevels;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -147,10 +147,10 @@ class BackupTest extends TestCase
     {
         $this->scenario();
         $supply = Supplement::whereNotNull('supply_date')->where('supply_date', '<=', self::UP_TO)->first();   // a supply that the backup clears
-        $fromSupply = \App\Models\Remainder::forceCreate([
+        $fromSupply = \App\Models\Supplements\Remainder::forceCreate([
             'supplement_id' => $supply->id, 'ticket_barcode' => '0000021000000001', 'fuel_type' => 'D', 'amount_kg' => 2, 'remainder_date' => '2026-09-10', 'created_at' => '2026-09-10 10:00:00',
         ]);
-        $opening = \App\Models\Remainder::forceCreate([
+        $opening = \App\Models\Supplements\Remainder::forceCreate([
             'supplement_id' => null, 'ticket_barcode' => '0000021000000002', 'fuel_type' => 'D', 'amount_kg' => 3, 'remainder_date' => '2026-09-01', 'created_at' => '2026-09-01 10:00:00',
         ]);
 
@@ -160,8 +160,8 @@ class BackupTest extends TestCase
         $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup');
 
         $this->assertNull(Supplement::find($supply->id));                                           // the supply is gone...
-        $this->assertNotNull(\App\Models\Remainder::find($fromSupply->id));                        // ...its remainder stays
-        $this->assertNotNull(\App\Models\Remainder::find($opening->id));
+        $this->assertNotNull(\App\Models\Supplements\Remainder::find($fromSupply->id));                        // ...its remainder stays
+        $this->assertNotNull(\App\Models\Supplements\Remainder::find($opening->id));
         $this->as('admin')->get('/remainders')->assertOk()->assertSee(__('supplements.remainder_supply_cleared'))->assertSee(__('supplements.remainder_opening'));
     }
 
@@ -240,14 +240,14 @@ class BackupTest extends TestCase
 
     public function testSyncIsOnlyBusyWhileTheBackupRuns()
     {
-        $this->assertFalse(\App\Support\BackupRun::isRunning());
+        $this->assertFalse(\App\Support\Admin\BackupRun::isRunning());
 
         $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup');
-        $this->assertFalse(\App\Support\BackupRun::isRunning()); // cleared when it finished
+        $this->assertFalse(\App\Support\Admin\BackupRun::isRunning()); // cleared when it finished
 
         config(['backup.dump_before_clear' => true, 'backup.mysqldump' => 'Z:\\no\\such\\mysqldump.exe']);
         $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
-        $this->assertFalse(\App\Support\BackupRun::isRunning()); // and also when it failed
+        $this->assertFalse(\App\Support\Admin\BackupRun::isRunning()); // and also when it failed
     }
 
     public function testDebtOfAClearedSaleKeepsItsDateOnThePaymentsPage()
@@ -305,7 +305,7 @@ class BackupTest extends TestCase
         $late = $this->sale('2026-09-20');       // after the cut-off
         $deleted = $this->sale('2026-09-12');
         foreach ([$old, $late, $deleted] as $sale) {
-            \App\Models\SaleItem::forceCreate(['sale_id' => $sale->id, 'spec' => 0, 'start_serial' => 1, 'end_serial' => 2, 'quantity' => 2, 'amount_kg' => 10]);
+            \App\Models\Sales\SaleItem::forceCreate(['sale_id' => $sale->id, 'spec' => 0, 'start_serial' => 1, 'end_serial' => 2, 'quantity' => 2, 'amount_kg' => 10]);
         }
         $deleted->delete();
 
@@ -313,7 +313,7 @@ class BackupTest extends TestCase
 
         $this->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup')->assertSessionHas('status');
 
-        $this->assertSame([$late->id], \App\Models\SaleItem::pluck('sale_id')->all()); // the cleared sales took their items along
+        $this->assertSame([$late->id], \App\Models\Sales\SaleItem::pluck('sale_id')->all()); // the cleared sales took their items along
         $backup = Backup::first();
         $this->assertSame(2, $backup->cleared['sale_items']); // the old sale's item and the deleted sale's
         $zip = new ZipArchive;
@@ -359,7 +359,7 @@ class BackupTest extends TestCase
         config(['backup.is_backup_server' => true]);
         $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
 
-        $remainder = \App\Models\Remainder::find('33333333-3333-3333-3333-333333333333');
+        $remainder = \App\Models\Supplements\Remainder::find('33333333-3333-3333-3333-333333333333');
         $this->assertSame('2026-10-01', substr((string) $remainder->remainder_date, 0, 10));   // its old `date`
         $this->assertNull($remainder->complete_date);
     }

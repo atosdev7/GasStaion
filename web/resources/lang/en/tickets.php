@@ -49,7 +49,6 @@ return [
     'lift_confirm' => 'Lift the restriction of this ticket?',
 
     // Ticket inbound
-    'from_name' => 'From',
 
     // Ticket publish
     'available' => 'Available',

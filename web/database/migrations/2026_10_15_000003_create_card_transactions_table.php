@@ -1,11 +1,11 @@
 <?php
 
-use App\Support\CardLedger;
+use App\Support\Cards\CardLedger;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-// The ledger of the cards: an entry for every top-up and every fill, with the running balance after it (see App\Support\CardLedger). Entries made
+// The ledger of the cards: an entry for every top-up and every fill, with the running balance after it (see App\Support\Cards\CardLedger). Entries made
 // from the records that exist already (top-ups, fills, and the reversal of the deleted ones) come with the table. The Smart210 pulls the table.
 class CreateCardTransactionsTable extends Migration
 {

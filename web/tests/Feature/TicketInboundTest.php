@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\TicketStock;
-use App\Models\User;
+use App\Support\Tickets\TicketStock;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -88,7 +88,7 @@ class TicketInboundTest extends TestCase
 
     private function firstInbound()
     {
-        return \App\Models\TicketInbound::orderBy('id')->first();
+        return \App\Models\Tickets\TicketInbound::orderBy('id')->first();
     }
 
     private function publishTickets($from, $to)
@@ -145,16 +145,16 @@ class TicketInboundTest extends TestCase
         $this->assertNotNull($first->fresh());
 
         // deleting the 50 would leave 100 received for 120 published: refused too
-        $second = \App\Models\TicketInbound::orderByDesc('id')->first();
+        $second = \App\Models\Tickets\TicketInbound::orderByDesc('id')->first();
         $this->delete('/ticket-inbound/' . $second->id)->assertSessionHasErrors('inbound');
-        $this->assertSame(2, \App\Models\TicketInbound::count());
+        $this->assertSame(2, \App\Models\Tickets\TicketInbound::count());
 
         // a record nothing was published from can go
         $this->receive(20, 1); // 10 kg tickets: nothing published
-        $ten = \App\Models\TicketInbound::where('spec', 1)->first();
+        $ten = \App\Models\Tickets\TicketInbound::where('spec', 1)->first();
         $this->delete('/ticket-inbound/' . $ten->id)->assertRedirect('/ticket-inbound')->assertSessionHasNoErrors();
-        $this->assertNull(\App\Models\TicketInbound::find($ten->id));
-        $this->assertNotNull(\App\Models\TicketInbound::onlyTrashed()->find($ten->id)); // kept as deleted
+        $this->assertNull(\App\Models\Tickets\TicketInbound::find($ten->id));
+        $this->assertNotNull(\App\Models\Tickets\TicketInbound::onlyTrashed()->find($ten->id)); // kept as deleted
         $this->assertSame(0, TicketStock::available($this->diesel, 1));
     }
 
@@ -173,23 +173,4 @@ class TicketInboundTest extends TestCase
         $this->assertSame(10, (int) $row->fresh()->quantity);
     }
 
-    public function testInboundRemembersWhereTheTicketsCameFrom()
-    {
-        $this->as('manager');
-        $this->post('/ticket-inbound', ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 10, 'inbound_date' => '2026-09-20', 'from_name' => 'Printing Press No. 2'])
-            ->assertRedirect('/ticket-inbound');
-        $row = DB::table('ticket_inbounds')->first();
-        $this->assertSame('Printing Press No. 2', $row->from_name);
-
-        $this->get('/ticket-inbound')->assertSee('Printing Press No. 2');
-        $this->get('/ticket-inbound/' . $row->id . '/edit')->assertSee('Printing Press No. 2');
-
-        $this->put('/ticket-inbound/' . $row->id, ['quantity' => 10, 'inbound_date' => '2026-09-20', 'from_name' => 'Depot'])->assertRedirect('/ticket-inbound');
-        $this->assertSame('Depot', DB::table('ticket_inbounds')->value('from_name'));
-        $this->put('/ticket-inbound/' . $row->id, ['quantity' => 10, 'inbound_date' => '2026-09-20', 'from_name' => str_repeat('x', 101)])->assertSessionHasErrors('from_name');
-
-        // it is optional
-        $this->receive(5)->assertRedirect('/ticket-inbound');
-        $this->assertNull(DB::table('ticket_inbounds')->orderByDesc('id')->value('from_name'));
-    }
 }

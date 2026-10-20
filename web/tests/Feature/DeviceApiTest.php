@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Device;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\RegistersDevice;
 use Tests\TestCase;

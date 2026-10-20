@@ -2,7 +2,7 @@
 @php
     $w = 520; $h = 280; $left = 56; $right = 10; $top = 18; $bottom = 58;
     $plotW = $w - $left - $right; $plotH = $h - $top - $bottom;
-    $max = App\Support\DashboardData::niceMax($tanks->map(function ($t) { return max($t->current, $t->capacity ?: 0); })->max() ?: 0);
+    $max = App\Support\Dashboard\DashboardData::niceMax($tanks->map(function ($t) { return max($t->current, $t->capacity ?: 0); })->max() ?: 0);
     $y = function ($kg) use ($top, $plotH, $max) { return round($top + $plotH - max(0, min($kg, $max)) / $max * $plotH, 1); };
     $slot = $tanks->count() ? $plotW / $tanks->count() : $plotW;
     $barW = min(64, $slot * 0.5);

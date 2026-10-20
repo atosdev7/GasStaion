@@ -2,14 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Sale;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Sales\Sale;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -340,8 +340,8 @@ class SaleDeleteTest extends TestCase
         $this->assertNull(Sale::withTrashed()->find($today->id));
         $this->assertNotNull(Sale::onlyTrashed()->find($other->id)); // another date: still waiting
         // the items go with the sale that was erased and stay with the one that waits
-        $this->assertSame(0, \App\Models\SaleItem::where('sale_id', $today->id)->count());
-        $this->assertSame(1, \App\Models\SaleItem::where('sale_id', $other->id)->count());
+        $this->assertSame(0, \App\Models\Sales\SaleItem::where('sale_id', $today->id)->count());
+        $this->assertSame(1, \App\Models\Sales\SaleItem::where('sale_id', $other->id)->count());
     }
 
     public function testConfirmingWithNothingCheckedStillNeedsSomethingToDo()

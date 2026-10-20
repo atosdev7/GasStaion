@@ -2,14 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Device;
-use App\Models\FuelType;
-use App\Models\Nozzle;
-use App\Models\Remainder;
-use App\Models\Supplement;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\User;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Nozzle;
+use App\Models\Supplements\Remainder;
+use App\Models\Supplements\Supplement;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -195,7 +195,7 @@ class SupplementTest extends TestCase
         $this->supply($second->barcode, $nozzle, 5, ['density' => '0.9'])->assertRedirect('/supplements');
         $typed = Supplement::where('density', '0.9')->first();
         $this->assertEquals(4.5, $typed->out_amount_kg);                 // 5 L x 0.9
-        \App\Models\FuelType::where('fuel_type', 'D')->update(['density' => 0.5]);
+        \App\Models\Fuel\FuelType::where('fuel_type', 'D')->update(['density' => 0.5]);
         $this->assertEquals(0.9, $typed->fresh()->density);
         $this->assertSame(1, Supplement::where('density', '0.89')->count());   // the first one kept its own
 

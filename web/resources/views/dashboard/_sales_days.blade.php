@@ -4,7 +4,7 @@
     $w = 640; $h = 280; $left = 56; $right = 10; $top = 14; $bottom = 62;
     $plotW = $w - $left - $right; $plotH = $h - $top - $bottom;
     $totals = collect($salesByDay)->map(function ($d) { return max(0, $d->ticket) + max(0, $d->spot) + max(0, $d->card); });
-    $max = App\Support\DashboardData::niceMax($totals->max() ?: 0);
+    $max = App\Support\Dashboard\DashboardData::niceMax($totals->max() ?: 0);
     $y = function ($kg) use ($top, $plotH, $max) { return round($top + $plotH - max(0, min($kg, $max)) / $max * $plotH, 1); };
     $slot = $plotW / count($salesByDay);
     $barW = $slot * 0.62;

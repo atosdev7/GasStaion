@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
-use App\Models\Device;
-use App\Models\Nozzle;
-use App\Models\Tank;
+use App\Models\Admin\Device;
+use App\Models\Fuel\Nozzle;
+use App\Models\Fuel\Tank;
 use Illuminate\Validation\Rule;
 
 // The nozzles of the station: which device (Smart210) runs the nozzle, its number on that device, its fuel type, the tank it draws from (which holds
-// that fuel type) and the address of its board. The Smart210 also reports its nozzles (see App\Support\Push; it names the tank, the fuel type is
+// that fuel type) and the address of its board. The Smart210 also reports its nozzles (see App\Support\Sync\Push; it names the tank, the fuel type is
 // the tank's), so a nozzle set up there appears here too.
 class NozzleController extends CrudController
 {

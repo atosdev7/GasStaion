@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Jobs\RunBackupDump;
-use App\Models\Customer;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Models\User;
+use App\Models\Sales\Customer;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
@@ -119,7 +119,7 @@ class ConfirmationTest extends TestCase
         $spotGas = $this->sale('2026-10-01', ['sale_type' => 'spot', 'fuel_type' => 'A']);
         $spotGas2 = $this->sale('2026-10-01', ['sale_type' => 'spot', 'fuel_type' => 'A']);
         $self = $this->sale('2026-10-01', ['fuel_type' => 'A', 'usage' => 'self', 'paid_amount' => 0, 'unpaid_amount' => 0]);   // not a sale of fuel
-        $card = \App\Models\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D']);
+        $card = \App\Models\Cards\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D']);
         $topUp = $this->sale('2026-10-01', ['sale_type' => 'card', 'card_id' => $card->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'total_amount' => 300, 'paid_amount' => 300]);   // a top-up
 
         $response = $this->as('accountant')->get('/confirmations?date=2026-10-01')->assertOk();
@@ -192,7 +192,7 @@ class ConfirmationTest extends TestCase
 
     private function item($sale, $spec, $quantity)
     {
-        return \App\Models\SaleItem::forceCreate([
+        return \App\Models\Sales\SaleItem::forceCreate([
             'sale_id' => $sale->id, 'spec' => $spec, 'start_serial' => 1, 'end_serial' => $quantity, 'quantity' => $quantity,
             'amount_kg' => $quantity * config('ticket_specs.' . $spec),
         ]);
@@ -239,7 +239,7 @@ class ConfirmationTest extends TestCase
 
         // the Excel sheet: Count merged over the four spec columns, every other heading over two rows, the counts and their totals
         $sales = Sale::with('items')->where('sale_type', 'ticket')->orderBy('amount_kg')->get();
-        $path = \App\Support\XlsxWriter::build(\App\Support\ReportSheets::confirmationSales([
+        $path = \App\Support\Reports\XlsxWriter::build(\App\Support\Reports\ReportSheets::confirmationSales([
             'title' => 'Ticket Sales', 'fuels' => config('fuel_types'), 'customers' => collect(),
             'sides' => [['title' => null, 'rows' => $sales, 'withFuel' => true, 'detail' => 'payment', 'specs' => [0 => 5, 1 => 10, 2 => 15, 3 => 50]]],
         ]));
@@ -289,13 +289,13 @@ class ConfirmationTest extends TestCase
         foreach (['ticket', 'spot', 'card', 'others'] as $block) {
             $this->assertStringContainsString('confirmations/sales-export?date=2026-10-01&amp;block=' . $block, $html);
             $response = $this->as('accountant')->get('/confirmations/sales-export?date=2026-10-01&block=' . $block)->assertOk();
-            $response->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+            $response->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
             $this->assertStringContainsString('confirmation-sales-2026-10-01-' . $block . '.xlsx', $response->headers->get('content-disposition'));
         }
 
         // the ticket file: one sheet, one plain table with a fuel column and the payment, the totals at the foot
         $zip = new \ZipArchive();
-        $path = \App\Support\XlsxWriter::build(\App\Support\ReportSheets::confirmationSales([
+        $path = \App\Support\Reports\XlsxWriter::build(\App\Support\Reports\ReportSheets::confirmationSales([
             'title' => 'Ticket Sales', 'fuels' => config('fuel_types'), 'customers' => collect(),
             'sides' => [['title' => null, 'rows' => Sale::where('sale_type', 'ticket')->orderBy('amount_kg')->get(), 'withFuel' => true, 'detail' => 'payment']],
         ]));
@@ -315,7 +315,7 @@ class ConfirmationTest extends TestCase
 
         // the spot file: a heading over each fuel (merged) and the sales of the two fuels side by side
         $rows = Sale::where('sale_type', 'spot')->where('usage', 'sale');
-        $path = \App\Support\XlsxWriter::build(\App\Support\ReportSheets::confirmationSales([
+        $path = \App\Support\Reports\XlsxWriter::build(\App\Support\Reports\ReportSheets::confirmationSales([
             'title' => 'Spot Sales', 'fuels' => config('fuel_types'), 'customers' => collect(),
             'sides' => [
                 ['title' => 'Gasoline (0)', 'rows' => (clone $rows)->where('fuel_type', 'A')->get(), 'withFuel' => false, 'detail' => 'payment'],
@@ -359,8 +359,8 @@ class ConfirmationTest extends TestCase
     public function testTheSupplementsPageHasSupplementsAndRemaindersTabs()
     {
         $supplement = $this->supplement('2026-10-01', ['fuel_type' => 'A', 'comment' => 'hose was changed', 'preset_kg' => 10, 'out_amount_kg' => 9, 'out_amount_lt' => 12.5]);
-        $made = \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'A', 'amount_kg' => 1, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-02']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2, 'remainder_date' => '2026-10-03']);   // another day
+        $made = \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'A', 'amount_kg' => 1, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-02']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2, 'remainder_date' => '2026-10-03']);   // another day
 
         $html = $this->as('accountant')->get('/confirmations/supplements?date=2026-10-01')->assertOk()->getContent();
 
@@ -400,7 +400,7 @@ class ConfirmationTest extends TestCase
         $this->assertStringContainsString('confirmations/supplements-export?date=2026-10-01', $html);
 
         $response = $this->as('accountant')->get('/confirmations/supplements-export?date=2026-10-01')->assertOk();
-        $response->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+        $response->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
         $this->assertStringContainsString('confirmation-supplements-2026-10-01.xlsx', $response->headers->get('content-disposition'));
 
         $sides = [];
@@ -408,7 +408,7 @@ class ConfirmationTest extends TestCase
             $rows = Supplement::withCount('tickets')->with('remainder')->where('supply_date', '2026-10-01')->whereNull('confirmed_at')->where('fuel_type', $fuel)->orderBy('supplied_at')->get();
             $sides[] = ['title' => config('fuel_types')[$fuel] . ' (' . $rows->count() . ')', 'rows' => $rows];
         }
-        $path = \App\Support\XlsxWriter::build(\App\Support\ReportSheets::confirmationSupplements(['title' => 'Supplements', 'sides' => $sides, 'nozzleLabels' => []]));
+        $path = \App\Support\Reports\XlsxWriter::build(\App\Support\Reports\ReportSheets::confirmationSupplements(['title' => 'Supplements', 'sides' => $sides, 'nozzleLabels' => []]));
         $zip = new \ZipArchive();
         $zip->open($path);
         $this->assertFalse($zip->getFromName('xl/worksheets/sheet2.xml'));      // one sheet
@@ -432,19 +432,19 @@ class ConfirmationTest extends TestCase
     public function testTheRemaindersTabExportsToExcel()
     {
         $supplement = $this->supplement('2026-10-01', ['fuel_type' => 'A']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'A', 'amount_kg' => 1.5, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-02']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2, 'remainder_date' => '2026-10-01']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000003', 'fuel_type' => 'A', 'amount_kg' => 9, 'remainder_date' => '2026-10-04']);   // another day
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'A', 'amount_kg' => 1.5, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-02']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2, 'remainder_date' => '2026-10-01']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000003', 'fuel_type' => 'A', 'amount_kg' => 9, 'remainder_date' => '2026-10-04']);   // another day
 
         $html = $this->as('accountant')->get('/confirmations/supplements?date=2026-10-01')->assertOk()->getContent();
         $this->assertStringContainsString('confirmations/remainders-export?date=2026-10-01', $html);
 
         $response = $this->as('accountant')->get('/confirmations/remainders-export?date=2026-10-01')->assertOk();
-        $response->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+        $response->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
         $this->assertStringContainsString('confirmation-remainders-2026-10-01.xlsx', $response->headers->get('content-disposition'));
 
-        $rows = \App\Models\Remainder::with('supplement')->where('remainder_date', '2026-10-01')->orderBy('amount_kg')->get();
-        $path = \App\Support\XlsxWriter::build(\App\Support\ReportSheets::confirmationRemainders(['title' => 'Remainders', 'rows' => $rows, 'fuels' => config('fuel_types'), 'nozzleLabels' => []]));
+        $rows = \App\Models\Supplements\Remainder::with('supplement')->where('remainder_date', '2026-10-01')->orderBy('amount_kg')->get();
+        $path = \App\Support\Reports\XlsxWriter::build(\App\Support\Reports\ReportSheets::confirmationRemainders(['title' => 'Remainders', 'rows' => $rows, 'fuels' => config('fuel_types'), 'nozzleLabels' => []]));
         $zip = new \ZipArchive();
         $zip->open($path);
         $this->assertFalse($zip->getFromName('xl/worksheets/sheet2.xml'));
@@ -485,7 +485,7 @@ class ConfirmationTest extends TestCase
 
     private function supplyTicket($supplement, $code, $fuel, $spec, $kg, $serial)
     {
-        return \App\Models\Ticket::forceCreate([
+        return \App\Models\Tickets\Ticket::forceCreate([
             'barcode' => str_pad($code . $serial, 16, '0', STR_PAD_LEFT), 'fuel_type' => $fuel, 'spec' => $spec, 'code' => $code, 'serial' => $serial,
             'amount_kg' => $kg, 'status' => config('ticket_statuses.supply'), 'supplement_id' => $supplement->id, 'synced' => false,
         ]);
@@ -521,9 +521,9 @@ class ConfirmationTest extends TestCase
         $this->supplyTicket($three, '22', 'A', null, 3, 4);      // self use
         $this->supplyTicket($three, '24', 'A', null, 1, 5);      // ticket loan: the others
         $this->supplement('2026-10-02', ['fuel_type' => 'A']);   // another day: its tickets are not counted
-        \App\Models\Remainder::forceCreate(['supplement_id' => $one->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2.5, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-01']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $three->id, 'ticket_barcode' => '0000025000000009', 'fuel_type' => 'D', 'amount_kg' => 1, 'remainder_date' => '2026-10-01']);
-        \App\Models\Remainder::forceCreate(['supplement_id' => $two->id, 'ticket_barcode' => '0000025000000008', 'fuel_type' => 'D', 'amount_kg' => 4, 'remainder_date' => '2026-09-30', 'complete_date' => '2026-10-01']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $one->id, 'ticket_barcode' => '0000025000000002', 'fuel_type' => 'A', 'amount_kg' => 2.5, 'remainder_date' => '2026-10-01', 'complete_date' => '2026-10-01']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $three->id, 'ticket_barcode' => '0000025000000009', 'fuel_type' => 'D', 'amount_kg' => 1, 'remainder_date' => '2026-10-01']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $two->id, 'ticket_barcode' => '0000025000000008', 'fuel_type' => 'D', 'amount_kg' => 4, 'remainder_date' => '2026-09-30', 'complete_date' => '2026-10-01']);
 
         $response = $this->as('accountant')->get('/confirmations/summary?date=2026-10-01')->assertOk();
         $summary = $response->viewData('summary');
@@ -647,14 +647,14 @@ class ConfirmationTest extends TestCase
         $this->sale('2026-10-02', ['amount_kg' => 99]);
         $supplement = $this->supplement('2026-10-01', ['fuel_type' => 'D', 'preset_kg' => 8, 'out_amount_kg' => 8, 'out_amount_lt' => 9, 'comment' => 'hose changed']);
         $this->supplyTicket($supplement, '21', 'D', null, 8, 1);                      // a spot ticket
-        \App\Models\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'D', 'amount_kg' => 1.5, 'remainder_date' => '2026-10-01']);
+        \App\Models\Supplements\Remainder::forceCreate(['supplement_id' => $supplement->id, 'ticket_barcode' => '0000025000000001', 'fuel_type' => 'D', 'amount_kg' => 1.5, 'remainder_date' => '2026-10-01']);
 
         $html = $this->as('accountant')->get('/confirmations/summary?date=2026-10-01')->assertOk()->getContent();
         $this->assertSame(1, substr_count($html, 'fa-file-excel'));
         $this->assertStringContainsString('confirmations/summary-export?date=2026-10-01', $html);
 
         $response = $this->as('accountant')->get('/confirmations/summary-export?date=2026-10-01')->assertOk();
-        $response->assertHeader('content-type', \App\Support\XlsxWriter::MIME);
+        $response->assertHeader('content-type', \App\Support\Reports\XlsxWriter::MIME);
         $this->assertStringContainsString('confirmation-summary-2026-10-01.xlsx', $response->headers->get('content-disposition'));
 
         $zip = new \ZipArchive();

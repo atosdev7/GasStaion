@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
-use App\Models\Tank;
+use App\Models\Fuel\Tank;
 use Illuminate\Validation\Rule;
 
 class TankController extends CrudController

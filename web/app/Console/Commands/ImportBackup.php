@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Support\Audit;
+use App\Support\Admin\Audit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;

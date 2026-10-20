@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
-use App\Models\Device;
-use App\Support\DeviceHash;
+use App\Models\Admin\Device;
+use App\Support\Admin\DeviceHash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 

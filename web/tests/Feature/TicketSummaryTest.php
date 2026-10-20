@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\TicketInbound;
-use App\Models\TicketPublish;
-use App\Models\User;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -204,7 +204,7 @@ class TicketSummaryTest extends TestCase
         $response = $this->get('/ticket-summary?fuel_type=D&spec=0&export=xls')->assertOk();
         $response->assertHeader('content-disposition');
         $this->assertStringContainsString('ticket-summary-D-5kg-' . today()->toDateString() . '.xlsx', $response->headers->get('content-disposition'));
-        $this->assertSame(\App\Support\XlsxWriter::MIME, $response->headers->get('content-type'));
+        $this->assertSame(\App\Support\Reports\XlsxWriter::MIME, $response->headers->get('content-type'));
 
         list($xml, $workbook) = $this->sheetOf($response);
 

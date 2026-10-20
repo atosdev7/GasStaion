@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Cards;
 
 use App\Http\Controllers\Controller;
-use App\Models\Card;
-use App\Support\Audit;
-use App\Support\CardPin;
+use App\Models\Cards\Card;
+use App\Support\Admin\Audit;
+use App\Support\Cards\CardPin;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -67,7 +67,7 @@ class CardController extends Controller
             'filters' => $filters,
             'balance' => $card->balance(),
             'recordsBalance' => $card->balanceFromRecords(),
-            'users' => \App\Models\User::withTrashed()->pluck('name', 'id'),
+            'users' => \App\Models\Admin\User::withTrashed()->pluck('name', 'id'),
             'fuels' => config('fuel_types'),
         ]);
     }

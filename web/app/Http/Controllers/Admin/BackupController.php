@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Backup;
-use App\Models\Tank;
-use App\Support\Audit;
-use App\Support\BackupRun;
+use App\Models\Admin\Backup;
+use App\Models\Fuel\Tank;
+use App\Support\Admin\Audit;
+use App\Support\Admin\BackupRun;
 use Illuminate\Http\Request;
 use RuntimeException;
 

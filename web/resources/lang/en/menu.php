@@ -35,7 +35,6 @@ return [
     'card_summary' => 'Summary',
     'card_sales' => 'Card Sales',
     'debt_summary' => 'Summary',
-    'confirmations' => 'Daily Confirmation',
     'confirmation_sales' => 'Sales',
     'confirmation_supplements' => 'Supplements',
     'confirmation_summary' => 'Summary',

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Audit;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 
 /**

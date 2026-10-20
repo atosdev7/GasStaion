@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\FuelType;
-use App\Models\Sale;
-use App\Models\Setting;
-use App\Models\Supplement;
-use App\Models\Ticket;
-use App\Support\Api;
-use App\Support\Audit;
-use App\Support\Pull;
-use App\Support\TankLevels;
+use App\Models\Fuel\FuelType;
+use App\Models\Sales\Sale;
+use App\Models\Admin\Setting;
+use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
+use App\Support\Sync\Api;
+use App\Support\Admin\Audit;
+use App\Support\Sync\Pull;
+use App\Support\Dashboard\TankLevels;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 

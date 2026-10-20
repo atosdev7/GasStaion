@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\CrudController;
-use App\Models\Customer;
+use App\Models\Sales\Customer;
 
 class CustomerController extends CrudController
 {

@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Device;
-use App\Support\Api;
+use App\Models\Admin\Device;
+use App\Support\Sync\Api;
 use Closure;
 
 /**

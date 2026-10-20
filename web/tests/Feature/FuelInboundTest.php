@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\FuelInbound;
-use App\Support\TankLevels;
-use App\Models\Tank;
-use App\Models\User;
+use App\Models\Fuel\FuelInbound;
+use App\Support\Dashboard\TankLevels;
+use App\Models\Fuel\Tank;
+use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -260,5 +260,29 @@ class FuelInboundTest extends TestCase
         $this->put('/inbound/' . $row->id, ['tank_id' => $this->tankD->id, 'inbound_date' => '2026-09-20', 'amount_kg' => '1', 'cost' => '1'])->assertForbidden();
         $this->delete('/inbound/' . $row->id)->assertForbidden();
         $this->assertNotNull(FuelInbound::find($row->id));
+    }
+
+    public function testInboundRemembersWhereTheFuelCameFrom()
+    {
+        $this->as('manager');
+        $this->inbound($this->tankD, '6.1000', ['from_name' => 'Refinery No. 1'])->assertRedirect('/inbound');
+        $row = FuelInbound::first();
+        $this->assertSame('Refinery No. 1', $row->from_name);
+
+        $this->get('/inbound')->assertSee('Refinery No. 1');
+        $this->get('/inbound/' . $row->id . '/edit')->assertSee('Refinery No. 1');
+
+        $this->put('/inbound/' . $row->id, ['tank_id' => $this->tankD->id, 'inbound_date' => '2026-09-20', 'amount_kg' => '10000', 'cost' => '6.1000', 'from_name' => 'Depot'])
+            ->assertRedirect('/inbound');
+        $this->assertSame('Depot', $row->fresh()->from_name);
+        $this->put('/inbound/' . $row->id, ['tank_id' => $this->tankD->id, 'inbound_date' => '2026-09-20', 'amount_kg' => '10000', 'cost' => '6.1000', 'from_name' => str_repeat('x', 101)])
+            ->assertSessionHasErrors('from_name');
+
+        // it is optional
+        $this->inbound($this->tankG, '7.0000')->assertRedirect('/inbound');
+        $this->assertNull(FuelInbound::orderByDesc('id')->first()->from_name);
+
+        // and the ticket inbound has no From any more
+        $this->get('/ticket-inbound/create')->assertOk()->assertDontSee('f_from_name');
     }
 }

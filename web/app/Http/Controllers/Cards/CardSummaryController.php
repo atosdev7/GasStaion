@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Cards;
 
 use App\Http\Controllers\Controller;
-use App\Models\Card;
-use App\Models\Sale;
-use App\Models\Supplement;
-use App\Support\ReportSheets;
-use App\Support\XlsxWriter;
+use App\Models\Cards\Card;
+use App\Models\Sales\Sale;
+use App\Models\Supplements\Supplement;
+use App\Support\Reports\ReportSheets;
+use App\Support\Reports\XlsxWriter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 

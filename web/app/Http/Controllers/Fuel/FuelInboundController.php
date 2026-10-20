@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Fuel;
 
 use App\Http\Controllers\Controller;
-use App\Models\FuelInbound;
-use App\Models\Tank;
-use App\Support\Audit;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\Tank;
+use App\Support\Admin\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +32,7 @@ class FuelInboundController extends Controller
         $data = $request->validate([
             'tank_id' => 'required|exists:tanks,id',
             'inbound_date' => 'required|date',
+            'from_name' => 'nullable|string|max:100',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'cost' => 'required|numeric|min:0|max:999999',
             'is_default' => 'nullable|boolean',
@@ -53,6 +54,7 @@ class FuelInboundController extends Controller
                 'cost' => $data['cost'],
                 'is_default' => false,
                 'inbound_date' => $data['inbound_date'],
+                'from_name' => $data['from_name'] ?? null,
                 'note' => $data['note'] ?? null,
                 'user_id' => auth()->id(),
             ]);
@@ -82,7 +84,7 @@ class FuelInboundController extends Controller
         ]);
     }
 
-    // Changes a record: date, tank (of the same fuel type), amount, cost, note. The tank stock follows because it is worked out from the
+    // Changes a record: date, where it came from, tank (of the same fuel type), amount, cost, note. The tank stock follows because it is worked out from the
     // records; sales already made keep the cost they were made with. Which record is the default is changed with "make default".
     public function update(Request $request, $id)
     {
@@ -90,6 +92,7 @@ class FuelInboundController extends Controller
         $data = $request->validate([
             'tank_id' => 'required|exists:tanks,id',
             'inbound_date' => 'required|date',
+            'from_name' => 'nullable|string|max:100',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'cost' => 'required|numeric|min:0|max:999999',
             'note' => 'nullable|string|max:255',
@@ -105,6 +108,7 @@ class FuelInboundController extends Controller
             'inbound_date' => $data['inbound_date'],
             'amount_kg' => $data['amount_kg'],
             'cost' => $data['cost'],
+            'from_name' => $data['from_name'] ?? null,
             'note' => $data['note'] ?? null,
         ])->save();
 

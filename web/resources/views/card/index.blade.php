@@ -41,7 +41,7 @@
                     <th>
                         <select name="status" form="card-filters" class="form-control form-control-sm" onchange="document.getElementById('card-filters').submit()">
                             <option value="">{{ __('cards.all_statuses') }}</option>
-                            @foreach (App\Models\Card::STATUSES as $status)
+                            @foreach (App\Models\Cards\Card::STATUSES as $status)
                                 <option value="{{ $status }}" {{ ($filters['status'] ?? '') === $status ? 'selected' : '' }}>{{ __('cards.status_' . $status) }}</option>
                             @endforeach
                         </select>

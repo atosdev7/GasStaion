@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Debts;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\TicketLoan;
-use App\Models\TicketLoanSettlement;
-use App\Support\ReportSheets;
-use App\Support\XlsxWriter;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Debts\TicketLoan;
+use App\Models\Debts\TicketLoanSettlement;
+use App\Support\Reports\ReportSheets;
+use App\Support\Reports\XlsxWriter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 

@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\Debt;
-use App\Models\DebtPayment;
-use App\Models\Sale;
-use App\Models\Ticket;
-use App\Support\Audit;
-use App\Support\SaleReturn;
+use App\Models\Sales\Customer;
+use App\Models\Debts\Debt;
+use App\Models\Debts\DebtPayment;
+use App\Models\Sales\Sale;
+use App\Models\Tickets\Ticket;
+use App\Support\Admin\Audit;
+use App\Support\Sales\SaleReturn;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
-// Return tickets of a sale as a counter entry (see App\Support\SaleReturn). Works on any sale that is not itself a
+// Return tickets of a sale as a counter entry (see App\Support\Sales\SaleReturn). Works on any sale that is not itself a
 // return, confirmed or not; the physical tickets handed back are entered by barcode.
 class SaleReturnController extends Controller
 {
