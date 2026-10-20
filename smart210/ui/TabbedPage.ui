@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TabbedPage</class>
+ <widget class="QWidget" name="TabbedPage">
+  <layout class="QVBoxLayout" name="tabbedLayout" stretch="0,1">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>16</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+    </widget>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="pageTabs">
+     <property name="pageTabs" stdset="0"><bool>true</bool></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

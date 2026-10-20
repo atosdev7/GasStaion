@@ -1,0 +1,6 @@
+src/PrintService.cpp
+src/PrinterConnection.cpp
+src/EscPos.cpp
+src/Uploader.cpp
+src/SyncClient.cpp
+src/ApiReply.cpp

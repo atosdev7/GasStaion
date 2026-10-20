@@ -1,0 +1,103 @@
+#ifndef CARDS_H
+#define CARDS_H
+
+#include <QDateTime>
+#include <QSqlDatabase>
+#include <QString>
+
+// The RFID fuel cards. A card is only its id; it holds a balance in kg of ONE fuel type, kept in the database (kg x100, like everything).
+//
+//   registering   the cashier reads the card, types the customer's name (only a name, not a customer of the web app), picks the fuel type and the
+//                 PIN the customer gives; the card waits for the upload (synced = 0). The PIN is kept as a salted SHA-256, never as it was typed.
+//   PIN           the cashier types it for every supply; a wrong one counts, the 5th wrong one in a row locks the card (status "locked"): only
+//                 the web app unlocks it (a manager or the accountant), or resets the PIN. A right PIN counts the wrong ones from zero again.
+//   top-up        a sale of type "card": cash only, paid in full, no customer, no ticket; the balance grows by its kg.
+//   supply        see SupplySession::startCard and SupplyRecord: no tickets, the balance falls by the kg that really came out.
+//
+// The balance of a card is `balance_kg`: the web app's figure at the last pull plus what was topped up and taken here since (see 015_cards.sql),
+// so it is right at once. All weights kg x100, money x100.
+class Cards
+{
+public:
+    static const int MaxAttempts = 5;   // wrong PINs in a row that lock a card
+    static const int PinMinLength = 4;
+    static const int PinMaxLength = 8;
+    static const int MaxUidLength = 32;
+    static const int MaxNameLength = 100;
+    static const int MaxPhoneLength = 30;
+
+    struct Card {
+        Card() : failedAttempts(0), balanceX100(0), deleted(false), synced(true), exists(false) {}
+
+        QString id;
+        QString uid;           // the id on the card, as the reader gives it
+        QString holderName;
+        QString holderPhone;   // optional
+        QString fuelType;
+        QString pinSalt;
+        QString pinHash;
+        int failedAttempts;
+        QString status;        // active, locked or blocked
+        qlonglong balanceX100; // what the card holds now
+        bool deleted;
+        bool synced;
+        bool exists;
+
+        bool isActive() const { return exists && !deleted && status == "active"; }
+    };
+
+    // What the reader sent, tidied: no spaces or control characters around it, capital letters (so the same card is always the same text).
+    static QString normalizeUid(const QString &text);
+
+    // True for 4 to 8 digits.
+    static bool validPin(const QString &pin);
+
+    static Card find(QSqlDatabase db, const QString &uid);
+    static Card findById(QSqlDatabase db, const QString &id);
+
+    struct Registration {
+        Registration() : ok(false) {}
+
+        bool ok;
+        QString error;
+        QString cardId;
+    };
+    // The card is new here (its uid is not known, not even to a deleted or blocked card). The fuel type must be one of the downloaded ones. The
+    // holder's phone number is optional (up to MaxPhoneLength characters); it is uploaded with the card.
+    static Registration registerCard(QSqlDatabase db, const QString &uid, const QString &holderName, const QString &fuelType, const QString &pin,
+                                     const QString &holderPhone = QString());
+
+    enum PinResult {
+        PinRight,
+        PinWrong,       // counted; triesLeft says how many are left
+        PinNowLocked,   // this was the 5th: the card is locked
+        PinRefused      // not counted: the card is unknown, locked or blocked, or the PIN is not 4 to 8 digits
+    };
+    struct PinCheck {
+        PinCheck() : result(PinRefused), triesLeft(0) {}
+
+        PinResult result;
+        int triesLeft;
+        QString error;  // for the cashier
+    };
+    static PinCheck checkPin(QSqlDatabase db, const QString &cardId, const QString &pin);
+
+    struct TopUpResult {
+        TopUpResult() : ok(false), totalX100(0), balanceX100(0) {}
+
+        bool ok;
+        QString error;
+        QString saleId;
+        qlonglong totalX100;
+        qlonglong balanceX100; // the balance after the top-up
+    };
+    // A top-up of kg at a price per kg (cash, paid in full). The total is kg x price unless the cashier typed the total payment (totalX100 >= 0).
+    // A locked card can be topped up, a blocked (lost) one cannot.
+    static TopUpResult topUp(QSqlDatabase db, const QString &cardId, qlonglong kgX100, qlonglong priceX100, int userId, const QDateTime &now,
+                             qlonglong totalX100 = -1);
+
+    // Moves the balance of a card, inside the transaction of whatever caused it (a top-up, a supply). False when there is no such card.
+    static bool adjustBalance(QSqlDatabase db, const QString &cardId, qlonglong deltaX100);
+};
+
+#endif

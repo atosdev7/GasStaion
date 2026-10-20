@@ -1,0 +1,8 @@
+src/SettingsPage.cpp
+ui/SettingsPage.ui
+src/MachineConfigPage.cpp
+ui/MachineConfigPage.ui
+src/ServerForm.cpp
+ui/ServerForm.ui
+src/PinPage.cpp
+ui/PinPage.ui

@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ManualSupplyPage</class>
+ <widget class="QWidget" name="ManualSupplyPage">
+  <layout class="QVBoxLayout" name="manualLayout" stretch="0,0,0,0,1,0,0,0,0">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>8</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>8</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Manual input</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="msIntro">
+     <property name="wordWrap"><bool>true</bool></property>
+     <property name="text"><string>A manual-mode nozzle is never recorded by the program: type its supply in here, with the tickets that paid for it.</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="manualGrid" columnstretch="4,4,4">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="msNozzleLabel">
+       <property name="text"><string>Nozzle</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="msTimeLabel">
+       <property name="text"><string>Date and time</string></property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="msDensityLabel">
+       <property name="text"><string>Density (kg/L)</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QComboBox" name="msNozzleCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QDateTimeEdit" name="msTimeEdit">
+       <property name="displayFormat"><string notr="true">yyyy-MM-dd HH:mm</string></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="msDensityField">
+       <property name="readOnly"><bool>true</bool></property>
+       <property name="focusPolicy"><enum>Qt::NoFocus</enum></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="msPresetLabel">
+       <property name="text"><string>Preset (kg)</string></property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLabel" name="msKgLabel">
+       <property name="text"><string>Dispensed (kg)</string></property>
+      </widget>
+     </item>
+     <item row="2" column="2">
+      <widget class="QLabel" name="msLitersLabel">
+       <property name="text"><string>Litres</string></property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLineEdit" name="msPresetField">
+       <property name="readOnly"><bool>true</bool></property>
+       <property name="focusPolicy"><enum>Qt::NoFocus</enum></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLineEdit" name="msKgField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="3" column="2">
+      <widget class="QLineEdit" name="msLitersField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="ticketRow" stretch="1,0,0">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QLineEdit" name="msBarcode">
+       <property name="placeholderText"><string>Ticket barcode, then Enter</string></property>
+       <property name="maxLength"><number>32</number></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="msAddButton">
+       <property name="text"><string>Add ticket</string></property>
+       <property name="minimumSize"><size><width>140</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="msRemoveButton">
+       <property name="text"><string>Remove</string></property>
+       <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="msTickets">
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="msCommentField">
+     <property name="placeholderText"><string>Comment (optional)</string></property>
+     <property name="maxLength"><number>255</number></property>
+     <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="msSummary">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="msStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="msSaveButton">
+     <property name="text"><string>Save supply</string></property>
+     <property name="enabled"><bool>false</bool></property>
+     <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

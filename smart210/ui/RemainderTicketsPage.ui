@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RemainderTicketsPage</class>
+ <widget class="QWidget" name="RemainderTicketsPage">
+  <layout class="QVBoxLayout" name="remainderLayout" stretch="0,0,1,0,0,0">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>12</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Remainder tickets</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="remainderIntro">
+     <property name="text"><string>A fill that gave less than its tickets covered makes a remainder ticket for the customer. Choose one and print it again when it was not printed or is lost.</string></property>
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="remainderTable">
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="remainderCommentRow" stretch="1,0">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QLineEdit" name="remainderCommentField">
+       <property name="placeholderText"><string>Comment of the chosen remainder</string></property>
+       <property name="maxLength"><number>255</number></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="remainderSaveCommentButton">
+       <property name="text"><string>Save comment</string></property>
+       <property name="minimumSize"><size><width>180</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="remainderStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="remainderPrintButton">
+     <property name="text"><string>Print the ticket</string></property>
+     <property name="minimumSize"><size><width>0</width><height>52</height></size></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

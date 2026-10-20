@@ -1,0 +1,58 @@
+<RCC>
+    <qresource prefix="/i18n">
+        <file alias="smart210_shell_en.qm">../i18n/smart210_shell_en.qm</file>
+        <file alias="smart210_shell_zh_CN.qm">../i18n/smart210_shell_zh_CN.qm</file>
+        <file alias="smart210_shell_zh_TW.qm">../i18n/smart210_shell_zh_TW.qm</file>
+        <file alias="smart210_login_en.qm">../i18n/smart210_login_en.qm</file>
+        <file alias="smart210_login_zh_CN.qm">../i18n/smart210_login_zh_CN.qm</file>
+        <file alias="smart210_login_zh_TW.qm">../i18n/smart210_login_zh_TW.qm</file>
+        <file alias="smart210_sales_en.qm">../i18n/smart210_sales_en.qm</file>
+        <file alias="smart210_sales_zh_CN.qm">../i18n/smart210_sales_zh_CN.qm</file>
+        <file alias="smart210_sales_zh_TW.qm">../i18n/smart210_sales_zh_TW.qm</file>
+        <file alias="smart210_supplies_en.qm">../i18n/smart210_supplies_en.qm</file>
+        <file alias="smart210_supplies_zh_CN.qm">../i18n/smart210_supplies_zh_CN.qm</file>
+        <file alias="smart210_supplies_zh_TW.qm">../i18n/smart210_supplies_zh_TW.qm</file>
+        <file alias="smart210_remainders_en.qm">../i18n/smart210_remainders_en.qm</file>
+        <file alias="smart210_remainders_zh_CN.qm">../i18n/smart210_remainders_zh_CN.qm</file>
+        <file alias="smart210_remainders_zh_TW.qm">../i18n/smart210_remainders_zh_TW.qm</file>
+        <file alias="smart210_cards_en.qm">../i18n/smart210_cards_en.qm</file>
+        <file alias="smart210_cards_zh_CN.qm">../i18n/smart210_cards_zh_CN.qm</file>
+        <file alias="smart210_cards_zh_TW.qm">../i18n/smart210_cards_zh_TW.qm</file>
+        <file alias="smart210_dispensers_en.qm">../i18n/smart210_dispensers_en.qm</file>
+        <file alias="smart210_dispensers_zh_CN.qm">../i18n/smart210_dispensers_zh_CN.qm</file>
+        <file alias="smart210_dispensers_zh_TW.qm">../i18n/smart210_dispensers_zh_TW.qm</file>
+        <file alias="smart210_ticket_debt_en.qm">../i18n/smart210_ticket_debt_en.qm</file>
+        <file alias="smart210_ticket_debt_zh_CN.qm">../i18n/smart210_ticket_debt_zh_CN.qm</file>
+        <file alias="smart210_ticket_debt_zh_TW.qm">../i18n/smart210_ticket_debt_zh_TW.qm</file>
+        <file alias="smart210_review_en.qm">../i18n/smart210_review_en.qm</file>
+        <file alias="smart210_review_zh_CN.qm">../i18n/smart210_review_zh_CN.qm</file>
+        <file alias="smart210_review_zh_TW.qm">../i18n/smart210_review_zh_TW.qm</file>
+        <file alias="smart210_settings_en.qm">../i18n/smart210_settings_en.qm</file>
+        <file alias="smart210_settings_zh_CN.qm">../i18n/smart210_settings_zh_CN.qm</file>
+        <file alias="smart210_settings_zh_TW.qm">../i18n/smart210_settings_zh_TW.qm</file>
+        <file alias="smart210_sync_en.qm">../i18n/smart210_sync_en.qm</file>
+        <file alias="smart210_sync_zh_CN.qm">../i18n/smart210_sync_zh_CN.qm</file>
+        <file alias="smart210_sync_zh_TW.qm">../i18n/smart210_sync_zh_TW.qm</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="theme.qss">theme.qss</file>
+    </qresource>
+    <qresource prefix="/migrations">
+        <file alias="001_initial.sql">migrations/001_initial.sql</file>
+        <file alias="002_card_transactions.sql">migrations/002_card_transactions.sql</file>
+        <file alias="003_remainder_comment.sql">migrations/003_remainder_comment.sql</file>
+        <file alias="004_card_transaction_order.sql">migrations/004_card_transaction_order.sql</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file alias="sales.png">icons/sales.png</file>
+        <file alias="supplies.png">icons/supplies.png</file>
+        <file alias="dispensers.png">icons/dispensers.png</file>
+        <file alias="debt.png">icons/debt.png</file>
+        <file alias="review.png">icons/review.png</file>
+        <file alias="settings.png">icons/settings.png</file>
+    </qresource>
+    <qresource prefix="/brand">
+        <file alias="logo.png">brand/logo.png</file>
+        <file alias="company.txt">brand/company.txt</file>
+    </qresource>
+</RCC>

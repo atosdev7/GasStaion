@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AppShell</class>
+ <widget class="QWidget" name="AppShell">
+  <layout class="QVBoxLayout" name="shellLayout" stretch="0,1,0">
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+   <item>
+    <widget class="ShellHeader" name="shellHeader">
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="middleLayout" stretch="0,1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>0</number></property>
+     <item>
+      <widget class="SideBar" name="shellSidebar">
+      </widget>
+     </item>
+     <item>
+      <widget class="QStackedWidget" name="shellContent">
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="ShellFooter" name="shellFooter">
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ShellHeader</class>
+   <extends>QWidget</extends>
+   <header>AppShell.h</header>
+   <container>0</container>
+  </customwidget>
+  <customwidget>
+   <class>SideBar</class>
+   <extends>QWidget</extends>
+   <header>AppShell.h</header>
+   <container>0</container>
+  </customwidget>
+  <customwidget>
+   <class>ShellFooter</class>
+   <extends>QWidget</extends>
+   <header>AppShell.h</header>
+   <container>0</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

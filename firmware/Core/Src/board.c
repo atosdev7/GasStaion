@@ -1,0 +1,845 @@
+#include "board.h"
+
+#include "checksum.h"
+
+#include <string.h>
+
+#define STX 0x02
+#define ANSWER 0x80
+#define CONFIG_SIZE 11
+#define TIME_SIZE 7
+#define MIN_DENSITY 1000
+#define MAX_DENSITY 20000
+#define MAX_PULSES_X100 100000000UL
+
+/* ---------------------------------------------------------------- numbers */
+
+static void put16(uint8_t *at, uint16_t v)
+{
+    at[0] = (uint8_t)(v & 0xFF);
+    at[1] = (uint8_t)(v >> 8);
+}
+
+static void put32(uint8_t *at, uint32_t v)
+{
+    at[0] = (uint8_t)(v & 0xFF);
+    at[1] = (uint8_t)((v >> 8) & 0xFF);
+    at[2] = (uint8_t)((v >> 16) & 0xFF);
+    at[3] = (uint8_t)((v >> 24) & 0xFF);
+}
+
+static uint16_t get16(const uint8_t *at)
+{
+    return (uint16_t)(at[0] | (at[1] << 8));
+}
+
+static uint32_t get32(const uint8_t *at)
+{
+    return (uint32_t)at[0] | ((uint32_t)at[1] << 8) | ((uint32_t)at[2] << 16) | ((uint32_t)at[3] << 24);
+}
+
+static int configured(const Config *c)
+{
+    return c->density != 0 && c->pulses_x100 != 0;
+}
+
+/* counts of the preset: litres = g x 10 / density, counts = litres x pulses_x100 / 100; rounded down, so the fill never goes past it */
+uint32_t board_target_pulses(const Config *c, uint32_t preset_g)
+{
+    uint64_t pulses;
+
+    if (!configured(c)) {
+        return 0;
+    }
+    pulses = (uint64_t)preset_g * c->pulses_x100 / ((uint64_t)c->density * 10);
+
+    return pulses > 0xFFFFFFFFULL ? 0xFFFFFFFFUL : (uint32_t)pulses;
+}
+
+/* the weight of a number of counts, rounded to the nearest gram */
+uint32_t board_grams_of(const Config *c, uint32_t pulses)
+{
+    uint64_t num, den, g;
+
+    if (!configured(c)) {
+        return 0;
+    }
+    num = (uint64_t)pulses * c->density * 10;
+    den = c->pulses_x100;
+    g = (num + den / 2) / den;
+
+    return g > 0xFFFFFFFFULL ? 0xFFFFFFFFUL : (uint32_t)g;
+}
+
+static uint32_t ml_of_pulses(const Config *c, uint32_t pulses)
+{
+    uint64_t num, den, ml;
+
+    if (!configured(c)) {
+        return 0;
+    }
+    num = (uint64_t)pulses * 100000ULL;
+    den = c->pulses_x100;
+    ml = (num + den / 2) / den;
+
+    return ml > 0xFFFFFFFFULL ? 0xFFFFFFFFUL : (uint32_t)ml;
+}
+
+uint32_t board_ml_of_grams(const Config *c, uint32_t grams)
+{
+    uint64_t ml;
+
+    if (c->density == 0) {
+        return 0;
+    }
+    ml = ((uint64_t)grams * 10000ULL + c->density / 2) / c->density;
+
+    return ml > 0xFFFFFFFFULL ? 0xFFFFFFFFUL : (uint32_t)ml;
+}
+
+/* ---------------------------------------------------------------- the calendar */
+
+static int leap(unsigned year)
+{
+    return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+static int valid_time(const DateTime *t)
+{
+    static const uint8_t days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    unsigned limit;
+
+    if (t->year < 2000 || t->year > 2099 || t->month < 1 || t->month > 12 || t->hour > 23 || t->minute > 59 || t->second > 59) {
+        return 0;
+    }
+    limit = days[t->month - 1] + ((t->month == 2 && leap(t->year)) ? 1u : 0u);
+
+    return t->day >= 1 && t->day <= limit;
+}
+
+static void time_to_bytes(const DateTime *t, uint8_t *out)
+{
+    put16(out, t->year);
+    out[2] = t->month;
+    out[3] = t->day;
+    out[4] = t->hour;
+    out[5] = t->minute;
+    out[6] = t->second;
+}
+
+static void time_from_bytes(const uint8_t *in, DateTime *t)
+{
+    t->year = get16(in);
+    t->month = in[2];
+    t->day = in[3];
+    t->hour = in[4];
+    t->minute = in[5];
+    t->second = in[6];
+}
+
+/* ---------------------------------------------------------------- answers */
+
+static void build(uint8_t *out, size_t *out_len, uint8_t address, uint8_t seq, uint8_t cmd, const uint8_t *data, size_t len)
+{
+    uint16_t crc;
+
+    out[0] = STX;
+    out[1] = address;
+    out[2] = seq;
+    out[3] = cmd;
+    out[4] = (uint8_t)len;
+    if (len) {
+        memcpy(out + 5, data, len);
+    }
+    crc = crc16(out + 1, 4 + len);
+    out[5 + len] = (uint8_t)(crc & 0xFF);
+    out[6 + len] = (uint8_t)(crc >> 8);
+    *out_len = 7 + len;
+}
+
+static void answer(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, size_t len)
+{
+    build(b->tx, &b->tx_len, b->address, seq, (uint8_t)(cmd | ANSWER), data, len);
+}
+
+static void nak(Board *b, uint8_t seq, uint8_t cmd, uint8_t error)
+{
+    uint8_t d[2];
+
+    d[0] = error;
+    d[1] = cmd;
+    build(b->tx, &b->tx_len, b->address, seq, CMD_NAK, d, 2);
+}
+
+/* ---------------------------------------------------------------- the memory */
+
+static int save(Board *b)
+{
+    if (b->hal->save(b->hal->ctx, &b->p)) {
+        return 1;
+    }
+    /* the memory refused: nothing is promised any more, so the board stops working until it is power cycled */
+    if (b->fault != FAULT_MEMORY) {
+        board_set_fault(b, FAULT_MEMORY);
+    }
+
+    return 0;
+}
+
+/* ---------------------------------------------------------------- the pump */
+
+static int hook_lifted(const Board *b)
+{
+    return b->hal->hook ? b->hal->hook(b->hal->ctx) != 0 : 1;
+}
+
+static void set_pump(Board *b, int on)
+{
+    if (b->pump_on != (uint8_t)(on != 0)) {
+        b->pump_on = (uint8_t)(on != 0);
+        b->hal->pump(b->hal->ctx, on != 0);
+    }
+}
+
+/* ---------------------------------------------------------------- the fill */
+
+/* the counts of the fill so far; a backflow takes them off again but they do not go below 0 */
+static uint32_t counts_since_start(const Board *b)
+{
+    const int32_t d = (int32_t)(b->hal->pulses(b->hal->ctx) - b->pulse_base);
+
+    return d < 0 ? 0 : (uint32_t)d;
+}
+
+static void hold_result(Board *b, uint32_t id, uint32_t preset_g, uint32_t g, uint32_t ml, uint8_t reason)
+{
+    Result *r = &b->p.result;
+
+    r->held = 1;
+    r->id = id;
+    r->preset_g = preset_g;
+    r->dispensed_g = g;
+    r->dispensed_ml = ml;
+    r->reason = reason;
+    b->p.inflight.active = 0;
+    save(b);
+}
+
+/* the weight and the volume of a fill that did not reach its target: what the counts say, never more than the preset */
+static void partial_amounts(const Config *c, uint32_t pulses, uint32_t preset_g, uint32_t *g, uint32_t *ml)
+{
+    const uint32_t most_ml = board_ml_of_grams(c, preset_g);
+
+    *g = board_grams_of(c, pulses);
+    if (*g > preset_g) {
+        *g = preset_g;
+    }
+    *ml = ml_of_pulses(c, pulses);
+    if (*ml > most_ml) {
+        *ml = most_ml;
+    }
+}
+
+uint32_t board_live_grams(const Board *b)
+{
+    uint32_t g, ml;
+
+    if (b->state == STATE_RESULT) {
+        return b->p.result.dispensed_g;
+    }
+    if (b->state != STATE_DISPENSING) {
+        return 0;
+    }
+    partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
+
+    return g;
+}
+
+/* The fill is over: the result is held (in the memory first), then the state shows it. */
+static void finish_fill(Board *b, uint8_t reason)
+{
+    uint32_t g, ml;
+    const Config *c = &b->p.config;
+
+    set_pump(b, 0);
+    if (reason == REASON_PRESET) {
+        /* the target was reached: by the calibration that is the preset, whatever the last few counts while the pump stops say */
+        g = b->preset_g;
+        ml = board_ml_of_grams(c, g);
+    } else {
+        partial_amounts(c, b->pulses_seen, b->preset_g, &g, &ml);
+    }
+    b->closing = 0;
+    hold_result(b, b->p.inflight.id, b->preset_g, g, ml, reason);
+    b->state = STATE_RESULT;
+}
+
+/* The pump stops; the counts that still come are counted, then the result is held. */
+static void begin_closing(Board *b, uint8_t reason)
+{
+    set_pump(b, 0);
+    b->closing = 1;
+    b->closing_reason = reason;
+    b->closing_ms = 0;
+    b->quiet_ms = 0;
+}
+
+static int start_fill(Board *b)
+{
+    Inflight *f = &b->p.inflight;
+
+    b->p.next_result_id += 1;
+    if (b->p.next_result_id == 0) {
+        b->p.next_result_id = 1;
+    }
+    f->active = 1;
+    f->id = b->p.next_result_id;
+    f->preset_g = b->preset_g;
+    f->target_pulses = board_target_pulses(&b->p.config, b->preset_g);
+    f->pulses = 0;
+    b->p.result.held = 0;
+    if (!save(b)) {
+        return 0; /* the id is not promised before it is stored */
+    }
+    b->pulse_base = b->hal->pulses(b->hal->ctx);
+    b->pulses_seen = 0;
+    b->flow_started = 0;
+    b->closing = 0;
+    b->since_start_ms = 0;
+    b->no_flow_for_ms = 0;
+    b->hook_down_ms = 0;
+    b->since_save_ms = 0;
+    b->saved_pulses = 0;
+    b->state = STATE_DISPENSING;
+    set_pump(b, hook_lifted(b) && !b->powering_down);
+
+    return 1;
+}
+
+static void run_fill(Board *b, uint32_t elapsed_ms)
+{
+    const uint32_t seen = counts_since_start(b);
+    const uint32_t target = b->p.inflight.target_pulses;
+    const int changed = seen != b->pulses_seen;
+    int lifted;
+    uint32_t early;
+
+    b->pulses_seen = seen;
+    b->p.inflight.pulses = seen;
+
+    if (b->closing) {
+        b->closing_ms += elapsed_ms;
+        b->quiet_ms = changed ? 0 : b->quiet_ms + elapsed_ms;
+        if (b->quiet_ms >= b->params.settle_ms || b->closing_ms >= b->params.settle_max_ms) {
+            finish_fill(b, b->closing_reason);
+        }
+
+        return;
+    }
+
+    b->since_start_ms += elapsed_ms;
+    if (changed) {
+        b->flow_started = 1;
+        b->no_flow_for_ms = 0;
+    } else if (b->flow_started) {
+        b->no_flow_for_ms += elapsed_ms;
+    }
+
+    /* the pump runs only while the nozzle is lifted */
+    lifted = hook_lifted(b);
+    set_pump(b, lifted && !b->powering_down);
+    b->hook_down_ms = lifted ? 0 : b->hook_down_ms + elapsed_ms;
+
+    early = target > b->params.early_close_pulses ? b->params.early_close_pulses : 0;
+    if (seen >= target - early) {
+        begin_closing(b, REASON_PRESET);
+
+        return;
+    }
+    if ((b->flow_started && !lifted && b->hook_down_ms >= b->params.hook_down_end_ms)
+        || (b->flow_started && b->no_flow_for_ms >= b->params.no_flow_ms)
+        || (!b->flow_started && b->since_start_ms >= b->params.start_wait_ms)) {
+        begin_closing(b, REASON_NO_FLOW);
+
+        return;
+    }
+
+    b->since_save_ms += elapsed_ms;
+    if (b->since_save_ms >= b->params.save_ms) {
+        b->since_save_ms = 0;
+        if (seen != b->saved_pulses) {
+            b->saved_pulses = seen;
+            save(b);
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- start up */
+
+void board_default_params(Params *params)
+{
+    params->rx_gap_ms = 10;
+    params->no_flow_ms = 30000;
+    params->start_wait_ms = 600000;
+    params->hook_down_end_ms = 3000;
+    params->settle_ms = 200;
+    params->settle_max_ms = 1000;
+    params->save_ms = 2000;
+    params->early_close_pulses = 0;
+}
+
+void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)
+{
+    int loaded;
+
+    memset(b, 0, sizeof(*b));
+    b->hal = hal;
+    b->address = address;
+    if (params) {
+        b->params = *params;
+    } else {
+        board_default_params(&b->params);
+    }
+    hal->pump(hal->ctx, 0);
+
+    loaded = hal->load(hal->ctx, &b->p);
+    if (loaded < 0) {
+        /* a record is there but cannot be read: the result ids cannot be trusted, so the board does not work (fault 3) until it is serviced */
+        memset(&b->p, 0, sizeof(b->p));
+        b->fault = FAULT_MEMORY;
+        b->state = STATE_FAULT;
+
+        return;
+    }
+    if (loaded == 0) {
+        memset(&b->p, 0, sizeof(b->p)); /* a new board: not configured, the first result id will be 1 */
+    }
+    if (b->p.inflight.active) {
+        /* a power cut in the middle of a fill: it comes back as a result holding the last stored value */
+        const Inflight f = b->p.inflight;
+        uint32_t g, ml;
+
+        partial_amounts(&b->p.config, f.pulses, f.preset_g, &g, &ml);
+        b->preset_g = f.preset_g;
+        hold_result(b, f.id, f.preset_g, g, ml, REASON_INTERRUPTED);
+    }
+    if (b->p.result.held) {
+        b->preset_g = b->p.result.preset_g;
+        b->state = STATE_RESULT;
+    } else {
+        b->state = STATE_IDLE;
+    }
+}
+
+/* ---------------------------------------------------------------- commands */
+
+static int config_ok(const Config *c)
+{
+    return (c->mode == MODE_AUTO || c->mode == MODE_MANUAL) && c->fuel[0] != 0 && c->density >= MIN_DENSITY && c->density <= MAX_DENSITY
+        && c->pulses_x100 >= 1 && c->pulses_x100 <= MAX_PULSES_X100;
+}
+
+static void config_to_bytes(const Config *c, uint8_t *out)
+{
+    out[0] = c->mode;
+    memcpy(out + 1, c->fuel, FUEL_LEN);
+    put16(out + 5, c->density);
+    put32(out + 7, c->pulses_x100);
+}
+
+static void config_from_bytes(const uint8_t *in, Config *c)
+{
+    c->mode = in[0];
+    memcpy(c->fuel, in + 1, FUEL_LEN);
+    c->density = get16(in + 5);
+    c->pulses_x100 = get32(in + 7);
+}
+
+static void do_poll(Board *b, uint8_t seq)
+{
+    uint8_t d[15];
+    uint8_t flags = (uint8_t)(b->key_events & (FLAG_SELECT_KEY | FLAG_DESELECT_KEY));
+    uint32_t id = 0, g = 0, ml = 0;
+
+    if (b->state == STATE_RESULT) {
+        flags |= FLAG_RESULT;
+        id = b->p.result.id;
+        g = b->p.result.dispensed_g;
+        ml = b->p.result.dispensed_ml;
+    } else if (b->state == STATE_DISPENSING) {
+        id = b->p.inflight.id;
+        partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
+    }
+    if (b->state == STATE_FAULT || b->fault != 0) {
+        flags |= FLAG_FAULT;
+    }
+    d[0] = b->state;
+    d[1] = flags;
+    d[2] = b->fault;
+    put32(d + 3, id);
+    put32(d + 7, g);
+    put32(d + 11, ml);
+    b->key_events = 0; /* raised once */
+    answer(b, seq, CMD_POLL, d, sizeof(d));
+}
+
+/* The data length each command takes; -1 for a command this board does not know. */
+static int data_length(uint8_t cmd)
+{
+    switch (cmd) {
+    case CMD_INFO: case CMD_POLL: case CMD_SELECT: case CMD_DESELECT: case CMD_START: case CMD_CANCEL:
+    case CMD_GET_RESULT: case CMD_GET_CONFIG: case CMD_GET_TIME:
+        return 0;
+    case CMD_SET_PRESET: case CMD_ACK_RESULT:
+        return 4;
+    case CMD_SET_CONFIG:
+        return CONFIG_SIZE;
+    case CMD_SET_TIME:
+        return TIME_SIZE;
+    default:
+        return -1;
+    }
+}
+
+static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, size_t len)
+{
+    const int manual = b->p.config.mode == MODE_MANUAL;
+    const int want = data_length(cmd);
+    uint8_t d[17];
+
+    if (want < 0) {
+        nak(b, seq, cmd, ERR_BAD_COMMAND);
+
+        return;
+    }
+    if ((size_t)want != len) {
+        nak(b, seq, cmd, ERR_BAD_LENGTH);
+
+        return;
+    }
+
+    switch (cmd) {
+    case CMD_POLL:
+        do_poll(b, seq);
+        break;
+    case CMD_INFO:
+        d[0] = PROTOCOL_VERSION;
+        d[1] = FW_MAJOR;
+        d[2] = FW_MINOR;
+        put32(d + 3, b->hal->serial(b->hal->ctx));
+        answer(b, seq, cmd, d, 7);
+        break;
+    case CMD_SELECT:
+        if (b->state == STATE_FAULT) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else if (manual || (b->state != STATE_IDLE && b->state != STATE_SELECTED)) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else {
+            b->state = STATE_SELECTED;
+            answer(b, seq, cmd, 0, 0);
+        }
+        break;
+    case CMD_DESELECT:
+        if (b->state > STATE_ARMED) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else {
+            b->state = STATE_IDLE;
+            answer(b, seq, cmd, 0, 0);
+        }
+        break;
+    case CMD_SET_PRESET:
+        if (b->state == STATE_FAULT) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else if (manual || (b->state != STATE_SELECTED && b->state != STATE_ARMED)) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else if (get32(data) == 0) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);
+        } else {
+            b->preset_g = get32(data);
+            b->state = STATE_ARMED;
+            answer(b, seq, cmd, data, 4);
+        }
+        break;
+    case CMD_START:
+        if (!configured(&b->p.config)) {
+            nak(b, seq, cmd, ERR_NOT_CONFIGURED);
+        } else if (b->state == STATE_FAULT) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else if (manual || b->state != STATE_ARMED) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else if (board_target_pulses(&b->p.config, b->preset_g) == 0) {
+            nak(b, seq, cmd, ERR_BAD_VALUE); /* less than one count */
+        } else if (!start_fill(b)) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else {
+            put32(d, b->p.inflight.id);
+            answer(b, seq, cmd, d, 4);
+        }
+        break;
+    case CMD_CANCEL:
+        if (b->state != STATE_SELECTED && b->state != STATE_ARMED) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else {
+            b->state = STATE_IDLE;
+            answer(b, seq, cmd, 0, 0);
+        }
+        break;
+    case CMD_GET_RESULT:
+        if (b->state != STATE_RESULT) {
+            nak(b, seq, cmd, ERR_NO_RESULT);
+        } else {
+            put32(d, b->p.result.id);
+            put32(d + 4, b->p.result.preset_g);
+            put32(d + 8, b->p.result.dispensed_g);
+            put32(d + 12, b->p.result.dispensed_ml);
+            d[16] = b->p.result.reason;
+            answer(b, seq, cmd, d, 17);
+        }
+        break;
+    case CMD_ACK_RESULT: {
+        const uint32_t id = get32(data);
+
+        if (b->state == STATE_RESULT && id == b->p.result.id) {
+            b->p.last_acked_id = id;
+            b->p.result.held = 0;
+            save(b);
+            b->state = b->fault != 0 ? STATE_FAULT : STATE_IDLE;
+            answer(b, seq, cmd, data, 4);
+        } else if (id == b->p.last_acked_id && id != 0) {
+            answer(b, seq, cmd, data, 4); /* already done: a lost answer is repeated */
+        } else {
+            nak(b, seq, cmd, b->state == STATE_RESULT ? ERR_ID_MISMATCH : ERR_NO_RESULT);
+        }
+        break;
+    }
+    case CMD_GET_CONFIG:
+        config_to_bytes(&b->p.config, d);
+        answer(b, seq, cmd, d, CONFIG_SIZE);
+        break;
+    case CMD_SET_CONFIG: {
+        Config wanted;
+
+        config_from_bytes(data, &wanted);
+        if (b->state != STATE_IDLE) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else if (!config_ok(&wanted)) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);
+        } else {
+            const Config old = b->p.config;
+
+            b->p.config = wanted;
+            if (!save(b)) {
+                b->p.config = old;
+                nak(b, seq, cmd, ERR_FAULT);
+            } else {
+                config_to_bytes(&b->p.config, d);
+                answer(b, seq, cmd, d, CONFIG_SIZE);
+            }
+        }
+        break;
+    }
+    case CMD_SET_TIME: {
+        DateTime t;
+
+        time_from_bytes(data, &t);
+        if (!valid_time(&t)) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);
+        } else if (!b->hal->rtc_set(b->hal->ctx, &t)) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else {
+            time_to_bytes(&t, d);
+            answer(b, seq, cmd, d, TIME_SIZE);
+        }
+        break;
+    }
+    case CMD_GET_TIME: {
+        DateTime t;
+
+        if (!b->hal->rtc_get(b->hal->ctx, &t)) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else {
+            time_to_bytes(&t, d);
+            answer(b, seq, cmd, d, TIME_SIZE);
+        }
+        break;
+    }
+    default:
+        nak(b, seq, cmd, ERR_BAD_COMMAND);
+        break;
+    }
+}
+
+/* ---------------------------------------------------------------- the line */
+
+static void handle_frame(Board *b, const uint8_t *f)
+{
+    const uint8_t seq = f[2];
+    const uint8_t cmd = f[3];
+
+    if (b->have_seq && b->last_seq == seq) {
+        /* the same ADDR and SEQ again: nothing runs a second time, the last answer goes out again */
+        memcpy(b->tx, b->last_reply, b->last_reply_len);
+        b->tx_len = b->last_reply_len;
+
+        return;
+    }
+    execute(b, seq, cmd, f + 5, f[4]);
+    b->have_seq = 1;
+    b->last_seq = seq;
+    memcpy(b->last_reply, b->tx, b->tx_len);
+    b->last_reply_len = b->tx_len;
+}
+
+static void drop(Board *b, size_t n)
+{
+    if (n >= b->rx_len) {
+        b->rx_len = 0;
+    } else {
+        memmove(b->rx, b->rx + n, b->rx_len - n);
+        b->rx_len -= n;
+    }
+}
+
+/* Is there a complete frame with a good CRC starting at this offset of the receive buffer? Returns its length, or 0. */
+static size_t frame_at(const Board *b, size_t at)
+{
+    size_t total;
+    uint16_t crc;
+
+    if (b->rx[at] != STX || b->rx_len - at < 5 || b->rx[at + 4] > MAX_DATA) {
+        return 0;
+    }
+    total = (size_t)b->rx[at + 4] + 7;
+    if (b->rx_len - at < total) {
+        return 0;
+    }
+    crc = crc16(b->rx + at + 1, 4 + (size_t)b->rx[at + 4]);
+
+    return (b->rx[at + total - 2] == (uint8_t)(crc & 0xFF) && b->rx[at + total - 1] == (uint8_t)(crc >> 8)) ? total : 0;
+}
+
+int board_feed(Board *b, uint8_t byte)
+{
+    int answered = 0;
+
+    b->rx_idle_ms = 0;
+    if (b->rx_len < sizeof(b->rx)) {
+        b->rx[b->rx_len++] = byte;
+    }
+
+    for (;;) {
+        size_t at = 0;
+        size_t total = 0;
+
+        /* A frame is taken as soon as it is complete and its CRC is right, wherever it starts: a stray 0x02 (noise, or the STX byte of a
+           frame that was cut) in front of it must not hold it back until more bytes arrive. */
+        while (at < b->rx_len && (total = frame_at(b, at)) == 0) {
+            ++at;
+        }
+        if (at < b->rx_len) {
+            drop(b, at);
+            if (b->rx[1] == b->address) {
+                handle_frame(b, b->rx);
+                answered = 1;
+            }
+            drop(b, total);
+            continue;
+        }
+
+        /* no good frame in the buffer: keep the bytes from the first STX that can still become one, throw the rest away */
+        at = 0;
+        while (at < b->rx_len) {
+            if (b->rx[at] == STX && (b->rx_len - at < 5 || (b->rx[at + 4] <= MAX_DATA && b->rx_len - at < (size_t)b->rx[at + 4] + 7))) {
+                break; /* still incomplete: wait for the rest */
+            }
+            ++at;
+        }
+        drop(b, at);
+        break;
+    }
+
+    return answered;
+}
+
+const uint8_t *board_reply(const Board *b, size_t *len)
+{
+    *len = b->tx_len;
+
+    return b->tx;
+}
+
+/* ---------------------------------------------------------------- time, keys, faults, power */
+
+void board_tick(Board *b, uint32_t elapsed_ms)
+{
+    if (b->rx_len) {
+        b->rx_idle_ms += elapsed_ms;
+        if (b->rx_idle_ms >= b->params.rx_gap_ms) {
+            b->rx_len = 0; /* a half frame is dropped */
+            b->rx_idle_ms = 0;
+        }
+    }
+    if (b->state == STATE_DISPENSING) {
+        run_fill(b, elapsed_ms);
+    }
+}
+
+void board_key_select(Board *b)
+{
+    if (b->p.config.mode == MODE_MANUAL) {
+        return; /* the select key is not used in manual mode */
+    }
+    if (b->state == STATE_IDLE) {
+        b->state = STATE_SELECTED;
+        b->key_events |= FLAG_SELECT_KEY;
+    } else if (b->state == STATE_SELECTED || b->state == STATE_ARMED) {
+        b->state = STATE_IDLE;
+        b->key_events |= FLAG_DESELECT_KEY;
+    }
+}
+
+int board_manual_amount(Board *b, uint32_t grams)
+{
+    if (b->p.config.mode != MODE_MANUAL || b->state != STATE_IDLE || grams == 0 || !configured(&b->p.config)
+        || board_target_pulses(&b->p.config, grams) == 0) {
+        return 0;
+    }
+    b->preset_g = grams;
+
+    return start_fill(b);
+}
+
+void board_set_fault(Board *b, uint8_t code)
+{
+    b->fault = code;
+    if (code != 0) {
+        if (b->state == STATE_DISPENSING) {
+            finish_fill(b, REASON_FAULT); /* the result is held; the board is in fault after it is acknowledged */
+        } else if (b->state != STATE_RESULT) {
+            b->state = STATE_FAULT;
+        }
+    } else if (b->state == STATE_FAULT) {
+        b->state = STATE_IDLE;
+    }
+}
+
+/* The supply is going: the pump stops at once and the fill so far is written, so that after the restart it comes back as a result with
+   reason 2 holding these counts (and not the ones of the last periodic write). */
+void board_power_fail(Board *b)
+{
+    if (b->powering_down) {
+        return;
+    }
+    b->powering_down = 1;
+    set_pump(b, 0);
+    if (b->state == STATE_DISPENSING) {
+        b->pulses_seen = counts_since_start(b);
+        b->p.inflight.pulses = b->pulses_seen;
+        b->hal->save(b->hal->ctx, &b->p);
+    }
+}
+
+void board_power_restored(Board *b)
+{
+    b->powering_down = 0;
+}

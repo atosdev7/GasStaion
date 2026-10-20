@@ -1,0 +1,7 @@
+ui/ShellHeader.ui
+ui/ShellFooter.ui
+ui/SideBar.ui
+src/MainWindow.cpp
+src/AppShell.cpp
+ui/AppShell.ui
+src/main.cpp

@@ -1,0 +1,5 @@
+src/LoanSettlePage.cpp
+ui/LoanSettlePage.ui
+src/LoanSettleDialog.cpp
+ui/LoanSettleDialog.ui
+src/LoanSettlement.cpp

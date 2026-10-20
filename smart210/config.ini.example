@@ -1,0 +1,23 @@
+; Copy to config.ini next to the program. Every key is optional.
+language=en
+fullscreen=true
+width=1280
+height=720
+;fontDir=/path/to/fonts
+;themeFile=/path/to/theme.qss   ; a copy of resources/theme.qss to edit: the app reads it again whenever it is saved
+;dataDir=/path/to/sdcard/smart210
+;downloadMinutes=10
+;setSystemClock=false
+;printWidthDots=576
+;logo=/path/to/logo.png
+;ticketFont=/path/to/titlefont.ttf
+;printEnd=cut
+;ticketTitle_sale=Gas Station Fuel Ticket
+
+; listen for the RS485 converter of the nozzle boards (the port is set on Machine Config); false for trying screens on a PC
+boards=true
+
+; the supplier's barcode scanner is read in the background: its exact name from /proc/bus/input/devices (the N: Name="..." line),
+; and, to tell it from another scanner of the same name, a part of its USB port (the P: Phys= line)
+supplierScannerName=SCANNER SCANNER
+;supplierScannerPhys=usb-s5p-ehci-1.1

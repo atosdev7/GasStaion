@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ShellFooter</class>
+ <widget class="QWidget" name="ShellFooter">
+  <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+  <property name="maximumSize"><size><width>16777215</width><height>40</height></size></property>
+  <layout class="QHBoxLayout" name="footerLayout" stretch="1,0,0,0,0,0">
+   <property name="leftMargin"><number>16</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>16</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>28</number></property>
+   <item>
+    <widget class="QLabel" name="footerSync">
+     <property name="sizePolicy"><sizepolicy hsizetype="Ignored" vsizetype="Preferred"><horstretch>1</horstretch><verstretch>0</verstretch></sizepolicy></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="footerClockWarning">
+     <property name="visible"><bool>false</bool></property>
+     <property name="state" stdset="0"><string notr="true">error</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="footerBoards">
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="footerScanner">
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="footerInput">
+     <property name="visible"><bool>false</bool></property>
+     <property name="toolTip"><string>Hangul key or Ctrl+Space: Hangul / English</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="footerWaiting">
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

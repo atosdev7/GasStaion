@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="en_US">
+<context>
+    <name>QObject</name>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="40"/>
+        <source>Sale</source>
+        <translation>Sale</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="40"/>
+        <source>Self use</source>
+        <translation>Self use</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="40"/>
+        <source>Other</source>
+        <translation>Other</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="40"/>
+        <source>Ticket loan</source>
+        <translation>Ticket loan</translation>
+    </message>
+</context>
+<context>
+    <name>ReviewPage</name>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="13"/>
+        <source>Review</source>
+        <translation>Review</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="41"/>
+        <location filename="../src/ReviewPage.cpp" line="259"/>
+        <source>Upload data</source>
+        <translation>Upload data</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <source>Time</source>
+        <translation>Time</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <source>Type</source>
+        <translation>Type</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <source>Customer</source>
+        <translation>Customer</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <source>Fuel</source>
+        <translation>Fuel</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <source>kg</source>
+        <translation>kg</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="57"/>
+        <source>Amount</source>
+        <translation>Amount</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="124"/>
+        <location filename="../src/ReviewPage.cpp" line="58"/>
+        <location filename="../src/ReviewPage.cpp" line="61"/>
+        <location filename="../src/ReviewPage.cpp" line="64"/>
+        <source>Comment</source>
+        <translation>Comment</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="58"/>
+        <location filename="../src/ReviewPage.cpp" line="61"/>
+        <location filename="../src/ReviewPage.cpp" line="64"/>
+        <source>State</source>
+        <translation>State</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <source>Nozzle</source>
+        <translation>Nozzle</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <source>Litres</source>
+        <translation>Litres</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="60"/>
+        <source>Preset kg</source>
+        <translation>Preset kg</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="61"/>
+        <source>Manual</source>
+        <translation>Manual</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <source>Record</source>
+        <translation>Record</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="63"/>
+        <location filename="../src/ReviewPage.cpp" line="168"/>
+        <source>Ticket</source>
+        <translation>Ticket</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="56"/>
+        <source>Sales</source>
+        <translation>Sales</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="74"/>
+        <source>Supplies</source>
+        <translation>Supplies</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="92"/>
+        <source>Ticket Debt</source>
+        <translation>Ticket Debt</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="129"/>
+        <source>Save comment</source>
+        <translation>Save comment</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="148"/>
+        <source>Set date</source>
+        <translation>Set date</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="160"/>
+        <location filename="../src/ReviewPage.cpp" line="354"/>
+        <source>Delete sale</source>
+        <translation>Delete sale</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="168"/>
+        <source>Spot</source>
+        <translation>Spot</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="168"/>
+        <source>Card</source>
+        <translation>Card</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="172"/>
+        <source>Yes</source>
+        <translation>Yes</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="172"/>
+        <source>No</source>
+        <translation>No</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="175"/>
+        <source>Loan</source>
+        <translation>Loan</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="175"/>
+        <source>Settlement</source>
+        <translation>Settlement</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="179"/>
+        <source>Refused</source>
+        <translation>Refused</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="179"/>
+        <source>Waiting</source>
+        <translation>Waiting</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="179"/>
+        <source>Uploaded</source>
+        <translation>Uploaded</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="194"/>
+        <source>Made near 9:00: check that the date is right.</source>
+        <translation>Made near 9:00: check that the date is right.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="238"/>
+        <source>Spot sales: %1 records, %2 kg, amount %3
+Ticket sales: %4 records, %5 kg, amount %6
+Total paid: %7, unpaid: %8</source>
+        <translation>Spot sales: %1 records, %2 kg, amount %3
+Ticket sales: %4 records, %5 kg, amount %6
+Total paid: %7, unpaid: %8</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="241"/>
+        <source>Supplies: %1 records, %2 litres, %3 kg
+Remainders: %4 records, %5 kg</source>
+        <translation>Supplies: %1 records, %2 litres, %3 kg
+Remainders: %4 records, %5 kg</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="243"/>
+        <source>Ticket loans: %1 records, %2 kg
+Settlements: %3 records, %4 kg</source>
+        <translation>Ticket loans: %1 records, %2 kg
+Settlements: %3 records, %4 kg</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="248"/>
+        <source>%1 waiting, %2 refused</source>
+        <translation>%1 waiting, %2 refused</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="250"/>
+        <source>%1 waiting for upload</source>
+        <translation>%1 waiting for upload</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="252"/>
+        <source>Nothing waits on this date</source>
+        <translation>Nothing waits on this date</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="259"/>
+        <source>Upload data (%1 waiting)</source>
+        <translation>Upload data (%1 waiting)</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="331"/>
+        <source>Confirm delete</source>
+        <translation>Confirm delete</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="347"/>
+        <source>The sale was deleted. It will never be uploaded.</source>
+        <translation>The sale was deleted. It will never be uploaded.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="370"/>
+        <location filename="../src/ReviewPage.cpp" line="391"/>
+        <source>Nothing changed.</source>
+        <translation>Nothing changed.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="386"/>
+        <source>The date was set. The record will be uploaded again.</source>
+        <translation>The date was set. The record will be uploaded again.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="402"/>
+        <source>Uploading...</source>
+        <translation>Uploading...</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="409"/>
+        <source>The upload did not finish: %1 Nothing is lost; press Upload data again.</source>
+        <translation>The upload did not finish: %1 Nothing is lost; press Upload data again.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="289"/>
+        <source>Select a record</source>
+        <translation>Select a record</translation>
+    </message>
+    <message>
+        <location filename="../ui/ReviewPage.ui" line="25"/>
+        <location filename="../src/ReviewPage.cpp" line="58"/>
+        <location filename="../src/ReviewPage.cpp" line="61"/>
+        <location filename="../src/ReviewPage.cpp" line="64"/>
+        <source>Date</source>
+        <translation>Date</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="289"/>
+        <source>1 selected</source>
+        <translation>1 selected</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="367"/>
+        <source>The comment was saved. The record will be uploaded again.</source>
+        <translation>The comment was saved. The record will be uploaded again.</translation>
+    </message>
+    <message>
+        <location filename="../src/ReviewPage.cpp" line="387"/>
+        <source>The record was moved to %1. It will be uploaded again.</source>
+        <translation>The record was moved to %1. It will be uploaded again.</translation>
+    </message>
+</context>
+</TS>

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TicketSalePage</class>
+ <widget class="QWidget" name="TicketSalePage">
+  <layout class="QVBoxLayout" name="ticketLayout" stretch="0,0,1,0,0,0">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>8</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>8</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Ticket sale</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="topGrid" columnstretch="4,3,2,2">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="tsCustomerLabel">
+       <property name="text"><string>Customer</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="tsFuelLabel">
+       <property name="text"><string>Fuel type</string></property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="tsPriceLabel">
+       <property name="text"><string>Price per kg</string></property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QLabel" name="tsUsageLabel">
+       <property name="text"><string>Use</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QComboBox" name="tsCustomerCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QComboBox" name="tsFuelCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="tsPriceField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QComboBox" name="tsUsageCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="tsPanel">
+     <property name="title"><string>Tickets to sell</string></property>
+     <layout class="QHBoxLayout" name="panelLayout" stretch="2,5">
+      <property name="leftMargin"><number>9</number></property>
+      <property name="topMargin"><number>9</number></property>
+      <property name="rightMargin"><number>9</number></property>
+      <property name="bottomMargin"><number>9</number></property>
+      <property name="spacing"><number>6</number></property>
+      <item>
+       <layout class="QGridLayout" name="addGrid">
+        <property name="leftMargin"><number>0</number></property>
+        <property name="topMargin"><number>0</number></property>
+        <property name="rightMargin"><number>0</number></property>
+        <property name="bottomMargin"><number>0</number></property>
+        <property name="spacing"><number>6</number></property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="tsSpecLabel">
+          <property name="text"><string>Spec</string></property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QComboBox" name="tsSpecCombo">
+          <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="tsStartLabel">
+          <property name="text"><string>Start serial</string></property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="tsStartField">
+          <property name="placeholderText"><string>lowest available</string></property>
+          <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="tsCountLabel">
+          <property name="text"><string>Count</string></property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLineEdit" name="tsCountField">
+          <property name="text"><string notr="true">1</string></property>
+          <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="tsEndLabel">
+          <property name="text"><string>End serial</string></property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLineEdit" name="tsEndField">
+          <property name="readOnly"><bool>true</bool></property>
+          <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+         </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
+         <widget class="QLabel" name="tsCheckResult">
+          <property name="wordWrap"><bool>true</bool></property>
+         </widget>
+        </item>
+        <item row="5" column="0" colspan="2">
+         <layout class="QHBoxLayout" name="addButtons">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QPushButton" name="tsCheckButton">
+            <property name="text"><string>Check</string></property>
+            <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="tsAddButton">
+            <property name="text"><string>Add item</string></property>
+            <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="itemsColumn" stretch="1,0">
+        <property name="leftMargin"><number>0</number></property>
+        <property name="topMargin"><number>0</number></property>
+        <property name="rightMargin"><number>0</number></property>
+        <property name="bottomMargin"><number>0</number></property>
+        <property name="spacing"><number>6</number></property>
+        <item>
+         <widget class="QTableWidget" name="tsItemsTable">
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="tableButtons">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QLabel" name="tsTotals">
+            <property name="bold" stdset="0"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacer1">
+            <property name="orientation"><enum>Qt::Horizontal</enum></property>
+            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="tsClearButton">
+            <property name="text"><string>Clear list</string></property>
+            <property name="minimumSize"><size><width>120</width><height>44</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="summaryRow" stretch="0,1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QCheckBox" name="tsReceiptCheck">
+       <property name="text"><string>Receipt issued</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="tsCommentField">
+       <property name="placeholderText"><string>Comment</string></property>
+       <property name="maxLength"><number>255</number></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="tsStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow" stretch="2">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QPushButton" name="saveTicketSaleButton">
+       <property name="text"><string>Save sale</string></property>
+       <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

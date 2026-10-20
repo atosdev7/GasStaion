@@ -1,0 +1,268 @@
+#include "port.h"
+
+#include "board_config.h"
+#include "store.h"
+#include "w25q.h"
+#include "ui_drivers.h"
+
+extern TIM_HandleTypeDef htim1;
+extern RTC_HandleTypeDef hrtc;
+extern SPI_HandleTypeDef hspi3;
+extern UART_HandleTypeDef huart6;
+
+/* ---------------------------------------------------------------- the flow meter */
+
+/* TIM1 counts the A/B signals of the flow meter (all four edges); it is 16 bit, so it is widened here. The count goes down with a backflow.
+   Called at every tick, which is far more often than the 16 bit counter can wrap. */
+static uint16_t last_count_;
+static uint32_t total_count_;
+
+static uint32_t port_pulses(void *ctx)
+{
+    const uint16_t now = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
+
+    (void)ctx;
+    total_count_ += (uint32_t)(int32_t)(int16_t)(uint16_t)(now - last_count_);
+    last_count_ = now;
+
+    return total_count_;
+}
+
+/* ---------------------------------------------------------------- pump, hook */
+
+static void port_pump(void *ctx, int on)
+{
+    const GPIO_PinState level = on ? RELAY_ON_LEVEL : (RELAY_ON_LEVEL == GPIO_PIN_SET ? GPIO_PIN_RESET : GPIO_PIN_SET);
+
+    (void)ctx;
+    HAL_GPIO_WritePin(RELAY1_GPIO_Port, RELAY1_Pin, level);
+    HAL_GPIO_WritePin(RELAY2_GPIO_Port, RELAY2_Pin, level);
+}
+
+static int port_hook(void *ctx)
+{
+    (void)ctx;
+
+    return HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL;
+}
+
+int port_power_cut(void)
+{
+    return HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL;
+}
+
+/* ---------------------------------------------------------------- the clock, the serial number */
+
+static uint8_t weekday_of(uint16_t year, uint8_t month, uint8_t day)
+{
+    static const uint8_t t[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    uint16_t y = year;
+    uint8_t w;
+
+    if (month < 3) {
+        y = (uint16_t)(y - 1);
+    }
+    w = (uint8_t)((y + y / 4 - y / 100 + y / 400 + t[month - 1] + day) % 7); /* 0 = Sunday */
+
+    return w == 0 ? RTC_WEEKDAY_SUNDAY : w;
+}
+
+static int port_rtc_get(void *ctx, DateTime *out)
+{
+    RTC_TimeTypeDef t;
+    RTC_DateTypeDef d;
+
+    (void)ctx;
+    if (HAL_RTC_GetTime(&hrtc, &t, RTC_FORMAT_BIN) != HAL_OK || HAL_RTC_GetDate(&hrtc, &d, RTC_FORMAT_BIN) != HAL_OK) { /* the date after the time */
+        return 0;
+    }
+    out->year = (uint16_t)(2000 + d.Year);
+    out->month = d.Month;
+    out->day = d.Date;
+    out->hour = t.Hours;
+    out->minute = t.Minutes;
+    out->second = t.Seconds;
+
+    return 1;
+}
+
+static int port_rtc_set(void *ctx, const DateTime *in)
+{
+    RTC_TimeTypeDef t = {0};
+    RTC_DateTypeDef d = {0};
+
+    (void)ctx;
+    t.Hours = in->hour;
+    t.Minutes = in->minute;
+    t.Seconds = in->second;
+    t.TimeFormat = RTC_HOURFORMAT12_AM;
+    t.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    t.StoreOperation = RTC_STOREOPERATION_RESET;
+    d.Year = (uint8_t)(in->year - 2000);
+    d.Month = in->month;
+    d.Date = in->day;
+    d.WeekDay = weekday_of(in->year, in->month, in->day);
+
+    return HAL_RTC_SetTime(&hrtc, &t, RTC_FORMAT_BIN) == HAL_OK && HAL_RTC_SetDate(&hrtc, &d, RTC_FORMAT_BIN) == HAL_OK;
+}
+
+static uint32_t port_serial(void *ctx)
+{
+    (void)ctx;
+
+    return HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2();
+}
+
+/* ---------------------------------------------------------------- the memory */
+
+static Store store_;
+
+static int port_load(void *ctx, Persist *out)
+{
+    (void)ctx;
+
+    return store_load(&store_, out);
+}
+
+static int port_save(void *ctx, const Persist *in)
+{
+    (void)ctx;
+
+    return store_save(&store_, in);
+}
+
+/* ---------------------------------------------------------------- the RS-485 line */
+
+#define RX_RING 128
+
+static uint8_t rx_byte_;
+static volatile uint8_t ring_[RX_RING];
+static volatile uint16_t head_;
+static volatile uint16_t tail_;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART6) {
+        const uint16_t next = (uint16_t)((head_ + 1) % RX_RING);
+
+        if (next != tail_) { /* a full ring drops the byte: the master asks again */
+            ring_[head_] = rx_byte_;
+            head_ = next;
+        }
+        HAL_UART_Receive_IT(&huart6, &rx_byte_, 1);
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART6) {
+        HAL_UART_Receive_IT(&huart6, &rx_byte_, 1); /* an overrun or a framing error: the byte is lost, the receiver goes on */
+    }
+}
+
+int port_rx_byte(void)
+{
+    int byte;
+
+    if (tail_ == head_) {
+        return -1;
+    }
+    byte = ring_[tail_];
+    tail_ = (uint16_t)((tail_ + 1) % RX_RING);
+
+    return byte;
+}
+
+void port_send(const uint8_t *data, size_t len)
+{
+    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_SET); /* the driver on (RE and DE are one pin) */
+    HAL_UART_Transmit(&huart6, (uint8_t *)data, (uint16_t)len, 50);   /* returns after the last bit has gone */
+    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_RESET);
+}
+
+/* ---------------------------------------------------------------- beeper, LEDs */
+
+static uint32_t beep_until_;
+static uint8_t beeping_;
+
+static void port_beep(void *ctx, uint16_t ms)
+{
+    (void)ctx;
+    HAL_GPIO_WritePin(BEEP_GPIO_Port, BEEP_Pin, BEEP_ON_LEVEL);
+    beep_until_ = HAL_GetTick() + ms;
+    beeping_ = 1;
+}
+
+void port_poll(void)
+{
+    if (beeping_ && (int32_t)(HAL_GetTick() - beep_until_) >= 0) {
+        HAL_GPIO_WritePin(BEEP_GPIO_Port, BEEP_Pin, BEEP_ON_LEVEL == GPIO_PIN_SET ? GPIO_PIN_RESET : GPIO_PIN_SET);
+        beeping_ = 0;
+    }
+}
+
+static void port_led(void *ctx, uint8_t index, int on)
+{
+    static GPIO_TypeDef *const ports[4] = {LED1_GPIO_Port, LED2_GPIO_Port, LED3_GPIO_Port, LED4_GPIO_Port};
+    static const uint16_t pins[4] = {LED1_Pin, LED2_Pin, LED3_Pin, LED4_Pin};
+    const GPIO_PinState lit = LED_ON_LEVEL;
+
+    (void)ctx;
+    if (index < 4) {
+        HAL_GPIO_WritePin(ports[index], pins[index], on ? lit : (lit == GPIO_PIN_SET ? GPIO_PIN_RESET : GPIO_PIN_SET));
+    }
+}
+
+/* ---------------------------------------------------------------- the display and the keyboard (ui_drivers.h) */
+
+static void port_lcd_clear(void *ctx)
+{
+    (void)ctx;
+    ui_lcd_clear();
+}
+
+static void port_lcd_print(void *ctx, uint8_t row, uint8_t col, const char *text)
+{
+    (void)ctx;
+    ui_lcd_print(row, col, text);
+}
+
+static int port_key(void *ctx)
+{
+    (void)ctx;
+
+    return ui_key_read();
+}
+
+/* ---------------------------------------------------------------- start up */
+
+void port_init(Hal *hal, UiHal *ui)
+{
+    port_pump(0, 0); /* the pump is off before anything else */
+
+    HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
+    last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
+    total_count_ = 0;
+
+    HAL_UART_Receive_IT(&huart6, &rx_byte_, 1);
+
+    w25q_init(&hspi3);
+    store_init(&store_, w25q_flash(), STORE_BASE, STORE_AUTOFORMAT);
+
+    hal->ctx = 0;
+    hal->load = port_load;
+    hal->save = port_save;
+    hal->pulses = port_pulses;
+    hal->pump = port_pump;
+    hal->hook = port_hook;
+    hal->rtc_get = port_rtc_get;
+    hal->rtc_set = port_rtc_set;
+    hal->serial = port_serial;
+
+    ui->ctx = 0;
+    ui->lcd_clear = port_lcd_clear;
+    ui->lcd_print = port_lcd_print;
+    ui->key = port_key;
+    ui->beep = port_beep;
+    ui->led = port_led;
+}

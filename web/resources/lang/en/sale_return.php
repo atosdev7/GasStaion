@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'title' => 'Return tickets',
+    'button' => 'Return',
+    'badge' => 'Return',
+    'sale' => 'Sale being corrected',
+    'returned_so_far' => ':kg kg already returned',
+    'still_owed' => 'Still owed on this sale',
+    'unused' => 'Tickets that can still be returned',
+    'none_unused' => 'None: every ticket of this sale was used or restricted.',
+    'whole_only_hint' => 'This sale can only be returned whole: every one of its tickets must come back.',
+    'barcodes_hint' => 'Scan or type the barcodes of the tickets the customer hands back, one per line.',
+    'all' => 'All unused tickets of this sale',
+    'comment' => 'Reason (optional)',
+    'money_hint' => 'The value returned first cancels what the customer still owes on this sale; the rest is refunded in the sale\'s payment method. The tickets go back to stock, and this is recorded as a new entry dated today.',
+    'submit' => 'Return tickets',
+    'done' => 'Returned :count tickets (:kg kg). :debt of what the customer owed was cancelled and :refund refunded (:method).',
+    'nothing_entered' => 'Enter the barcodes of the returned tickets, or tick "all unused tickets".',
+    'tickets_not_returnable' => 'These barcodes are not unused tickets of this sale: :barcodes',
+    'is_return' => 'A return entry cannot be returned again.',
+    'nothing_to_return' => 'This sale has no unused ticket left to return.',
+    'whole_only' => 'This sale can only be returned whole: all of its tickets must be unused and handed back together.',
+    'loan_settled' => 'Tickets were already surrendered for this sale\'s loan, so it cannot be returned.',
+    'more_than_remaining' => 'That is more than is left of this sale.',
+    'returned_kg' => 'returned :kg kg',
+];

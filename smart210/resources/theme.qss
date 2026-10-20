@@ -1,0 +1,65 @@
+/* The look of the Smart210 app: colours, fonts and spacing of every widget. Edit this file in Qt Creator.
+ *
+ * To try a change without rebuilding: copy this file next to the program, put  themeFile=/path/to/theme.qss  in config.ini and start the
+ * app; the file is read again whenever it is saved. The built-in copy (this file in resources) is used when themeFile is not set.
+ *
+ * Font sizes are in pixels:  20 = every text (Theme::BodyPx, also the size the Chinese font is loaded at), 24 = menu items, sub titles and
+ * buttons, 28 = page titles and the company name. A page that needs a title gives its label the object name "pageTitle", a sub title "subTitle".
+ *
+ * Colours:  text #111827 / #374151 / #4b5563, lines #e5e7eb / #cbd5e1, page #f8fafc, panels #ffffff, blue (the selected thing) #1d4ed8,
+ * the sidebar #111827, error #b42318, warning #b45309.
+ */
+
+/* the base: every widget 20 px, the rules below raise some to 24 and 28 */
+QWidget { font-size: 20px; }
+QWidget#shellContent { background: #f8fafc; }
+
+QLabel#pageTitle { font-size: 28px; font-weight: bold; color: #111827; }
+QLabel[sub="true"] { font-size: 24px; font-weight: bold; }
+QLabel#subTitle, QLabel[heading="true"] { font-size: 24px; font-weight: bold; color: #111827; }
+QGroupBox { font-size: 24px; font-weight: bold; }
+
+QPushButton { font-size: 24px; min-height: 36px; padding: 4px 18px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #111827; }
+QPushButton:hover { background: #f1f5f9; }
+QPushButton:pressed { background: #e2e8f0; }
+QPushButton:disabled { color: #9ca3af; background: #f3f4f6; border-color: #e5e7eb; }
+
+QPushButton[state="danger"], QPushButton[state="danger"]:hover { background: #b42318; color: #ffffff; }
+QTabBar { font-size: 20px; }
+QTabWidget[pageTabs="true"] > QTabBar { font-size: 24px; }
+QTabWidget[pageTabs="true"] > QTabBar::tab { font-size: 24px; padding: 8px 22px; }
+QTabWidget::pane { border: 1px solid #e5e7eb; border-radius: 6px; background: #ffffff; top: -1px; }
+QTabBar::tab { font-size: 20px; padding: 6px 14px; border: 1px solid #e5e7eb; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; background: #e5e7eb; color: #374151; margin-right: 3px; }
+QTabBar::tab:selected { background: #ffffff; color: #1d4ed8; }
+
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { min-height: 34px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; background: #ffffff; }
+QLineEdit:focus, QComboBox:focus { border: 2px solid #1d4ed8; }
+QLineEdit:disabled, QComboBox:disabled { background: #f3f4f6; color: #9ca3af; }
+
+QListWidget#cashierList::item { min-height: 52px; padding-left: 12px; }
+QLabel[bold="true"] { font-weight: bold; }
+QTableWidget, QListWidget { background: #ffffff; border: 1px solid #e5e7eb; gridline-color: #e5e7eb; }
+QHeaderView::section { background: #f1f5f9; padding: 6px 8px; border: none; border-bottom: 1px solid #d1d5db; font-weight: bold; }
+
+/* the header: logo and company on the left, the cashier and the time on the right */
+QWidget#shellHeader { background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+QLabel#companyName { font-size: 28px; font-weight: bold; color: #111827; }
+QLabel#cashierLabel { font-size: 24px; font-weight: bold; color: #111827; }
+QLabel#headerClock { color: #4b5563; }
+
+/* the sidebar: dark, one button for each page */
+QWidget#shellSidebar { background: #111827; }
+QWidget#shellSidebar QPushButton { font-size: 24px; color: #e5e7eb; text-align: left; border: none; border-radius: 10px; padding: 0px 14px; background: transparent; min-height: 56px; }
+QWidget#shellSidebar QPushButton:hover { background: #1f2937; }
+QWidget#shellSidebar QPushButton:checked { background: #1d4ed8; color: #ffffff; font-weight: bold; }
+QWidget#shellSidebar QPushButton[alert="true"] { color: #fbbf24; }
+
+/* the footer: the status of the terminal */
+QWidget#shellFooter { background: #f3f4f6; border-top: 1px solid #e5e7eb; }
+QWidget#shellFooter QLabel { color: #374151; }
+
+/* the state of a message: a label (or a line edit) gets the property "state" with Theme::setState(widget, "error"), "warning", "ok" or "muted" */
+QLabel[state="error"], QWidget#shellFooter QLabel[state="error"] { color: #b42318; }
+QLabel[state="warning"], QWidget#shellFooter QLabel[state="warning"] { color: #b45309; }
+QLabel[state="ok"], QWidget#shellFooter QLabel[state="ok"] { color: #1a7f37; }
+QLabel[state="muted"], QWidget#shellFooter QLabel[state="muted"] { color: #6b7280; }

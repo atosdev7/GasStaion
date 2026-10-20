@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ServerForm</class>
+ <widget class="QGroupBox" name="ServerForm">
+  <property name="title"><string>Server</string></property>
+  <layout class="QVBoxLayout" name="serverFormLayout">
+   <property name="leftMargin"><number>9</number></property>
+   <property name="topMargin"><number>9</number></property>
+   <property name="rightMargin"><number>9</number></property>
+   <property name="bottomMargin"><number>9</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <layout class="QFormLayout" name="serverFormFields">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="serverHostLabel">
+       <property name="text"><string>Address</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="serverHost">
+       <property name="placeholderText"><string>For example 192.168.1.10</string></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="serverPortLabel">
+       <property name="text"><string>Port</string></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="serverPort">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="2" column="0" colspan="2">
+      <widget class="QPushButton" name="testConnectionButton">
+       <property name="text"><string>Test Connection</string></property>
+       <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="serverStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

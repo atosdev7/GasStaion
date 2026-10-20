@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SpotSalePage</class>
+ <widget class="QWidget" name="SpotSalePage">
+  <layout class="QVBoxLayout" name="spotLayout">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>8</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>8</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Spot sale</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="topGrid" columnstretch="4,3,2,2">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="customerLabel">
+       <property name="text"><string>Customer</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="fuelLabel">
+       <property name="text"><string>Fuel type</string></property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="priceLabel">
+       <property name="text"><string>Price per kg</string></property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QLabel" name="usageLabel">
+       <property name="text"><string>Use</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QComboBox" name="customerCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QComboBox" name="fuelCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="priceField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QComboBox" name="usageCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="amountsGrid" columnstretch="4,3,2,2">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="kgLabel">
+       <property name="text"><string>Weight (kg)</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="amountLabel">
+       <property name="text"><string>Amount</string></property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="paymentLabel">
+       <property name="text"><string>Payment method</string></property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QLabel" name="resultLabel">
+       <property name="text"><string>Result</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLineEdit" name="kgField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="amountField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLineEdit" name="paymentField">
+       <property name="text"><string>Cash</string></property>
+       <property name="readOnly"><bool>true</bool></property>
+       <property name="focusPolicy"><enum>Qt::NoFocus</enum></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QComboBox" name="resultCombo">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="bottomRow" stretch="0,1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QCheckBox" name="receiptCheck">
+       <property name="text"><string>Receipt issued</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="commentField">
+       <property name="placeholderText"><string>Comment</string></property>
+       <property name="maxLength"><number>255</number></property>
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="saleStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="spacer1">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+    </spacer>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow" stretch="2,1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QPushButton" name="saveSaleButton">
+       <property name="text"><string>Save sale</string></property>
+       <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="printAgainButton">
+       <property name="text"><string>Print again</string></property>
+       <property name="enabled"><bool>false</bool></property>
+       <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

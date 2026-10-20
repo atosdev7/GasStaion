@@ -1,0 +1,5 @@
+src/CardPage.cpp
+ui/CardPage.ui
+src/Cards.cpp
+src/CardHistoryDialog.cpp
+ui/CardHistoryDialog.ui

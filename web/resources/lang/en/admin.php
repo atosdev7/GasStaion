@@ -1,0 +1,78 @@
+<?php
+
+return [
+    // Users, devices, fuel types, tanks, nozzles
+    'board_address_hint' => 'The address of the nozzle\'s board on the RS-485 line; leave it empty when it is not known yet.',
+    'nozzle_number_taken' => 'This number is already used on this device (a nozzle that was deleted keeps its number: restore it instead).',
+    'nozzle_fuel_mismatch' => 'The tank holds a different fuel type than the nozzle.',
+    'density_hint' => 'Weight per litre, e.g. for converting between an LPG ticket\'s kg and a litre-based tank/report. Leave blank if not needed.',
+    'password_hint' => 'Leave blank to keep the current password. It is also the Smart210 login password.',
+    'pin_hint' => 'Machine Config PIN, 4 to 8 digits. Leave blank to keep it (new devices get the default PIN).',
+    'ip_address_hint' => 'The address this Smart210 calls from. Only registered addresses may use the API, so give the terminal a fixed address (or a reservation on the router).',
+    'purge_days_hint' => 'Synced records older than this many days are removed from the Smart210.',
+
+    // Backup
+    'backup_up_to' => 'Clear up to',
+    'backup_preview' => 'Preview',
+    'backup_kept_hint' => 'Debts, payments, ticket loans and settlements are never removed, and neither is anything not yet checked out. The latest possible date is yesterday.',
+    'backup_daily_hint' => 'A full database copy is also saved every night at 02:00 and kept for :days days.',
+    'backup_will_clear' => 'Exports all data, then permanently removes these rows up to :date',
+    'backup_tank_carry' => 'Tank stock carried forward (inbound minus supplied in the removed rows, still counted in tank levels)',
+    'backup_run' => 'Export and clear',
+    'backup_confirm' => 'Export all data and permanently remove the rows shown? A safety copy of the database is made first.',
+    'backup_done' => 'Backup finished: :file',
+    'backup_history' => 'Backup history',
+    'backup_date' => 'Run at',
+    'backup_cleared' => 'Removed',
+    'backup_file' => 'Export file',
+    'backup_table_sales' => 'Sales',
+    'backup_table_supplements' => 'Supplements',
+    'backup_table_remainders' => 'Remainders',
+    'backup_table_fuel_inbounds' => 'Fuel inbounds',
+    'backup_table_tickets' => 'Supplied / restricted tickets',
+
+    // Users, devices, fuel types, tanks, nozzles
+    'username' => 'Username',
+    'role' => 'Role',
+    'password' => 'Password',
+    'capacity_kg' => 'Capacity (kg)',
+    'ip_address' => 'IP address',
+    'purge_days' => 'Purge days',
+    'pin' => 'PIN',
+    'device_id' => 'Device',
+    'number' => 'Nozzle number',
+    'board_address' => 'Board RS-485 address',
+
+    // Field labels
+    'price' => 'Price per kg',
+    'density' => 'Density (kg/L)',
+    'fuel_type' => 'Fuel type',
+    'tank_id' => 'Tank',
+    'kg' => 'kg',
+    'name' => 'Name',
+
+    // Labels and messages
+    'saved' => 'Saved.',
+    'created' => 'Created.',
+    'deleted' => 'Deleted.',
+    'new' => 'New',
+    'delete' => 'Delete',
+    'status' => 'Status',
+    'save' => 'Save',
+    'cancel' => 'Cancel',
+    'edit' => 'Edit',
+    'restored' => 'Restored.',
+    'active' => 'Active',
+    'inactive' => 'Inactive',
+    'activate' => 'Activate',
+    'deactivate' => 'Deactivate',
+    'restore' => 'Restore',
+    'delete_confirm' => 'Delete this record? It will disappear from lists, but nothing that already refers to it is affected. It can be restored from the trash.',
+    'show_trash' => 'Show deleted',
+    'show_active' => 'Back to list',
+
+    // Copied from report.php
+    'from' => 'From',
+    'to' => 'To',
+    'no_data' => 'No data for this period.',
+];

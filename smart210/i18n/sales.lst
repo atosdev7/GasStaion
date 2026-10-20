@@ -1,0 +1,9 @@
+src/TicketSalePage.cpp
+ui/TicketSalePage.ui
+src/SpotSalePage.cpp
+ui/SpotSalePage.ui
+src/TicketSale.cpp
+src/SpotSale.cpp
+src/Checkout.cpp
+src/SaleDeletion.cpp
+src/TicketNumbers.cpp

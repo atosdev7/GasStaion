@@ -1,0 +1,19 @@
+# tool and editor state (the preview launch config is shared)
+/.claude/*
+!/.claude/launch.json
+*.user
+*.autosave
+.qtc_clangd/
+Thumbs.db
+
+# a password-protected archive of real data, never in the repository
+/bd.dd
+
+# build output
+/smart210/build/
+/simulator/build/
+/firmware/Debug/
+*.o
+
+# the Smart210's local settings (config.ini.example is tracked)
+/smart210/config.ini

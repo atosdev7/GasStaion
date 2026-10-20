@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LoanSettleDialog</class>
+ <widget class="QDialog" name="LoanSettleDialog">
+  <property name="minimumSize"><size><width>560</width><height>440</height></size></property>
+  <layout class="QVBoxLayout" name="settleLayout" stretch="0,0,0,1,0,0,0,0">
+   <property name="leftMargin"><number>16</number></property>
+   <property name="topMargin"><number>16</number></property>
+   <property name="rightMargin"><number>16</number></property>
+   <property name="bottomMargin"><number>16</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="settleTitle">
+     <property name="text"><string>Settle a ticket debt</string></property>
+     <property name="heading" stdset="0"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="settleInfo">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="settleScanField">
+     <property name="placeholderText"><string>Scan a ticket, or type its 16 digits and press Enter</string></property>
+     <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="settleTable">
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="listButtons">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QPushButton" name="settleRemoveButton">
+       <property name="text"><string>Remove selected</string></property>
+       <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="settleClearButton">
+       <property name="text"><string>Clear list</string></property>
+       <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="settleTotals">
+     <property name="bold" stdset="0"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="settleStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow" stretch="2,1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QPushButton" name="settleButton">
+       <property name="text"><string>Settle</string></property>
+       <property name="minimumSize"><size><width>0</width><height>52</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="settleCloseButton">
+       <property name="text"><string>Close</string></property>
+       <property name="minimumSize"><size><width>0</width><height>52</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

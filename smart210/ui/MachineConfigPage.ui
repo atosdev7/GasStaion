@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MachineConfigPage</class>
+ <widget class="QWidget" name="MachineConfigPage">
+  <layout class="QVBoxLayout" name="machineLayout" stretch="0,1,0,0">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>12</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Machine Config</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="machineTabs">
+     <property name="pageTabs" stdset="0"><bool>true</bool></property>
+     <widget class="QWidget" name="machineServerTab">
+      <attribute name="title"><string>Server</string></attribute>
+      <layout class="QVBoxLayout" name="serverTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QWidget" name="serverFormHost">
+         <layout class="QVBoxLayout" name="serverFormLayout">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="uploadBox">
+         <property name="title"><string>Upload to the server</string></property>
+         <layout class="QVBoxLayout" name="uploadBoxLayout">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <layout class="QHBoxLayout" name="uploadRow" stretch="0,1,0">
+            <property name="leftMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLabel" name="uploadModeLabel">
+              <property name="text"><string>Upload</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="uploadModeCombo">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="saveUploadModeButton">
+              <property name="text"><string>Save</string></property>
+              <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="uploadModeHint">
+            <property name="wordWrap"><bool>true</bool></property>
+            <property name="sub" stdset="0"><bool>true</bool></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer1">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="machinePrinterTab">
+      <attribute name="title"><string>Printer</string></attribute>
+      <layout class="QVBoxLayout" name="printerTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <layout class="QFormLayout" name="printerForm">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="printerHostLabel">
+           <property name="text"><string>Printer address</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="printerHost">
+           <property name="placeholderText"><string>For example 192.168.1.20</string></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="printerPortLabel">
+           <property name="text"><string>Port</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="printerPort">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="savePrinterButton">
+         <property name="text"><string>Save printer</string></property>
+         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="checkPrinterButton">
+         <property name="text"><string>Check printer</string></property>
+         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="printerStatus">
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer2">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="machineNozzleTab">
+      <attribute name="title"><string>Nozzles</string></attribute>
+      <layout class="QVBoxLayout" name="nozzleTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <layout class="QHBoxLayout" name="upperRow" stretch="0,1">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item>
+          <widget class="QTableWidget" name="nozzleTable">
+          </widget>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="formColumn">
+           <property name="leftMargin"><number>0</number></property>
+           <property name="topMargin"><number>0</number></property>
+           <property name="rightMargin"><number>0</number></property>
+           <property name="bottomMargin"><number>0</number></property>
+           <property name="spacing"><number>6</number></property>
+           <item>
+            <widget class="QLabel" name="selectedNozzle">
+            </widget>
+           </item>
+           <item>
+            <layout class="QFormLayout" name="nozzleForm">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+             <property name="spacing"><number>6</number></property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="nozzleModeLabel">
+               <property name="text"><string>Mode</string></property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="nozzleMode">
+               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="nozzleFuelLabel">
+               <property name="text"><string>Fuel type</string></property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QComboBox" name="nozzleFuel">
+               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="nozzleDensityLabel">
+               <property name="text"><string>Density</string></property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLineEdit" name="nozzleDensity">
+               <property name="placeholderText"><string>kg/L, e.g. 0.8300</string></property>
+               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="nozzlePulsesLabel">
+               <property name="text"><string>Pulses per litre</string></property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QLineEdit" name="nozzlePulses">
+               <property name="placeholderText"><string>e.g. 1200 or 1234.5</string></property>
+               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="nozzleTankLabel">
+               <property name="text"><string>Tank</string></property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QComboBox" name="nozzleTank">
+               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="nozzleButtons" stretch="1,1">
+             <property name="leftMargin"><number>0</number></property>
+             <property name="topMargin"><number>0</number></property>
+             <property name="rightMargin"><number>0</number></property>
+             <property name="bottomMargin"><number>0</number></property>
+             <property name="spacing"><number>6</number></property>
+             <item>
+              <widget class="QPushButton" name="sendNozzleButton">
+               <property name="text"><string>Send</string></property>
+               <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="readNozzlesButton">
+               <property name="text"><string>Read</string></property>
+               <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <spacer name="spacer3">
+             <property name="orientation"><enum>Qt::Vertical</enum></property>
+             <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+             <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="converterRow">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item>
+          <widget class="QLabel" name="converterPortLabel">
+           <property name="text"><string>Converter port (this terminal listens)</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="converterPort">
+           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="saveConverterPortButton">
+           <property name="text"><string>Save port</string></property>
+           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="machineCardTab">
+      <attribute name="title"><string>Card reader</string></attribute>
+      <layout class="QVBoxLayout" name="cardTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <layout class="QFormLayout" name="cardReaderForm">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="cardReaderPortLabel">
+           <property name="text"><string>Serial port</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="cardReaderPort">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="cardReaderBaudLabel">
+           <property name="text"><string>Speed (baud)</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="cardReaderBaud">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="cardReaderFormatLabel">
+           <property name="text"><string>How the id comes</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QComboBox" name="cardReaderFormat">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="cardReaderLengthLabel">
+           <property name="text"><string>Length of the id</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLineEdit" name="cardReaderLength">
+           <property name="placeholderText"><string>characters</string></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="cardReaderPrefixLabel">
+           <property name="text"><string>Text before the id</string></property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QLineEdit" name="cardReaderPrefix">
+           <property name="maxLength"><number>20</number></property>
+           <property name="placeholderText"><string>none</string></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QLabel" name="cardReaderEncodingLabel">
+           <property name="text"><string>What the bytes are</string></property>
+          </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="QComboBox" name="cardReaderEncoding">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveCardReaderButton">
+         <property name="text"><string>Save card reader</string></property>
+         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="cardReaderHelp">
+         <property name="text"><string>The reader is read on this serial port (8 data bits, no parity, 1 stop bit). Put a card on it: its id shows on the Cards screen. The station's Arduino reader sends one line "CARD: &lt;id&gt;" for a card (9600 baud, ends with a line break): keep the text before the id as CARD: and lines of another kind are ignored. An original Arduino Uno shows up as /dev/ttyACM0, a clone with a CH340 chip as /dev/ttyUSB0.</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer4">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QListWidget" name="changeLog">
+      <property name="maximumSize"><size><width>16777215</width><height>140</height></size></property>
+      <attribute name="title"><string>Latest changes</string></attribute>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="machineStatus">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="machineBackButton">
+     <property name="text"><string>Back</string></property>
+     <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

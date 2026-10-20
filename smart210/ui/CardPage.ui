@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CardPage</class>
+ <widget class="QWidget" name="CardPage">
+  <layout class="QVBoxLayout" name="cardLayout" stretch="0,0,0,0,1,0">
+   <property name="leftMargin"><number>24</number></property>
+   <property name="topMargin"><number>8</number></property>
+   <property name="rightMargin"><number>24</number></property>
+   <property name="bottomMargin"><number>8</number></property>
+   <property name="spacing"><number>6</number></property>
+   <item>
+    <widget class="QLabel" name="pageTitle">
+     <property name="text"><string>Cards</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="cardIdLayout" stretch="1">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QLineEdit" name="cardIdField">
+       <property name="readOnly"><bool>true</bool></property>
+       <property name="focusPolicy"><enum>Qt::NoFocus</enum></property>
+       <property name="placeholderText"><string>Put the card on the reader</string></property>
+       <property name="maxLength"><number>32</number></property>
+       <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="cardReaderStatus">
+     <property name="sub" stdset="0"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="cardInfoBox">
+     <property name="title"><string>Card</string></property>
+     <layout class="QVBoxLayout" name="cardInfoLayout">
+      <property name="leftMargin"><number>9</number></property>
+      <property name="topMargin"><number>9</number></property>
+      <property name="rightMargin"><number>9</number></property>
+      <property name="bottomMargin"><number>9</number></property>
+      <property name="spacing"><number>6</number></property>
+      <item>
+       <layout class="QHBoxLayout" name="cardInfoRow" stretch="1,0">
+        <property name="leftMargin"><number>0</number></property>
+        <property name="topMargin"><number>0</number></property>
+        <property name="rightMargin"><number>0</number></property>
+        <property name="bottomMargin"><number>0</number></property>
+        <property name="spacing"><number>6</number></property>
+        <item>
+         <layout class="QGridLayout" name="cardInfoForm" columnstretch="0,1,0,1">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="horizontalSpacing"><number>12</number></property>
+          <property name="verticalSpacing"><number>6</number></property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="cardHolderLabel">
+            <property name="text"><string>Customer</string></property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="cardHolder">
+           </widget>
+          </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="cardPhoneLabel">
+           <property name="text"><string>Phone number</string></property>
+          </widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QLabel" name="cardPhone">
+          </widget>
+         </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="cardFuelLabel">
+            <property name="text"><string>Fuel type</string></property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="cardFuel">
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="cardBalanceLabel">
+            <property name="text"><string>Balance (kg)</string></property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QLabel" name="cardBalance">
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="cardStateLabel">
+            <property name="text"><string>Status</string></property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="cardState">
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="cardHistoryColumn">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <spacer name="cardHistorySpacer">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="cardHistoryButton">
+            <property name="text"><string>History</string></property>
+            <property name="enabled"><bool>false</bool></property>
+            <property name="minimumSize"><size><width>160</width><height>44</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QStackedWidget" name="cardPanels">
+     <widget class="QWidget" name="cardPanelNone">
+      <layout class="QVBoxLayout" name="cardNoneLayout">
+       <property name="leftMargin"><number>0</number></property>
+       <property name="topMargin"><number>0</number></property>
+       <property name="rightMargin"><number>0</number></property>
+       <property name="bottomMargin"><number>0</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QLabel" name="cardNoneLabel">
+         <property name="text"><string>Read a card to register it, top it up or fill with it.</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="cardPanelRegister">
+      <layout class="QVBoxLayout" name="registerLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QLabel" name="cardNotRegisteredLabel">
+         <property name="text"><string>This card is not registered yet.</string></property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QFormLayout" name="registerForm">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="registerNameFieldLabel">
+           <property name="text"><string>Customer name</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="registerNameField">
+           <property name="maxLength"><number>100</number></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="registerPhoneFieldLabel">
+           <property name="text"><string>Phone number</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="registerPhoneField">
+           <property name="maxLength"><number>30</number></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="registerFuelComboLabel">
+           <property name="text"><string>Fuel type</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QComboBox" name="registerFuelCombo">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="registerPinFieldLabel">
+           <property name="text"><string>PIN (4 to 8 digits)</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLineEdit" name="registerPinField">
+           <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+           <property name="maxLength"><number>8</number></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="registerPinAgainFieldLabel">
+           <property name="text"><string>PIN again</string></property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QLineEdit" name="registerPinAgainField">
+           <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+           <property name="maxLength"><number>8</number></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="registerButton">
+         <property name="text"><string>Register card</string></property>
+         <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer1">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="cardPanelCard">
+      <layout class="QHBoxLayout" name="cardPanelLayout" stretch="1,1">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QGroupBox" name="topUpBox">
+         <property name="title"><string>Top up (cash)</string></property>
+         <layout class="QVBoxLayout" name="topUpLayout">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <layout class="QFormLayout" name="topUpForm">
+            <property name="leftMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <property name="spacing"><number>6</number></property>
+            <item row="0" column="0">
+             <widget class="QLabel" name="topUpKgFieldLabel">
+              <property name="text"><string>Weight (kg)</string></property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLineEdit" name="topUpKgField">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="topUpPriceFieldLabel">
+              <property name="text"><string>Price per kg</string></property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLineEdit" name="topUpPriceField">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="topUpTotalLabel">
+              <property name="text"><string>Total payment</string></property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLineEdit" name="topUpTotal">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="topUpButton">
+            <property name="text"><string>Top up</string></property>
+            <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacer2">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="fillBox">
+         <property name="title"><string>Fill</string></property>
+         <layout class="QVBoxLayout" name="fillLayout">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <layout class="QFormLayout" name="fillForm">
+            <property name="leftMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <property name="spacing"><number>6</number></property>
+            <item row="0" column="0">
+             <widget class="QLabel" name="fillPinFieldLabel">
+              <property name="text"><string>PIN</string></property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLineEdit" name="fillPinField">
+              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+              <property name="maxLength"><number>8</number></property>
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="fillKgFieldLabel">
+              <property name="text"><string>Weight (kg)</string></property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLineEdit" name="fillKgField">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="fillNozzleComboLabel">
+              <property name="text"><string>Nozzle</string></property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QComboBox" name="fillNozzleCombo">
+              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+             </widget>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="fillNozzleStateLabel">
+              <property name="text"><string>Nozzle status</string></property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLabel" name="fillNozzleState">
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="fillStartButton">
+            <property name="text"><string>Start fill</string></property>
+            <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacer3">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="cardMessage">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

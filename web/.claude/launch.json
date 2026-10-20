@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gasstation-web",
+      "runtimeExecutable": "D:\\php72\\php.exe",
+      "runtimeArgs": ["artisan", "serve", "--port=8123"],
+      "port": 8123
+    }
+  ]
+}

@@ -1,0 +1,513 @@
+<?php
+
+namespace App\Support;
+
+use App\Http\Controllers\Sales\SaleController;
+use App\Models\Card;
+use App\Models\Device;
+use App\Models\FuelInbound;
+use App\Models\Nozzle;
+use App\Models\Remainder;
+use App\Models\Sale;
+use App\Models\SaleItem;
+use App\Models\Supplement;
+use App\Models\SyncError;
+use App\Models\Tank;
+use App\Models\Ticket;
+use App\Models\TicketLoan;
+use App\Models\TicketLoanSettlement;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+
+// Rows the Smart210 pushes. Each is validated and stored by its key, so sending the same row again changes nothing.
+// A device is the source of truth for what happened at the pump, so a valid row is stored as it is; only rows that are
+// malformed or point at things that do not exist are rejected. Push order: nozzles, sales, supplements, remainders, ticket_loans,
+// ticket_loan_settlements, tickets.
+class Push
+{
+    const TABLES = ['nozzles', 'cards', 'sales', 'supplements', 'remainders', 'ticket_loans', 'ticket_loan_settlements', 'tickets'];
+
+    const DATETIME = 'date_format:Y-m-d H:i:s';
+
+    public static function pattern()
+    {
+        return implode('|', self::TABLES);
+    }
+
+    // How a row is named in replies and in sync_errors: tickets by barcode, nozzles by number, everything else by id.
+    public static function keyOf($table, array $row)
+    {
+        $field = $table === 'tickets' ? 'barcode' : ($table === 'nozzles' ? 'number' : 'id');
+
+        return isset($row[$field]) && is_scalar($row[$field]) ? (string) $row[$field] : null;
+    }
+
+    // Stores one row in its own transaction; throws RejectedRow when it must not be stored.
+    public static function apply($table, Device $device, array $row)
+    {
+        DB::transaction(function () use ($table, $device, $row) {
+            call_user_func([self::class, $table], $device, $row);
+        });
+    }
+
+    // The nozzles are set up on the Smart210, which is the source of truth for them: a row creates, changes or deletes the
+    // calling device's nozzle with this number. The fuel type is the tank's. Supplements keep pointing at a deleted nozzle.
+    private static function nozzles(Device $device, array $row)
+    {
+        $d = self::validate($row, [
+            'number' => 'required|integer|min:1|max:255',
+            'tank_id' => ['required', 'integer', Rule::exists('tanks', 'id')],
+            'board_address' => 'nullable|integer|min:0|max:255',
+            'deleted' => 'required|boolean',
+        ]);
+
+        $nozzle = Nozzle::withTrashed()->where('device_id', $device->id)->where('number', $d['number'])->first();
+
+        if ($d['deleted']) {
+            if ($nozzle && !$nozzle->trashed()) {
+                $nozzle->delete();
+            }
+
+            return;
+        }
+
+        if (!$nozzle) {
+            $nozzle = new Nozzle;
+            $nozzle->device_id = $device->id;
+            $nozzle->number = $d['number'];
+        }
+        $nozzle->tank_id = $d['tank_id'];
+        $nozzle->fuel_type = Tank::findOrFail($d['tank_id'])->fuel_type;
+        $nozzle->board_address = $d['board_address'];
+        $nozzle->deleted_at = null;
+        $nozzle->save();
+    }
+
+    // The cards. The cashier registers a card on the Smart210, which creates it here (id, card id, holder, fuel type, the salted PIN hash) and reports the
+    // wrong PINs it counted and a lock after 5 of them. The web is the source of truth for everything else: unlocking, blocking a lost card and
+    // resetting a PIN are done on the web and go down with the pull. So an existing card takes from the terminal only its wrong tries and a lock of
+    // an active card, and only while the web has no change waiting to be pulled (a row not synced): otherwise the terminal's copy is older.
+    private static function cards(Device $device, array $row)
+    {
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'uid' => 'required|string|max:32',
+            'holder_name' => 'required|string|max:100',
+            'holder_phone' => 'nullable|string|max:30', // optional: asked at the registration when the terminal has the field
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'pin_salt' => 'required|string|max:32',
+            'pin_hash' => 'required|string|size:64',
+            'failed_attempts' => 'nullable|integer|min:0|max:255',
+            'status' => ['nullable', Rule::in(Card::STATUSES)],
+        ]);
+
+        $card = Card::withTrashed()->find($d['id']);
+        if (!$card) {
+            if (Card::withTrashed()->where('uid', $d['uid'])->exists()) {
+                throw new RejectedRow('another card has this card id');
+            }
+            $card = new Card;
+            $card->id = $d['id'];
+            self::store($card, [
+                'uid' => $d['uid'], 'holder_name' => $d['holder_name'], 'holder_phone' => isset($d['holder_phone']) ? $d['holder_phone'] : null, 'fuel_type' => $d['fuel_type'], 'pin_salt' => $d['pin_salt'], 'pin_hash' => $d['pin_hash'],
+                'failed_attempts' => isset($d['failed_attempts']) ? $d['failed_attempts'] : 0,
+                // a new card is active; a lock the terminal already counted is kept
+                'status' => (isset($d['status']) && $d['status'] === 'locked') ? 'locked' : 'active',
+                'device_id' => $device->id, 'synced' => true,
+            ]);
+
+            return;
+        }
+
+        if (!$card->synced) {
+            return; // the web changed it and the terminal has not pulled that yet: its copy is the older one
+        }
+        $changes = [];
+        if (isset($d['failed_attempts']) && $card->status === 'active') {
+            $changes['failed_attempts'] = $d['failed_attempts'];
+        }
+        if (isset($d['status']) && $d['status'] === 'locked' && $card->status === 'active') {
+            $changes['status'] = 'locked';
+        }
+        if ($changes) {
+            self::store($card, $changes + ['synced' => true]);
+        }
+    }
+
+    private static function sales(Device $device, array $row)
+    {
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')],
+            // a card sale (a top-up) names its card, which exists (the cards go first in a push)
+            'card_id' => ['nullable', 'uuid', Rule::exists('cards', 'id')],
+            'sale_type' => ['required', Rule::in(SaleController::SALE_TYPES)],
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'price' => 'required|numeric|min:0|max:9999999',
+            'amount_kg' => 'required|numeric|min:0|max:99999999',
+            'payment_method' => ['required', Rule::in(SaleController::PAYMENT_METHODS)],
+            'total_amount' => 'required|numeric|min:0|max:99999999',
+            'paid_amount' => 'required|numeric|min:0|max:99999999',
+            'unpaid_amount' => 'required|numeric|min:0|max:99999999',
+            'receipt' => 'nullable|string|max:100',
+            'usage' => ['required', Rule::in(SaleController::USAGES)],
+            'comment' => 'nullable|string|max:255',
+            'created_at' => ['required', self::DATETIME], // the moment the sale was made at the terminal
+            'sale_date' => 'required|date_format:Y-m-d',
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            // the items of a ticket sale as entered at the terminal; they go with the sale and replace the ones kept before
+            'items' => 'nullable|array|max:200',
+            'items.*.spec' => 'required|integer|min:0|max:255',
+            'items.*.start_serial' => 'required|integer|min:1',
+            'items.*.end_serial' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:100000',
+            'items.*.amount_kg' => 'required|numeric|min:0|max:99999999',
+        ]);
+        $items = isset($d['items']) ? $d['items'] : [];
+        unset($d['items']);
+
+        // The receipt is a yes/no on the web; the device sends nothing, or some text, for it.
+        $d['receipt'] = !empty($d['receipt']);
+
+        if (abs($d['paid_amount'] + $d['unpaid_amount'] - $d['total_amount']) > 0.01) {
+            throw new RejectedRow('paid and unpaid amounts do not add up to the total');
+        }
+        // Debts are created on the web; a sale made at the pump is always paid in full.
+        if ($d['unpaid_amount'] > 0.01) {
+            throw new RejectedRow('a Smart210 sale cannot leave an unpaid amount');
+        }
+        if ($d['sale_type'] === 'card') {
+            // a top-up of a card: of its fuel type, cash only, a sale of fuel (no customer, no debt)
+            if (empty($d['card_id'])) {
+                throw new RejectedRow('a card sale needs its card');
+            }
+            if (Card::find($d['card_id'])->fuel_type !== $d['fuel_type']) {
+                throw new RejectedRow('the fuel type is not the fuel type of the card');
+            }
+            if ($d['payment_method'] !== 'cash' || $d['usage'] !== 'sale') {
+                throw new RejectedRow('a card is paid in cash and a top-up is a sale');
+            }
+            $d['customer_id'] = null;
+        } elseif (!empty($d['card_id'])) {
+            throw new RejectedRow('only a card sale has a card');
+        }
+
+        $sale = self::find(Sale::class, $d['id']);
+        if ($sale->confirmed_at) {
+            self::refuseEditOfConfirmed($sale, $d, 'sale_date');
+
+            return; // confirmed by the accountant: final, so a repeated push changes nothing
+        }
+        if (!$sale->exists) {
+            // The cost is the web's to fill, from the inbound that was the default when the sale was made (it may arrive days later);
+            // the device never knows it.
+            $sale->cost = FuelInbound::costAt($d['fuel_type'], $d['sale_date'] . ' 23:59:59');
+        }
+
+        self::store($sale, $d, ['synced' => true]);
+
+        SaleItem::where('sale_id', $d['id'])->delete();
+        foreach ($items as $item) {
+            $row = new SaleItem;
+            $row->forceFill($item + ['sale_id' => $d['id']])->save();
+        }
+    }
+
+    private static function supplements(Device $device, array $row)
+    {
+        // an older terminal calls the day of a supply `date`
+        if (!array_key_exists('supply_date', $row) && array_key_exists('date', $row)) {
+            $row['supply_date'] = $row['date'];
+        }
+        unset($row['date']);
+        // an older terminal calls the weight and the litres that came out `amount_kg` and `liters_dispensed`
+        foreach (['amount_kg' => 'out_amount_kg', 'liters_dispensed' => 'out_amount_lt'] as $old => $new) {
+            if (!array_key_exists($new, $row) && array_key_exists($old, $row)) {
+                $row[$new] = $row[$old];
+            }
+            unset($row[$old]);
+        }
+
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'nozzle_number' => 'required|integer|min:1|max:255',
+            'out_amount_lt' => 'required|numeric|min:0.01|max:999999',
+            'density' => 'nullable|numeric|min:0|max:9999.9999', // kg per litre; an older terminal sends none
+            'out_amount_kg' => 'required|numeric|min:0|max:99999999',
+            'preset_kg' => 'required|numeric|min:0|max:99999999',
+            'manual_reading' => 'nullable|boolean', // gone from the web app: an older terminal still sends it, a reading typed in by hand counts as the manual mode
+            'mode' => ['nullable', Rule::in(Supplement::MODES)], // the nozzle's mode at the fill; an older terminal sends none: auto
+            'card_id' => ['nullable', 'uuid', Rule::exists('cards', 'id')], // the card a supply was made with (it has no tickets)
+            'supplied_at' => ['required', self::DATETIME],
+            'comment' => 'nullable|string|max:255',
+            'supply_date' => 'nullable|date_format:Y-m-d',
+        ]);
+
+        // The tolerance of the Smart210 (0.05 kg) only ever favours the station: the tickets may exceed what was dispensed, never the other way.
+        if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > 0) {
+            throw new RejectedRow('more was dispensed than the tickets cover');
+        }
+
+        // The device names its nozzle by number; the nozzles go first in a push, so it exists (deleted ones count too).
+        $nozzle = Nozzle::withTrashed()->where('device_id', $device->id)->where('number', $d['nozzle_number'])->first();
+        if (!$nozzle) {
+            throw new RejectedRow('unknown nozzle ' . $d['nozzle_number'] . ' for this device');
+        }
+        $d['nozzle_id'] = $nozzle->id;
+        unset($d['nozzle_number']);
+        if (!empty($d['card_id']) && Card::find($d['card_id'])->fuel_type !== $d['fuel_type']) {
+            throw new RejectedRow('the fuel type is not the fuel type of the card');
+        }
+        $d['mode'] = isset($d['mode']) ? $d['mode'] : (!empty($d['manual_reading']) ? 'manual' : 'auto');
+        unset($d['manual_reading']);
+        if (empty($d['density'])) {
+            $d['density'] = round($d['out_amount_kg'] / $d['out_amount_lt'], 4); // what the litres and the kg give
+        }
+
+        $supplement = self::find(Supplement::class, $d['id']);
+        if ($supplement->confirmed_at) {
+            self::refuseEditOfConfirmed($supplement, $d, 'supply_date');
+
+            return; // confirmed by the accountant: final, so a repeated push changes nothing
+        }
+
+        // A supply made with a card may not take the card below zero: what it held, without this supply if it was saved before, less this one.
+        if (!empty($d['card_id'])) {
+            $held = Card::find($d['card_id'])->balance() + ($supplement->exists && $supplement->card_id === $d['card_id'] ? (float) $supplement->out_amount_kg : 0);
+            if (round($held - (float) $d['out_amount_kg'], 2) < 0) {
+                throw new RejectedRow('the card holds only ' . number_format($held, 2, '.', '') . ' kg, less than the ' . number_format((float) $d['out_amount_kg'], 2, '.', '') . ' kg supplied');
+            }
+        }
+
+        // Whichever device is calling is the one that dispensed it.
+        self::store($supplement, $d, ['device_id' => $device->id, 'synced' => true]);
+    }
+
+    private static function remainders(Device $device, array $row)
+    {
+        // an older terminal calls the moment `remainder_at` and the day `date`
+        foreach (['remainder_at' => 'created_at', 'date' => 'remainder_date'] as $old => $new) {
+            if (!array_key_exists($new, $row) && array_key_exists($old, $row)) {
+                $row[$new] = $row[$old];
+            }
+            unset($row[$old]);
+        }
+
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'supplement_id' => ['required', 'uuid', Rule::exists('supplements', 'id')],
+            'ticket_barcode' => 'required|string|size:16',
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'amount_kg' => 'required|numeric|min:0.01|max:99999999',
+            'created_at' => ['required', self::DATETIME], // the moment of the remainder at the terminal
+            'remainder_date' => 'nullable|date_format:Y-m-d',
+            'comment' => 'nullable|string|max:255',
+        ]);
+
+        self::store(self::find(Remainder::class, $d['id']), $d);
+    }
+
+    private static function ticket_loans(Device $device, array $row)
+    {
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'loaned_at' => ['required', self::DATETIME],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')],
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'amount_kg' => 'required|numeric|min:0.01|max:99999999',
+            'sale_id' => 'nullable|uuid',
+            'comment' => 'nullable|string|max:255',
+            'date' => 'nullable|date_format:Y-m-d',
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
+        ]);
+
+        // What has been settled is the ledger's total, which the web owns (it can be settled there too), so the device's
+        // own figure is not taken.
+        $loan = self::find(TicketLoan::class, $d['id']);
+        if (!$loan->exists) {
+            $loan->settled_amount_kg = TicketLoanSettlement::where('loan_id', $d['id'])->sum('amount_kg');
+        }
+
+        self::store($loan, $d, ['synced' => true]);
+    }
+
+    private static function ticket_loan_settlements(Device $device, array $row)
+    {
+        $d = self::validate($row, [
+            'id' => 'required|uuid',
+            'loan_id' => ['required', 'uuid', Rule::exists('ticket_loans', 'id')],
+            'ticket_barcode' => 'required|string|size:16',
+            'amount_kg' => 'required|numeric|min:0.01|max:99999999',
+            'settled_at' => ['required', self::DATETIME],
+            'comment' => 'nullable|string|max:255',
+            'date' => 'nullable|date_format:Y-m-d',
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
+        ]);
+
+        self::store(self::find(TicketLoanSettlement::class, $d['id']), $d, ['synced' => true]);
+
+        // Recomputed from the ledger, as the web does. An ordinary save: the new total goes back to the device with its
+        // next pull, together with anything settled on the web meanwhile.
+        $loan = self::find(TicketLoan::class, $d['loan_id']);
+        $loan->settled_amount_kg = TicketLoanSettlement::where('loan_id', $loan->id)->sum('amount_kg');
+        $loan->save();
+    }
+
+    // A device reports a ticket as sold or supplied, nothing else. It may create tickets only in its own reserved range
+    // (direct, self, other, ticket loan, remainder); press tickets exist already. A ticket only moves forward, and a
+    // push that disagrees with what the web already knows is not applied but logged, so staff can see it and the
+    // device does not retry forever. Fuel that was dispensed is a fact: it wins over a restriction made meanwhile.
+    private static function tickets(Device $device, array $row)
+    {
+        $s = config('ticket_statuses');
+        $d = self::validate($row, [
+            'barcode' => 'required|string|size:16',
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'amount_kg' => 'nullable|numeric|min:0.01|max:99999999',
+            'status' => ['required', 'integer', Rule::in([$s['sale'], $s['supply']])],
+            'sale_id' => 'nullable|uuid',
+            'sale_date' => ['nullable', self::DATETIME],
+            'supply_date' => ['nullable', self::DATETIME],
+            'supplement_id' => 'nullable|uuid',
+        ]);
+        $status = (int) $d['status'];
+
+        if ($status === $s['sale'] && empty($d['sale_date'])) {
+            throw new RejectedRow('a sold ticket needs its sale date');
+        }
+        // No supplement is needed: a ticket surrendered to settle a ticket loan is supplied too, but not at a nozzle.
+        if ($status === $s['supply'] && empty($d['supply_date'])) {
+            throw new RejectedRow('a supplied ticket needs its supply date');
+        }
+
+        $ticket = Ticket::find($d['barcode']);
+        if (!$ticket) {
+            self::createDeviceTicket($d, $status);
+
+            return;
+        }
+
+        $remainderCode = config('ticket_reserved_codes.remainder');
+        if ($status === $s['sale'] && empty($d['sale_id']) && $ticket->code !== $remainderCode) {
+            throw new RejectedRow('a sold ticket needs its sale');
+        }
+
+        $current = (int) $ticket->status;
+        $names = array_flip($s);
+        $sale = ['sale_id' => $d['sale_id'] ?? null, 'sale_date' => $d['sale_date'] ?? null];
+        $attributes = [];
+
+        if ($status === $s['sale']) {
+            if ($current === $s['publish']) {
+                $attributes = ['status' => $s['sale']] + $sale;
+            } elseif ($current !== $s['sale']) {
+                self::conflict($device, $d, 'the ticket is already ' . $names[$current] . ' on the server, the sale was not applied');
+            }
+        } elseif ($current === $s['supply']) {
+            if (!empty($d['supplement_id']) && !empty($ticket->supplement_id) && $ticket->supplement_id !== $d['supplement_id']) {
+                self::conflict($device, $d, 'the ticket was already supplied under another supplement, kept as it was');
+            }
+        } else {
+            if ($current === $s['restrict']) {
+                self::conflict($device, $d, 'the ticket was restricted on the server but fuel was dispensed, marked supplied');
+            }
+            $attributes = ['status' => $s['supply'], 'supply_date' => $d['supply_date'], 'supplement_id' => $d['supplement_id'] ?? null];
+            if ($current === $s['publish']) {
+                $attributes += $sale; // sold and supplied between two syncs
+            }
+        }
+
+        if ($attributes) {
+            $ticket->saveFromDevice($attributes + ['synced' => true]);
+        }
+    }
+
+    private static function createDeviceTicket(array $d, $status)
+    {
+        $parsed = Barcode::parse($d['barcode']);
+
+        if ($parsed['sign'] !== sprintf('%05d', config('ticket_sign'))) {
+            throw new RejectedRow('the barcode does not carry this business\'s sign');
+        }
+        if (!Barcode::isReservedCode($parsed['code'])) {
+            throw new RejectedRow('unknown ticket: a Smart210 can only create tickets with a reserved code');
+        }
+        if ($parsed['serial'] <= config('ticket_serial.device_base')) {
+            throw new RejectedRow('the serial is below the range reserved for Smart210 tickets');
+        }
+        if (empty($d['amount_kg'])) {
+            throw new RejectedRow('a new ticket needs its amount');
+        }
+        if ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $parsed['code'] !== config('ticket_reserved_codes.remainder')) {
+            throw new RejectedRow('a sold ticket needs its sale');
+        }
+
+        $ticket = new Ticket;
+        $ticket->barcode = $d['barcode'];
+        $ticket->saveFromDevice([
+            'fuel_type' => $d['fuel_type'], 'spec' => null, 'code' => $parsed['code'], 'serial' => $parsed['serial'],
+            'amount_kg' => $d['amount_kg'], 'status' => $status,
+            'sale_id' => $d['sale_id'] ?? null, 'sale_date' => $d['sale_date'] ?? null,
+            'supply_date' => $d['supply_date'] ?? null, 'supplement_id' => $d['supplement_id'] ?? null,
+            'synced' => true,
+        ]);
+    }
+
+    private static function conflict(Device $device, array $d, $reason)
+    {
+        SyncError::record($device->id, 'tickets', $d['barcode'], json_encode($d), 'conflict: ' . $reason);
+    }
+
+    // The cashier may change the comment and the date of a record after it was uploaded. A record the accountant has confirmed is
+    // final: such a change is refused with the reason, so the cashier sees it. Any other difference is ignored, as before (the device
+    // cannot make one, and it stops retrying).
+    private static function refuseEditOfConfirmed($model, array $d, $dateColumn)
+    {
+        $comment = isset($d['comment']) ? trim((string) $d['comment']) : '';
+        $date = isset($d[$dateColumn]) ? (string) $d[$dateColumn] : '';
+
+        $storedComment = trim((string) $model->comment);
+        $storedDate = $model->{$dateColumn} ? substr((string) $model->{$dateColumn}, 0, 10) : '';
+
+        if ($comment !== $storedComment || $date !== $storedDate) {
+            throw new RejectedRow('confirmed by the accountant: ask the accountant to change the comment or the date on the web');
+        }
+    }
+
+    private static function validate(array $row, array $rules)
+    {
+        $validator = Validator::make($row, $rules);
+        if ($validator->fails()) {
+            throw new RejectedRow($validator->errors()->first());
+        }
+
+        return $validator->validated();
+    }
+
+    // The existing row, or a new one with this key, deleted rows included.
+    private static function find($class, $key)
+    {
+        $query = in_array(SoftDeletes::class, class_uses_recursive($class), true) ? $class::withTrashed() : $class::query();
+        $model = $query->find($key);
+        if (!$model) {
+            $model = new $class;
+            $model->{$model->getKeyName()} = $key;
+        }
+
+        return $model;
+    }
+
+    private static function store($model, array $data, array $extra = [])
+    {
+        $attributes = $extra + array_diff_key($data, [$model->getKeyName() => true]);
+
+        if (method_exists($model, 'saveFromDevice')) {
+            $model->saveFromDevice($attributes);
+        } else {
+            $model->forceFill($attributes)->save();
+        }
+    }
+}

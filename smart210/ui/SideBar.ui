@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SideBar</class>
+ <widget class="QWidget" name="SideBar">
+  <property name="minimumSize"><size><width>250</width><height>0</height></size></property>
+  <property name="maximumSize"><size><width>250</width><height>16777215</height></size></property>
+  <layout class="QVBoxLayout" name="sidebarLayout">
+   <property name="leftMargin"><number>12</number></property>
+   <property name="topMargin"><number>16</number></property>
+   <property name="rightMargin"><number>12</number></property>
+   <property name="bottomMargin"><number>16</number></property>
+   <property name="spacing"><number>8</number></property>
+   <item>
+    <widget class="QPushButton" name="navSales">
+     <property name="text"><string>Sales</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/sales.png</normaloff>:/icons/sales.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navSupplies">
+     <property name="text"><string>Supplies</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/supplies.png</normaloff>:/icons/supplies.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navRemainders">
+     <property name="text"><string>Remainders</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/debt.png</normaloff>:/icons/debt.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navCards">
+     <property name="text"><string>Cards</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/sales.png</normaloff>:/icons/sales.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navDispensers">
+     <property name="text"><string>Dispensers</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/dispensers.png</normaloff>:/icons/dispensers.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navDebt">
+     <property name="text"><string>Ticket Debt</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/debt.png</normaloff>:/icons/debt.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="spacer1">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>8</height></size></property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navReview">
+     <property name="text"><string>Review</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/review.png</normaloff>:/icons/review.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="navSettings">
+     <property name="text"><string>Settings</string></property>
+     <property name="icon"><iconset resource="../resources/resources.qrc"><normaloff>:/icons/settings.png</normaloff>:/icons/settings.png</iconset></property>
+     <property name="iconSize"><size><width>32</width><height>32</height></size></property>
+     <property name="checkable"><bool>true</bool></property>
+     <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="spacer2">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

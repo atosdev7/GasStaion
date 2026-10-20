@@ -1,0 +1,77 @@
+/* Offline-safe font stack with Chinese fallbacks (no web fonts). */
+body, .content-wrapper, .main-sidebar, .main-header {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK SC", "Noto Sans CJK TC", Arial, sans-serif;
+}
+
+/* the main action buttons at the right end of the title line */
+.page-actions .btn { margin-left: .5rem; }
+.page-actions { margin: .25rem 0; }
+
+/* the date picker (public/js/datepicker.js) */
+.dp-popup { position: absolute; z-index: 2000; width: 252px; padding: 8px; background: #fff; border: 1px solid #ced4da; border-radius: .25rem; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.dp-title { font-weight: 600; }
+.dp-nav { width: 30px; height: 28px; border: 0; background: transparent; font-size: 20px; line-height: 1; cursor: pointer; border-radius: .2rem; }
+.dp-nav:hover, .dp-day:hover, .dp-link:hover { background: #e9ecef; }
+.dp-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dp-table th { text-align: center; font-size: 12px; font-weight: 600; color: #6c757d; padding: 2px 0; }
+.dp-table td { padding: 0; text-align: center; }
+.dp-day { width: 32px; height: 30px; border: 0; background: transparent; cursor: pointer; border-radius: .2rem; font-size: 13px; }
+.dp-other { color: #adb5bd; }
+.dp-today { border: 1px solid #007bff; }
+.dp-selected, .dp-selected:hover { background: #007bff; color: #fff; }
+.dp-foot { display: flex; justify-content: space-between; margin-top: 6px; }
+.dp-link { border: 0; background: transparent; color: #007bff; cursor: pointer; padding: 2px 6px; border-radius: .2rem; }
+.dp-time { display: flex; align-items: center; justify-content: center; margin-top: 6px; }
+.dp-select { width: 60px; height: 28px; border: 1px solid #ced4da; border-radius: .2rem; background: #fff; }
+.dp-colon { margin: 0 6px; font-weight: 600; }
+
+/* a bordered table with a grouped head: the head cells are centred in their rows */
+.table-bordered thead th { vertical-align: middle; }
+
+/* the drop-down of the actions of a row: a form with a button inside looks like the other items */
+.sale-actions .dropdown-menu form { margin: 0; }
+.sale-actions .dropdown-menu .dropdown-item { cursor: pointer; }
+/* a Select2 is as high as the other boxes of a form (a Bootstrap form-control) and its text sits like theirs */
+.select2-container--default .select2-selection--single { height: calc(2.25rem + 2px); border-color: #ced4da; }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: calc(2.25rem); padding-left: .75rem; color: #495057; }
+.select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(2.25rem + 2px); }
+
+/* the Select2 of a filter row is as small as the other filters */
+.filters .select2-container--default .select2-selection--single { height: calc(1.8125rem + 2px); }
+.filters .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 1.5; font-size: .875rem; padding-top: 1px; }
+.filters .select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(1.8125rem + 2px); }
+.filters .select2-container--default .select2-selection--single .select2-selection__rendered { font-weight: 400; }
+
+/* a table with date boxes: the picker is not cut off by the scrolling box of the table on a wide screen */
+@media (min-width: 1100px) { .table-responsive.dp-visible { overflow: visible; } }
+
+/* the picker keeps its width inside a narrow box (a filter of a table), and its days are not squeezed by a text-nowrap table */
+.bootstrap-datetimepicker-widget.dropdown-menu:not(.timepicker-sbs) { width: 19rem; max-width: none; white-space: normal; }
+.bootstrap-datetimepicker-widget table { width: 100%; }
+
+/* every table of the pages has vertical borders between its columns (and at its sides) */
+.content-wrapper .table th, .content-wrapper .table td { border-left: 1px solid #dee2e6; }
+.content-wrapper .table th:last-child, .content-wrapper .table td:last-child { border-right: 1px solid #dee2e6; }
+
+/* dashboard charts (inline SVG) */
+.dash-chart { width: 100%; height: auto; display: block; }
+.dash-chart .dash-grid { stroke: #e9ecef; stroke-width: 1; }
+.dash-chart .dash-axis { font-size: 11px; fill: #6c757d; }
+.dash-chart .dash-label { font-size: 12px; fill: #343a40; }
+.dash-chart .dash-value { font-size: 11px; fill: #343a40; }
+.dash-capacity { fill: #f8f9fa; stroke: #ced4da; stroke-width: 1; }
+.dash-lowmark { stroke: #dc3545; stroke-width: 2; }
+.dash-tank-bar { fill: #007bff; }
+.dash-tank-bar.dash-low { fill: #dc3545; }
+.dash-ticket { fill: #007bff; background: #007bff; }
+.dash-spot { fill: #fd7e14; background: #fd7e14; }
+.dash-card { fill: #6f42c1; background: #6f42c1; }
+.dash-unconfirmed { opacity: .5; }
+.dash-status-confirmed { fill: #28a745; background: #28a745; }
+.dash-status-open { fill: #ffc107; background: #ffc107; }
+.dash-status-none { fill: #ced4da; background: #ced4da; }
+.dash-blank { fill: #adb5bd; background: #adb5bd; }
+.dash-ready { fill: #17a2b8; background: #17a2b8; }
+.dash-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; }
+.dash-legend { margin-top: 4px; }
