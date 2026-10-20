@@ -26,9 +26,9 @@ require __DIR__ . '/../web/vendor/autoload.php';
 $app = require __DIR__ . '/../web/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-use App\Models\Backup;
-use App\Support\BackupRun;
-use App\Support\TankLevels;
+use App\Models\Admin\Backup;
+use App\Support\Admin\BackupRun;
+use App\Support\Dashboard\TankLevels;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;

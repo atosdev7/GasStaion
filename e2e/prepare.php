@@ -5,15 +5,15 @@
 
 require __DIR__ . '/common.php';
 
-use App\Models\Customer;
-use App\Models\Device;
-use App\Models\FuelInbound;
-use App\Models\FuelType;
-use App\Models\Tank;
-use App\Models\Ticket;
-use App\Models\TicketLoan;
-use App\Models\User;
-use App\Support\DeviceHash;
+use App\Models\Sales\Customer;
+use App\Models\Admin\Device;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelType;
+use App\Models\Fuel\Tank;
+use App\Models\Tickets\Ticket;
+use App\Models\Debts\TicketLoan;
+use App\Models\Admin\User;
+use App\Support\Admin\DeviceHash;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 

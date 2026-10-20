@@ -7,11 +7,11 @@
 
 require __DIR__ . '/common.php';
 
-use App\Models\Card;
-use App\Models\Sale;
-use App\Models\User;
-use App\Support\CardLedger;
-use App\Support\CardSales;
+use App\Models\Cards\Card;
+use App\Models\Sales\Sale;
+use App\Models\Admin\User;
+use App\Support\Cards\CardLedger;
+use App\Support\Sales\CardSales;
 
 $action = $argv[1] ?? '';
 $manager = User::forceCreate(['name' => 'Manager', 'username' => 'mgr' . mt_rand(1000, 9999), 'password' => bcrypt('x'), 'role' => 'manager', 'active' => true]);

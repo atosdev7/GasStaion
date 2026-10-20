@@ -140,8 +140,8 @@ bool parseInfo(const QByteArray &data, Info *info)
         return false;
     }
     info->protocol = quint8(data.at(0));
-    info->major = quint8(data.at(1));
-    info->minor = quint8(data.at(2));
+    info->versionMajor = quint8(data.at(1));
+    info->versionMinor = quint8(data.at(2));
     info->serial = getU32(data, 3);
 
     return true;

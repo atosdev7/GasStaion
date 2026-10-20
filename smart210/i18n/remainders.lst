@@ -1,2 +1,2 @@
-src/RemainderTicketsPage.cpp
-ui/RemainderTicketsPage.ui
+src/remainders/RemainderTicketsPage.cpp
+src/remainders/RemainderTicketsPage.ui

@@ -1,8 +1,8 @@
-src/SupplyPage.cpp
-ui/SupplyPage.ui
-src/SupplySession.cpp
-src/SupplySelection.cpp
-src/SupplyQueue.cpp
-src/SupplyRecord.cpp
-src/ManualSupplyPage.cpp
-ui/ManualSupplyPage.ui
+src/supplies/SupplyPage.cpp
+src/supplies/SupplyPage.ui
+src/supplies/SupplySession.cpp
+src/supplies/SupplySelection.cpp
+src/supplies/SupplyQueue.cpp
+src/supplies/SupplyRecord.cpp
+src/supplies/ManualSupplyPage.cpp
+src/supplies/ManualSupplyPage.ui

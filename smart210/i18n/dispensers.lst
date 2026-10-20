@@ -1,5 +1,5 @@
-src/DispensersPage.cpp
-ui/DispensersPage.ui
-src/NozzleDialog.cpp
-ui/NozzleDialog.ui
-src/BoardProtocol.cpp
+src/dispensers/DispensersPage.cpp
+src/dispensers/DispensersPage.ui
+src/dispensers/NozzleDialog.cpp
+src/dispensers/NozzleDialog.ui
+src/dispensers/BoardProtocol.cpp

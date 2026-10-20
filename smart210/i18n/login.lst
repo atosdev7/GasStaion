@@ -1,7 +1,7 @@
-src/LoginPage.cpp
-ui/LoginPage.ui
-src/SetupPage.cpp
-ui/SetupPage.ui
-src/SetupFlow.cpp
-src/FirstSyncPage.cpp
-ui/FirstSyncPage.ui
+src/login/LoginPage.cpp
+src/login/LoginPage.ui
+src/login/SetupPage.cpp
+src/login/SetupPage.ui
+src/login/SetupFlow.cpp
+src/login/FirstSyncPage.cpp
+src/login/FirstSyncPage.ui

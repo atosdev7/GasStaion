@@ -57,7 +57,7 @@ if ($scenario === 'cards') {
     ok($kg === [40.0, 10.0, -20.0, 5.0, -10.0], 'the kg in and out: +40, +10, -20, +5, -10');
     $running = $web->map(function ($e) { return (float) $e->balance_kg; })->all();
     ok($running === [40.0, 50.0, 30.0, 35.0, 25.0], 'the running balances: 40, 50, 30, 35, 25 (' . implode(', ', $running) . ')');
-    ok(abs(App\Support\CardLedger::balance($facts['card_id']) - 25) < 0.005, 'the balance of the card is 25.00');
+    ok(abs(App\Support\Cards\CardLedger::balance($facts['card_id']) - 25) < 0.005, 'the balance of the card is 25.00');
     $topUp = $web->first();
     ok(abs((float) $topUp->price - 7.5) < 0.005 && abs((float) $topUp->total_amount - 300) < 0.005, 'the first top-up keeps its price and what was paid: 7.50 and 300.00');
     ok($web[4]->source_id === $facts['topup_sale'] && abs((float) $web[4]->kg + 10) < 0.005, 'the reversal names the top-up that was deleted');
@@ -67,7 +67,7 @@ if ($scenario === 'cards') {
     ok($deleted && $deleted->deleted_at !== null, 'the deleted top-up is still a row (deleted), and the ledger keeps both entries');
     $supply = DB::table('supplements')->where('card_id', $facts['card_id'])->first();
     ok($supply && abs((float) $supply->out_amount_kg - 20) < 0.005, 'the fill of 20.00 kg is a supplement with the card');
-    $card = App\Models\Card::find($facts['card_id']);
+    $card = App\Models\Cards\Card::find($facts['card_id']);
     ok(abs($card->balance() - $card->balanceFromRecords()) < 0.005, 'the ledger agrees with the records that are left (' . $card->balance() . ')');
 
     section('the terminal holds the same ledger');
@@ -200,7 +200,7 @@ if ($scenario === 'basic') {
         'the items are the ones entered: 3 x 5 kg from serial 1 to 3, and 1 x 10 kg at serial 101');
     ok(DB::table('sales')->where('comment', 'paid by card')->count() === 1, 'the comment on the first sale arrived');
     ok(DB::table('supplements')->where('comment', 'ticket check done')->count() === 1, 'the comment on the manual supply arrived (an edit after the upload)');
-    $levels = App\Support\TankLevels::all()->first();
+    $levels = App\Support\Dashboard\TankLevels::all()->first();
     ok($levels && abs($levels->current - 99950) < 0.005, 'the tank holds 99950 kg: 100000 in, 50 supplied (' . ($levels ? $levels->current : '-') . ')');
 }
 
@@ -233,7 +233,7 @@ if ($scenario === 'offline') {
     section('faults and power cuts left no trace on the server');
     $fills = DB::table('supplements')->whereIn('out_amount_kg', [4, 3, 10])->count();
     ok($fills >= 3, 'the fills of the restarts and the power cut were recorded once each');
-    $levels = App\Support\TankLevels::all()->first();
+    $levels = App\Support\Dashboard\TankLevels::all()->first();
     $supplied = (float) DB::table('supplements')->sum('out_amount_kg');
     ok($levels && abs($levels->current - (100000 - $supplied)) < 0.005, 'the tank holds 100000 minus everything supplied (' . ($levels ? $levels->current : '-') . ')');
 }

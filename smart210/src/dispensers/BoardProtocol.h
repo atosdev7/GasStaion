@@ -94,10 +94,10 @@ struct BoardConfig {
 
 // The answer to INFO.
 struct Info {
-    Info() : protocol(0), major(0), minor(0), serial(0) {}
+    Info() : protocol(0), versionMajor(0), versionMinor(0), serial(0) {}
     int protocol;
-    int major;
-    int minor;
+    int versionMajor;
+    int versionMinor;
     quint32 serial;
 };
 

@@ -4,67 +4,67 @@
 <context>
     <name>LoanSettleDialog</name>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="14"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="14"/>
         <source>Settle a ticket debt</source>
         <translation>Settle a ticket debt</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="25"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="25"/>
         <source>Scan a ticket, or type its 16 digits and press Enter</source>
         <translation>Scan a ticket, or type its 16 digits and press Enter</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="42"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="42"/>
         <source>Remove selected</source>
         <translation>Remove selected</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="48"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="48"/>
         <source>Clear list</source>
         <translation>Clear list</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="73"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="73"/>
         <source>Settle</source>
         <translation>Settle</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettleDialog.ui" line="79"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.ui" line="79"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="23"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="23"/>
         <source>%1: %2 kg of %3 are owed. Scan the tickets the customer brings back.</source>
         <translation>%1: %2 kg of %3 are owed. Scan the tickets the customer brings back.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="27"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="27"/>
         <source>Ticket</source>
         <translation>Ticket</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="27"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="27"/>
         <source>kg</source>
         <translation>kg</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="59"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="59"/>
         <source>%1 tickets, %2 kg, balance after: %3 kg</source>
         <translation>%1 tickets, %2 kg, balance after: %3 kg</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="74"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="74"/>
         <source>This ticket is already in the list.</source>
         <translation>This ticket is already in the list.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="139"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="139"/>
         <source>Settled %1 tickets, %2 kg. Still owed: %3 kg</source>
         <translation>Settled %1 tickets, %2 kg. Still owed: %3 kg</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettleDialog.cpp" line="140"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="140"/>
         <source>Settled %1 tickets, %2 kg. The loan is paid off.</source>
         <translation>Settled %1 tickets, %2 kg. The loan is paid off.</translation>
     </message>
@@ -72,52 +72,52 @@
 <context>
     <name>LoanSettlePage</name>
     <message>
-        <location filename="../ui/LoanSettlePage.ui" line="13"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.ui" line="13"/>
         <source>Ticket Debt</source>
         <translation>Ticket Debt</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettlePage.ui" line="18"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.ui" line="18"/>
         <source>Choose a debt and press Settle to surrender the tickets the customer brings back.</source>
         <translation>Choose a debt and press Settle to surrender the tickets the customer brings back.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Customer</source>
         <translation>Customer</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Fuel</source>
         <translation>Fuel</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Loaned at</source>
         <translation>Loaned at</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Loaned kg</source>
         <translation>Loaned kg</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Settled kg</source>
         <translation>Settled kg</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="22"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="22"/>
         <source>Balance kg</source>
         <translation>Balance kg</translation>
     </message>
     <message>
-        <location filename="../ui/LoanSettlePage.ui" line="39"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.ui" line="39"/>
         <source>Settle</source>
         <translation>Settle</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlePage.cpp" line="76"/>
+        <location filename="../src/ticket_debt/LoanSettlePage.cpp" line="76"/>
         <source>There are no open ticket loans.</source>
         <translation>There are no open ticket loans.</translation>
     </message>
@@ -125,67 +125,67 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="105"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="105"/>
         <source>Log in first.</source>
         <translation>Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="76"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="76"/>
         <source>This ticket was already used.</source>
         <translation>This ticket was already used.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="54"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="54"/>
         <source>That is not a ticket barcode (16 digits).</source>
         <translation>That is not a ticket barcode (16 digits).</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="63"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="63"/>
         <source>This ticket is not known on this terminal.</source>
         <translation>This ticket is not known on this terminal.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="72"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="72"/>
         <source>This ticket was never sold, so it cannot settle a loan.</source>
         <translation>This ticket was never sold, so it cannot settle a loan.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="80"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="80"/>
         <source>This ticket is restricted and cannot be used.</source>
         <translation>This ticket is restricted and cannot be used.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="85"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="85"/>
         <source>This ticket is another fuel type than the loan.</source>
         <translation>This ticket is another fuel type than the loan.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="91"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="91"/>
         <source>This ticket is in the queue of nozzle %1.</source>
         <translation>This ticket is in the queue of nozzle %1.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="120"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="120"/>
         <source>Choose the loan first.</source>
         <translation>Choose the loan first.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="134"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="134"/>
         <source>Ticket %1 cannot settle the loan: %2</source>
         <translation>Ticket %1 cannot settle the loan: %2</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="182"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="182"/>
         <source>The settlement could not be saved.</source>
         <translation>The settlement could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="108"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="108"/>
         <source>Scan the tickets first.</source>
         <translation>Scan the tickets first.</translation>
     </message>
     <message>
-        <location filename="../src/LoanSettlement.cpp" line="135"/>
+        <location filename="../src/ticket_debt/LoanSettlement.cpp" line="135"/>
         <source>it is twice in the list.</source>
         <translation>it is twice in the list.</translation>
     </message>

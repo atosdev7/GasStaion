@@ -1,2 +1,2 @@
-src/ReviewPage.cpp
-ui/ReviewPage.ui
+src/review/ReviewPage.cpp
+src/review/ReviewPage.ui

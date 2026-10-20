@@ -7,6 +7,7 @@ TARGET = nozzle-simulator
 QT += core gui widgets network
 
 INCLUDEPATH += src ../smart210/src
+include(../smart210/src/folders.pri)
 
 SOURCES += \
     src/main.cpp \
@@ -14,11 +15,11 @@ SOURCES += \
     src/ConverterClient.cpp \
     src/MainWindow.cpp \
     src/NozzlePanel.cpp \
-    ../smart210/src/BoardProtocol.cpp
+    ../smart210/src/dispensers/BoardProtocol.cpp
 
 HEADERS += \
     src/BoardSimulator.h \
     src/ConverterClient.h \
     src/MainWindow.h \
     src/NozzlePanel.h \
-    ../smart210/src/BoardProtocol.h
+    ../smart210/src/dispensers/BoardProtocol.h

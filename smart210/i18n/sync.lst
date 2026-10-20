@@ -1,6 +1,6 @@
-src/PrintService.cpp
-src/PrinterConnection.cpp
-src/EscPos.cpp
-src/Uploader.cpp
-src/SyncClient.cpp
-src/ApiReply.cpp
+src/printing/PrintService.cpp
+src/printing/PrinterConnection.cpp
+src/printing/EscPos.cpp
+src/sync/Uploader.cpp
+src/sync/SyncClient.cpp
+src/sync/ApiReply.cpp

@@ -1,7 +1,7 @@
-ui/ShellHeader.ui
-ui/ShellFooter.ui
-ui/SideBar.ui
-src/MainWindow.cpp
-src/AppShell.cpp
-ui/AppShell.ui
-src/main.cpp
+src/shell/ShellHeader.ui
+src/shell/ShellFooter.ui
+src/shell/SideBar.ui
+src/shell/MainWindow.cpp
+src/shell/AppShell.cpp
+src/shell/AppShell.ui
+src/shell/main.cpp

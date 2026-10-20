@@ -1,5 +1,5 @@
-src/LoanSettlePage.cpp
-ui/LoanSettlePage.ui
-src/LoanSettleDialog.cpp
-ui/LoanSettleDialog.ui
-src/LoanSettlement.cpp
+src/ticket_debt/LoanSettlePage.cpp
+src/ticket_debt/LoanSettlePage.ui
+src/ticket_debt/LoanSettleDialog.cpp
+src/ticket_debt/LoanSettleDialog.ui
+src/ticket_debt/LoanSettlement.cpp

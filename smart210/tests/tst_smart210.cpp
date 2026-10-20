@@ -5262,8 +5262,8 @@ void Smart210Test::theDataOfTheCommandsRoundTrips()
     Info info;
     QVERIFY(parseInfo(QByteArray::fromHex("020104010000ca"), &info));
     QCOMPARE(info.protocol, 2);
-    QCOMPARE(info.major, 1);
-    QCOMPARE(info.minor, 4);
+    QCOMPARE(info.versionMajor, 1);
+    QCOMPARE(info.versionMinor, 4);
     QCOMPARE(info.serial, quint32(0xCA000001));
 }
 
