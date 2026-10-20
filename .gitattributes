@@ -1,0 +1,10 @@
+# Let git normalise line endings (the working copies on Windows may be CRLF, the repository keeps LF)
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.qm binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.ttf binary
+*.otf binary
