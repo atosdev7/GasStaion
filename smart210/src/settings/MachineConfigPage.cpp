@@ -54,6 +54,10 @@ QString subject(const QString &what)
         return QObject::tr("Upload");
     }
 
+    if (what == "show sales without receipt") {
+        return QObject::tr("Sales without a receipt");
+    }
+
     return what == "server" ? QObject::tr("Server address") : what;
 }
 
@@ -141,6 +145,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
 
     connect(uploadMode_, SIGNAL(activated(int)), this, SLOT(uploadModePicked()));
     connect(ui_->saveUploadModeButton, SIGNAL(clicked()), this, SLOT(saveUploadMode()));
+    connect(ui_->saveReviewOptionsButton, SIGNAL(clicked()), this, SLOT(saveReviewOptions()));
     connect(ui_->sendNozzleButton, SIGNAL(clicked()), this, SLOT(sendNozzle()));
     connect(ui_->readNozzlesButton, SIGNAL(clicked()), this, SLOT(readNozzles()));
     connect(table_, SIGNAL(itemSelectionChanged()), this, SLOT(rowSelected()));
@@ -179,6 +184,9 @@ void MachineConfigPage::reload()
     uploadModeBefore_ = AutoUpload::textOf(AutoUpload::modeOf(settings_->value(SettingKey::UploadMode)));
     uploadMode_->setCurrentIndex(qMax(0, uploadMode_->findData(uploadModeBefore_)));
     uploadModePicked();
+
+    showNoReceiptBefore_ = settings_->boolValue(SettingKey::ShowSalesWithoutReceipt, true);
+    ui_->showNoReceiptCheck->setChecked(showNoReceiptBefore_);
 
     cardPort_->setText(settings_->value(SettingKey::CardReaderPort, CardReader::defaultPort()));
     cardBaud_->setCurrentIndex(qMax(0, cardBaud_->findData(settings_->intValue(SettingKey::CardReaderBaud, CardReader::DefaultBaud))));
@@ -463,6 +471,23 @@ void MachineConfigPage::saveUploadMode()
     if (mode != uploadModeBefore_) {
         config_->logChange("upload mode", uploadModeBefore_, mode, session_->userId());
         uploadModeBefore_ = mode;
+        fillLog();
+    }
+    showStatus(tr("Saved."), true);
+}
+
+// Whether the Review screen lists the sales that have no receipt (the box on the sale forms).
+void MachineConfigPage::saveReviewOptions()
+{
+    const bool show = ui_->showNoReceiptCheck->isChecked();
+    if (!settings_->setBool(SettingKey::ShowSalesWithoutReceipt, show)) {
+        showStatus(tr("The values could not be saved."), false);
+
+        return;
+    }
+    if (show != showNoReceiptBefore_) {
+        config_->logChange("show sales without receipt", showNoReceiptBefore_ ? "yes" : "no", show ? "yes" : "no", session_->userId());
+        showNoReceiptBefore_ = show;
         fillLog();
     }
     showStatus(tr("Saved."), true);

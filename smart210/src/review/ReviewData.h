@@ -86,7 +86,9 @@ public:
     };
 
     // The records of the date ("yyyy-MM-dd"), oldest first.
-    static QList<Record> sales(QSqlDatabase db, const QString &date);
+    // withoutReceipt false leaves out the sales without a receipt (the setting ShowSalesWithoutReceipt of Machine Config); the totals stay whole.
+    static QList<Record> sales(QSqlDatabase db, const QString &date, bool withoutReceipt = true);
+    static int salesWithoutReceipt(QSqlDatabase db, const QString &date); // how many sales of the date have none
     static QList<Record> supplements(QSqlDatabase db, const QString &date);
     static QList<Record> debts(QSqlDatabase db, const QString &date); // loans and settlements together, by time
 

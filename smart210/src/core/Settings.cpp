@@ -14,6 +14,7 @@ const char *const ServerPort = "server_port";
 const char *const DeviceId = "device_id";
 const char *const DeviceName = "device_name";
 const char *const UploadMode = "upload_mode";
+const char *const ShowSalesWithoutReceipt = "show_sales_without_receipt";
 const char *const PurgeDays = "purge_days";
 const char *const PinSalt = "pin_salt";
 const char *const PinHash = "pin_hash";
@@ -76,7 +77,7 @@ bool Settings::isDeviceBound(const QString &key)
         || key == SettingKey::PrinterHost || key == SettingKey::PrinterPort || key == SettingKey::ConverterPort
         || key == SettingKey::CardReaderPort || key == SettingKey::CardReaderBaud || key == SettingKey::CardReaderFormat
         || key == SettingKey::CardReaderLength || key == SettingKey::CardReaderEncoding || key == SettingKey::CardReaderPrefix
-        || key == SettingKey::UploadMode;
+        || key == SettingKey::UploadMode || key == SettingKey::ShowSalesWithoutReceipt;
 }
 
 QString Settings::deviceValue(const QString &name)

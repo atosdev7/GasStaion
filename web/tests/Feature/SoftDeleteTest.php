@@ -124,11 +124,9 @@ class SoftDeleteTest extends TestCase
         $ticketInbound = TicketInbound::forceCreate([
             'fuel_type' => $f->fuel_type, 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-09-20', 'user_id' => 1,
         ]);
-        $ticketPublish = TicketPublish::forceCreate([
-            'fuel_type' => $f->fuel_type, 'spec' => 0, 'code' => '06', 'start_serial' => 1, 'end_serial' => 100, 'count' => 100, 'user_id' => 1,
-        ]);
+        // (a ticket publish is not soft deleted: it is really deleted, see TicketPublishTest)
 
-        foreach ([$inbound, $ticketInbound, $ticketPublish] as $model) {
+        foreach ([$inbound, $ticketInbound] as $model) {
             $class = get_class($model);
             $model->delete();
             $this->assertNull($class::find($model->id));

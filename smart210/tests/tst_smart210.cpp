@@ -267,6 +267,7 @@ private slots:
     void refusedRecordsStayListedWithTheirReason();
     void withNothingWaitingTheUploadButtonIsOff();
     void theReviewListsTheRecordsOfTheChosenDateWithTotals();
+    void theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen();
     void aRecordWithoutADateShowsUnderTheBusinessDayOfItsTime();
     void aRecordMadeNearNineIsFlaggedForTheDate();
     void aChangedCommentMakesTheRecordWaitAgainAndIsSentAgain();
@@ -3025,6 +3026,68 @@ void Smart210Test::anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedO
     QCOMPARE(rows.size(), 1);
 }
 
+void Smart210Test::theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen()
+{
+    setUpLoggedInTerminalWithAPin();
+    serverKnowsThisTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QString columns = "(id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, receipt) ";
+    run("INSERT INTO sales " + columns + "VALUES ('with', '2026-10-09 10:00:00', 'spot', 'D', 750, 1000, 'cash', 7500, 7500, 'sale', 7, '2026-10-09', '1')");
+    run("INSERT INTO sales " + columns + "VALUES ('none', '2026-10-09 11:00:00', 'spot', 'D', 750, 1000, 'cash', 7500, 7500, 'sale', 7, '2026-10-09', NULL)");
+    run("INSERT INTO sales " + columns + "VALUES ('zero', '2026-10-09 12:00:00', 'spot', 'D', 750, 1000, 'cash', 7500, 7500, 'sale', 7, '2026-10-09', '0')");
+
+    // the data layer: all of them, or only the ones with a receipt
+    QCOMPARE(ReviewData::sales(db, "2026-10-09").size(), 3);
+    QCOMPARE(ReviewData::sales(db, "2026-10-09", true).size(), 3);
+    QCOMPARE(ReviewData::sales(db, "2026-10-09", false).size(), 1);
+    QCOMPARE(ReviewData::sales(db, "2026-10-09", false).at(0).id, QString("with"));
+    QCOMPARE(ReviewData::salesWithoutReceipt(db, "2026-10-09"), 2);
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
+    QTableWidget *table = window.findChild<QTableWidget *>("reviewSalesTable");
+    QLabel *totals = window.findChild<QLabel *>("reviewSalesTotals");
+    QCOMPARE(table->rowCount(), 3);                                       // shown by default
+    QVERIFY(!totals->text().contains("not listed"));
+
+    // Machine Config: the box is ticked, un-tick it and save
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+    QCheckBox *show = window.findChild<QCheckBox *>("showNoReceiptCheck");
+    QVERIFY(show != 0);
+    QVERIFY(show->isChecked());
+    show->setChecked(false);
+    QCOMPARE(Settings(db).value(SettingKey::ShowSalesWithoutReceipt), QString());   // not saved before Save
+    window.findChild<QPushButton *>("saveReviewOptionsButton")->click();
+    QCOMPARE(Settings(db).value(SettingKey::ShowSalesWithoutReceipt), QString("0"));
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Sales without a receipt: yes -> no"));
+
+    // the Review screen lists only the sale with a receipt, says how many are left out, and its totals still count all three
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
+    QCOMPARE(table->rowCount(), 1);
+    QVERIFY(totals->text().contains("Spot sales: 3 records"));
+    QVERIFY(totals->text().contains("2 sales without a receipt are not listed"));
+
+    // and back
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QVERIFY(!window.findChild<QCheckBox *>("showNoReceiptCheck")->isChecked());   // shown again when the page is reopened
+    window.findChild<QCheckBox *>("showNoReceiptCheck")->setChecked(true);
+    window.findChild<QPushButton *>("saveReviewOptionsButton")->click();
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
+    QCOMPARE(table->rowCount(), 3);
+}
 void Smart210Test::theUploadModeIsPickedAndSavedOnMachineConfig()
 {
     setUpLoggedInTerminalWithAPin();

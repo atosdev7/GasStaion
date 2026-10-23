@@ -4,6 +4,7 @@
 #include "Decimal.h"
 #include "SaleDeletion.h"
 #include "Session.h"
+#include "Settings.h"
 #include "Uploader.h"
 #include "ui_ReviewPage.h"
 #include "Theme.h"
@@ -230,7 +231,9 @@ void ReviewPage::reload()
     loading_ = true;
     const QString date = date_->date().toString("yyyy-MM-dd");
 
-    fillRecords(sales_, ReviewData::sales(db_, date));
+    // Machine Config can hide the sales without a receipt; the totals below still count them, and a line says how many are left out
+    const bool showNoReceipt = Settings(db_).boolValue(SettingKey::ShowSalesWithoutReceipt, true);
+    fillRecords(sales_, ReviewData::sales(db_, date, showNoReceipt));
     fillRecords(supplies_, ReviewData::supplements(db_, date));
     fillRecords(debts_, ReviewData::debts(db_, date));
 
@@ -238,6 +241,10 @@ void ReviewPage::reload()
     salesTotals_->setText(tr("Spot sales: %1 records, %2 kg, amount %3\nTicket sales: %4 records, %5 kg, amount %6\nTotal paid: %7, unpaid: %8")
                               .arg(t.spotCount).arg(money(t.spotKgX100)).arg(money(t.spotAmountX100)).arg(t.ticketCount).arg(money(t.ticketKgX100))
                               .arg(money(t.ticketAmountX100)).arg(money(t.paidX100)).arg(money(t.unpaidX100)));
+    const int hidden = showNoReceipt ? 0 : ReviewData::salesWithoutReceipt(db_, date);
+    if (hidden > 0) {
+        salesTotals_->setText(salesTotals_->text() + "\n" + tr("%1 sales without a receipt are not listed (Machine Config).").arg(hidden));
+    }
     supplyTotals_->setText(tr("Supplies: %1 records, %2 litres, %3 kg\nRemainders: %4 records, %5 kg")
                                .arg(t.supplements).arg(money(t.litersX100)).arg(money(t.supplementKgX100)).arg(t.remainders).arg(money(t.remainderKgX100)));
     debtTotals_->setText(tr("Ticket loans: %1 records, %2 kg\nSettlements: %3 records, %4 kg")

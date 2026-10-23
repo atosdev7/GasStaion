@@ -79,6 +79,30 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="reviewOptionsBox">
+         <property name="title"><string>Review screen</string></property>
+         <layout class="QHBoxLayout" name="reviewOptionsLayout" stretch="1,0">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QCheckBox" name="showNoReceiptCheck">
+            <property name="text"><string>Show the sales without a receipt</string></property>
+            <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveReviewOptionsButton">
+            <property name="text"><string>Save</string></property>
+            <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <spacer name="spacer1">
          <property name="orientation"><enum>Qt::Vertical</enum></property>
          <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>

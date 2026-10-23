@@ -18,8 +18,8 @@ use Illuminate\Validation\ValidationException;
 // fuel type + spec and enters the serial range.
 //
 // A batch can be looked at (its tickets), changed (the serial range and the date) or deleted while it is untouched: every ticket of it is still blank
-// and none was downloaded by a terminal yet. After that the terminals hold its tickets and it stays as it is. The serial numbers of a
-// deleted batch stay reserved (a ticket with such a number may already be printed): no later batch may use them.
+// and none was downloaded by a terminal yet. After that the terminals hold its tickets and it stays as it is. A deleted batch is really deleted
+// (no soft delete, nothing is kept of it): its serial numbers are free again, and the start number suggested for a new batch ignores it.
 class TicketPublishController extends Controller
 {
     const MAX_QUANTITY = 50000;
@@ -43,8 +43,8 @@ class TicketPublishController extends Controller
         // against overlapping tickets happens on submit regardless.
         $nextSerials = $stock->mapWithKeys(function ($row) {
             $code = Barcode::codeFor($row->fuel_type, $row->spec);
-            // From the publishes, not the tickets: backup removes used tickets, publishes stay. Deleted batches keep their numbers reserved.
-            $next = $code ? (int) TicketPublish::withTrashed()->where('code', $code)->max('end_serial') + 1 : 1;
+            // From the publishes, not the tickets: backup removes used tickets, publishes stay. A deleted batch is gone and counts for nothing.
+            $next = $code ? (int) TicketPublish::where('code', $code)->max('end_serial') + 1 : 1;
 
             return [$row->fuel_type . ':' . $row->spec => $next];
         });
@@ -155,7 +155,7 @@ class TicketPublishController extends Controller
         $before = '';
         $batch = DB::transaction(function () use ($id, $startSerial, $endSerial, $quantity, $date, &$before) {
             $batch = TicketPublish::lockForUpdate()->findOrFail($id);
-            if ($reason = $this->touchedReason($batch)) {
+            if ($reason = $this->touchedReason($batch, true)) {
                 throw ValidationException::withMessages(['start_serial' => $reason]);
             }
             // the blank tickets of this batch go back to the stock first: the new range may take as many as the stock holds
@@ -177,12 +177,12 @@ class TicketPublishController extends Controller
         return redirect()->route('ticket-publish.index')->with('status', __('tickets.saved'));
     }
 
-    // Cancels a wrong batch: its blank tickets are removed and go back to the blank stock; its serial numbers stay reserved.
+    // Cancels a wrong batch: its blank tickets are removed and go back to the blank stock, and the batch itself is deleted for good (its numbers are free).
     public function destroy($id)
     {
         $batch = DB::transaction(function () use ($id) {
             $batch = TicketPublish::lockForUpdate()->findOrFail($id);
-            if ($reason = $this->touchedReason($batch)) {
+            if ($reason = $this->touchedReason($batch, true)) {
                 throw ValidationException::withMessages(['batch' => $reason]);
             }
             Ticket::where('publish_id', $batch->id)->delete();
@@ -211,11 +211,11 @@ class TicketPublishController extends Controller
         return $quantity;
     }
 
-    // Never publish over the range of another batch for this fuel type + spec, a deleted one included (its numbers stay reserved). Every
-    // ticket comes from exactly one publish, so this alone catches it, and it is a cheap indexed look-up against one row per publish.
+    // Never publish over the range of another batch for this fuel type + spec. Every ticket comes from exactly one publish, so this alone
+    // catches it, and it is a cheap indexed look-up against one row per publish.
     private function refuseOverlap($fuelType, $spec, $startSerial, $endSerial, $exceptId)
     {
-        $query = TicketPublish::withTrashed()->where('fuel_type', $fuelType)->where('spec', $spec)
+        $query = TicketPublish::where('fuel_type', $fuelType)->where('spec', $spec)
             ->where('start_serial', '<=', $endSerial)->where('end_serial', '>=', $startSerial)->lockForUpdate();
         if ($exceptId) {
             $query->where('id', '<>', $exceptId);
@@ -250,11 +250,17 @@ class TicketPublishController extends Controller
     }
 
     // null when the batch is untouched (every ticket of it is blank, none was downloaded by a terminal), else the reason it cannot change.
-    private function touchedReason(TicketPublish $batch)
+    // A ticket counts as sold when it is no longer 'published', or names a sale or a supplement. A terminal can sell a ticket before the web app
+    // hears of it, so a downloaded batch is never deleted either. $lock (inside a transaction): the tickets are locked first, so that a sale
+    // made at the same moment cannot slip in between this check and the delete.
+    private function touchedReason(TicketPublish $batch, $lock = false)
     {
         $tickets = Ticket::where('publish_id', $batch->id);
+        if ($lock) {
+            (clone $tickets)->lockForUpdate()->count();
+        }
         $used = (clone $tickets)->where(function ($q) {
-            $q->where('status', '<>', config('ticket_statuses.publish'))->orWhereNotNull('sale_id')->orWhereNotNull('supplement_id');
+            $q->where('status', '<>', config('ticket_statuses.publish'))->orWhereNotNull('sale_id')->orWhereNotNull('sale_date')->orWhereNotNull('supplement_id');
         })->exists();
         $downloaded = (clone $tickets)->where('synced', 1)->exists();
 

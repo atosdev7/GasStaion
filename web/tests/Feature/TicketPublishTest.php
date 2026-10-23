@@ -306,7 +306,7 @@ class TicketPublishTest extends TestCase
         $this->assertSame(8, DB::table('tickets')->count());
     }
 
-    public function testDeleteGivesTheBlankTicketsBackAndKeepsTheNumbersReserved()
+    public function testDeleteGivesTheBlankTicketsBackAndTheNumbersAreFreeAgain()
     {
         $this->as('manager');
         $this->receive(20);
@@ -317,15 +317,27 @@ class TicketPublishTest extends TestCase
         $this->delete('/ticket-publish/' . $batch->id)->assertRedirect('/ticket-publish');
 
         $this->assertNull(\App\Models\Tickets\TicketPublish::find($batch->id));
-        $this->assertNotNull(\App\Models\Tickets\TicketPublish::onlyTrashed()->find($batch->id)); // kept as deleted
+        $this->assertSame(0, DB::table('ticket_publishes')->count());                               // really deleted, nothing is kept
+        $this->assertNull(DB::table('ticket_publishes')->value('deleted_at'));
         $this->assertSame(0, DB::table('tickets')->count());
         $this->assertSame(20, \App\Support\Tickets\TicketStock::available('D', 0));
 
-        // its numbers stay reserved: nothing publishes over them, and the suggested start moves on
-        $this->publish(3, 8)->assertSessionHasErrors('start_serial');
+        // its numbers are free: the suggested start ignores it, and the same numbers can be published again
+        $suggest = $this->get('/ticket-publish/create')->assertOk()->viewData('nextSerials');
+        $this->assertSame(1, $suggest['D:0']);
+        $this->publish(1, 5)->assertRedirect('/ticket-publish');
+        $this->assertSame(5, DB::table('tickets')->count());
+
+        // with a batch after the deleted one, the start continues after the batch that is left
         $this->publish(6, 8)->assertRedirect('/ticket-publish');
+        $first = \App\Models\Tickets\TicketPublish::where('start_serial', 1)->first();
+        $this->delete('/ticket-publish/' . $first->id)->assertRedirect('/ticket-publish');
+        $this->publish(3, 8)->assertSessionHasErrors('start_serial');                                // overlaps the batch that is left
         $suggest = $this->get('/ticket-publish/create')->assertOk()->viewData('nextSerials');
         $this->assertSame(9, $suggest['D:0']);
+        $last = \App\Models\Tickets\TicketPublish::first();
+        $this->delete('/ticket-publish/' . $last->id)->assertRedirect('/ticket-publish');         // the last one goes: the start is 1 again
+        $this->assertSame(1, $this->get('/ticket-publish/create')->viewData('nextSerials')['D:0']);
     }
 
     public function testATouchedBatchCannotBeChangedOrDeleted()
@@ -348,6 +360,15 @@ class TicketPublishTest extends TestCase
         DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.sale')]);
         $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
         $this->put('/ticket-publish/' . $batch->id, $range)->assertSessionHasErrors('start_serial');
+
+        // sold, whichever field says so: the sale, the day of the sale or the supply
+        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.publish')]);
+        foreach (['sale_id' => 'a-sale-id', 'sale_date' => '2026-09-20', 'supplement_id' => 'a-supplement-id'] as $column => $value) {
+            DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update([$column => $value]);
+            $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
+            DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update([$column => null]);
+        }
+        $this->assertSame(5, DB::table('tickets')->where('publish_id', $batch->id)->count());
 
         // a ticket gone from the batch (used and removed by a backup)
         DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.publish')]);

@@ -26,10 +26,10 @@ return [
     'published' => 'Published :count tickets: :start to :end.',
     'batch_tickets' => 'Tickets of the batch',
     'ticket_downloaded' => 'Downloaded by a terminal',
-    'batch_delete_confirm' => 'Delete this batch? Its blank tickets are removed and go back to the blank stock. Its serial numbers stay reserved.',
+    'batch_delete_confirm' => 'Delete this batch? Its blank tickets are removed and go back to the blank stock, and its serial numbers are free again.',
     'batch_used' => 'Not possible: some tickets of this batch were already sold, supplied or restricted.',
     'batch_downloaded' => 'Not possible: a terminal has already downloaded the tickets of this batch.',
-    'batch_edit_hint' => 'The fuel type, the spec and the code of a batch do not change. A new serial range numbers its blank tickets again; the numbers of deleted batches stay reserved.',
+    'batch_edit_hint' => 'The fuel type, the spec and the code of a batch do not change. A new serial range numbers its blank tickets again.',
 
     // Ticket lookup
     'ticket_not_found' => 'No ticket found with that barcode.',

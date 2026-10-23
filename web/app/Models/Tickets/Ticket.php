@@ -43,11 +43,10 @@ class Ticket extends Model
     protected $keyType = 'string'; // a zero-padded 16-digit code, not a quantity — see App\Support\Tickets\Barcode
     public $incrementing = false;
 
-    // The batch the ticket was published in (kept even when the batch is deleted: the ticket then no longer exists, but a backup may have
-    // removed the used tickets of an old batch and not the batch).
+    // The batch the ticket was published in.
     public function batch()
     {
-        return $this->belongsTo(TicketPublish::class, 'publish_id')->withTrashed();
+        return $this->belongsTo(TicketPublish::class, 'publish_id');
     }
 
     public function sale()

@@ -57,6 +57,7 @@ private slots:
     void formatPicked();
     void uploadModePicked();
     void saveUploadMode();
+    void saveReviewOptions();
     void serverConfigured();
     void savePrinter();
     void checkPrinter();
@@ -100,6 +101,7 @@ private:
     QString converterBefore_;
     QComboBox *uploadMode_;
     QString uploadModeBefore_;
+    bool showNoReceiptBefore_;
     QListWidget *log_;
     QLabel *status_;
     QString serverBefore_;

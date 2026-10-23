@@ -45,9 +45,9 @@ Files: `app/Http/Controllers/TicketPublishController.php`, `resources/views/tick
 | `tickets.actions` | Actions |
 | `tickets.available` | Available |
 | `tickets.barcode` | Barcode |
-| `tickets.batch_delete_confirm` | Delete this batch? Its blank tickets are removed and go back to the blank stock. Its serial numbers stay reserved. |
+| `tickets.batch_delete_confirm` | Delete this batch? Its blank tickets are removed and go back to the blank stock, and its serial numbers are free again. |
 | `tickets.batch_downloaded` | Not possible: a terminal has already downloaded the tickets of this batch. |
-| `tickets.batch_edit_hint` | The fuel type, the spec and the code of a batch do not change. A new serial range numbers its blank tickets again; the numbers of deleted batches stay reserved. |
+| `tickets.batch_edit_hint` | The fuel type, the spec and the code of a batch do not change. A new serial range numbers its blank tickets again. |
 | `tickets.batch_tickets` | Tickets of the batch |
 | `tickets.batch_used` | Not possible: some tickets of this batch were already sold, supplied or restricted. |
 | `tickets.blank_stock` | Blank ticket stock |
