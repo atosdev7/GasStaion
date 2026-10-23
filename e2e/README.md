@@ -8,8 +8,11 @@ powershell -ExecutionPolicy Bypass -File e2e\run.ps1 basic    # 9.1
 powershell -ExecutionPolicy Bypass -File e2e\run.ps1 offline  # 9.2
 ```
 
-It builds the Smart210 side (qmake, Qt 5.15 desktop), makes the scratch database `gasstation_e2e` new, starts the web app on port 8124 against it
-(the 60-requests-a-minute API limit is raised with `API_THROTTLE_PER_MINUTE`), runs the terminal, then compares the two. The dev database
+It builds the Smart210 side (qmake, Qt 5.15 desktop), makes the scratch database `gasstation_e2e` new, starts the web app on port 8124 against it,
+in a second Apache of XAMPP 7.4.33 (`e2e/apache/httpd-test.conf`; the Apache service on port 80 is not touched; `-Builtin` uses PHP's built-in
+server instead) with PHP 7.4.33 as its module and for every script here (`D:\xampp\php\php.exe`). The scratch environment (the database, the
+60-requests-a-minute API limit raised with `API_THROTTLE_PER_MINUTE`, the backup folders) reaches Apache through `SetEnv` lines that the script
+writes to `web/storage/logs/apache-e2e-env.conf`. It runs the terminal, then compares the two. The dev database
 `gasstation` is never used: `verify.php` checks at the end that its row counts are what they were before. XAMPP's MariaDB must be running; it is left
 running.
 
@@ -49,6 +52,12 @@ are removed before the retry; the supply screen's `heightForWidth` word-wrap cau
 ## cards: the ledger of a card
 
 `run.ps1 cards` (`Cards.inc`, `cards_step.php`): the terminal registers a card, tops it up twice (40 and 10 kg) and fills with it (20 kg) on a simulated board, uploads; the web app makes the ledger entries from the card sales and the supplement; the terminal downloads and its History list changes from "not confirmed yet" entries to the web app's entries; then the web app tops the card up (5 kg) and deletes the 10 kg top-up of the terminal (a reversal entry), and the terminal downloads again. `verify.php cards` checks that the web app and the terminal hold the same five entries with the running balances 40, 50, 30, 35 and 25, that the deleted sale is still a row, and that the ledger agrees with the records that are left.
+
+## day: a business day with both programs
+
+`run.ps1 day` (`Day.inc`, `webday.php`): the terminal does its shift (the `basic` scenario) and uploads; `verify.php` compares the two; then the web staff work through the web app's own pages with a real login and the CSRF token (`webday.php`, curl against the running web app): the assistant sells two tickets on credit to ACME, the accountant records a part payment, a ticket is brought back (a return), a wrong spot sale is entered and deleted, a supply is typed in on the web with a sold ticket, the accountant confirms the day (the deleted sale is erased, the dump is made), a confirmed sale cannot be changed or deleted, the manager takes a confirmation back (the assistant cannot) and the record can be edited again, the pages and the seven reports (with their xlsx export) open, and the administrator makes the periodic backup up to yesterday (the tank stock stays, debts and payments are kept). At the end the terminal downloads and must hold the same stock as the web app: the ticket brought back is in stock again, the ticket used on the web and the ticket of the deleted sale cannot be sold.
+
+Lines that start with `ISSUE` are rules of `REVIEW_2026-10-20.md` that the code does not keep yet (a return cutting the debt of the original sale, an overpayment or a payment dated in the future accepted, a remainder of 0.03 kg from a supply typed in, an unconfirmed sale cleared by the backup). They are counted and printed but do not fail the run; when one is fixed the line turns into `ok`. The backup dumps and exports of this scenario go to `web/storage/app/e2e-backups/` (`BACKUP_DUMP_DIR`, `BACKUP_EXPORT_DIR`), not to the real folders.
 
 ## 9.3 backup and restore rehearsal
 

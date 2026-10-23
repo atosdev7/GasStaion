@@ -49,6 +49,8 @@ HEADERS += \
     Offline.inc \
     Cards.inc \
     Proxy.inc \
+    Day.inc \
+    Dev.inc \
     $$SIM/BoardSimulator.h \
     $$SIM/ConverterClient.h \
     ../smart210/tests/FakeBoards.h \

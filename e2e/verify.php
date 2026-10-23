@@ -93,6 +93,17 @@ if ($scenario === 'cards') {
     exit($failures > 0 ? 1 : 0);
 }
 
+// ---- the day: the terminal program already ran this very comparison (as "basic") before the web staff changed things; only the dev database is checked here ----
+
+if ($scenario === 'day') {
+    if ($devBefore !== null) {
+        section('the dev database');
+        ok(e2e_dev_fingerprint() === $devBefore, 'the dev database `gasstation` was not touched');
+    }
+    echo "\n" . ($checks - $failures) . " of $checks checks passed\n";
+    exit($failures > 0 ? 1 : 0);
+}
+
 // ---- every record of the terminal is on the server, with the same values ----
 
 section('sales');

@@ -6,15 +6,6 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
 {
-    // The device API allows 60 requests a minute; the end-to-end tests (e2e/) send far more and raise it with API_THROTTLE_PER_MINUTE.
-    public function __construct(\Illuminate\Contracts\Foundation\Application $app, \Illuminate\Routing\Router $router)
-    {
-        if (env('API_THROTTLE_PER_MINUTE')) {
-            $this->middlewareGroups['api'][0] = 'throttle:' . (int) env('API_THROTTLE_PER_MINUTE') . ',1';
-        }
-        parent::__construct($app, $router);
-    }
-
     /**
      * The application's global HTTP middleware stack.
      *
@@ -47,7 +38,7 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            'throttle:60,1',
+            \App\Http\Middleware\ThrottleDevices::class, // the limit is config('sync.throttle_per_minute')
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
     ];

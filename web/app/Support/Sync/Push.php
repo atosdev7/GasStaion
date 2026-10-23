@@ -18,6 +18,7 @@ use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Support\Tickets\Barcode;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -48,9 +49,24 @@ class Push
     // Stores one row in its own transaction; throws RejectedRow when it must not be stored.
     public static function apply($table, Device $device, array $row)
     {
-        DB::transaction(function () use ($table, $device, $row) {
-            call_user_func([self::class, $table], $device, $row);
-        });
+        // A request the terminal gave up on (a timeout, a power cut) is still worked on by the web server while the terminal sends the same row again,
+        // so two requests can store one row at the same moment. The second one gets a duplicate key (or a deadlock) from the database; by then the first
+        // has stored the row, so running this one again finds it and stores it as the same row (what a repeated push always does).
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                DB::transaction(function () use ($table, $device, $row) {
+                    call_user_func([self::class, $table], $device, $row);
+                });
+
+                return;
+            } catch (QueryException $e) {
+                $driverCode = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
+                if ($attempt >= 4 || !in_array($driverCode, [1062, 1213, 1205], true)) {
+                    throw $e;
+                }
+                usleep(150000 * $attempt);
+            }
+        }
     }
 
     // The nozzles are set up on the Smart210, which is the source of truth for them: a row creates, changes or deletes the

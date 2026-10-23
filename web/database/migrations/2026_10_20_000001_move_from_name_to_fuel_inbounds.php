@@ -10,9 +10,12 @@ class MoveFromNameToFuelInbounds extends Migration
 {
     public function up()
     {
-        Schema::table('fuel_inbounds', function (Blueprint $table) {
-            $table->string('from_name', 100)->nullable()->after('inbound_date');
-        });
+        // each step checks first: DDL cannot be rolled back, so a run that stopped half way (a lock on a temporary file, for instance) can be run again
+        if (!Schema::hasColumn('fuel_inbounds', 'from_name')) {
+            Schema::table('fuel_inbounds', function (Blueprint $table) {
+                $table->string('from_name', 100)->nullable()->after('inbound_date');
+            });
+        }
         if (Schema::hasColumn('ticket_inbounds', 'from_name')) {
             Schema::table('ticket_inbounds', function (Blueprint $table) {
                 $table->dropColumn('from_name');
@@ -22,11 +25,15 @@ class MoveFromNameToFuelInbounds extends Migration
 
     public function down()
     {
-        Schema::table('ticket_inbounds', function (Blueprint $table) {
-            $table->string('from_name', 100)->nullable()->after('inbound_date');
-        });
-        Schema::table('fuel_inbounds', function (Blueprint $table) {
-            $table->dropColumn('from_name');
-        });
+        if (!Schema::hasColumn('ticket_inbounds', 'from_name')) {
+            Schema::table('ticket_inbounds', function (Blueprint $table) {
+                $table->string('from_name', 100)->nullable()->after('inbound_date');
+            });
+        }
+        if (Schema::hasColumn('fuel_inbounds', 'from_name')) {
+            Schema::table('fuel_inbounds', function (Blueprint $table) {
+                $table->dropColumn('from_name');
+            });
+        }
     }
 }

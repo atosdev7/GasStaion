@@ -21,7 +21,7 @@ return [
     // Run backup:dump right before a backup clears anything.
     'dump_before_clear' => true,
 
-    // Under storage/app.
-    'dump_dir' => 'backups/daily',
-    'export_dir' => 'backups/exports',
+    // Under storage/app (the end-to-end tests point them somewhere else so the real dumps are never touched).
+    'dump_dir' => env('BACKUP_DUMP_DIR', 'backups/daily'),
+    'export_dir' => env('BACKUP_EXPORT_DIR', 'backups/exports'),
 ];

@@ -157,11 +157,7 @@ class BackupRun
             mkdir($dir, 0755, true);
         }
 
-        $zip = new ZipArchive;
-        if ($zip->open($dir . '/' . $file, ZipArchive::CREATE | ZipArchive::EXCL) !== true) {
-            throw new RuntimeException('Could not create ' . $file);
-        }
-
+        // the table files first, the zip after them: the zip step can be tried again
         $temps = [];
         $counts = [];
         foreach (static::tables() as $table) {
@@ -177,21 +173,39 @@ class BackupRun
                 $counts[$table]++;
             }
             fclose($out);
-            $zip->addFile($temp, $table . '.jsonl');
-            $temps[] = $temp;
+            $temps[$table] = $temp;
         }
-        $zip->addFromString('manifest.json', json_encode([
+        $manifest = json_encode([
             'database' => DB::connection()->getDatabaseName(),
             'created_at' => now()->toDateTimeString(),
             'up_to_date' => $upTo,
             'rows' => $counts,
-        ], JSON_PRETTY_PRINT));
+        ], JSON_PRETTY_PRINT);
 
-        $ok = $zip->close();
+        // On Windows a virus scanner or an indexer may hold the new zip for a moment, and then the last step (renaming the temporary file) fails
+        // with "Unknown error": the zip is made again a few times before the backup gives up.
+        $target = $dir . '/' . $file;
+        $ok = false;
+        for ($attempt = 1; $attempt <= 6 && !$ok; $attempt++) {
+            if ($attempt > 1) {
+                @unlink($target);
+                usleep(500000);
+            }
+            $zip = new ZipArchive;
+            if ($zip->open($target, ZipArchive::CREATE | ZipArchive::EXCL) !== true) {
+                continue;
+            }
+            foreach ($temps as $table => $temp) {
+                $zip->addFile($temp, $table . '.jsonl');
+            }
+            $zip->addFromString('manifest.json', $manifest);
+            $ok = @$zip->close();
+        }
         foreach ($temps as $temp) {
             @unlink($temp);
         }
         if (!$ok) {
+            @unlink($target);
             throw new RuntimeException('Could not write ' . $file);
         }
     }

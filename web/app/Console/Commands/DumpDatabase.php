@@ -36,14 +36,24 @@ class DumpDatabase extends Command
         $name = $db['database'] . '-' . now()->format('Y-m-d-His') . '.sql.gz';
         $sqlPath = $dir . DIRECTORY_SEPARATOR . $name . '.tmp';
 
-        $process = new Process([
-            config('backup.mysqldump'),
-            '--host=' . $db['host'], '--port=' . $db['port'], '--user=' . $db['username'],
-            '--single-transaction', '--routines', '--default-character-set=utf8mb4',
-            '--result-file=' . $sqlPath,
-            $db['database'],
-        ], null, ['MYSQL_PWD' => (string) $db['password']]); // keeps the password off the command line
-        $process->setTimeout(3600)->run();
+        // The password stays off the command line; the whole environment goes along: from the built-in web server Symfony passes none of it, and without
+        // SystemRoot mysqldump cannot open a socket on Windows. On Windows the server may fail to delete a temporary file of its own while a virus scanner
+        // holds it ("Errcode: 13"): the dump is tried again a few times then.
+        for ($attempt = 1; $attempt <= 6; $attempt++) {
+            $process = new Process([
+                config('backup.mysqldump'),
+                '--host=' . $db['host'], '--port=' . $db['port'], '--user=' . $db['username'],
+                '--single-transaction', '--routines', '--default-character-set=utf8mb4',
+                '--result-file=' . $sqlPath,
+                $db['database'],
+            ], null, array_merge(getenv(), ['MYSQL_PWD' => (string) $db['password']]));
+            $process->setTimeout(3600)->run();
+            if ($process->isSuccessful() || !preg_match('/Errcode: 13|Permission denied/i', $process->getErrorOutput())) {
+                break;
+            }
+            @unlink($sqlPath);
+            sleep(1);
+        }
 
         if (!$process->isSuccessful()) {
             @unlink($sqlPath);

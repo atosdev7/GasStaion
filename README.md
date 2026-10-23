@@ -6,15 +6,15 @@ Also: `PROTOCOL.md` (the nozzle board protocol) and `simulator/` (a PC program t
 
 ## Run the web project
 
-The web app is in `web/`: PHP 7.2, Laravel 6, MariaDB, AdminLTE 3 (bundled locally, no internet needed).
+The web app is in `web/`: Laravel 6 on PHP 7.4.33 (XAMPP, Apache + MariaDB 10.4 as services), AdminLTE 3 (bundled locally, no internet needed). The station browsers are Google Chrome 86, so the pages use no newer script or style features.
 
 Uses whatever is already on the machine — no separate database server or PHP install needed:
 
-- **MariaDB from XAMPP** (`D:\xampp\mysql`). Laravel 6 does not run on PHP 8, so a dedicated **PHP 7.2** lives side by side with XAMPP's own PHP, at `D:\php72` on this machine, and is used only for this project.
+- **XAMPP 7.4.33** (`D:\xampp`): its PHP 7.4.33 runs the app (Laravel 6 does not run on PHP 8), its MariaDB 10.4 holds the databases (`gasstation`, `gasstation_test` for the tests, `gasstation_e2e` for the end-to-end tests), its Apache serves the pages. `e2e/apache/gasstation.conf` has the virtual hosts of the app (include it in `httpd.conf` to serve it from the Apache service); `e2e/apache/httpd-test.conf` starts a second Apache of the same XAMPP on ports 8123 (app) and 8124 (end-to-end tests) without touching the service.
 
 ### Requirements
 
-- **PHP 7.2** with the extensions `mbstring`, `openssl`, `pdo_mysql`, `fileinfo`, `curl`, `gd`, `zip`, `xml`, `tokenizer`, `ctype`, `json`. Make sure `php -v` shows 7.2 in the terminal you use (put the PHP 7.2 folder first on `PATH`).
+- **PHP 7.4** (the XAMPP one) with the extensions `mbstring`, `openssl`, `pdo_mysql`, `fileinfo`, `curl`, `gd`, `zip`, `xml`, `tokenizer`, `ctype`, `json`. Make sure `php -v` shows 7.4 in the terminal you use (put `D:\xampp\php` first on `PATH`).
 - **Composer**.
 - **MariaDB running** (start it from the XAMPP control panel, or `mysqld` directly if it's not already up).
 
@@ -117,6 +117,7 @@ Pulling a table: ask for a page, store it, ack it, and repeat until `more` is `f
 
 ### Troubleshooting
 
-- **`php` is the wrong version:** put the PHP 7.2 folder first in the `PATH` (for example `set PATH=D:\php72;%PATH%` on Windows).
+- **`php` is the wrong version:** put the XAMPP PHP folder first in the `PATH` (for example `set PATH=D:\xampp\php;%PATH%` on Windows).
+- **`Error on delete of ...\xampp\tmp\#sql... (Errcode: 13)` from MariaDB, or `ZipArchive::close(): Renaming temporary file failed`:** a virus scanner or indexer holds a new file on the drive for a moment. The backup retries both; if it keeps happening, exclude `D:\xampp\tmp`, `D:\xampp\mysql\data` and the project folder from the scanner, or point `tmpdir` in `D:\xampp\mysql\bin\my.ini` to a folder that is not scanned and restart the `mysql` service.
 - **Windows: "rename ... Permission denied" while running artisan or composer:** antivirus is briefly locking a file. Run the command again.
 - **MariaDB stops during `migrate`:** some XAMPP MariaDB builds crash on `ALTER TABLE ... ADD PRIMARY KEY`. The migrations already avoid it by creating those tables with raw SQL, so keep that style for any new table that needs a non-auto-increment primary key.

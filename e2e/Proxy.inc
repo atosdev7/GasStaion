@@ -139,7 +139,10 @@ private:
         link->upConnected = false;
         QObject::connect(link->up, &QTcpSocket::connected, [link]() {
             link->upConnected = true;
-            link->up->write(link->request);
+            // a real server (Apache) keeps the connection open after its answer; the proxy takes the end of the answer from the closing of this connection
+            QByteArray head = link->request;
+            head.replace("Connection: keep-alive", "Connection: close");
+            link->up->write(head);
             link->request.clear();
         });
         QObject::connect(link->up, &QTcpSocket::readyRead, [this, link, generation]() {
@@ -225,9 +228,17 @@ private:
         }
     }
 
+    // The first bytes of a new request on the same connection. Once the server has begun to answer, the terminal sends nothing more of the request it
+    // has answered, so data that starts like a request line is the next request (the end of the exchange cannot be taken from the server closing the
+    // connection: Apache closes a moment later than PHP's built-in server did).
+    static bool startsLikeRequest(const QByteArray &data)
+    {
+        return data.startsWith("POST /") || data.startsWith("GET /") || data.startsWith("PUT /") || data.startsWith("DELETE /") || data.startsWith("HEAD /");
+    }
+
     void clientData(Link *link, const QByteArray &data)
     {
-        if (link->exchangeDone) { // another request on the same connection
+        if (link->exchangeDone || (link->statusSeen && startsLikeRequest(data))) { // another request on the same connection
             dropUp(link);
             ++link->generation;
             link->exchangeDone = false;

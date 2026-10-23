@@ -31,6 +31,7 @@
 #include "Cards.h"
 #include "Checkout.h"
 #include "Database.h"
+#include "Decimal.h"
 #include "FakeBoards.h"
 #include "LoanSettlement.h"
 #include "MachineConfig.h"
@@ -47,6 +48,7 @@
 #include "SyncClient.h"
 #include "TicketNumbers.h"
 #include "TicketSale.h"
+#include "TicketStatus.h"
 #include "Uploader.h"
 
 static QTextStream out(stdout);
@@ -115,7 +117,7 @@ static int freePort()
 
 struct Terminal {
     Terminal(const QString &file_, const QString &host, int port)
-        : name("e2e"), file(file_), nowShift(0), userId(0), uploadTimeoutMs(20000)
+        : name("e2e"), file(file_), nowShift(0), userId(0), uploadTimeoutMs(20000), downloadTimeoutMs(60000)
     {
         QString error;
         if (!Database::open(file_, name, &error) || !Migrator::apply(QSqlDatabase::database(name), Migrator::bundled(), &error)) {
@@ -151,7 +153,7 @@ struct Terminal {
         QString text;
         QObject::connect(&client, &SyncClient::downloadFinished, [&](bool o, const QString &m) { ok = o; text = m; done = true; });
         client.download();
-        waitFor([&]() { return done; }, 60000);
+        waitFor([&]() { return done; }, downloadTimeoutMs);
         if (message) {
             *message = text;
         }
@@ -198,6 +200,7 @@ struct Terminal {
     int nowShift;
     int userId;
     int uploadTimeoutMs;
+    int downloadTimeoutMs;
 };
 
 // The boards behind the converter, the supply session on top of them: a nozzle 1 in auto mode and a nozzle 2 in manual mode.
@@ -357,10 +360,13 @@ static void writeFacts(const Terminal &t, const QString &file, const QJsonObject
 #include "Scenarios.inc"
 #include "Offline.inc"
 #include "Cards.inc"
+#include "Day.inc"
+#include "Dev.inc"
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
+    ApiClient::setMinIntervalMs(0); // a test does not wait a second between calls
     if (argc < 5) {
         out << "usage: e2e <scenario> <server host> <server port> <facts.json>\n";
 
@@ -373,7 +379,9 @@ int main(int argc, char *argv[])
     }
     QTemporaryDir dir;
     Settings::setDeviceFile(dir.path() + "/terminal.db.device.ini");
-    Terminal terminal(dir.path() + "/terminal.db", argv[2], QString(argv[3]).toInt());
+    // devrun works on the terminal's own database (the 7th argument): the dev web app and a terminal that has been used before
+    const QString databaseFile = (scenario == "devrun" && argc > 7) ? QString(argv[7]) : dir.path() + "/terminal.db";
+    Terminal terminal(databaseFile, argv[2], QString(argv[3]).toInt());
 
     int code = 0;
     if (scenario == "basic") {
@@ -384,12 +392,19 @@ int main(int argc, char *argv[])
         code = restoreScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".");
     } else if (scenario == "cards") {
         code = cardsScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".");
+    } else if (scenario == "devrun") {
+        code = devrunScenario(terminal, argv[4]);
+    } else if (scenario == "day") {
+        code = dayScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".", argv[2], QString(argv[3]).toInt());
     } else {
         out << "unknown scenario " << scenario << "\n";
         code = 2;
     }
 
     out << "\n" << (checks - failures) << " of " << checks << " checks passed\n";
+    if (scenario == "day") {
+        out << knownIssues << " known issue(s) of REVIEW_2026-10-20.md still show (ISSUE lines)\n";
+    }
     out.flush();
 
     return code != 0 ? code : (failures > 0 ? 1 : 0);
