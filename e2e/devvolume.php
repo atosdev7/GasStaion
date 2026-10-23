@@ -269,7 +269,7 @@ if (stage('confirm')) {
             }
         }
         foreach (array_chunk($supplyIds, 1900) as $part) {
-            act("$d: the accountant confirms " . count($part) . ' supplements', $accountantWeb, 'POST', '/confirmations', ['date' => $d, 'supplements' => $part, 'from' => 'supplements'], '/confirmations');
+            act("$d: the accountant confirms " . count($part) . ' supplements', $accountantWeb, 'POST', '/confirmations', ['date' => $d, 'supplements' => $part, 'from' => 'supplements'], '/confirmations/supplements');
         }
     }
     ok((int) one('SELECT COUNT(*) FROM sales WHERE confirmed_at IS NULL AND deleted_at IS NULL') === 0 && (int) one('SELECT COUNT(*) FROM supplements WHERE confirmed_at IS NULL AND deleted_at IS NULL') === 0, 'nothing is left to confirm');
@@ -318,13 +318,15 @@ if (stage('debts')) {
     echo '  ' . count($debts) . ' debts, ' . number_format(array_sum(array_column($debts, 'amount')), 2) . ' owed, ' . number_format(array_sum(array_column($debts, 'paid')), 2) . " paid\n";
     ok(count($debts) >= 8, 'debts exist for the credit sales of the web, the opening balance and the sales of the manager');
     // pay the biggest in two parts, the second in the other payment method, one small debt fully, and a general payment of a customer
-    $big = $debts[0];
+    $owing = array_values(array_filter($debts, function ($d) { return $d['amount'] - $d['paid'] >= 0.02; })); // a repeat run finds the biggest debts paid already
+    ok(count($owing) >= 2, 'at least two debts still owe something');
+    $big = $owing[0];
     $half = round(($big['amount'] - $big['paid']) / 2, 2);
     act('part payment of ' . number_format($half, 2) . ' (bank) on the biggest debt', $accountantWeb, 'POST', '/payments', ['customer_id' => $big['customer_id'], 'debt_id' => $big['id'], 'amount' => $half, 'payment_method' => 'bank', 'paid_date' => $today], '/payments');
     $rest = round($big['amount'] - $big['paid'] - $half, 2);
     act('the rest ' . number_format($rest, 2) . ' (cash) of the same debt', $accountantWeb, 'POST', '/payments', ['customer_id' => $big['customer_id'], 'debt_id' => $big['id'], 'amount' => $rest, 'payment_method' => 'cash', 'paid_date' => $today], '/payments');
     ok(abs(money(one('SELECT amount FROM debts WHERE id = ?', [$big['id']])) - money(one('SELECT SUM(amount) FROM debt_payments WHERE debt_id = ?', [$big['id']]))) < 0.005, 'the biggest debt is settled: payments equal the debt');
-    $small = end($debts);
+    $small = end($owing);
     act('the smallest debt ' . number_format($small['amount'] - $small['paid'], 2) . ' paid in full (cash)', $accountantWeb, 'POST', '/payments', ['customer_id' => $small['customer_id'], 'debt_id' => $small['id'], 'amount' => round($small['amount'] - $small['paid'], 2), 'payment_method' => 'cash', 'paid_date' => $today], '/payments');
     act('a general payment of 500.00 (bank) of Delta Taxi, not tied to a debt', $accountantWeb, 'POST', '/payments', ['customer_id' => $delta, 'amount' => '500', 'payment_method' => 'bank', 'paid_date' => $today, 'note' => 'general'], '/payments');
     // the same checks the page makes: per customer what is owed
@@ -421,10 +423,20 @@ if (stage('verify')) {
             $by[$r['sale_type']] = $r;
         }
         $terminalSpot = isset($by['spot']) ? (int) $by['spot']['n'] : 0;
-        ok($terminalSpot >= $f['spotSales'], "the terminal's $f[spotSales] spot sales are on the server ($terminalSpot by cashier1 in all)");
-        $serverKg = money(rows("SELECT SUM(amount_kg) AS v FROM sales WHERE user_id = ? AND sale_type = 'spot' AND deleted_at IS NULL", [$cashier])[0]['v'] ?: 0);
-        ok($serverKg >= $f['spotKgX100'] / 100 - 0.01 && $serverKg - $f['spotKgX100'] / 100 < 100, 'the kg of the spot sales on the server (' . number_format($serverKg, 2) . ') are the terminal\'s ' . number_format($f['spotKgX100'] / 100, 2) . ' plus the earlier sale made in the app');
-        ok((int) one('SELECT COUNT(*) FROM supplements') >= $f['supplies'], 'the terminal\'s ' . $f['supplies'] . ' supplies are on the server (' . (int) one('SELECT COUNT(*) FROM supplements') . ' in all)');
+        // this run's own spot sales (the ids are in the facts file): a repeat run has the sales of the runs before it on the server too
+        $spotIds = [];
+        foreach ($f['sales'] as $s) {
+            if ($s['sale_type'] === 'spot') {
+                $spotIds[] = $s['id'];
+            }
+        }
+        $marks = implode(',', array_fill(0, max(1, count($spotIds)), '?'));
+        $mine = rows("SELECT COUNT(*) AS n, SUM(amount_kg) AS kg FROM sales WHERE id IN ($marks) AND sale_type = 'spot' AND user_id = ? AND deleted_at IS NULL", array_merge($spotIds ?: [''], [$cashier]))[0];
+        ok((int) $mine['n'] === $f['spotSales'] && count($spotIds) === $f['spotSales'], "the terminal's $f[spotSales] spot sales are on the server ($terminalSpot by cashier1 in all)");
+        $serverKg = money($mine['kg'] ?: 0);
+        ok(abs($serverKg - $f['spotKgX100'] / 100) < 0.01, 'the kg of those spot sales on the server (' . number_format($serverKg, 2) . ') are the terminal\'s ' . number_format($f['spotKgX100'] / 100, 2));
+        $supplyIds = array_column($f['supplements'], 'id');
+        ok((int) rows('SELECT COUNT(*) AS n FROM supplements WHERE id IN (' . implode(',', array_fill(0, max(1, count($supplyIds)), '?')) . ')', $supplyIds ?: [''])[0]['n'] === $f['supplies'], 'the terminal\'s ' . $f['supplies'] . ' supplies are on the server (' . (int) one('SELECT COUNT(*) FROM supplements') . ' in all)');
         ok(abs(money(one('SELECT COALESCE(SUM(out_amount_kg), 0) FROM supplements WHERE card_id IS NULL')) - money(one('SELECT COALESCE(SUM(out_amount_kg), 0) FROM supplements'))) < 0.01, 'the supplements are consistent');
         echo '  the terminal part took ' . $f['seconds'] . " s\n";
     }
