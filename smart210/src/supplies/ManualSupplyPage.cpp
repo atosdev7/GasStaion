@@ -41,6 +41,8 @@ ManualSupplyPage::ManualSupplyPage(QSqlDatabase db, MachineConfig *config, Suppl
     QRegExpValidator *decimal = new QRegExpValidator(QRegExp("[0-9]{0,9}([.][0-9]{0,2})?"), this);
     kg_ = ui_->msKgField;
     kg_->setValidator(decimal);
+    remainder_ = ui_->msRemainderField;
+    remainder_->setValidator(decimal);
     liters_ = ui_->msLitersField;
     liters_->setValidator(decimal);
     code_ = ui_->msBarcode;
@@ -62,6 +64,7 @@ ManualSupplyPage::ManualSupplyPage(QSqlDatabase db, MachineConfig *config, Suppl
 
     connect(nozzle_, SIGNAL(currentIndexChanged(int)), this, SLOT(nozzleChanged()));
     connect(kg_, SIGNAL(textEdited(QString)), this, SLOT(kgEdited()));
+    connect(remainder_, SIGNAL(textEdited(QString)), this, SLOT(remainderEdited()));
     connect(liters_, SIGNAL(textEdited(QString)), this, SLOT(litersEdited()));
     connect(code_, SIGNAL(returnPressed()), this, SLOT(addTicket()));
     connect(ui_->msAddButton, SIGNAL(clicked()), this, SLOT(addTicket()));
@@ -121,6 +124,7 @@ void ManualSupplyPage::clearForm()
     comment_->clear();
     time_->setDateTime(QDateTime::currentDateTime());
     kg_->clear();
+    remainder_->clear();
     liters_->clear();
     preset_->clear();
     density_->setText(density() > 0 ? Decimal::format(density(), 4) : QString());
@@ -137,6 +141,7 @@ void ManualSupplyPage::nozzleChanged()
     barcodes_.clear(); // the tickets must be of the fuel of the nozzle
     weights_.clear();
     kg_->clear();
+    remainder_->clear();
     liters_->clear();
     kgTyped_ = false;
     density_->setText(density() > 0 ? Decimal::format(density(), 4) : QString());
@@ -155,10 +160,38 @@ void ManualSupplyPage::calculateLiters()
     }
 }
 
+// The remainder that goes with the dispensed kg: what is left of the tickets. Empty while there are no tickets or the kg is not a figure or
+// is more than the tickets cover (the summary says so).
+void ManualSupplyPage::showRemainder()
+{
+    qlonglong dispensed = 0;
+    if (!barcodes_.isEmpty() && Decimal::parse(kg_->text().trimmed(), 2, &dispensed) && dispensed <= ticketsX100()) {
+        remainder_->setText(kg(ticketsX100() - dispensed));
+    } else {
+        remainder_->clear();
+    }
+}
+
 void ManualSupplyPage::kgEdited()
 {
     kgTyped_ = true; // the cashier decides: the preset does not set it any more
     status_->clear();
+    calculateLiters();
+    showRemainder();
+    showSummary();
+}
+
+// The remainder typed: the dispensed kg is what is left of the tickets (and the litres follow).
+void ManualSupplyPage::remainderEdited()
+{
+    kgTyped_ = true;
+    status_->clear();
+    qlonglong left = 0;
+    if (!barcodes_.isEmpty() && Decimal::parse(remainder_->text().trimmed(), 2, &left) && left <= ticketsX100()) {
+        kg_->setText(kg(ticketsX100() - left));
+    } else {
+        kg_->clear();
+    }
     calculateLiters();
     showSummary();
 }
@@ -213,7 +246,7 @@ void ManualSupplyPage::removeSelected()
     }
 }
 
-// The tickets typed so far: their total is the preset, and the dispensed kg follows it until the cashier types another figure.
+// The tickets typed so far: their total is the preset, and the dispensed kg follows it (the remainder 0) until the cashier types another figure.
 void ManualSupplyPage::showTickets()
 {
     tickets_->setRowCount(barcodes_.size());
@@ -229,6 +262,7 @@ void ManualSupplyPage::showTickets()
         kg_->setText(barcodes_.isEmpty() ? QString() : kg(ticketsX100()));
         calculateLiters();
     }
+    showRemainder();
     showSummary();
 }
 
@@ -247,11 +281,16 @@ void ManualSupplyPage::showSummary()
         Theme::setState(summary_, "");
         summary_->setText(barcodes_.isEmpty() ? tr("Type the ticket barcodes, one after the other.") : tr("Type the kg and the litres that were dispensed."));
     } else {
-        const qlonglong gap = total > dispensed ? total - dispensed : dispensed - total;
-        matches = !barcodes_.isEmpty() && total >= dispensed && gap <= SupplyRecord::ToleranceX100;
+        const qlonglong rest = total - dispensed;
+        matches = !barcodes_.isEmpty() && rest >= 0;
         Theme::setState(summary_, matches ? "ok" : "warning");
-        summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg, difference: %3 kg (the tickets must cover it, at most %4 kg more)")
-                              .arg(kg(total)).arg(kg(dispensed)).arg(kg(total - dispensed)).arg(kg(SupplyRecord::ToleranceX100)));
+        if (barcodes_.isEmpty() || rest < 0) {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. The tickets must cover everything that was dispensed.").arg(kg(total)).arg(kg(dispensed)));
+        } else if (rest == 0 || rest <= SupplyRecord::ToleranceX100) {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).").arg(kg(total)).arg(kg(dispensed)).arg(kg(SupplyRecord::ToleranceX100)));
+        } else {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. A remainder ticket of %3 kg is made and printed.").arg(kg(total)).arg(kg(dispensed)).arg(kg(rest)));
+        }
     }
     save_->setEnabled(matches);
 }
@@ -269,6 +308,7 @@ void ManualSupplyPage::save()
 
     QString why;
     const int tickets = barcodes_.size();
+    const qlonglong rest = ticketsX100() - dispensed;
     if (!session_->recordManual(nozzle(), dispensed, liters, barcodes_, time_->dateTime(), &why, comment_->text())) {
         status_->setText(why);
 
@@ -277,6 +317,8 @@ void ManualSupplyPage::save()
 
     clearForm();
     Theme::setState(status_, "ok");
-    status_->setText(tr("The supply was recorded with %1 tickets. It will be uploaded.").arg(tickets));
+    status_->setText(rest > SupplyRecord::ToleranceX100
+                         ? tr("The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.").arg(tickets).arg(kg(rest))
+                         : tr("The supply was recorded with %1 tickets. It will be uploaded.").arg(tickets));
     emit recorded();
 }

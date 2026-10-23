@@ -15,8 +15,8 @@
 //                without tickets: nothing waits for them.
 //   manual mode  the program never records a supplement for a manual-mode nozzle: its result is only acknowledged (SupplySession).
 //   by hand      the cashier types a supply in on the Manual input screen: the nozzle, the kg and litres that came out, when, and the tickets
-//                that pay for it (Reading::tickets). Their total weight must cover the dispensed weight and exceed it by the tolerance at most.
-//                The supplement is saved with them at once (mode manual, no remainder).
+//                that pay for it (Reading::tickets). Their total weight must cover the dispensed weight; what is left of it is a remainder
+//                (a new ticket, as in auto mode), unless it is within the tolerance. The supplement is saved with them at once (mode manual).
 //
 // A result of the board is recorded once: the result id is kept with the supplement, and a result seen again only reports "duplicate".
 // All weights are kg x100, litres x100.
@@ -24,8 +24,7 @@ class SupplyRecord
 {
 public:
     // The most the station may keep: 0.05 kg. The tolerance only ever favours the station. A fill that ends at its preset up to this far short
-    // gives no remainder; the tickets of a manual supply may exceed what was dispensed by up to this much, never fall short of it; more
-    // dispensed than the tickets cover is never accepted.
+    // gives no remainder, and neither does a supply typed in; more dispensed than the tickets cover is never accepted.
     static const qlonglong ToleranceX100 = 5; // 0.05 kg
 
     struct Reading {

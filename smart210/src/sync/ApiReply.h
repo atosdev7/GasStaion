@@ -1,10 +1,13 @@
 #ifndef APIREPLY_H
 #define APIREPLY_H
 
+#include <QByteArray>
 #include <QJsonObject>
+#include <QNetworkRequest>
 #include <QObject>
 #include <QString>
 
+class QNetworkAccessManager;
 class QNetworkReply;
 class QTimer;
 
@@ -19,7 +22,11 @@ class ApiReply : public QObject
     Q_OBJECT
 
 public:
-    ApiReply(QNetworkReply *reply, int timeoutMs, QObject *parent = 0);
+    ApiReply(int timeoutMs, QObject *parent = 0);
+
+    // Sends the request after delayMs (at once when 0): the client spaces its calls (see ApiClient::setMinIntervalMs). The time to answer
+    // counts from the moment of sending; finished() is always emitted later, so the caller may connect to it after this returns.
+    void send(QNetworkAccessManager *manager, const QNetworkRequest &request, const QByteArray &body, bool post, int delayMs);
 
     bool ok() const { return ok_; }
     bool isBusy() const { return busy_; }
@@ -32,10 +39,16 @@ signals:
     void finished();
 
 private slots:
+    void sendNow();
     void replyFinished();
     void timedOut();
 
 private:
+    QNetworkAccessManager *manager_;
+    QNetworkRequest request_;
+    QByteArray body_;
+    bool post_;
+    int timeoutMs_;
     QNetworkReply *reply_;
     QTimer *timer_;
     bool ok_;

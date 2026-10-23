@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 
     const QString fontFamily = Fonts::install(config.fontDir(), Theme::BodyPx);
     if (fontFamily.isEmpty()) {
-        qWarning() << "No Chinese font found in" << config.fontDir();
+        qWarning() << "No Korean font found in" << config.fontDir();
     }
 
     if (!config.deviceFile().isEmpty()) {

@@ -48,7 +48,7 @@ AppConfig::AppConfig()
     ticketFont_ = settings.value("ticketFont").toString();
 }
 
-// "zh-cn", "zh_CN" and "ZH-CN" all mean zh_CN.
+// "en-us", "en_US" and "EN-US" all mean en_US.
 QString AppConfig::normalizeLanguage(const QString &value)
 {
     QStringList parts = value.trimmed().replace('-', '_').split('_');
@@ -61,17 +61,10 @@ QString AppConfig::normalizeLanguage(const QString &value)
 
 bool AppConfig::isSupportedLanguage(const QString &value)
 {
-    return value == "en" || value == "zh_CN" || value == "zh_TW";
+    return value == "en";
 }
 
-QString AppConfig::languageName(const QString &language)
+QString AppConfig::languageName(const QString &)
 {
-    if (language == "zh_CN") {
-        return QString::fromUtf8("简体中文");
-    }
-    if (language == "zh_TW") {
-        return QString::fromUtf8("繁體中文");
-    }
-
     return "English";
 }

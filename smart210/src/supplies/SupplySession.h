@@ -53,7 +53,7 @@ public:
     bool startCard(int nozzle, const QString &cardId, qlonglong presetX100, QString *why = 0);
 
     // The cashier typed a supply in (Manual input): what came out (kg x100, litres x100), when, and the tickets that pay for it (barcodes as keys;
-    // they must cover the kg, see SupplyRecord). Refused while a fill runs on the nozzle or a result waits. When a fill was started on the nozzle
+    // they must cover the kg; what is left of them is a remainder, see SupplyRecord). Refused while a fill runs on the nozzle or a result waits. When a fill was started on the nozzle
     // from the app and its board died, the tickets (or the card) of that fill are used and `tickets` is ignored: the reading must not be more than
     // they cover, and what is left of the tickets is a remainder, as when the result comes from the board.
     bool recordManual(int nozzle, qlonglong dispensedX100, qlonglong litersX100, const QList<qlonglong> &tickets, const QDateTime &when, QString *why = 0, const QString &comment = QString());

@@ -14,7 +14,7 @@
 //   2. the fuel, the weight and the date and time, as a bitmap
 //   3. the barcode, the printer's own Code 128 subset C
 //   4. the company logo, as a bitmap
-// A bitmap is used for the text because the printer has no Chinese font of its own and the title uses a font of its own.
+// A bitmap is used for the text because the printer has no Korean font of its own and the title uses a font of its own.
 struct TicketData {
     TicketData() : kgX100(0) {}
 

@@ -10,7 +10,7 @@
 struct HangulKeyDef;
 
 // Turns the key presses of a keyboard (USB or PS/2) into Hangul text for the widget that has the focus: an event filter on the application,
-// no screen of its own. The mode starts as English (keys pass through untouched: barcodes, numbers, Latin and Chinese text keep working);
+// no screen of its own. The mode starts as English (keys pass through untouched: barcodes, numbers, Latin text keeps working);
 // the Hangul key or Ctrl+Space switches Hangul on and off, and the footer shows which is on (MainWindow connects hangulModeChanged). In Hangul
 // mode the letter keys give jamo (HangulKeyMap.h, Dubeolsik) that HangulComposer builds into syllables; the syllable being composed is shown
 // as the preedit of the field, Space, Enter, digits and the arrows commit it, Backspace takes the last jamo off it. Fields that hide what is

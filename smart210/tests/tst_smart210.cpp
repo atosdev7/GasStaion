@@ -79,6 +79,7 @@
 #include "SpotSale.h"
 #include "TicketRenderer.h"
 #include "TicketSale.h"
+#include "ManualSupplyPage.h"
 #include "SpotSalePage.h"
 #include "TicketSalePage.h"
 #include "Settings.h"
@@ -99,7 +100,7 @@ private slots:
     void cleanup();
 
     void languageNamesAreNormalized();
-    void onlyThreeLanguagesAreSupported();
+    void onlyEnglishIsSupported();
     void everyLanguageHasAnEmbeddedTranslation_data();
     void everyLanguageHasAnEmbeddedTranslation();
     void unknownLanguageLeavesEnglish();
@@ -124,6 +125,7 @@ private slots:
     void pingReturnsTheServerTime();
     void anErrorReplyShowsTheServersMessage();
     void aBusyServerIsRecognized();
+    void callsLeaveOneIntervalApart();
     void anAnswerThatIsNotJsonIsAnError();
     void aClosedPortIsANetworkError();
     void aServerThatNeverAnswersTimesOut();
@@ -279,6 +281,7 @@ private slots:
     void aFillThatReachedItsPresetLeavesNoRemainder();
     void aResultIsRecordedOnce();
     void aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOwn();
+    void theManualInputPageKeepsTheKgAndTheRemainderTogether();
     void scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
@@ -489,6 +492,7 @@ static QString footerWaiting(MainWindow &window)
 
 void Smart210Test::init()
 {
+    ApiClient::setMinIntervalMs(0); // the tests do not wait a second between calls
     dir_ = new QTemporaryDir;
     Settings::setDeviceFile(dir_->path() + "/device.ini"); // the machine configuration of each test is its own
     static int counter = 0;
@@ -533,16 +537,16 @@ void Smart210Test::removeTranslators()
 
 void Smart210Test::languageNamesAreNormalized()
 {
-    QCOMPARE(AppConfig::normalizeLanguage("zh-cn"), QString("zh_CN"));
-    QCOMPARE(AppConfig::normalizeLanguage(" ZH_tw "), QString("zh_TW"));
+    QCOMPARE(AppConfig::normalizeLanguage("en-us"), QString("en_US"));
+    QCOMPARE(AppConfig::normalizeLanguage(" EN_us "), QString("en_US"));
     QCOMPARE(AppConfig::normalizeLanguage("EN"), QString("en"));
 }
 
-void Smart210Test::onlyThreeLanguagesAreSupported()
+void Smart210Test::onlyEnglishIsSupported()
 {
     QVERIFY(AppConfig::isSupportedLanguage("en"));
-    QVERIFY(AppConfig::isSupportedLanguage("zh_CN"));
-    QVERIFY(AppConfig::isSupportedLanguage("zh_TW"));
+    QVERIFY(!AppConfig::isSupportedLanguage("zh_CN"));
+    QVERIFY(!AppConfig::isSupportedLanguage("zh_TW"));
     QVERIFY(!AppConfig::isSupportedLanguage("fr"));
     QVERIFY(!AppConfig::isSupportedLanguage(""));
 }
@@ -553,8 +557,6 @@ void Smart210Test::everyLanguageHasAnEmbeddedTranslation_data()
     QTest::addColumn<QString>("expected");
 
     QTest::newRow("en") << "en" << QString("Gas Station Cashier");
-    QTest::newRow("zh_CN") << "zh_CN" << QString::fromUtf8("加油站收银");
-    QTest::newRow("zh_TW") << "zh_TW" << QString::fromUtf8("加油站收銀");
 }
 
 void Smart210Test::everyLanguageHasAnEmbeddedTranslation()
@@ -575,6 +577,7 @@ void Smart210Test::unknownLanguageLeavesEnglish()
 {
     removeTranslators();
     QVERIFY(!Translations::install(qApp, "fr"));
+    QVERIFY(!Translations::install(qApp, "zh_CN")); // Chinese is gone
     QCOMPARE(QCoreApplication::translate("MainWindow", "Gas Station Cashier"), QString("Gas Station Cashier"));
 }
 
@@ -833,6 +836,28 @@ void Smart210Test::anErrorReplyShowsTheServersMessage()
     QVERIFY(!reply->isNetworkError());
     QCOMPARE(reply->httpStatus(), 403);
     QCOMPARE(reply->message(), QString("this IP address is not registered"));
+}
+
+void Smart210Test::callsLeaveOneIntervalApart()
+{
+    server_->reply("/api/ping", 200, json("{\"status\":\"ok\"}"));
+    ApiClient client;
+    client.setServer("127.0.0.1", server_->port());
+    ApiClient other; // the spacing is the program's, not the client's
+    other.setServer("127.0.0.1", server_->port());
+    ApiClient::setMinIntervalMs(300);
+
+    QTime time;
+    time.start();
+    ApiReply *first = client.ping();
+    ApiReply *second = other.ping();
+    ApiReply *third = client.ping();
+    QSignalSpy spy(third, SIGNAL(finished()));
+    QVERIFY(spy.wait(3000));
+    ApiClient::setMinIntervalMs(0);
+
+    QVERIFY(first->ok() && second->ok() && third->ok());
+    QVERIFY2(time.elapsed() >= 590, qPrintable(QString::number(time.elapsed())));
 }
 
 void Smart210Test::aBusyServerIsRecognized()
@@ -7635,9 +7660,6 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     QVERIFY(!supply.recordManual(3, 2000, 2410, tickets, when, &why));
     QVERIFY(why.contains("another fuel type"));
     tickets.clear();
-    tickets << 3000000042;                                                // 20.00 kg against 15.00 dispensed
-    QVERIFY(!supply.recordManual(3, 1500, 1807, tickets, when, &why));
-    QVERIFY2(why.contains("at most 0.05 kg more"), qPrintable(why));
     QCOMPARE(countRows("supplements"), 0);                                // nothing was changed by the refusals
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE status = 2").toInt(), 1);   // (the used one of the test data)
 
@@ -7652,11 +7674,28 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     QCOMPARE(one("SELECT out_amount_lt FROM supplements").toInt(), 2410);
     QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 2000);
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL AND status = 2 AND synced = 0").toInt(), 2);
-    QCOMPARE(countRows("remainders"), 0);                                 // never a remainder
+    QCOMPARE(countRows("remainders"), 0);                                 // dispensed in full: no remainder
     QCOMPARE(remainders.size(), 0);
     QCOMPARE(Uploader::pending(db).value("supplements"), 1);              // it goes up as it is
     QVERIFY(!supply.recordManual(3, 2000, 2410, tickets, when, &why));    // the tickets are used now
     QVERIFY(why.contains("already used"));
+
+    // less dispensed than the tickets cover: the rest is a remainder ticket, as with an automatic fill (within 0.05 kg the station keeps it)
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000048, 'D', 1, 1000, 1, 1)");
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000049, 'D', 0, 500, 1, 1)");
+    tickets.clear();
+    tickets << 3000000048;                                                // 10.00 kg against 7.00 dispensed
+    QVERIFY2(supply.recordManual(3, 700, 843, tickets, when, &why), qPrintable(why));
+    QCOMPARE(countRows("remainders"), 1);
+    QCOMPARE(remainders.size(), 1);
+    QCOMPARE(one("SELECT amount_kg FROM remainders").toInt(), 300);
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE spec IS NULL AND sale_id IS NULL AND amount_kg = 300 AND status = 1 AND synced = 0").toInt(), 1); // the remainder ticket
+    QCOMPARE(one("SELECT out_amount_kg || '/' || preset_kg FROM supplements WHERE out_amount_kg = 700").toString(), QString("700/1000"));
+    tickets.clear();
+    tickets << 3000000049;                                                // 5.00 kg against 4.97 dispensed
+    QVERIFY2(supply.recordManual(3, 497, 598, tickets, when, &why), qPrintable(why));
+    QCOMPARE(countRows("remainders"), 1);                                 // 0.03 kg: kept by the station
+    tickets.clear();
 
     // the fill of nozzle 2 was started from the app, then the board died: the reading takes its tickets, the rest is a remainder
     const QDateTime now = QDateTime::currentDateTime();
@@ -7668,10 +7707,10 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     QVERIFY(why.contains("More than the tickets cover (20.00 kg)"));
     QVERIFY(supply.isLocked(2));
     QVERIFY2(supply.recordManual(2, 1500, 1807, tickets, now, &why), qPrintable(why));
-    QCOMPARE(remainders.size(), 1);
+    QCOMPARE(remainders.size(), 2);
     QVERIFY(!supply.isLocked(2));
     QCOMPARE(one("SELECT COUNT(*) FROM supplements WHERE mode = 'manual' AND out_amount_kg = 1500 AND preset_kg = 2000").toInt(), 1);
-    QCOMPARE(countRows("remainders"), 1);
+    QCOMPARE(countRows("remainders"), 2);
 
     // bad input
     QVERIFY(!supply.recordManual(1, 0, 100, tickets, now, &why));
@@ -7708,6 +7747,69 @@ struct SupplyBench {
 
 }
 
+void Smart210Test::theManualInputPageKeepsTheKgAndTheRemainderTogether()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    ManualSupplyPage page(db, &bench.config, &bench.supply);
+    page.reload();
+    QLineEdit *code = page.findChild<QLineEdit *>("msBarcode");
+    QLineEdit *kg = page.findChild<QLineEdit *>("msKgField");
+    QLineEdit *remainder = page.findChild<QLineEdit *>("msRemainderField");
+    QLineEdit *liters = page.findChild<QLineEdit *>("msLitersField");
+    QPushButton *save = page.findChild<QPushButton *>("msSaveButton");
+    QSignalSpy printed(&bench.supply, SIGNAL(remainderMade(QString)));
+
+    // two tickets, 15.00 + 5.00: all of it is dispensed by itself, the remainder is zero
+    code->setText(Barcode::fromKey(3000000041));
+    QTest::keyClick(code, Qt::Key_Return);
+    code->setText(Barcode::fromKey(3000000043));
+    QTest::keyClick(code, Qt::Key_Return);
+    QCOMPARE(kg->text(), QString("20.00"));
+    QCOMPARE(remainder->text(), QString("0.00"));
+    QVERIFY(save->isEnabled());
+
+    // the kg typed: the remainder follows
+    kg->clear();
+    QTest::keyClicks(kg, "17.5");
+    QCOMPARE(remainder->text(), QString("2.50"));
+    QVERIFY(!liters->text().isEmpty());
+    QVERIFY(save->isEnabled());
+
+    // the remainder typed: the kg follows
+    remainder->clear();
+    QTest::keyClicks(remainder, "5");
+    QCOMPARE(kg->text(), QString("15.00"));
+    // more than was dispensed cannot be saved: kg above the tickets
+    kg->clear();
+    QTest::keyClicks(kg, "20.5");
+    QVERIFY(remainder->text().isEmpty());
+    QVERIFY(!save->isEnabled());
+
+    // fully dispensed again: the remainder is zero and nothing is printed
+    kg->clear();
+    QTest::keyClicks(kg, "20");
+    QCOMPARE(remainder->text(), QString("0.00"));
+    save->click();
+    QCOMPARE(countRows("supplements"), 1);
+    QCOMPARE(countRows("remainders"), 0);
+    QCOMPARE(printed.size(), 0);
+    QVERIFY(remainder->text().isEmpty()); // the form is empty again
+
+    // a remainder of 3.00: the supply is saved with a remainder ticket, which is to be printed
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000048, 'D', 1, 1000, 1, 1)");
+    code->setText(Barcode::fromKey(3000000048));
+    QTest::keyClick(code, Qt::Key_Return);
+    remainder->clear();
+    QTest::keyClicks(remainder, "3");
+    QCOMPARE(kg->text(), QString("7.00"));
+    save->click();
+    QCOMPARE(countRows("remainders"), 1);
+    QCOMPARE(one("SELECT amount_kg FROM remainders").toInt(), 300);
+    QCOMPARE(printed.size(), 1);
+}
 void Smart210Test::scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded()
 {
     setUpSupplying();
@@ -8119,17 +8221,28 @@ void Smart210Test::theManualInputScreenRecordsASupplyWithItsTickets()
     QCOMPARE(liters->text(), QString("24.10"));
     QVERIFY(save->isEnabled());
 
-    // the kg is free to edit: the litres follow, and it must stay within the tickets
+    // the kg is free to edit: the litres and the remainder follow, and it must stay within the tickets
+    QLineEdit *remainder = window.findChild<QLineEdit *>("msRemainderField");
+    QCOMPARE(remainder->text(), QString("0.00"));                      // dispensed in full: no remainder
     kg->selectAll();
     QTest::keyClicks(kg, "19.98");
     QCOMPARE(liters->text(), QString("24.07"));
-    QVERIFY(summary->text().contains("difference: 0.02 kg"));
+    QCOMPARE(remainder->text(), QString("0.02"));
+    QVERIFY(summary->text().contains("No remainder"));                 // 0.02 kg: the station keeps it
     QVERIFY(save->isEnabled());
     kg->selectAll();
-    QTest::keyClicks(kg, "19.90");                                     // 0.10 kg less than the tickets: the station may keep 0.05 only
-    QVERIFY(!save->isEnabled());
+    QTest::keyClicks(kg, "19.90");                                     // 0.10 kg less than the tickets: a remainder ticket
+    QCOMPARE(remainder->text(), QString("0.10"));
+    QVERIFY(summary->text().contains("remainder ticket of 0.10 kg"));
+    QVERIFY(save->isEnabled());
+    remainder->selectAll();                                            // the remainder typed: the kg and the litres follow
+    QTest::keyClicks(remainder, "4.5");
+    QCOMPARE(kg->text(), QString("15.50"));
+    QCOMPARE(liters->text(), QString("18.67"));
+    QVERIFY(save->isEnabled());
     kg->selectAll();
     QTest::keyClicks(kg, "20.50");                                     // more than the tickets cover
+    QVERIFY(remainder->text().isEmpty());
     QVERIFY(!save->isEnabled());
     kg->selectAll();
     QTest::keyClicks(kg, "19.98");
@@ -9377,7 +9490,7 @@ void Smart210Test::grabAllScreens()
         QSKIP("set SCREENS_DIR to a folder to take the screenshots of every screen");
     }
     QDir().mkpath(dir);
-    const QString language = QString::fromLocal8Bit(qgetenv("SCREENS_LANG")); // en (default), zh_CN or zh_TW
+    const QString language = QString::fromLocal8Bit(qgetenv("SCREENS_LANG")); // en
     if (!language.isEmpty()) {
         Translations::install(qApp, language);
     }

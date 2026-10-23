@@ -7,7 +7,7 @@
 #include <QSize>
 
 // Settings that must be known before the database is open, read from config.ini next to the program:
-//   language   = en | zh_CN | zh_TW   (fixed per installation; default en)
+//   language   = en                   (the only language; default en)
 //   fullscreen = true | false         (true on the board, false for trying it on a PC)
 //   width, height                     (window size when not fullscreen; default 1280 x 720)
 //   fontDir    = folder holding the .ttf/.otf/.ttc files to load (default: fonts next to the program)

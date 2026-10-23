@@ -23,7 +23,7 @@ QString Fonts::install(const QString &dir, int pixelSize)
     foreach (const QString &family, families) {
         QFontDatabase database;
         const QList<QFontDatabase::WritingSystem> systems = database.writingSystems(family);
-        if (systems.contains(QFontDatabase::SimplifiedChinese) || systems.contains(QFontDatabase::TraditionalChinese)) {
+        if (systems.contains(QFontDatabase::Korean)) {
             QFont font(family);
             font.setPixelSize(pixelSize);
             QApplication::setFont(font);

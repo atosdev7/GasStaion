@@ -12,7 +12,7 @@ struct PrintOptions {
     int barcodeModule;    // thinnest bar of the barcode in dots
     int barcodeHeight;    // height of the bars in dots
     QString logoPath;     // a picture file (png, bmp, jpg); printed last. No file: no logo
-    QString fontFamily;   // the font of the title and the details; empty is the application font (the one with Chinese in fonts/)
+    QString fontFamily;   // the font of the title and the details; empty is the application font (the one with Korean in fonts/)
     QString endMode;      // "cut" (default), "label" (form feed to the next label) or "none"
     QMap<QString, QString> titles; // the long title of the ticket by use: sale, self, other, ticket_loan, remainder
 };

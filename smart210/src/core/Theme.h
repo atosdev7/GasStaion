@@ -11,7 +11,7 @@ class QWidget;
 //   SubPx   24   menu items, sub titles and buttons
 //   TitlePx 28   page titles (a label with the object name "pageTitle") and the company name in the header
 // A page that needs a title gives its label the object name "pageTitle" and a sub title "subTitle". The numbers in theme.qss are these three;
-// BodyPx is also the size the Chinese font is loaded at (Fonts::install), so change it there too when the body size changes.
+// BodyPx is also the size the Korean font is loaded at (Fonts::install), so change it there too when the body size changes.
 namespace Theme {
 
 enum { BodyPx = 20, SubPx = 24, TitlePx = 28 };

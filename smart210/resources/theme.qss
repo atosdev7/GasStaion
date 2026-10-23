@@ -3,7 +3,7 @@
  * To try a change without rebuilding: copy this file next to the program, put  themeFile=/path/to/theme.qss  in config.ini and start the
  * app; the file is read again whenever it is saved. The built-in copy (this file in resources) is used when themeFile is not set.
  *
- * Font sizes are in pixels:  20 = every text (Theme::BodyPx, also the size the Chinese font is loaded at), 24 = menu items, sub titles and
+ * Font sizes are in pixels:  20 = every text (Theme::BodyPx, also the size the Korean font is loaded at), 24 = menu items, sub titles and
  * buttons, 28 = page titles and the company name. A page that needs a title gives its label the object name "pageTitle", a sub title "subTitle".
  *
  * Colours:  text #111827 / #374151 / #4b5563, lines #e5e7eb / #cbd5e1, page #f8fafc, panels #ffffff, blue (the selected thing) #1d4ed8,

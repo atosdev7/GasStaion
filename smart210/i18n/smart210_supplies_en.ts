@@ -40,86 +40,110 @@
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.ui" line="74"/>
+        <source>Remainder (kg)</source>
+        <translation>Remainder (kg)</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="79"/>
         <source>Litres</source>
         <translation>Litres</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.ui" line="105"/>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="115"/>
         <source>Ticket barcode, then Enter</source>
         <translation>Ticket barcode, then Enter</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.ui" line="112"/>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="122"/>
         <source>Add ticket</source>
         <translation>Add ticket</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.ui" line="118"/>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="128"/>
         <source>Remove</source>
         <translation>Remove</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.ui" line="130"/>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="140"/>
         <source>Comment (optional)</source>
         <translation>Comment (optional)</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.ui" line="147"/>
+        <location filename="../src/supplies/ManualSupplyPage.ui" line="157"/>
         <source>Save supply</source>
         <translation>Save supply</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="54"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="56"/>
         <source>Ticket</source>
         <translation>Ticket</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="54"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="56"/>
         <source>kg</source>
         <translation>kg</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="109"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="112"/>
         <source>Nozzle %1 (%2)</source>
         <translation>Nozzle %1 (%2)</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="180"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="213"/>
         <source>Choose the nozzle first.</source>
         <translation>Choose the nozzle first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="193"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="226"/>
         <source>This ticket is in the list already.</source>
         <translation>This ticket is in the list already.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="245"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="279"/>
         <source>No nozzle works in manual mode.</source>
         <translation>No nozzle works in manual mode.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="248"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="282"/>
         <source>Type the ticket barcodes, one after the other.</source>
         <translation>Type the ticket barcodes, one after the other.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="248"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="282"/>
         <source>Type the kg and the litres that were dispensed.</source>
         <translation>Type the kg and the litres that were dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="253"/>
-        <source>Tickets: %1 kg, dispensed: %2 kg, difference: %3 kg (the tickets must cover it, at most %4 kg more)</source>
-        <translation>Tickets: %1 kg, dispensed: %2 kg, difference: %3 kg (the tickets must cover it, at most %4 kg more)</translation>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="288"/>
+        <source>Tickets: %1 kg, dispensed: %2 kg. The tickets must cover everything that was dispensed.</source>
+        <translation>Tickets: %1 kg, dispensed: %2 kg. The tickets must cover everything that was dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="265"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="290"/>
+        <source>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</source>
+        <translation>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="292"/>
+        <source>Tickets: %1 kg, dispensed: %2 kg. A remainder ticket of %3 kg is made and printed.</source>
+        <translation>Tickets: %1 kg, dispensed: %2 kg. A remainder ticket of %3 kg is made and printed.</translation>
+    </message>
+    <message>
+        <source>Tickets: %1 kg, dispensed: %2 kg, difference: %3 kg (the tickets must cover it, at most %4 kg more)</source>
+        <translation type="vanished">Tickets: %1 kg, dispensed: %2 kg, difference: %3 kg (the tickets must cover it, at most %4 kg more)</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="304"/>
         <source>Type the weight and the litres as numbers, for example 15.00.</source>
         <translation>Type the weight and the litres as numbers, for example 15.00.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="280"/>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="321"/>
+        <source>The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.</source>
+        <translation>The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="322"/>
         <source>The supply was recorded with %1 tickets. It will be uploaded.</source>
         <translation>The supply was recorded with %1 tickets. It will be uploaded.</translation>
     </message>
@@ -177,7 +201,7 @@
         <translation>Nozzle %1 is not known yet.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyRecord.cpp" line="239"/>
+        <location filename="../src/supplies/SupplyRecord.cpp" line="236"/>
         <source>The supply could not be saved.</source>
         <translation>The supply could not be saved.</translation>
     </message>
@@ -187,14 +211,13 @@
         <translation>Ticket %1 cannot be used: %2</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyRecord.cpp" line="149"/>
+        <location filename="../src/supplies/SupplyRecord.cpp" line="148"/>
         <source>The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.</source>
         <translation>The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyRecord.cpp" line="151"/>
         <source>The tickets add up to %1 kg but only %2 kg was dispensed: they may be at most %3 kg more.</source>
-        <translation>The tickets add up to %1 kg but only %2 kg was dispensed: they may be at most %3 kg more.</translation>
+        <translation type="vanished">The tickets add up to %1 kg but only %2 kg was dispensed: they may be at most %3 kg more.</translation>
     </message>
 </context>
 <context>

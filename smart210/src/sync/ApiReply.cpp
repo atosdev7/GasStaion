@@ -5,16 +5,35 @@
 #include <QTimer>
 #include <QVariant>
 
-ApiReply::ApiReply(QNetworkReply *reply, int timeoutMs, QObject *parent)
-    : QObject(parent), reply_(reply), ok_(false), busy_(false), networkError_(false), timedOut_(false), httpStatus_(0)
+ApiReply::ApiReply(int timeoutMs, QObject *parent)
+    : QObject(parent), manager_(0), post_(false), timeoutMs_(timeoutMs), reply_(0), ok_(false), busy_(false), networkError_(false),
+      timedOut_(false), httpStatus_(0)
 {
-    reply_->setParent(this);
-    connect(reply_, SIGNAL(finished()), this, SLOT(replyFinished()));
-
     timer_ = new QTimer(this);
     timer_->setSingleShot(true);
     connect(timer_, SIGNAL(timeout()), this, SLOT(timedOut()));
-    timer_->start(timeoutMs);
+}
+
+void ApiReply::send(QNetworkAccessManager *manager, const QNetworkRequest &request, const QByteArray &body, bool post, int delayMs)
+{
+    manager_ = manager;
+    request_ = request;
+    body_ = body;
+    post_ = post;
+
+    if (delayMs <= 0) {
+        sendNow();
+    } else {
+        QTimer::singleShot(delayMs, this, SLOT(sendNow()));
+    }
+}
+
+void ApiReply::sendNow()
+{
+    reply_ = post_ ? manager_->post(request_, body_) : manager_->get(request_);
+    reply_->setParent(this);
+    connect(reply_, SIGNAL(finished()), this, SLOT(replyFinished()));
+    timer_->start(timeoutMs_);
 }
 
 void ApiReply::timedOut()

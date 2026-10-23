@@ -120,7 +120,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
     }
 
     // The tickets typed in with the reading replace the queue: each must pass the checks of a scan, and together they must cover what was
-    // dispensed, by the tolerance at most more (so a supply typed in has no remainder).
+    // dispensed. What is left of them is a remainder (a new ticket), unless it is within the tolerance: the station keeps that.
     const bool typed = !reading.tickets.isEmpty();
     if (typed) {
         queue.clear();
@@ -142,22 +142,19 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
             queue.append(entry);
             total += scan.kgX100;
         }
-        if (total < reading.dispensedX100 || total - reading.dispensedX100 > ToleranceX100) {
+        if (total < reading.dispensedX100) {
             db.rollback();
 
-            return refused(total < reading.dispensedX100
-                ? QObject::tr("The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.")
-                      .arg(Decimal::format(total, 2)).arg(Decimal::format(reading.dispensedX100, 2))
-                : QObject::tr("The tickets add up to %1 kg but only %2 kg was dispensed: they may be at most %3 kg more.")
-                      .arg(Decimal::format(total, 2)).arg(Decimal::format(reading.dispensedX100, 2)).arg(Decimal::format(ToleranceX100, 2)));
+            return refused(QObject::tr("The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.")
+                               .arg(Decimal::format(total, 2)).arg(Decimal::format(reading.dispensedX100, 2)));
         }
         withTickets = true;
     }
 
     qlonglong remainder = 0;
-    if (withTickets && !typed) {
+    if (withTickets) {
         const qlonglong rest = total - reading.dispensedX100;
-        const bool atPreset = (reading.reason == BoardProtocol::ReasonPresetReached);
+        const bool atPreset = typed || (reading.reason == BoardProtocol::ReasonPresetReached); // a typed supply is as good as one that ended at its preset
         remainder = (rest > 0 && !(atPreset && rest <= ToleranceX100)) ? rest : 0;
     }
 

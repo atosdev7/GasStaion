@@ -20,7 +20,7 @@
     </widget>
    </item>
    <item>
-    <layout class="QGridLayout" name="manualGrid" columnstretch="4,4,4">
+    <layout class="QGridLayout" name="manualGrid" columnstretch="4,4,4,4">
      <property name="leftMargin"><number>0</number></property>
      <property name="topMargin"><number>0</number></property>
      <property name="rightMargin"><number>0</number></property>
@@ -70,6 +70,11 @@
       </widget>
      </item>
      <item row="2" column="2">
+      <widget class="QLabel" name="msRemainderLabel">
+       <property name="text"><string>Remainder (kg)</string></property>
+      </widget>
+     </item>
+     <item row="2" column="3">
       <widget class="QLabel" name="msLitersLabel">
        <property name="text"><string>Litres</string></property>
       </widget>
@@ -87,6 +92,11 @@
       </widget>
      </item>
      <item row="3" column="2">
+      <widget class="QLineEdit" name="msRemainderField">
+       <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+      </widget>
+     </item>
+     <item row="3" column="3">
       <widget class="QLineEdit" name="msLitersField">
        <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
       </widget>
