@@ -18,6 +18,10 @@ return [
     // The nightly 02:00 dump only runs when the newest dump is older than this many hours (a day nobody confirms).
     'safety_net_hours' => (int) env('BACKUP_SAFETY_NET_HOURS', 20),
 
+    // The business day of the terminals runs from this hour to the same hour of the next day (Smart210 Checkout::businessDay). A backup up to a date
+    // waits until every terminal has uploaded something after the end of that business day.
+    'business_day_start_hour' => (int) env('BACKUP_BUSINESS_DAY_START_HOUR', 9),
+
     // Run backup:dump right before a backup clears anything.
     'dump_before_clear' => true,
 

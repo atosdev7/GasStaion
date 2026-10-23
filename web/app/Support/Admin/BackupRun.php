@@ -3,6 +3,7 @@
 namespace App\Support\Admin;
 
 use App\Models\Admin\Backup;
+use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
@@ -22,6 +23,8 @@ use ZipArchive;
 // debt_payments, ticket_loans, ticket_loan_settlements — their balances are computed from those rows; the remainders (a remainder outlives its
 // supply: its supplement_id may then point at a supply that was cleared, and an opening remainder has none); and the sales and supplements of the cards
 // (the top-ups and the supplies made with a card, `card_id` set), because the balance of a card is computed from them.
+// A backup is refused while a sale or supplement it would clear has not been confirmed (the accountant could no longer review it), and while a
+// terminal has not uploaded since the end of that business day (it may still hold records of those days that the web does not know yet).
 // The net kg each tank loses from the cleared inbound/supplied rows is recorded on the backup row
 // (see TankLevels), so live tank stock doesn't change and initial_tank_balances stays the go-live value.
 class BackupRun
@@ -35,6 +38,37 @@ class BackupRun
         return collect(static::clearable($upTo))->map(function ($query) {
             return $query->count();
         })->all();
+    }
+
+    /**
+     * What stops a backup up to $upTo, as sentences for the screen (empty: it may run): sales and supplements it would clear that nobody
+     * confirmed, and terminals that have not uploaded since the business day of $upTo ended. Deleted records are not waiting for anything.
+     */
+    public static function blockers($upTo)
+    {
+        $blockers = [];
+
+        $sales = static::clearable($upTo)['sales']->whereNull('deleted_at')->whereNull('confirmed_at');
+        $supplements = static::clearable($upTo)['supplements']->whereNull('deleted_at')->whereNull('confirmed_at');
+        $saleCount = (clone $sales)->count();
+        $supplementCount = (clone $supplements)->count();
+        if ($saleCount || $supplementCount) {
+            $oldest = array_filter([$sales->min('sale_date'), $supplements->min('supply_date')]);
+            $blockers[] = __('admin.backup_blocked_unconfirmed', [
+                'sales' => $saleCount, 'supplements' => $supplementCount, 'date' => substr((string) min($oldest), 0, 10),
+            ]);
+        }
+
+        $dayEnds = Carbon::parse($upTo)->addDay()->setTime((int) config('backup.business_day_start_hour'), 0, 0);
+        $silent = Device::where('initial_sync_done', true)
+            ->where(function ($q) use ($dayEnds) {
+                $q->whereNull('last_synced_at')->orWhere('last_synced_at', '<', $dayEnds);
+            })->orderBy('name')->pluck('name');
+        if ($silent->isNotEmpty()) {
+            $blockers[] = __('admin.backup_blocked_devices', ['devices' => $silent->implode(', '), 'time' => $dayEnds->format('Y-m-d H:i')]);
+        }
+
+        return $blockers;
     }
 
     /** Net kg per tank in the rows a backup up to $upTo would clear: inbound minus supplied. */
@@ -69,6 +103,11 @@ class BackupRun
     {
         if (config('backup.is_backup_server')) {
             throw new RuntimeException('This is the backup server: clearing here would destroy the history it keeps.');
+        }
+
+        $blockers = static::blockers($upTo);
+        if ($blockers) {
+            throw new RuntimeException(implode(' ', $blockers));
         }
 
         Cache::put(self::BUSY_KEY, true, 3600);

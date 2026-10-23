@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
 use App\Models\Sales\Sale;
 use App\Models\Tickets\Ticket;
@@ -32,7 +33,7 @@ class DashboardController extends Controller
             'todayKg' => (clone $today)->sum('amount_kg'),
             'todayTotal' => (clone $today)->sum('total_amount'),
             'todaySales' => (clone $today)->whereNull('reverses_sale_id')->count(),
-            'openDebt' => Debt::sum('amount') - DebtPayment::whereIn('debt_id', $debtIds)->sum('amount'),
+            'openDebt' => Debt::sum('amount') + DebtAdjustment::whereIn('debt_id', $debtIds)->sum('amount') - DebtPayment::whereIn('debt_id', $debtIds)->sum('amount'),
             'openLoanKg' => TicketLoan::sum('amount_kg') - TicketLoan::sum('settled_amount_kg'),
             'ticketsReady' => Ticket::where('status', config('ticket_statuses.publish'))->count(),
             'tanks' => $tanks,

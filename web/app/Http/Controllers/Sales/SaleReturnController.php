@@ -22,7 +22,7 @@ class SaleReturnController extends Controller
         $sale = Sale::findOrFail($id);
         abort_if($sale->isReturn() || $sale->sale_type === 'card', 404); // a top-up of a card is never refunded
 
-        $debt = Debt::where('sale_id', $sale->id)->first();
+        $debt = Debt::with('adjustments')->where('sale_id', $sale->id)->first();
 
         return view('sale.return', [
             'sale' => $sale,
@@ -30,7 +30,7 @@ class SaleReturnController extends Controller
             'unused' => Ticket::where('sale_id', $sale->id)->where('status', config('ticket_statuses.sale'))
                 ->selectRaw('spec, amount_kg, COUNT(*) AS n')->groupBy('spec', 'amount_kg')->orderBy('spec')->get(),
             'returnedKg' => abs(Sale::where('reverses_sale_id', $sale->id)->sum('amount_kg')),
-            'debtBalance' => $debt ? round($debt->amount - DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2) : null,
+            'debtBalance' => $debt ? round($debt->net_amount - DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2) : null,
             'wholeOnly' => $sale->sale_type === 'spot' || $sale->usage === 'ticket_loan',
             'fuels' => config('fuel_types'),
         ]);

@@ -47,10 +47,13 @@
                 </div>
             </div>
             <div class="card-footer">
+                @foreach ($blockers as $blocker)
+                    <div class="alert alert-warning">{{ $blocker }}</div>
+                @endforeach
                 <form method="POST" action="{{ route('backup.store') }}" onsubmit="return confirm(@json(__('admin.backup_confirm')))">
                     @csrf
                     <input type="hidden" name="up_to" value="{{ $upTo }}">
-                    <button type="submit" class="btn btn-danger"><i class="fas fa-file-archive"></i> {{ __('admin.backup_run') }}</button>
+                    <button type="submit" class="btn btn-danger" @if ($blockers) disabled @endif><i class="fas fa-file-archive"></i> {{ __('admin.backup_run') }}</button>
                 </form>
             </div>
         </div>

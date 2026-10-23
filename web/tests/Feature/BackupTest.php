@@ -63,21 +63,23 @@ class BackupTest extends TestCase
         return $this->actingAs($user);
     }
 
-    private function sale($checkoutDate)
+    // The records of the tests are confirmed unless a test says otherwise: a backup refuses to clear what nobody confirmed.
+    private function sale($checkoutDate, $confirmed = true)
     {
         return Sale::forceCreate([
             'customer_id' => $this->customer->id, 'sale_type' => 'ticket',
             'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 10, 'payment_method' => 'cash', 'total_amount' => 20,
             'paid_amount' => 0, 'unpaid_amount' => 20, 'usage' => 'sale', 'sale_date' => $checkoutDate, 'user_id' => 1,
+            'confirmed_at' => $confirmed ? now() : null, 'confirmed_by' => $confirmed ? 1 : null,
         ]);
     }
 
-    private function supplement($kg, $checkoutDate)
+    private function supplement($kg, $checkoutDate, $confirmed = true)
     {
         return Supplement::forceCreate([
             'fuel_type' => 'D', 'nozzle_id' => $this->nozzle->id, 'device_id' => $this->nozzle->device_id,
             'out_amount_lt' => $kg, 'out_amount_kg' => $kg, 'preset_kg' => $kg, 'supplied_at' => ($checkoutDate ?: '2026-09-28') . ' 11:00:00',
-            'supply_date' => $checkoutDate,
+            'supply_date' => $checkoutDate, 'confirmed_at' => $confirmed ? now() : null, 'confirmed_by' => $confirmed ? 1 : null,
         ]);
     }
 
@@ -515,5 +517,57 @@ class BackupTest extends TestCase
         $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
 
         $this->assertEquals(10, Supplement::find('22222222-2222-2222-2222-222222222222')->out_amount_kg);
+    }
+
+    public function testNothingIsClearedWhileASaleOrSupplementIsNotConfirmed()
+    {
+        $this->sale('2026-09-10');
+        $unconfirmedSale = $this->sale('2026-09-11', false);
+        $this->supplement(30, '2026-09-12', false);
+
+        $response = $this->as('admin')->post('/backup', ['up_to' => self::UP_TO]);
+
+        $response->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('1 sales and 1 supplements', session('errors')->first('up_to'));
+        $this->assertStringContainsString('2026-09-11', session('errors')->first('up_to'));
+        $this->assertSame(2, Sale::count());
+        $this->assertSame(1, Supplement::count());
+        $this->assertSame(0, Backup::count());
+        $this->get('/backup?up_to=' . self::UP_TO)->assertOk()->assertSee('not confirmed yet');
+
+        // confirmed, the backup runs
+        $unconfirmedSale->forceFill(['confirmed_at' => now()])->save();
+        Supplement::query()->update(['confirmed_at' => now()]);
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(1, Backup::count());
+    }
+
+    public function testADeletedOrLaterRecordNeverBlocksABackup()
+    {
+        $this->sale('2026-09-10');
+        $this->sale('2026-09-12', false)->delete();   // deleted: nothing waits for it
+        $this->sale('2026-09-20', false);             // after the date
+        $this->supplement(30, '2026-09-20', false);
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+
+        $this->assertSame(1, Backup::count());
+        $this->assertSame(1, Sale::count());          // only the later one is left
+    }
+
+    public function testNothingIsClearedWhileATerminalHasNotUploadedSinceThatBusinessDay()
+    {
+        $this->sale('2026-09-10');
+        $device = Device::where('name', 'Pump 1')->first();
+        $device->forceFill(['initial_sync_done' => true, 'last_synced_at' => '2026-09-16 08:59:00'])->save();   // the day of 2026-09-15 ends at 09:00 of the 16th
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('Pump 1 has not uploaded since 2026-09-16 09:00', session('errors')->first('up_to'));
+        $this->assertSame(0, Backup::count());
+
+        $device->forceFill(['last_synced_at' => '2026-09-16 09:01:00'])->save();
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+        $this->assertSame(1, Backup::count());
     }
 }

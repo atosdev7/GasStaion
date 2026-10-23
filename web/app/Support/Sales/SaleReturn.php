@@ -3,6 +3,7 @@
 namespace App\Support\Sales;
 
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
 use App\Models\Debts\TicketLoan;
 use App\Models\Debts\TicketLoanSettlement;
@@ -84,14 +85,10 @@ class SaleReturn
 
             // The returned value first cancels what is still owed on this sale, the rest is refunded.
             $debtCut = 0;
-            $debt = Debt::where('sale_id', $sale->id)->lockForUpdate()->first();
+            $debt = Debt::with('adjustments')->where('sale_id', $sale->id)->lockForUpdate()->first();
             if ($debt && $value > 0) {
-                $balance = round($debt->amount - DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2);
+                $balance = round($debt->net_amount - DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2);
                 $debtCut = round(min($value, max(0, $balance)), 2);
-                if ($debtCut > 0) {
-                    $debt->amount = round($debt->amount - $debtCut, 2);
-                    $debt->save();
-                }
             }
             $refund = round($value - $debtCut, 2);
 
@@ -103,6 +100,14 @@ class SaleReturn
                 'usage' => $sale->usage, 'comment' => $comment, 'sale_date' => today()->toDateString(),
                 'reverses_sale_id' => $sale->id, 'synced' => false, 'user_id' => auth()->id(),
             ])->save();
+
+            // The cut is a counter entry dated today; the debt keeps the amount the sale made, so closed days are not rewritten.
+            if ($debt && $debtCut > 0) {
+                DebtAdjustment::forceCreate([
+                    'debt_id' => $debt->id, 'customer_id' => $debt->customer_id, 'amount' => 0 - $debtCut, 'adjusted_date' => today()->toDateString(),
+                    'sale_id' => $return->id, 'user_id' => auth()->id(),
+                ]);
+            }
 
             $now = now();
             foreach ($tickets->chunk(self::CHUNK) as $chunk) {

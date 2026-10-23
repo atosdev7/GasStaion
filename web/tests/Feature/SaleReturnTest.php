@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Sales\Customer;
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleReturnTicket;
@@ -141,14 +142,20 @@ class SaleReturnTest extends TestCase
         $this->assertEquals(-20, $first->total_amount);
         $this->assertEquals(0, $first->paid_amount);
         $this->assertEquals(-20, $first->unpaid_amount);
-        $this->assertEquals(10, Debt::first()->amount);
+        $this->assertEquals(30, Debt::first()->amount);           // the debt keeps what the sale made...
+        $this->assertEquals(10, Debt::with('adjustments')->first()->net_amount);   // ...the return is a counter entry
+        $this->assertEquals([-20.0], DebtAdjustment::pluck('amount')->map(function ($a) { return (float) $a; })->all());
+        $this->assertEquals(today()->toDateString(), substr(DebtAdjustment::first()->adjusted_date, 0, 10));
+        $this->assertSame($first->id, DebtAdjustment::first()->sale_id);
 
         $this->giveBack($sale, array_slice($codes, 2, 2)); // value 20: 10 cancels the rest of the debt, 10 is refunded
         $second = $this->returnRows($sale)->firstWhere('id', '<>', $first->id); // same-second rows tie on created_at
         $this->assertEquals(-20, $second->total_amount);
         $this->assertEquals(-10, $second->paid_amount);
         $this->assertEquals(-10, $second->unpaid_amount);
-        $this->assertEquals(0, Debt::first()->amount);
+        $this->assertEquals(30, Debt::first()->amount);
+        $this->assertEquals(0, Debt::with('adjustments')->first()->net_amount);
+        $this->assertSame(2, DebtAdjustment::count());
         $this->assertSame(0, Ticket::where('sale_id', $sale->id)->count());
     }
 
@@ -166,7 +173,9 @@ class SaleReturnTest extends TestCase
         $return = $this->returnRows($sale)->first();
         $this->assertEquals(-10, $return->unpaid_amount);
         $this->assertEquals(-10, $return->paid_amount); // the customer had paid 30 of it, so 10 comes back
-        $this->assertEquals(30, Debt::first()->amount);
+        $this->assertEquals(40, Debt::first()->amount);
+        $this->assertEquals(30, Debt::with('adjustments')->first()->net_amount);   // 40 less the 10 that was still owed of the return
+        $this->assertEquals(-10, (float) DebtAdjustment::first()->amount);
     }
 
     public function testTheAllCheckboxReturnsEveryUnusedTicketAndSkipsUsedOnes()

@@ -98,12 +98,12 @@ class ReportController extends Controller
             return view('report.customer', $data + ['customer' => null]);
         }
 
-        $debts = Debt::with('sale')->where('customer_id', $customerId)->orderBy('created_at')->get();
+        $debts = Debt::with(['sale', 'adjustments'])->where('customer_id', $customerId)->orderBy('created_at')->get();
         $paidPerDebt = DebtPayment::whereIn('debt_id', $debts->pluck('id'))
             ->selectRaw('debt_id, SUM(amount) AS paid')->groupBy('debt_id')->pluck('paid', 'debt_id');
         $debts->each(function ($d) use ($paidPerDebt) {
             $d->settled = (float) ($paidPerDebt[$d->id] ?? 0);
-            $d->balance = $d->amount - $d->settled;
+            $d->balance = $d->net_amount - $d->settled;
         });
 
         $loans = TicketLoan::where('customer_id', $customerId)->orderBy('loaned_at')->get()->each(function ($l) {

@@ -21,6 +21,8 @@ return [
     'backup_run' => 'Export and clear',
     'backup_confirm' => 'Export all data and permanently remove the rows shown? A safety copy of the database is made first.',
     'backup_done' => 'Backup finished: :file',
+    'backup_blocked_unconfirmed' => 'Nothing was cleared: :sales sales and :supplements supplements up to this date are not confirmed yet (the oldest is of :date). Confirm them on the Daily confirmation page first.',
+    'backup_blocked_devices' => 'Nothing was cleared: :devices has not uploaded since :time, so it may still hold records of these days. Wait until it has uploaded.',
     'backup_history' => 'Backup history',
     'backup_date' => 'Run at',
     'backup_cleared' => 'Removed',

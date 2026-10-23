@@ -101,7 +101,7 @@
                         <td>{{ $debt->display_date ? $debt->display_date : __('debts.opening_balance') }}</td>
                         <td>{{ $customers[$debt->customer_id] ?? $debt->customer_id }}</td>
                         <td>{{ __('debts.payment_' . $debt->payment_method) }}</td>
-                        <td class="text-right">{{ number_format($debt->amount, 2) }}</td>
+                        <td class="text-right">{{ number_format($debt->net_amount, 2) }}</td>
                         <td class="text-right">{{ number_format($debt->settled_amount, 2) }}</td>
                         <td class="text-right">{{ number_format($debt->balance, 2) }}</td>
                         <td>

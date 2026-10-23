@@ -137,7 +137,7 @@ $return = Sale::where('reverses_sale_id', $credit->id)->first();
 ok($return && money($return->amount_kg) === -5.0 && money($return->total_amount) === -37.5, 'a counter entry of -5 kg / -37.50 was made');
 ok(Ticket::where('barcode', $back)->value('status') == config('ticket_statuses.publish') && Ticket::where('barcode', $back)->value('sale_id') === null, 'the ticket is back in stock');
 ok(money(Sale::find($credit->id)->total_amount) === 75.0, 'the original sale keeps its 75.00');
-$debtNow = money(Debt::find($debt->id)->amount);
+$debtNow = money(Debt::with('adjustments')->find($debt->id)->net_amount);   // the debt keeps its amount, the return is an adjustment
 ok(money($debtNow - DebtPayment::where('debt_id', $debt->id)->sum('amount')) === 7.5, 'the customer still owes 7.50 (75 - 37.50 returned - 30 paid)');
 expect($debtNow === $debtBefore, 'the debt of the sale is still 75.00 as of its own day; the return is a separate entry (now the debt itself was cut to ' . number_format($debtNow, 2) . ')');
 note('returned', $back);
@@ -207,11 +207,17 @@ $terminalTicketSale = Sale::where('sale_type', 'ticket')->whereNotNull('user_id'
 if ($terminalTicketSale) {
     $spare = Ticket::where('sale_id', $terminalTicketSale->id)->where('status', config('ticket_statuses.sale'))->value('barcode');
     $before = money($terminalTicketSale->total_amount);
+    $debtBefore = Debt::where('sale_id', $terminalTicketSale->id)->value('amount');
     if ($spare) {
         $r = $assistant->send('POST', '/ticket-sales/' . $terminalTicketSale->id . '/return', ['ticket_barcodes' => $spare]);
         $late = Sale::where('reverses_sale_id', $terminalTicketSale->id)->first();
         ok($late && $late->confirmed_at === null && money($late->total_amount) < 0 && substr((string) $late->sale_date, 0, 10) === $today, 'a return of a confirmed sale is a new entry dated today');
         ok(money(Sale::find($terminalTicketSale->id)->total_amount) === $before, 'the confirmed sale keeps its figures');
+        if ($debtBefore !== null && $late && money($late->unpaid_amount) < 0) {
+            // REVIEW A2: the return cuts the debt by a counter entry dated today, the debt keeps what the sale made
+            ok(money(Debt::where('sale_id', $terminalTicketSale->id)->value('amount')) === money($debtBefore), 'the debt of the confirmed sale keeps its amount');
+            ok(money(DB::table('debt_adjustments')->where('sale_id', $late->id)->sum('amount')) === money($late->unpaid_amount), 'the cut is a counter entry of the return (' . money($late->unpaid_amount) . ')');
+        }
         note('returned2', $spare);
     }
 }
@@ -289,7 +295,19 @@ if (!isset($adminIn)) {
     $adminIn = $admin->login('wadm');
 }
 ok($adminIn, 'the administrator signs in');
+// a backup is refused while a sale it would clear is not confirmed (REVIEW A1)
 $r = $admin->send('POST', '/backup', ['up_to' => $yesterday]);
+ok(DB::table('backups')->count() === 0 && Sale::where('id', $unconfirmedId)->exists(), 'the backup is refused while a sale of those days is not confirmed');
+$r = $acct->send('POST', '/confirmations', ['date' => $yesterday, 'sales' => [$unconfirmedId], 'from' => 'sales']);
+ok(Sale::find($unconfirmedId)->confirmed_at !== null, 'the accountant confirms it');
+// and while a terminal has not uploaded since the business day ended; the terminal has uploaded since
+$r = $admin->send('POST', '/backup', ['up_to' => $yesterday]);
+$sinceDayEnd = date('Y-m-d H:i:s', strtotime($today . ' ' . config('backup.business_day_start_hour') . ':00') + 60);
+if (DB::table('backups')->count() === 0) {
+    // the clock of this run is before the end of that business day: the upload after it is simulated
+    DB::table('devices')->update(['last_synced_at' => $sinceDayEnd]);
+    $r = $admin->send('POST', '/backup', ['up_to' => $yesterday]);
+}
 $why = '';
 if (DB::table('backups')->count() !== 1) {
     preg_match_all('/invalid-feedback[^>]*>\s*([^<]+)</', $r['page']['body'] ?? '', $em);
@@ -301,7 +319,7 @@ ok(count($export) === 1, 'the export file exists');
 $levels = TankLevels::all()->first();
 ok($levels && $tankBefore !== null && abs($levels->current - $tankBefore) < 0.005, 'the tank holds the same after the clearing (' . ($levels ? number_format($levels->current, 2) : '-') . ')');
 ok(DebtPayment::count() >= 1 && Debt::count() >= 2, 'the debts and their payments are kept');
-expect(Sale::where('id', $unconfirmedId)->exists(), 'a sale nobody confirmed is not cleared by the backup (now it is ' . (Sale::where('id', $unconfirmedId)->exists() ? 'kept' : 'cleared and only in the zip') . ')');
+ok(!Sale::where('id', $unconfirmedId)->exists(), 'once confirmed, the sale is cleared by the backup');
 
 note('published', Ticket::where('status', config('ticket_statuses.publish'))->count());
 

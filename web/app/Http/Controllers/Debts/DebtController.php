@@ -73,7 +73,7 @@ class DebtController extends Controller
             'filters' => $filters,
             'unallocated' => $unallocated,
             'customers' => Customer::withTrashed()->orderBy('name')->pluck('name', 'id'),
-            'totalOwed' => $debts->sum('amount'),
+            'totalOwed' => $debts->sum('net_amount'),
             'totalSettled' => $debts->sum('settled_amount'),
             'totalBalance' => $debts->sum('balance'),
         ]);
@@ -131,9 +131,9 @@ class DebtController extends Controller
             ->groupBy('debt_id')
             ->pluck('settled', 'debt_id');
 
-        return Debt::with('sale')->orderByDesc('created_at')->get()->map(function ($debt) use ($settled) {
+        return Debt::with(['sale', 'adjustments'])->orderByDesc('created_at')->get()->map(function ($debt) use ($settled) {
             $debt->settled_amount = (float) ($settled[$debt->id] ?? 0);
-            $debt->balance = $debt->amount - $debt->settled_amount;
+            $debt->balance = $debt->net_amount - $debt->settled_amount;
 
             return $debt;
         });

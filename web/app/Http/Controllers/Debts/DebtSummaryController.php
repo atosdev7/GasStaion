@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Debts;
 use App\Http\Controllers\Controller;
 use App\Models\Sales\Customer;
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
 use App\Models\Debts\TicketLoan;
 use App\Models\Debts\TicketLoanSettlement;
@@ -79,6 +80,16 @@ class DebtSummaryController extends Controller
                 $add($debt->customer_id, 'opening', $debt->payment_method, $debt->amount);
             } elseif ($day <= $to) {
                 $add($debt->customer_id, 'debts', $debt->payment_method, $debt->amount);
+            }
+        }
+        // a return cuts the debt on the day it was made (a counter entry): the days before it stay as they were
+        foreach (DebtAdjustment::get() as $adjustment) {
+            $day = substr((string) $adjustment->adjusted_date, 0, 10);
+            $method = Debt::withTrashed()->where('id', $adjustment->debt_id)->value('payment_method');
+            if ($day < $from) {
+                $add($adjustment->customer_id, 'opening', $method, $adjustment->amount);
+            } elseif ($day <= $to) {
+                $add($adjustment->customer_id, 'debts', $method, $adjustment->amount);
             }
         }
         foreach (DebtPayment::get() as $payment) {

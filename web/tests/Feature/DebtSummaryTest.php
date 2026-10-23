@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Sales\Customer;
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
 use App\Models\Sales\Sale;
 use App\Models\Debts\TicketLoan;
@@ -132,6 +133,26 @@ class DebtSummaryTest extends TestCase
         $oneDay = collect($this->as('accountant')->get('/debt-summary?from=2026-10-10&to=2026-10-10')->viewData('payments'))->keyBy('name');
         $this->assertEquals([300, 10, 0, 0, 0, 0, 300, 10], $this->figures($oneDay['ACME']));
         $this->assertEquals([0, 0, 40, 0, 0, 0, 40, 0], $this->figures($oneDay['Globex']));
+    }
+
+    public function testAReturnCutsTheDebtOnTheDayOfTheReturnAndLeavesEarlierDaysAsTheyWere()
+    {
+        $debt = $this->debt($this->acme, '2026-10-05', 100);
+        DebtAdjustment::forceCreate([
+            'debt_id' => $debt->id, 'customer_id' => $this->acme->id, 'amount' => -30, 'adjusted_date' => '2026-10-12', 'user_id' => 1,
+        ]);
+        $summary = function ($from, $to) {
+            return collect($this->as('accountant')->get("/debt-summary?from=$from&to=$to")->viewData('payments'))->keyBy('name');
+        };
+
+        // the days before the return show the debt as the sale made it
+        $this->assertEquals([0, 0, 100, 0, 0, 0, 100, 0], $this->figures($summary('2026-10-01', '2026-10-11')['ACME']));
+        // the day of the return: owed at the start 100, the cut -30 among the new debts, owed at the end 70
+        $this->assertEquals([100, 0, -30, 0, 0, 0, 70, 0], $this->figures($summary('2026-10-12', '2026-10-12')['ACME']));
+        // later: the cut is part of what was owed at the start
+        $this->assertEquals([70, 0, 0, 0, 0, 0, 70, 0], $this->figures($summary('2026-10-13', '2026-10-31')['ACME']));
+        $this->assertEquals([0, 0, 70, 0, 0, 0, 70, 0], $this->figures($summary('2026-10-01', '2026-10-31')['ACME']));
+        $this->assertEquals(100, Debt::first()->amount);
     }
 
     public function testTheTicketLoansTabSummarisesTheKgByCustomerAndFuelType()

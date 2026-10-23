@@ -23,6 +23,7 @@ class BackupController extends Controller
             'backups' => Backup::orderByDesc('id')->get(),
             'upTo' => $upTo,
             'preview' => $upTo ? BackupRun::preview($upTo) : null,
+            'blockers' => $upTo ? BackupRun::blockers($upTo) : [],
             'carry' => $upTo ? BackupRun::tankCarryForward($upTo) : null,
             'tanks' => Tank::withTrashed()->pluck('name', 'id'),
         ]);
