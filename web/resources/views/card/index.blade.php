@@ -10,6 +10,17 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
+    @if ($overdrawn->isNotEmpty())
+        <div class="alert alert-warning">
+            <strong>{{ __('cards.overdrawn_title') }}</strong> {{ __('cards.overdrawn_hint') }}
+            <ul class="mb-0">
+                @foreach ($overdrawn as $card)
+                    <li><a href="{{ route('cards.history', $card->id) }}">{{ $card->holder_name ?: $card->uid }}</a> ({{ $card->uid }}): {{ number_format($balances[$card->id], 2) }} kg</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-header"><h3 class="card-title">{{ __('menu.cards') }}</h3></div>
         {{-- every filter sits in the head of its own column; the inputs belong to this form by their form attribute --}}
@@ -60,7 +71,7 @@
                         <td>{{ $card->holder_phone }}</td>
                         <td>{{ $card->uid }}</td>
                         <td>{{ $fuels[$card->fuel_type] ?? $card->fuel_type }}</td>
-                        <td class="text-right"><a href="{{ route('cards.history', $card->id) }}" title="{{ __('cards.history') }}">{{ number_format($balances[$card->id] ?? 0, 2) }}</a></td>
+                        <td class="text-right{{ round((float) ($balances[$card->id] ?? 0), 2) < 0 ? ' text-danger font-weight-bold' : '' }}"><a href="{{ route('cards.history', $card->id) }}" title="{{ __('cards.history') }}">{{ number_format($balances[$card->id] ?? 0, 2) }}</a></td>
                         <td>
                             <span class="badge {{ ['active' => 'badge-success', 'locked' => 'badge-warning', 'blocked' => 'badge-danger'][$card->status] ?? 'badge-secondary' }}">{{ __('cards.status_' . $card->status) }}</span>
                             @if ($card->status === 'locked')

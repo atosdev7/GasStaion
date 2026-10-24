@@ -189,7 +189,7 @@ private slots:
     void emptyOrOddHashesNeverMatch();
 
     void theLoginListHasOnlyActiveTerminalUsersByName();
-    void theLoginOffersOnlyTheCashiersAndAssistantsNotTheAdministrator();
+    void theLoginOffersOnlyTheCashiers();
     void theLoginScreenHasAComboBoxAndASettingsButtonThatOpensMachineConfigWithoutALogin();
     void aCashierWhoHasLoggedInCannotOpenMachineConfig();
     void aRightPasswordStartsASessionThatSurvivesARestart();
@@ -2247,7 +2247,7 @@ void Smart210Test::theLoginListHasOnlyActiveTerminalUsersByName()
     QCOMPARE(list.at(1).name, QString("Zoe"));
 }
 
-void Smart210Test::theLoginOffersOnlyTheCashiersAndAssistantsNotTheAdministrator()
+void Smart210Test::theLoginOffersOnlyTheCashiers()
 {
     QSqlDatabase db = openDatabase();
     Session session(db);
@@ -2263,13 +2263,14 @@ void Smart210Test::theLoginOffersOnlyTheCashiersAndAssistantsNotTheAdministrator
     foreach (const Session::Cashier &cashier, session.cashiers()) {
         names << cashier.name;
     }
-    QCOMPARE(names, QStringList() << "Cashier" << "Helper");
+    QCOMPARE(names, QStringList() << "Cashier");                                  // not the administrator, the manager or the assistant
 
     // and the others cannot log in even when the id is known; a session of one of them ends
     QVERIFY(!session.login(2, "pw"));
     QVERIFY(!session.login(3, "pw"));
-    QVERIFY(session.login(4, "pw"));
-    run("UPDATE users SET role = 'manager' WHERE id = 4");
+    QVERIFY(!session.login(4, "pw"));
+    QVERIFY(session.login(1, "pw"));
+    run("UPDATE users SET role = 'assistant' WHERE id = 1");
     QVERIFY(!session.validate());
     QVERIFY(!session.isLoggedIn());
 }

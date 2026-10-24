@@ -79,6 +79,6 @@ return [
         ],
     ],
 
-    // Roles allowed to sign in on the Smart210 (cashier terminal).
-    'pos_roles' => ['admin', 'manager', 'assistant', 'cashier'],
+    // Roles allowed to sign in on the Smart210 (cashier terminal): the cashiers only.
+    'pos_roles' => ['cashier'],
 ];

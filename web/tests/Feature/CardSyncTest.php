@@ -305,44 +305,44 @@ class CardSyncTest extends TestCase
         $this->assertEquals(28, $card->balance());                                              // the balance counts them all
     }
 
-    public function testASupplyThatWouldTakeTheCardBelowZeroIsRefused()
+    public function testAFillMadeAfterTheCardRanOutIsKeptAndTheCardIsListedBelowZero()
     {
         $card = Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + CardPin::make('1234'));
         $this->push('sales', [$this->saleRow($card, ['amount_kg' => '20.00', 'total_amount' => '150.00', 'paid_amount' => '150.00'])]);       // the card holds 20 kg
 
-        // 12 kg are fine, the next 12 kg would leave -4
+        // 12 kg are fine, the next 12 kg are poured too: fuel that was dispensed is a fact, so it is stored and the balance is -4
         $first = $this->supplyRow($card);
         $second = $this->supplyRow($card);
         $this->assertSame([$first['id']], $this->push('supplements', [$first])['saved']);
-        $result = $this->push('supplements', [$second]);
-        $this->assertSame([], $result['saved']);
-        $this->assertStringContainsString('holds only 8.00 kg', $result['rejected'][0]['error']);
-        $this->assertNull(Supplement::find($second['id']));
-        $this->assertEquals(8, $card->balance());
+        $this->assertSame(0, \App\Models\Admin\SyncError::where('entity', 'supplements')->count());
+        $this->assertSame([$second['id']], $this->push('supplements', [$second])['saved']);
+        $this->assertNotNull(Supplement::find($second['id']));
+        $this->assertEquals(-4, $card->balance());
+        $error = \App\Models\Admin\SyncError::where('entity', 'supplements')->first();
+        $this->assertStringContainsString('the card held only 8.00 kg', $error->reason);
+        $this->assertSame($second['id'], $error->record_id);
 
-        // exactly what is left is fine, to the last gram
-        $rest = $this->supplyRow($card, ['out_amount_kg' => '8.00', 'preset_kg' => '8.00', 'out_amount_lt' => '9.00']);
-        $this->assertSame([$rest['id']], $this->push('supplements', [$rest])['saved']);
-        $this->assertEquals(0, $card->balance());
+        // the same fill sent again (the terminal did not get the answer) is not counted twice and not reported twice
+        $this->assertSame([$second['id']], $this->push('supplements', [$second])['saved']);
+        $this->assertEquals(-4, $card->balance());
+        $this->assertSame(1, \App\Models\Admin\SyncError::where('entity', 'supplements')->count());
+        $this->assertSame(1, (int) \App\Models\Admin\SyncError::where('entity', 'supplements')->first()->occurrences);
 
-        // the same supply sent again (the terminal did not get the answer) is not counted twice
-        $this->assertSame([$first['id']], $this->push('supplements', [$first])['saved']);
-        $this->assertEquals(0, $card->balance());
-        // a supply changed upwards over what the card can pay is refused
-        $this->assertSame([], $this->push('supplements', [array_merge($first, ['out_amount_kg' => '13.00', 'preset_kg' => '13.00', 'out_amount_lt' => '15.00'])])['saved']);
-        $this->assertEquals(12, Supplement::find($first['id'])->out_amount_kg);
+        // the Cards page lists the card below zero, and shows its balance in red
+        $manager = \App\Models\Admin\User::forceCreate(['name' => 'Boss', 'username' => 'boss', 'password' => bcrypt('x'), 'role' => 'manager', 'active' => true]);
+        $page = $this->actingAs($manager)->get('/cards')->assertOk();
+        $page->assertSee('Cards below zero.')->assertSee('-4.00 kg');
+        $this->assertSame([$card->id], $page->viewData('overdrawn')->pluck('id')->all());
 
-        // a top-up sent later (in the same push the top-ups go first) makes room
-        $this->push('sales', [$this->saleRow($card, ['amount_kg' => '5.00', 'total_amount' => '37.50', 'paid_amount' => '37.50'])]);
-        $more = $this->supplyRow($card, ['out_amount_kg' => '5.00', 'preset_kg' => '5.00', 'out_amount_lt' => '6.00']);
-        $this->assertSame([$more['id']], $this->push('supplements', [$more])['saved']);
-        $this->assertEquals(0, $card->balance());
+        // a top-up brings the card back above zero: it leaves the list
+        $this->push('sales', [$this->saleRow($card, ['amount_kg' => '10.00', 'total_amount' => '75.00', 'paid_amount' => '75.00'])]);
+        $this->assertEquals(6, $card->balance());
+        $this->assertCount(0, $this->get('/cards')->assertOk()->assertDontSee('Cards below zero.')->viewData('overdrawn'));
 
         // an ordinary supply has no card and no limit
         $plain = $this->supplyRow($card, ['card_id' => null]);
         $this->assertSame([$plain['id']], $this->push('supplements', [$plain])['saved']);
     }
-
     public function testTheTerminalMaySendThePhoneNumberOfANewCardButNeverChangesOneThatExists()
     {
         $row = $this->cardRow(['holder_phone' => '138 0000 1111']);

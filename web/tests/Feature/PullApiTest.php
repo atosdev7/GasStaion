@@ -195,6 +195,9 @@ class PullApiTest extends TestCase
     public function testUsersCarryLoginHashesAndTheDeletedFlag()
     {
         User::forceCreate(['name' => 'Acc', 'username' => 'acc', 'password' => 'x', 'role' => 'accountant', 'active' => true]);
+        foreach (['assistant', 'manager', 'admin'] as $role) {
+            User::forceCreate(['name' => $role, 'username' => $role . 'x', 'password' => 'x', 'role' => $role, 'active' => true]);
+        }
         User::where('username', 'acc')->first()->delete();
 
         $rows = array_column($this->pull('users')['rows'], null, 'username');
@@ -205,6 +208,9 @@ class PullApiTest extends TestCase
         $this->assertSame(hash('sha256', 'aa11' . 'secret1'), $rows['cash']['pos_hash']);
         $this->assertFalse($rows['cash']['deleted']);
         $this->assertFalse($rows['acc']['pos']); // an accountant has no Smart210 login
+        foreach (['assistantx', 'managerx', 'adminx'] as $username) {
+            $this->assertFalse($rows[$username]['pos']); // only the cashiers sign in on the terminal
+        }
         $this->assertTrue($rows['acc']['deleted']);
     }
 

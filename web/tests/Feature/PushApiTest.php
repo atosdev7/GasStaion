@@ -593,12 +593,42 @@ class PushApiTest extends TestCase
         return Barcode::makeReserved($code, config('ticket_serial.device_base') + $offset);
     }
 
+    // A sale on the server, as a push of it would have stored it: the tickets of a sale are only accepted when their sale is there.
+    private function storedSale($id)
+    {
+        Sale::forceCreate([
+            'id' => $id, 'customer_id' => $this->customer->id, 'sale_type' => 'spot', 'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 5,
+            'payment_method' => 'cash', 'total_amount' => 10, 'paid_amount' => 10, 'unpaid_amount' => 0, 'usage' => 'sale',
+            'sale_date' => '2026-10-06', 'user_id' => $this->cashier->id,
+        ]);
+
+        return $id;
+    }
+
+    private function storedSupplement($id)
+    {
+        Supplement::forceCreate([
+            'id' => $id, 'fuel_type' => 'D', 'nozzle_id' => $this->nozzle->id, 'device_id' => $this->nozzle->device_id, 'out_amount_lt' => 6,
+            'out_amount_kg' => 5, 'preset_kg' => 5, 'supplied_at' => '2026-10-06 09:30:00', 'supply_date' => '2026-10-06',
+        ]);
+
+        return $id;
+    }
+
     private function ticketRow($barcode, $overrides = [])
     {
-        return $overrides + [
+        $row = $overrides + [
             'barcode' => $barcode, 'fuel_type' => 'D', 'amount_kg' => '5.00', 'status' => config('ticket_statuses.sale'),
             'sale_id' => (string) Str::uuid(), 'sale_date' => '2026-10-06 10:00:00', 'supply_date' => null, 'supplement_id' => null,
         ];
+        if ($row['sale_id'] && !Sale::withTrashed()->whereKey($row['sale_id'])->exists()) {
+            $this->storedSale($row['sale_id']);
+        }
+        if ($row['supplement_id'] && !Supplement::withTrashed()->whereKey($row['supplement_id'])->exists()) {
+            $this->storedSupplement($row['supplement_id']);
+        }
+
+        return $row;
     }
 
     private function supplyRow($barcode, $supplementId = null)
@@ -656,6 +686,58 @@ class PushApiTest extends TestCase
         $this->assertSame([], $result['saved']);
         $this->assertCount(7, $result['rejected']);
         $this->assertSame(0, Ticket::count());
+    }
+
+    public function testTheTicketsOfASaleThatIsNotOnTheServerAreRefusedAndWaitForIt()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.publish'));
+        $saleId = (string) Str::uuid();
+        $row = [
+            'barcode' => $ticket->barcode, 'fuel_type' => 'D', 'amount_kg' => null, 'status' => config('ticket_statuses.sale'),
+            'sale_id' => $saleId, 'sale_date' => '2026-10-06 10:00:00', 'supply_date' => null, 'supplement_id' => null,
+        ];
+
+        // the sale was refused (it is not stored), its ticket is refused too and stays in stock
+        $result = $this->push('tickets', [$row]);
+        $this->assertSame([], $result['saved']);
+        $this->assertStringContainsString('its sale is not on the server', json_encode($result['rejected']));
+        $this->assertSame(config('ticket_statuses.publish'), (int) Ticket::find($ticket->barcode)->status);
+        $this->assertNull(Ticket::find($ticket->barcode)->sale_id);
+
+        // the sale is accepted later: the same ticket is accepted on its next upload
+        $this->push('sales', [$this->sale(['id' => $saleId, 'sale_type' => 'ticket'])]);
+        $this->assertSame([$ticket->barcode], $this->push('tickets', [$row])['saved']);
+        $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($ticket->barcode)->status);
+        $this->assertSame($saleId, Ticket::find($ticket->barcode)->sale_id);
+    }
+
+    public function testASuppliedTicketWaitsForItsSupplementToo()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $supplementId = (string) Str::uuid();
+        $row = [
+            'barcode' => $ticket->barcode, 'fuel_type' => 'D', 'amount_kg' => null, 'status' => config('ticket_statuses.supply'),
+            'sale_id' => null, 'sale_date' => null, 'supply_date' => '2026-10-06 11:00:00', 'supplement_id' => $supplementId,
+        ];
+
+        $this->assertSame([], $this->push('tickets', [$row])['saved']);
+        $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($ticket->barcode)->status);
+
+        $this->push('supplements', [$this->supplement(['id' => $supplementId])]);
+        $this->assertSame([$ticket->barcode], $this->push('tickets', [$row])['saved']);
+        $this->assertSame(config('ticket_statuses.supply'), (int) Ticket::find($ticket->barcode)->status);
+    }
+
+    public function testATicketAlreadySoldIsNotRefusedWhenItsSaleWasClearedByABackup()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $row = [
+            'barcode' => $ticket->barcode, 'fuel_type' => 'D', 'amount_kg' => null, 'status' => config('ticket_statuses.sale'),
+            'sale_id' => (string) Str::uuid(), 'sale_date' => '2026-10-06 10:00:00', 'supply_date' => null, 'supplement_id' => null,
+        ];
+
+        // nothing changes on the server for it, so nothing is checked: the same push after a backup stays quiet
+        $this->assertSame([$ticket->barcode], $this->push('tickets', [$row])['saved']);
     }
 
     public function testSellingAPublishedTicketMovesItForwardWithoutSendingItBack()

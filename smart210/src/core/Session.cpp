@@ -16,7 +16,7 @@ QList<Session::Cashier> Session::cashiers() const
     QList<Cashier> list;
 
     QSqlQuery query(db_);
-    query.exec("SELECT id, username, name, role FROM users WHERE pos = 1 AND active = 1 AND deleted = 0 AND role IN ('cashier', 'assistant') ORDER BY name COLLATE NOCASE, id");
+    query.exec("SELECT id, username, name, role FROM users WHERE pos = 1 AND active = 1 AND deleted = 0 AND role = 'cashier' ORDER BY name COLLATE NOCASE, id");
     while (query.next()) {
         Cashier cashier;
         cashier.id = query.value(0).toInt();
@@ -34,7 +34,7 @@ bool Session::login(int userId, const QString &password)
     logout(); // a failed attempt must not leave the previous cashier in
 
     QSqlQuery query(db_);
-    query.prepare("SELECT pos_salt, pos_hash FROM users WHERE id = ? AND pos = 1 AND active = 1 AND deleted = 0 AND role IN ('cashier', 'assistant')");
+    query.prepare("SELECT pos_salt, pos_hash FROM users WHERE id = ? AND pos = 1 AND active = 1 AND deleted = 0 AND role = 'cashier'");
     query.addBindValue(userId);
     if (!query.exec() || !query.next()) {
         return false;
@@ -77,7 +77,7 @@ bool Session::validate()
     }
 
     QSqlQuery query(db_);
-    query.prepare("SELECT 1 FROM users WHERE id = ? AND pos = 1 AND active = 1 AND deleted = 0 AND role IN ('cashier', 'assistant')");
+    query.prepare("SELECT 1 FROM users WHERE id = ? AND pos = 1 AND active = 1 AND deleted = 0 AND role = 'cashier'");
     query.addBindValue(userId());
     if (!query.exec() || !query.next()) {
         logout();

@@ -4,6 +4,8 @@ return [
     'uid' => 'Card ID',
     'holder' => 'Customer name',
     'balance' => 'Balance (kg)',
+    'overdrawn_title' => 'Cards below zero.',
+    'overdrawn_hint' => 'Fuel was poured with these cards after their balance had run out (the fill is kept, it is a fact). Top the card up, or settle it with the holder.',
     'status' => 'Status',
     'status_active' => 'Active',
     'status_locked' => 'Locked (wrong PIN)',

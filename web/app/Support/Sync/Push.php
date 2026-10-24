@@ -291,16 +291,23 @@ class Push
             return; // confirmed by the accountant: final, so a repeated push changes nothing
         }
 
-        // A supply made with a card may not take the card below zero: what it held, without this supply if it was saved before, less this one.
-        if (!empty($d['card_id'])) {
-            $held = Card::find($d['card_id'])->balance() + ($supplement->exists && $supplement->card_id === $d['card_id'] ? (float) $supplement->out_amount_kg : 0);
+        // Fuel that was dispensed is a fact, as with a ticket: a fill made with a card is stored even when the card holds less than was poured
+        // (the terminal checks the balance before it starts, but a top-up can be deleted or the clock can be wrong). The balance then goes below
+        // zero, the card is listed as a warning on the Cards page, and the staff see the case among the sync problems.
+        $overdrawn = null;
+        if (!empty($d['card_id']) && !$supplement->exists) {
+            $held = Card::find($d['card_id'])->balance();
             if (round($held - (float) $d['out_amount_kg'], 2) < 0) {
-                throw new RejectedRow('the card holds only ' . number_format($held, 2, '.', '') . ' kg, less than the ' . number_format((float) $d['out_amount_kg'], 2, '.', '') . ' kg supplied');
+                $overdrawn = 'conflict: the card held only ' . number_format($held, 2, '.', '') . ' kg, less than the ' . number_format((float) $d['out_amount_kg'], 2, '.', '') . ' kg supplied: stored, the balance is below zero';
             }
         }
 
         // Whichever device is calling is the one that dispensed it.
         self::store($supplement, $d, ['device_id' => $device->id, 'synced' => true]);
+
+        if ($overdrawn) {
+            SyncError::record($device->id, 'supplements', $d['id'], json_encode($d), $overdrawn);
+        }
     }
 
     private static function remainders(Device $device, array $row)
@@ -419,6 +426,7 @@ class Push
 
         if ($status === $s['sale']) {
             if ($current === $s['publish']) {
+                self::requireRecords($d);
                 $attributes = ['status' => $s['sale']] + $sale;
             } elseif ($current !== $s['sale']) {
                 self::conflict($device, $d, 'the ticket is already ' . $names[$current] . ' on the server, the sale was not applied');
@@ -431,6 +439,7 @@ class Push
             if ($current === $s['restrict']) {
                 self::conflict($device, $d, 'the ticket was restricted on the server but fuel was dispensed, marked supplied');
             }
+            self::requireRecords($d);
             $attributes = ['status' => $s['supply'], 'supply_date' => $d['supply_date'], 'supplement_id' => $d['supplement_id'] ?? null];
             if ($current === $s['publish']) {
                 $attributes += $sale; // sold and supplied between two syncs
@@ -439,6 +448,19 @@ class Push
 
         if ($attributes) {
             $ticket->saveFromDevice($attributes + ['synced' => true]);
+        }
+    }
+
+    // The sale (or the supplement) a ticket names must be on the server: when the sale was refused (its rows are checked one by one) or has not
+    // arrived, its tickets are refused too and wait, instead of being stored as sold under a sale that does not exist (the stock gone, no money
+    // recorded). The ticket is sent again with every upload until its sale is accepted. Deleted records count: they are on the server.
+    private static function requireRecords(array $d)
+    {
+        if (!empty($d['sale_id']) && !Sale::withTrashed()->whereKey($d['sale_id'])->exists()) {
+            throw new RejectedRow('its sale is not on the server (it was refused or has not arrived): the ticket waits for it');
+        }
+        if (!empty($d['supplement_id']) && !Supplement::withTrashed()->whereKey($d['supplement_id'])->exists()) {
+            throw new RejectedRow('its supplement is not on the server (it was refused or has not arrived): the ticket waits for it');
         }
     }
 
@@ -461,6 +483,7 @@ class Push
         if ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $parsed['code'] !== config('ticket_reserved_codes.remainder')) {
             throw new RejectedRow('a sold ticket needs its sale');
         }
+        self::requireRecords($d);
 
         $ticket = new Ticket;
         $ticket->barcode = $d['barcode'];

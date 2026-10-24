@@ -42,6 +42,10 @@ class CardController extends Controller
             'cards' => $query->paginate(50)->appends($request->query()),
             'filters' => $filters,
             'balances' => Card::balances(),
+            // the cards that hold less than nothing (a fill was poured after the card ran out): the warning list above the table
+            'overdrawn' => Card::whereIn('id', collect(Card::balances())->filter(function ($kg) {
+                return round((float) $kg, 2) < 0;
+            })->keys())->orderBy('holder_name')->get(),
             'fuels' => config('fuel_types'),
         ]);
     }
