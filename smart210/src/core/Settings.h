@@ -36,6 +36,8 @@ extern const char *const LastDownloadAt; // local time of the last complete down
 extern const char *const SessionUserId; // the cashier who is logged in (kept over restarts until Log out)
 extern const char *const RestoreHandled;     // the restore of the web app's database (its restored_at) this terminal has already acted on
 extern const char *const ClockOffsetSeconds; // server time minus this terminal's time, at the last download
+extern const char *const UtcOffsetSeconds;   // the station's time zone as the server's offset from UTC at the last download (it follows daylight saving time)
+extern const char *const TimeZoneName;       // the name of that zone, for the Settings page (Asia/Seoul)
 }
 
 // The machine configuration lives apart from the database, in an INI file on the board's own flash (see AppConfig::deviceFile), so a new SD
@@ -64,6 +66,8 @@ public:
     bool setInt(const QString &key, int value);
     bool setBool(const QString &key, bool value);
     bool remove(const QString &key);
+
+    QSqlDatabase database() const { return db_; }
 
 private:
     QSqlDatabase db_;

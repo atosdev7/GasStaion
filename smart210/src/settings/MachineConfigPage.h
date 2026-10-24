@@ -11,6 +11,7 @@ class QComboBox;
 class QLineEdit;
 class QPushButton;
 class QTabWidget;
+class QTimer;
 class QLabel;
 class QListWidget;
 class QTableWidget;
@@ -43,6 +44,7 @@ public:
 signals:
     void backRequested();
     void cardReaderChanged();   // the card reader's settings were saved: the reader is started again with them
+    void restartRequested();    // Clean Data or Clear Config was done: the program has to start again
 
 private slots:
     void sendNozzle();
@@ -62,6 +64,10 @@ private slots:
     void savePrinter();
     void checkPrinter();
     void printerChecked(bool ok, const QString &message);
+    void cleanDataPressed();
+    void clearConfigPressed();
+    void disarmReset();
+    void finishReset();
 
 private:
     Ui::MachineConfigPage *ui_;
@@ -71,6 +77,8 @@ private:
     void fillLog();
     bool storePrinter();
     void showStatus(const QString &message, bool ok);
+    void showResetBox();
+    void armReset(int which);
 
     MachineConfig *config_;
     Session *session_;
@@ -101,6 +109,8 @@ private:
     QString converterBefore_;
     QComboBox *uploadMode_;
     QString uploadModeBefore_;
+    int armedReset_;        // 0: none, 1: Clean Data, 2: Clear Config; the first press arms, the second one (within seconds) does it
+    QTimer *resetTimer_;
     bool showNoReceiptBefore_;
     QListWidget *log_;
     QLabel *status_;

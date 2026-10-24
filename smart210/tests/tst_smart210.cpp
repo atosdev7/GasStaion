@@ -82,6 +82,7 @@
 #include "ManualSupplyPage.h"
 #include "SpotSalePage.h"
 #include "TicketSalePage.h"
+#include "AppReset.h"
 #include "Settings.h"
 #include "SetupFlow.h"
 #include "SyncClient.h"
@@ -177,6 +178,11 @@ private slots:
 
     void theClockOffsetIsTheServersMinusOurs();
     void everyDownloadKeepsTheClockOffset();
+    void theTicketSaleScreenOpensQuicklyOnABigStock();
+    void theClockOffsetInUtcDoesNotDependOnTheTimeZone();
+    void theTimeZoneIsAFixedPosixOffset();
+    void aDownloadKeepsAndAppliesTheStationsTimeZoneAndMeasuresTheClockInUtc();
+    void theStoredTimeZoneIsAppliedAtTheStartAndShownOnTheSettingsPage();
 
     void aTerminalWithoutAServerShowsTheSetupPage();
     void theGateHoldsTheAppUntilTheFirstDownloadFinishes();
@@ -268,6 +274,9 @@ private slots:
     void withNothingWaitingTheUploadButtonIsOff();
     void theReviewListsTheRecordsOfTheChosenDateWithTotals();
     void theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen();
+    void cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait();
+    void clearConfigErasesTheMachineSettingsAndKeepsTheData();
+    void machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoResets();
     void aRecordWithoutADateShowsUnderTheBusinessDayOfItsTime();
     void aRecordMadeNearNineIsFlaggedForTheDate();
     void aChangedCommentMakesTheRecordWaitAgainAndIsSentAgain();
@@ -2075,6 +2084,178 @@ void Smart210Test::everyDownloadKeepsTheClockOffset()
     QVERIFY(Clock::isOff(settings.value(SettingKey::ClockOffsetSeconds).toLongLong()));
 }
 
+void Smart210Test::theTicketSaleScreenOpensQuicklyOnABigStock()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO fuel_types (fuel_type, name, price) VALUES ('D', 'Diesel', 750), ('A', 'Gasoline', 800), ('G', 'Gas without tickets', 900)");
+    run("INSERT INTO customers (id, name, is_self, deleted) VALUES (1, 'Self', 1, 0)");
+    QVERIFY(db.transaction());
+    QSqlQuery insert(db);
+    insert.prepare("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (?, ?, ?, ?, ?, 1)");
+    // 60000 tickets of Diesel in four specs, the lowest barcodes of each spec in a run of their own; 3000 already sold; 20000 of Gasoline
+    for (int i = 0; i < 60000; ++i) {
+        insert.addBindValue(qlonglong(8676106000000000LL) + i);
+        insert.addBindValue("D");
+        insert.addBindValue(i / 15000);
+        insert.addBindValue(500);
+        insert.addBindValue(i < 3000 ? 2 : 0);
+        insert.exec();
+    }
+    for (int i = 0; i < 20000; ++i) {
+        insert.addBindValue(qlonglong(8676106100000000LL) + i);
+        insert.addBindValue("A");
+        insert.addBindValue(1);
+        insert.addBindValue(1000);
+        insert.addBindValue(0);
+        insert.exec();
+    }
+    QVERIFY(db.commit());
+
+    // the stock of a spec, or only its lowest tickets
+    QCOMPARE(TicketSale::stock(db, "D", 1).size(), 15000);
+    const QList<TicketSale::Stock> first = TicketSale::stock(db, "D", 1, 3);
+    QCOMPARE(first.size(), 3);
+    QCOMPARE(first.at(0).barcode, qlonglong(8676106000015000LL));
+    QCOMPARE(first.at(2).barcode, qlonglong(8676106000015002LL));
+    QCOMPARE(TicketSale::stock(db, "D", 0, 1).at(0).barcode, qlonglong(8676106000003000LL));   // the sold ones are not in stock
+    QCOMPARE(TicketSale::stock(db, "D", 1, 100000).size(), 15000);                              // more than there is
+
+    // the lookups of the screen use the indexes, not a read of every ticket
+    QSqlQuery plan(db);
+    QVERIFY(plan.exec("EXPLAIN QUERY PLAN SELECT barcode, amount_kg FROM tickets WHERE fuel_type = 'D' AND spec = 1 AND status = 0 ORDER BY barcode LIMIT 3"));
+    QString text;
+    while (plan.next()) {
+        text += plan.value(3).toString() + "|";
+    }
+    QVERIFY2(text.contains("tickets_stock"), qPrintable(text));
+    QVERIFY(!text.contains("TEMP B-TREE"));                                                    // already in barcode order: no sort
+
+    // the screen: the fuel types with tickets (not the one without), the first serial and the end of the first run
+    Session session(db);
+    TicketSalePage page(db, &session);
+    QElapsedTimer timer;
+    timer.start();
+    page.reload();
+    const qint64 ms = timer.elapsed();
+    QComboBox *fuel = page.findChild<QComboBox *>("tsFuelCombo");
+    QComboBox *spec = page.findChild<QComboBox *>("tsSpecCombo");
+    QCOMPARE(fuel->count(), 2);
+    QCOMPARE(fuel->itemText(0), QString("Diesel"));
+    QCOMPARE(fuel->itemText(1), QString("Gasoline"));
+    QCOMPARE(spec->count(), 4);
+    QCOMPARE(spec->itemText(0), QString("5.00 kg (12000)"));                                    // 15000 less the 3000 sold
+    QCOMPARE(page.findChild<QLineEdit *>("tsStartField")->text(), QString::number(3000));
+    QCOMPARE(page.findChild<QLineEdit *>("tsEndField")->text(), QString::number(3000));       // a count of 1
+    page.findChild<QLineEdit *>("tsStartField")->clear();
+    page.findChild<QLineEdit *>("tsCountField")->setText("25");
+    page.findChild<QLineEdit *>("tsCountField")->textEdited("25");
+    QCOMPARE(page.findChild<QLineEdit *>("tsEndField")->text(), QString::number(3024));
+    qDebug() << "opening the Ticket sale screen with 80000 tickets in stock took" << ms << "ms";
+    QVERIFY2(ms < 1500, qPrintable(QString::number(ms)));                                     // about 20 ms here; the old screen read the whole stock three times
+}
+void Smart210Test::theClockOffsetInUtcDoesNotDependOnTheTimeZone()
+{
+    const QDateTime nowUtc(QDate(2026, 10, 7), QTime(10, 0, 0), Qt::UTC);
+
+    QCOMPARE(Clock::offsetFromUtc("2026-10-07 10:00:30", nowUtc), qint64(30));
+    QCOMPARE(Clock::offsetFromUtc("2026-10-07 09:58:00", nowUtc), qint64(-120));
+    QCOMPARE(Clock::offsetFromUtc("2026-10-07 10:00:00", nowUtc), qint64(0));
+    QCOMPARE(Clock::offsetFromUtc("", nowUtc), qint64(0));
+    QCOMPARE(Clock::offsetFromUtc("not a time", nowUtc), qint64(0));
+    QVERIFY(!Clock::utcOf("not a time").isValid());
+    QCOMPARE(Clock::utcOf("2026-10-07 10:00:30").timeSpec(), Qt::UTC);
+
+    // the same whatever time zone the program is set to: the digits are read as UTC on both sides
+    const QByteArray zone = qgetenv("TZ");
+    foreach (int offset, QList<int>() << 0 << 32400 << -18000 << 19800) {
+        Clock::applyTimeZone(offset);
+        QCOMPARE(Clock::offsetFromUtc("2026-10-07 10:00:30", nowUtc), qint64(30));
+    }
+    qputenv("TZ", zone);
+
+    // the clock is set when it is off by more than 5 seconds (and warned about when it is more than a minute)
+    QVERIFY(!Clock::needsSetting(0));
+    QVERIFY(!Clock::needsSetting(5));
+    QVERIFY(!Clock::needsSetting(-5));
+    QVERIFY(Clock::needsSetting(6));
+    QVERIFY(Clock::needsSetting(-6));
+}
+
+void Smart210Test::theTimeZoneIsAFixedPosixOffset()
+{
+    QCOMPARE(Clock::posixTimeZone(0), QString("UTC0"));
+    QCOMPARE(Clock::posixTimeZone(32400), QString("UTC-9"));        // POSIX counts the other way round
+    QCOMPARE(Clock::posixTimeZone(-18000), QString("UTC5"));
+    QCOMPARE(Clock::posixTimeZone(19800), QString("UTC-5:30"));
+    QCOMPARE(Clock::posixTimeZone(-12600), QString("UTC3:30"));
+    QCOMPARE(Clock::posixTimeZone(45900), QString("UTC-12:45"));
+    QCOMPARE(Clock::posixTimeZone(-3600), QString("UTC1"));
+
+    const QByteArray zone = qgetenv("TZ");
+    Clock::applyTimeZone(32400);
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC-9"));
+    Clock::applyTimeZone(-14400);
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC4"));
+    qputenv("TZ", zone);
+}
+
+void Smart210Test::aDownloadKeepsAndAppliesTheStationsTimeZoneAndMeasuresTheClockInUtc()
+{
+    configureServer();
+    serveEverything();
+    // the server is in UTC+9 and its clock is two minutes ahead of this machine's
+    const QDateTime ahead = QDateTime::currentDateTimeUtc().addSecs(120);
+    QJsonObject config = configObject();
+    config.insert("server_time_utc", ahead.toString("yyyy-MM-dd HH:mm:ss"));
+    config.insert("server_time", ahead.addSecs(32400).toString("yyyy-MM-dd HH:mm:ss"));
+    config.insert("timezone", "Asia/Seoul");
+    config.insert("utc_offset_seconds", 32400);
+    server_->reply("/api/pull/config", 200, QJsonDocument(config).toJson(QJsonDocument::Compact));
+
+    const QByteArray zone = qgetenv("TZ");
+    SyncClient client(QSqlDatabase::database(connection_));
+    QVERIFY(downloadOk(client));
+
+    Settings settings(QSqlDatabase::database(connection_));
+    QCOMPARE(settings.intValue(SettingKey::UtcOffsetSeconds), 32400);
+    QCOMPARE(settings.value(SettingKey::TimeZoneName), QString("Asia/Seoul"));
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC-9"));                                   // applied at once
+    const qint64 offset = settings.value(SettingKey::ClockOffsetSeconds).toLongLong();
+    QVERIFY2(offset >= 118 && offset <= 122, qPrintable(QString::number(offset)));   // measured in UTC: not 120 + 9 hours
+    QVERIFY(Clock::isOff(offset));
+
+    // the daylight saving time of the zone changed: the next download brings the new offset
+    config.insert("utc_offset_seconds", 28800);
+    server_->reply("/api/pull/config", 200, QJsonDocument(config).toJson(QJsonDocument::Compact));
+    SyncClient again(QSqlDatabase::database(connection_));
+    QVERIFY(downloadOk(again));
+    QCOMPARE(settings.intValue(SettingKey::UtcOffsetSeconds), 28800);
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC-8"));
+    qputenv("TZ", zone);
+}
+
+void Smart210Test::theStoredTimeZoneIsAppliedAtTheStartAndShownOnTheSettingsPage()
+{
+    QSqlDatabase db = openDatabase();
+    Settings settings(db);
+    const QByteArray zone = qgetenv("TZ");
+
+    // before the first download there is nothing to apply and nothing to show
+    qputenv("TZ", "UTC0");
+    Clock::applyStoredTimeZone(settings);
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC0"));
+    QVERIFY(Clock::zoneText(settings).isEmpty());
+
+    Clock::keepTimeZone(settings, 32400, "Asia/Seoul");
+    QCOMPARE(Clock::zoneText(settings), QString("UTC+09:00 (Asia/Seoul)"));
+    qputenv("TZ", "UTC0");                                                          // a new start of the program
+    Clock::applyStoredTimeZone(settings);
+    QCOMPARE(qgetenv("TZ"), QByteArray("UTC-9"));
+
+    Clock::keepTimeZone(settings, -12600, QString());
+    QCOMPARE(Clock::zoneText(settings), QString("UTC-03:30"));
+    qputenv("TZ", zone);
+}
 // ---- the window: first-sync gate and automatic download ----
 
 void Smart210Test::aTerminalWithoutAServerShowsTheSetupPage()
@@ -2295,7 +2476,7 @@ void Smart210Test::theLoginScreenHasAComboBoxAndASettingsButtonThatOpensMachineC
     // Settings asks for the PIN; the sidebar is out of reach until somebody logs in
     settings->click();
     QCOMPARE(window.currentPage(), QString("pin"));
-    QVERIFY(!window.findChild<SideBar *>()->isEnabled());
+    QVERIFY(!window.findChild<SideBar *>()->isVisibleTo(&window));           // the PIN page is the whole window: no sidebar, no header
     QVERIFY(window.findChild<QLabel *>("cashierLabel")->text().isEmpty());
 
     // Cancel goes back to the login, not to a Settings page that needs a cashier
@@ -2307,7 +2488,7 @@ void Smart210Test::theLoginScreenHasAComboBoxAndASettingsButtonThatOpensMachineC
     window.findChild<QLineEdit *>("pinField")->setText("4821");
     window.findChild<QPushButton *>("pinOkButton")->click();
     QCOMPARE(window.currentPage(), QString("machine"));
-    QVERIFY(!window.findChild<SideBar *>()->isEnabled());
+    QVERIFY(!window.findChild<SideBar *>()->isVisibleTo(&window)); // the whole window, not part of the cashier's shell
     window.findChild<QPushButton *>("machineBackButton")->click();
     QCOMPARE(window.currentPage(), QString("login"));
 
@@ -3027,6 +3208,131 @@ void Smart210Test::anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedO
     QCOMPARE(rows.size(), 1);
 }
 
+void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
+{
+    setUpLoggedInTerminalWithAPin();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (8676106000000001, 'D', 0, 500, 0, 1)");
+    run("INSERT INTO sales (id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, synced) "
+        "VALUES ('s1', '2026-10-09 10:00:00', 'spot', 'D', 750, 1000, 'cash', 7500, 7500, 'sale', 7, '2026-10-09', 0)");
+
+    // a sale waits for the upload: refused, nothing is erased
+    QString why;
+    QCOMPARE(AppReset::waiting(db), 1);
+    QVERIFY(!AppReset::cleanData(db, &why));
+    QVERIFY2(why.contains("1 records wait for the upload"), qPrintable(why));
+    QCOMPARE(countRows("sales"), 1);
+    QCOMPARE(countRows("tickets"), 1);
+
+    // uploaded: every table is emptied, the schema stays
+    run("UPDATE sales SET synced = 1");
+    QVERIFY2(AppReset::cleanData(db, &why), qPrintable(why));
+    QSqlQuery tables(db);
+    QVERIFY(tables.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"));
+    int checked = 0;
+    while (tables.next()) {
+        QCOMPARE(countRows(tables.value(0).toString()), 0);
+        ++checked;
+    }
+    QVERIFY(checked > 10);
+    QCOMPARE(Migrator::version(db), 5);                                   // the program still opens it
+    QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
+    QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
+}
+
+void Smart210Test::clearConfigErasesTheMachineSettingsAndKeepsTheData()
+{
+    setUpLoggedInTerminalWithAPin();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (8676106000000001, 'D', 0, 500, 0, 1)");
+    Settings settings(db);
+    settings.setValue(SettingKey::ServerHost, "192.168.1.5");
+    settings.setInt(SettingKey::ServerPort, 8080);
+    settings.setInt(SettingKey::DeviceId, 3);
+    settings.setValue(SettingKey::PrinterHost, "192.168.1.20");
+    settings.setValue(SettingKey::UploadMode, "close");
+    settings.setBool(SettingKey::ShowSalesWithoutReceipt, false);
+    Settings::setDeviceValue("nozzle_tank_1", "T1");
+    QVERIFY(QFileInfo(Settings::deviceFile()).exists());
+
+    QString why;
+    QVERIFY2(AppReset::clearConfig(db, &why), qPrintable(why));
+
+    QVERIFY(!QFileInfo(Settings::deviceFile()).exists());                 // the device file is gone
+    QVERIFY(!settings.contains(SettingKey::ServerHost));
+    QVERIFY(!settings.contains(SettingKey::DeviceId));                    // so the setup page asks for the server again
+    QVERIFY(!settings.contains(SettingKey::PrinterHost));
+    QVERIFY(!settings.contains(SettingKey::UploadMode));
+    QVERIFY(!settings.contains(SettingKey::ShowSalesWithoutReceipt));
+    QCOMPARE(Settings::deviceValue("nozzle_tank_1"), QString());
+    QCOMPARE(countRows("tickets"), 1);                                    // the data stays
+    QVERIFY(settings.contains(SettingKey::PinHash));                      // and what is not machine setting
+    QVERIFY(Session(db).isLoggedIn());
+}
+
+void Smart210Test::machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoResets()
+{
+    setUpLoggedInTerminalWithAPin();
+    serverKnowsThisTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (8676106000000001, 'D', 0, 500, 0, 1)");
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+
+    // the page has the whole window: the sidebar, the header and the footer of the cashier's program are not in it
+    QVERIFY(!window.findChild<SideBar *>()->isVisibleTo(&window));
+    QVERIFY(!window.findChild<ShellFooter *>()->isVisibleTo(&window));
+    QVERIFY(window.findChild<QWidget *>("MachineConfigPage")->isVisibleTo(&window));
+
+    // the tabs by what they are about
+    QTabWidget *tabs = window.findChild<QTabWidget *>("machineTabs");
+    QStringList names;
+    for (int i = 0; i < tabs->count(); ++i) {
+        names << tabs->tabText(i);
+    }
+    QCOMPARE(names, QStringList() << "Server" << "Dispensers" << "Printer" << "Card reader" << "Options" << "Maintenance");
+    QVERIFY(tabs->widget(0)->findChild<QComboBox *>("uploadModeCombo") != 0);                  // Server: the address and the upload
+    QVERIFY(tabs->widget(0)->findChild<QCheckBox *>("showNoReceiptCheck") == 0);
+    QVERIFY(tabs->widget(1)->findChild<QLineEdit *>("converterPort") != 0);                    // Dispensers: the converter port and the nozzles
+    QVERIFY(tabs->widget(1)->findChild<QTableWidget *>("nozzleTable") != 0);
+    QVERIFY(tabs->widget(2)->findChild<QLineEdit *>("printerHost") != 0);
+    QVERIFY(tabs->widget(3)->findChild<QLineEdit *>("cardReaderPort") != 0);
+    QVERIFY(tabs->widget(4)->findChild<QCheckBox *>("showNoReceiptCheck") != 0);               // Options
+    QVERIFY(tabs->widget(5)->findChild<QListWidget *>("changeLog") != 0);                      // Maintenance: the log and the resets
+    QVERIFY(tabs->widget(5)->findChild<QPushButton *>("cleanDataButton") != 0);
+    QVERIFY(tabs->widget(5)->findChild<QPushButton *>("clearConfigButton") != 0);
+
+    QPushButton *cleanData = window.findChild<QPushButton *>("cleanDataButton");
+    QPushButton *clearConfig = window.findChild<QPushButton *>("clearConfigButton");
+    QSignalSpy restart(&window, SIGNAL(restartRequested()));
+
+    // the first press only arms the button
+    cleanData->click();
+    QCOMPARE(cleanData->text(), QString("Press again to confirm"));
+    QCOMPARE(countRows("tickets"), 1);
+    // pressing the other one first disarms it
+    clearConfig->click();
+    QCOMPARE(cleanData->text(), QString("Clean Data"));
+    QCOMPARE(clearConfig->text(), QString("Press again to confirm"));
+    QVERIFY(QFileInfo(Settings::deviceFile()).exists());
+
+    // Clear Config: the second press erases the machine settings and asks for a restart
+    clearConfig->click();
+    QVERIFY(!QFileInfo(Settings::deviceFile()).exists());
+    QCOMPARE(countRows("tickets"), 1);
+    QVERIFY(!clearConfig->isEnabled());
+    QVERIFY(window.findChild<QLabel *>("machineStatus")->text().contains("machine settings were erased"));
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Reset: - -> clear config"));
+    QVERIFY(restart.wait(4000));
+    QVERIFY(window.restartWanted());
+}
 void Smart210Test::theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen()
 {
     setUpLoggedInTerminalWithAPin();
@@ -9501,8 +9807,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 4);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger
-    QCOMPARE(Migrator::version(db), 4);
+    QCOMPARE(Migrator::bundled().size(), 5);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock
+    QCOMPARE(Migrator::version(db), 5);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables

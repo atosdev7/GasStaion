@@ -101,7 +101,9 @@ public:
     };
 
     static QList<SpecStock> specs(QSqlDatabase db, const QString &fuelType);
-    static QList<Stock> stock(QSqlDatabase db, const QString &fuelType, int spec); // by barcode, lowest first
+    // limit > 0: only that many, the lowest barcodes (a screen that shows the first ticket in stock, or the end of a short run, does not need all of
+    // them: a big stock holds a hundred thousand).
+    static QList<Stock> stock(QSqlDatabase db, const QString &fuelType, int spec, int limit = -1); // by barcode, lowest first
 
     // Takes `quantity` tickets out of the stock list: from the serial `start` (all of the run must be in stock) or, with start 0, the lowest.
     // Not ok (and the list unchanged) when they are not there.

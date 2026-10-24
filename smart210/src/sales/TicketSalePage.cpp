@@ -132,8 +132,9 @@ void TicketSalePage::reload()
     // the fuel types that have tickets in stock
     fuel_->clear();
     QSqlQuery fuels(db_);
-    fuels.exec("SELECT DISTINCT t.fuel_type, COALESCE(f.name, t.fuel_type) FROM tickets t LEFT JOIN fuel_types f ON f.fuel_type = t.fuel_type "
-               "WHERE t.status = 0 AND t.spec IS NOT NULL ORDER BY 2");
+    // (asked of each fuel type, one look at the index each: a DISTINCT over the tickets would read every ticket in stock)
+    fuels.exec("SELECT f.fuel_type, f.name FROM fuel_types f WHERE EXISTS (SELECT 1 FROM tickets t WHERE t.fuel_type = f.fuel_type AND t.status = 0 "
+               "AND t.spec IS NOT NULL) ORDER BY 2");
     while (fuels.next()) {
         fuel_->addItem(fuels.value(1).toString(), fuels.value(0).toString());
     }
@@ -193,7 +194,8 @@ void TicketSalePage::fillStart()
         QMap<int, QList<TicketSale::Stock> > left;
         TicketSale::resolve(db_, fuelType(), itemList_, &left);
         const int spec = spec_->itemData(spec_->currentIndex()).toInt();
-        const QList<TicketSale::Stock> inStock = left.contains(spec) ? left.value(spec) : TicketSale::stock(db_, fuelType(), spec);
+        // without items of this spec above, only the first ticket in stock is needed, not the whole stock
+        const QList<TicketSale::Stock> inStock = left.contains(spec) ? left.value(spec) : TicketSale::stock(db_, fuelType(), spec, 1);
         if (!inStock.isEmpty()) {
             start_->setText(QString::number(inStock.first().serial()));
         }
@@ -212,7 +214,8 @@ void TicketSalePage::showEnd()
         if (item.quantity > 0 && spec_->count() > 0) {
             QMap<int, QList<TicketSale::Stock> > left;
             TicketSale::resolve(db_, fuelType(), itemList_, &left);
-            QList<TicketSale::Stock> inStock = left.contains(item.spec) ? left.value(item.spec) : TicketSale::stock(db_, fuelType(), item.spec);
+            // the lowest ones in stock: only as many as the count says
+            QList<TicketSale::Stock> inStock = left.contains(item.spec) ? left.value(item.spec) : TicketSale::stock(db_, fuelType(), item.spec, item.quantity);
             const TicketSale::Taken taken = TicketSale::take(&inStock, item.quantity, 0);
             if (taken.ok) {
                 end_->setText(QString::number(taken.end));

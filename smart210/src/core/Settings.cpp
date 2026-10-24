@@ -37,6 +37,8 @@ const char *const LastDownloadAt = "last_download_at";
 const char *const SessionUserId = "session_user_id";
 const char *const RestoreHandled = "restore_handled";
 const char *const ClockOffsetSeconds = "clock_offset_seconds";
+const char *const UtcOffsetSeconds = "utc_offset_seconds";
+const char *const TimeZoneName = "timezone_name";
 }
 
 namespace {

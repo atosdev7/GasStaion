@@ -1,6 +1,7 @@
 #include "SetupFlow.h"
 
 #include "ApiReply.h"
+#include "Clock.h"
 #include "Settings.h"
 
 SetupFlow::SetupFlow(Settings *settings, QObject *parent)
@@ -74,6 +75,10 @@ void SetupFlow::pingFinished()
         emit connectionTested(false, tr("The server address could not be saved on this device."));
 
         return;
+    }
+
+    if (reply->data().contains("utc_offset_seconds")) {
+        Clock::keepTimeZone(*settings_, reply->data().value("utc_offset_seconds").toInt(), reply->data().value("timezone").toString());
     }
 
     emit connectionTested(true, tr("Connected as %1. Server time %2.")

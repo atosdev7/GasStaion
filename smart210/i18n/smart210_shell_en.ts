@@ -19,27 +19,37 @@
         <translation>Supplies</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="518"/>
+        <location filename="../src/shell/MainWindow.cpp" line="503"/>
+        <source>Time zone: not known yet</source>
+        <translation>Time zone: not known yet</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/MainWindow.cpp" line="503"/>
+        <source>Time zone: %1</source>
+        <translation>Time zone: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/MainWindow.cpp" line="523"/>
         <source>Cashier: %1</source>
         <translation>Cashier: %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="606"/>
+        <location filename="../src/shell/MainWindow.cpp" line="611"/>
         <source>The remainder ticket was sent to the printer.</source>
         <translation>The remainder ticket was sent to the printer.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="609"/>
+        <location filename="../src/shell/MainWindow.cpp" line="614"/>
         <source>The remainder ticket %1 was not printed: %2 Print it on the Remainders screen.</source>
         <translation>The remainder ticket %1 was not printed: %2 Print it on the Remainders screen.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="669"/>
+        <location filename="../src/shell/MainWindow.cpp" line="680"/>
         <source>The clock differs from the server&apos;s by %1 s.</source>
         <translation>The clock differs from the server&apos;s by %1 s.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="496"/>
+        <location filename="../src/shell/MainWindow.cpp" line="499"/>
         <source>Server %1:%2, this terminal is %3</source>
         <translation>Server %1:%2, this terminal is %3</translation>
     </message>
@@ -49,12 +59,12 @@
         <translation>Manual input</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="577"/>
+        <location filename="../src/shell/MainWindow.cpp" line="582"/>
         <source>%1 not printed</source>
         <translation>%1 not printed</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="607"/>
+        <location filename="../src/shell/MainWindow.cpp" line="612"/>
         <source>The ticket %1 was sent to the printer.</source>
         <translation>The ticket %1 was sent to the printer.</translation>
     </message>
@@ -64,22 +74,22 @@
         <translation>Sessions</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="610"/>
+        <location filename="../src/shell/MainWindow.cpp" line="615"/>
         <source>The ticket %1 was not printed: %2</source>
         <translation>The ticket %1 was not printed: %2</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="663"/>
+        <location filename="../src/shell/MainWindow.cpp" line="674"/>
         <source>The last download failed, it will be tried again: %1</source>
         <translation>The last download failed, it will be tried again: %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="665"/>
+        <location filename="../src/shell/MainWindow.cpp" line="676"/>
         <source>No download yet.</source>
         <translation>No download yet.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="665"/>
+        <location filename="../src/shell/MainWindow.cpp" line="676"/>
         <source>Last download: %1</source>
         <translation>Last download: %1</translation>
     </message>
@@ -117,12 +127,12 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/shell/main.cpp" line="40"/>
+        <location filename="../src/shell/main.cpp" line="42"/>
         <source>Gas Station Cashier</source>
         <translation>Gas Station Cashier</translation>
     </message>
     <message>
-        <location filename="../src/shell/main.cpp" line="41"/>
+        <location filename="../src/shell/main.cpp" line="43"/>
         <source>The database cannot be opened.
 %1
 %2</source>
@@ -131,7 +141,7 @@
 %2</translation>
     </message>
     <message>
-        <location filename="../src/shell/main.cpp" line="48"/>
+        <location filename="../src/shell/main.cpp" line="52"/>
         <source>Database: version %1, journal %2</source>
         <translation>Database: version %1, journal %2</translation>
     </message>

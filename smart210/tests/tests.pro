@@ -36,6 +36,7 @@ SOURCES += \
     ../src/ticket_debt/LoanSettlement.cpp \
     ../src/login/LoginPage.cpp \
     ../src/settings/MachineConfig.cpp \
+    ../src/settings/AppReset.cpp \
     ../src/settings/MachineConfigPage.cpp \
     ../src/shell/MainWindow.cpp \
     ../src/core/Migrator.cpp \
@@ -114,6 +115,7 @@ HEADERS += \
     ../src/ticket_debt/LoanSettlement.h \
     ../src/login/LoginPage.h \
     ../src/settings/MachineConfig.h \
+    ../src/settings/AppReset.h \
     ../src/settings/MachineConfigPage.h \
     ../src/shell/MainWindow.h \
     ../src/core/Migrator.h \

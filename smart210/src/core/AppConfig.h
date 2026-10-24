@@ -22,7 +22,8 @@
 //   logo             = the logo picture (default: logo.png next to the program); ticketFont = a font file for the ticket text
 //   printEnd         = cut | label | none: what the printer does after a ticket
 //   ticketTitle_sale, ticketTitle_self, ticketTitle_other, ticketTitle_ticket_loan, ticketTitle_remainder = the long title of each ticket
-//   setSystemClock   = true | false  set the board's clock from the server's (needs root; default false: only warn)
+//   setSystemClock   = true | false  set the board's clock from the server's, in UTC, and write it to the RTC chip (needs root; default true for a Linux
+//                                    program that runs as root, else false: only warn)
 //   supplierScannerName = the exact name of the supplier's barcode scanner in /proc/bus/input/devices (default SCANNER SCANNER; empty: none)
 //   supplierScannerPhys = a part of its USB port (the Phys line, for example usb-s5p-ehci-1.1), to tell it from a scanner of the same name; default empty
 //   themeFile        = a theme.qss on disk to use instead of the built-in one; it is read again whenever it is saved (to try a new look without a build)

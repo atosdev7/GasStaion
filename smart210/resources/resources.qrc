@@ -20,6 +20,7 @@
         <file alias="002_card_transactions.sql">migrations/002_card_transactions.sql</file>
         <file alias="003_remainder_comment.sql">migrations/003_remainder_comment.sql</file>
         <file alias="004_card_transaction_order.sql">migrations/004_card_transaction_order.sql</file>
+        <file alias="005_ticket_stock_index.sql">migrations/005_ticket_stock_index.sql</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="sales.png">icons/sales.png</file>

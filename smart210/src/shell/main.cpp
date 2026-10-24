@@ -1,8 +1,10 @@
 #include <QApplication>
 #include <QDebug>
 #include <QMessageBox>
+#include <QProcess>
 
 #include "AppConfig.h"
+#include "Clock.h"
 #include "Database.h"
 #include "Fonts.h"
 #include "MainWindow.h"
@@ -43,6 +45,8 @@ int main(int argc, char *argv[])
         return 1;
     }
     QSqlDatabase db = QSqlDatabase::database(Database::DefaultConnection);
+    Settings clockSettings(db);
+    Clock::applyStoredTimeZone(clockSettings); // the station's time zone of the last download, before any screen shows a time
 
     MainWindow window(config, fontFamily,
                       QObject::tr("Database: version %1, journal %2")
@@ -55,8 +59,14 @@ int main(int argc, char *argv[])
         window.show();
     }
 
+    // Clean Data / Clear Config: the program starts again (after the database is closed, so that nothing is held open)
+    QObject::connect(&window, SIGNAL(restartRequested()), &app, SLOT(quit()));
+
     const int result = app.exec();
     Database::close(Database::DefaultConnection);
+    if (window.restartWanted()) {
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), QCoreApplication::arguments().mid(1));
+    }
 
     return result;
 }

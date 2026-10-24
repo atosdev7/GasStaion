@@ -1,5 +1,7 @@
 #include "AppConfig.h"
 
+#include "Clock.h"
+
 #include <QCoreApplication>
 #include <QSettings>
 #include <QStringList>
@@ -25,7 +27,7 @@ AppConfig::AppConfig()
     deviceFile_ = settings.value("deviceFile").toString();
     changeLogFile_ = dataDir_ + "/changes.log";
     downloadMinutes_ = 1; // the terminal downloads every minute (fixed)
-    setSystemClock_ = settings.value("setSystemClock", false).toBool();
+    setSystemClock_ = settings.value("setSystemClock", Clock::mayDefaultToSettingTheClock()).toBool();
     boardLink_ = settings.value("boards", true).toBool();
     hangulInput_ = settings.value("hangul", true).toBool();
     supplierScannerName_ = settings.value("supplierScannerName", "SCANNER SCANNER").toString().trimmed();

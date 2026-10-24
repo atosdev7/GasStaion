@@ -76,7 +76,14 @@ public:
     void setDownloadIntervalMs(int milliseconds);
     void setUploadIntervalMs(int milliseconds);
 
+    bool restartWanted() const { return restartWanted_; } // main() starts the program again when Machine Config reset it
+
+signals:
+    // Clean Data or Clear Config was done on Machine Config: what the program holds in memory is not right any more, main() starts it again.
+    void restartRequested();
+
 private slots:
+    void machineWasReset();
     void updateClock();
     void startFirstDownload();
     void autoDownload();
@@ -153,6 +160,7 @@ private:
     RemainderTicketsPage *remainderPage_;
     TicketSalePage *ticketPage_;
     LoanSettlePage *loanPage_;
+    bool restartWanted_;
     QString about_;      // version, language, font, database: shown on the Settings page
     bool boardLink_;     // the converter and the scanner are listened to
     QTimer *timer_;

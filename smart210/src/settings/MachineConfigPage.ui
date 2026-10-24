@@ -79,30 +79,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="reviewOptionsBox">
-         <property name="title"><string>Review screen</string></property>
-         <layout class="QHBoxLayout" name="reviewOptionsLayout" stretch="1,0">
-          <property name="leftMargin"><number>9</number></property>
-          <property name="topMargin"><number>9</number></property>
-          <property name="rightMargin"><number>9</number></property>
-          <property name="bottomMargin"><number>9</number></property>
-          <property name="spacing"><number>6</number></property>
-          <item>
-           <widget class="QCheckBox" name="showNoReceiptCheck">
-            <property name="text"><string>Show the sales without a receipt</string></property>
-            <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="saveReviewOptionsButton">
-            <property name="text"><string>Save</string></property>
-            <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <spacer name="spacer1">
          <property name="orientation"><enum>Qt::Vertical</enum></property>
          <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
@@ -111,78 +87,39 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="machinePrinterTab">
-      <attribute name="title"><string>Printer</string></attribute>
-      <layout class="QVBoxLayout" name="printerTabLayout">
-       <property name="leftMargin"><number>9</number></property>
-       <property name="topMargin"><number>9</number></property>
-       <property name="rightMargin"><number>9</number></property>
-       <property name="bottomMargin"><number>9</number></property>
-       <property name="spacing"><number>6</number></property>
-       <item>
-        <layout class="QFormLayout" name="printerForm">
-         <property name="leftMargin"><number>0</number></property>
-         <property name="topMargin"><number>0</number></property>
-         <property name="rightMargin"><number>0</number></property>
-         <property name="bottomMargin"><number>0</number></property>
-         <property name="spacing"><number>6</number></property>
-         <item row="0" column="0">
-          <widget class="QLabel" name="printerHostLabel">
-           <property name="text"><string>Printer address</string></property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="printerHost">
-           <property name="placeholderText"><string>For example 192.168.1.20</string></property>
-           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="printerPortLabel">
-           <property name="text"><string>Port</string></property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLineEdit" name="printerPort">
-           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QPushButton" name="savePrinterButton">
-         <property name="text"><string>Save printer</string></property>
-         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="checkPrinterButton">
-         <property name="text"><string>Check printer</string></property>
-         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="printerStatus">
-         <property name="wordWrap"><bool>true</bool></property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="spacer2">
-         <property name="orientation"><enum>Qt::Vertical</enum></property>
-         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
-         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-        </spacer>
-       </item>
-      </layout>
-     </widget>
      <widget class="QWidget" name="machineNozzleTab">
-      <attribute name="title"><string>Nozzles</string></attribute>
+      <attribute name="title"><string>Dispensers</string></attribute>
       <layout class="QVBoxLayout" name="nozzleTabLayout">
        <property name="leftMargin"><number>9</number></property>
        <property name="topMargin"><number>9</number></property>
        <property name="rightMargin"><number>9</number></property>
        <property name="bottomMargin"><number>9</number></property>
        <property name="spacing"><number>6</number></property>
+       <item>
+        <layout class="QHBoxLayout" name="converterRow">
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <property name="spacing"><number>6</number></property>
+         <item>
+          <widget class="QLabel" name="converterPortLabel">
+           <property name="text"><string>Converter port (this terminal listens)</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="converterPort">
+           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="saveConverterPortButton">
+           <property name="text"><string>Save port</string></property>
+           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <layout class="QHBoxLayout" name="upperRow" stretch="0,1">
          <property name="leftMargin"><number>0</number></property>
@@ -298,30 +235,69 @@
          </item>
         </layout>
        </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="machinePrinterTab">
+      <attribute name="title"><string>Printer</string></attribute>
+      <layout class="QVBoxLayout" name="printerTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
        <item>
-        <layout class="QHBoxLayout" name="converterRow">
+        <layout class="QFormLayout" name="printerForm">
          <property name="leftMargin"><number>0</number></property>
          <property name="topMargin"><number>0</number></property>
          <property name="rightMargin"><number>0</number></property>
          <property name="bottomMargin"><number>0</number></property>
          <property name="spacing"><number>6</number></property>
-         <item>
-          <widget class="QLabel" name="converterPortLabel">
-           <property name="text"><string>Converter port (this terminal listens)</string></property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="printerHostLabel">
+           <property name="text"><string>Printer address</string></property>
           </widget>
          </item>
-         <item>
-          <widget class="QLineEdit" name="converterPort">
-           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="printerHost">
+           <property name="placeholderText"><string>For example 192.168.1.20</string></property>
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
           </widget>
          </item>
-         <item>
-          <widget class="QPushButton" name="saveConverterPortButton">
-           <property name="text"><string>Save port</string></property>
-           <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+         <item row="1" column="0">
+          <widget class="QLabel" name="printerPortLabel">
+           <property name="text"><string>Port</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="printerPort">
+           <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
           </widget>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="savePrinterButton">
+         <property name="text"><string>Save printer</string></property>
+         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="checkPrinterButton">
+         <property name="text"><string>Check printer</string></property>
+         <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="printerStatus">
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacer2">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
        </item>
       </layout>
      </widget>
@@ -426,9 +402,117 @@
        </item>
       </layout>
      </widget>
-     <widget class="QListWidget" name="changeLog">
-      <property name="maximumSize"><size><width>16777215</width><height>140</height></size></property>
-      <attribute name="title"><string>Latest changes</string></attribute>
+     <widget class="QWidget" name="machineOptionsTab">
+      <attribute name="title"><string>Options</string></attribute>
+      <layout class="QVBoxLayout" name="optionsTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QGroupBox" name="reviewOptionsBox">
+         <property name="title"><string>Review screen</string></property>
+         <layout class="QHBoxLayout" name="reviewOptionsLayout" stretch="1,0">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QCheckBox" name="showNoReceiptCheck">
+            <property name="text"><string>Show the sales without a receipt</string></property>
+            <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveReviewOptionsButton">
+            <property name="text"><string>Save</string></property>
+            <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="spacerOptions">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="machineMaintenanceTab">
+      <attribute name="title"><string>Maintenance</string></attribute>
+      <layout class="QVBoxLayout" name="maintenanceTabLayout">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QLabel" name="changeLogTitle">
+         <property name="text"><string>Latest changes</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="changeLog"/>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="resetBox">
+         <property name="title"><string>Reset</string></property>
+         <layout class="QVBoxLayout" name="resetBoxLayout">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <layout class="QHBoxLayout" name="cleanDataRow" stretch="1,0">
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLabel" name="cleanDataHint">
+              <property name="text"><string>Clean Data erases everything this terminal keeps: tickets, sales, supplies, cards and the cashier's session. The machine settings stay. The terminal then downloads everything again. It is refused while records wait for the upload.</string></property>
+              <property name="wordWrap"><bool>true</bool></property>
+              <property name="sub" stdset="0"><bool>true</bool></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="cleanDataButton">
+              <property name="text"><string>Clean Data</string></property>
+              <property name="minimumSize"><size><width>200</width><height>48</height></size></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="clearConfigRow" stretch="1,0">
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLabel" name="clearConfigHint">
+              <property name="text"><string>Clear Config erases the machine settings: the server address, the printer, the converter port, the tanks of the nozzles, the card reader, the upload mode and the options. The data stays. The terminal then asks for the server again.</string></property>
+              <property name="wordWrap"><bool>true</bool></property>
+              <property name="sub" stdset="0"><bool>true</bool></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="clearConfigButton">
+              <property name="text"><string>Clear Config</string></property>
+              <property name="minimumSize"><size><width>200</width><height>48</height></size></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="resetInfo">
+            <property name="wordWrap"><bool>true</bool></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>

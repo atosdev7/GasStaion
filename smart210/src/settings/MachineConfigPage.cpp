@@ -1,5 +1,6 @@
 #include "MachineConfigPage.h"
 
+#include "AppReset.h"
 #include "AutoUpload.h"
 #include "BoardProtocol.h"
 #include "CardReader.h"
@@ -24,6 +25,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QTimer>
 
 namespace {
 
@@ -50,6 +52,10 @@ QString subject(const QString &what)
         return QObject::tr("Card reader");
     }
 
+    if (what == "reset") {
+        return QObject::tr("Reset");
+    }
+
     if (what == "upload mode") {
         return QObject::tr("Upload");
     }
@@ -66,7 +72,7 @@ QString subject(const QString &what)
 MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Session *session, Settings *settings, PrintService *printer,
                                      NozzleConfigSync *nozzles, QWidget *parent)
     : QWidget(parent), ui_(new Ui::MachineConfigPage), config_(config), session_(session), settings_(settings), printer_(printer), nozzles_(nozzles),
-      checking_(false), selectedNumber_(0)
+      checking_(false), armedReset_(0), resetTimer_(0), selectedNumber_(0)
 {
     ui_->setupUi(this);
 
@@ -146,6 +152,12 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(uploadMode_, SIGNAL(activated(int)), this, SLOT(uploadModePicked()));
     connect(ui_->saveUploadModeButton, SIGNAL(clicked()), this, SLOT(saveUploadMode()));
     connect(ui_->saveReviewOptionsButton, SIGNAL(clicked()), this, SLOT(saveReviewOptions()));
+    connect(ui_->cleanDataButton, SIGNAL(clicked()), this, SLOT(cleanDataPressed()));
+    connect(ui_->clearConfigButton, SIGNAL(clicked()), this, SLOT(clearConfigPressed()));
+    resetTimer_ = new QTimer(this);
+    resetTimer_->setSingleShot(true);
+    resetTimer_->setInterval(6000);
+    connect(resetTimer_, SIGNAL(timeout()), this, SLOT(disarmReset()));
     connect(ui_->sendNozzleButton, SIGNAL(clicked()), this, SLOT(sendNozzle()));
     connect(ui_->readNozzlesButton, SIGNAL(clicked()), this, SLOT(readNozzles()));
     connect(table_, SIGNAL(itemSelectionChanged()), this, SLOT(rowSelected()));
@@ -170,6 +182,8 @@ MachineConfigPage::~MachineConfigPage()
 
 void MachineConfigPage::reload()
 {
+    disarmReset();
+    showResetBox();
     server_->reload();
     serverBefore_ = settings_->value(SettingKey::ServerHost) + ":" + QString::number(settings_->intValue(SettingKey::ServerPort, 80));
 
@@ -596,6 +610,88 @@ void MachineConfigPage::showStatus(const QString &message, bool ok)
     status_->setText(message);
 }
 
+// The records that wait for the upload decide whether Clean Data may be used at all: they exist nowhere else.
+void MachineConfigPage::showResetBox()
+{
+    const int waits = AppReset::waiting(settings_->database());
+    ui_->cleanDataButton->setEnabled(waits == 0);
+    Theme::setState(ui_->resetInfo, waits > 0 ? "warning" : "ok");
+    ui_->resetInfo->setText(waits > 0 ? tr("%1 records wait for the upload: Clean Data is possible after they are uploaded (Review screen).").arg(waits)
+                                      : tr("Nothing waits for the upload."));
+}
+
+// The first press of a reset button arms it (it asks for the second press, and gives up after a few seconds); the second press does it.
+void MachineConfigPage::armReset(int which)
+{
+    disarmReset();
+    armedReset_ = which;
+    QPushButton *button = which == 1 ? ui_->cleanDataButton : ui_->clearConfigButton;
+    button->setText(tr("Press again to confirm"));
+    Theme::setState(button, "error");
+    showStatus(which == 1 ? tr("Press Clean Data again to erase all the data of this terminal.") : tr("Press Clear Config again to erase the machine settings."), false);
+    resetTimer_->start();
+}
+
+void MachineConfigPage::disarmReset()
+{
+    armedReset_ = 0;
+    resetTimer_->stop();
+    ui_->cleanDataButton->setText(tr("Clean Data"));
+    ui_->clearConfigButton->setText(tr("Clear Config"));
+    Theme::setState(ui_->cleanDataButton, "");
+    Theme::setState(ui_->clearConfigButton, "");
+}
+
+void MachineConfigPage::cleanDataPressed()
+{
+    if (armedReset_ != 1) {
+        armReset(1);
+
+        return;
+    }
+    disarmReset();
+
+    QString why;
+    if (!AppReset::cleanData(settings_->database(), &why)) {
+        showStatus(why, false);
+        showResetBox();
+
+        return;
+    }
+    config_->logChange("reset", QString(), "clean data", session_->userId());
+    fillLog();
+    showStatus(tr("The data was erased. The program starts again."), true);
+    finishReset();
+}
+
+void MachineConfigPage::clearConfigPressed()
+{
+    if (armedReset_ != 2) {
+        armReset(2);
+
+        return;
+    }
+    disarmReset();
+
+    QString why;
+    if (!AppReset::clearConfig(settings_->database(), &why)) {
+        showStatus(why, false);
+
+        return;
+    }
+    config_->logChange("reset", QString(), "clear config", session_->userId());
+    fillLog();
+    showStatus(tr("The machine settings were erased. The program starts again."), true);
+    finishReset();
+}
+
+// Nothing in memory is right after a reset: the buttons are shut, and after a moment (to read the message) the program is asked to start again.
+void MachineConfigPage::finishReset()
+{
+    ui_->cleanDataButton->setEnabled(false);
+    ui_->clearConfigButton->setEnabled(false);
+    QTimer::singleShot(1500, this, SIGNAL(restartRequested()));
+}
 // The address of the server was changed and tested: it is saved, and the change is logged.
 void MachineConfigPage::serverConfigured()
 {

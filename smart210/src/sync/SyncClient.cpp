@@ -89,11 +89,25 @@ void SyncClient::replyFinished()
         break;
 
     case Config: {
-        // The config comes with the server's time: keep how far this terminal's clock is from it.
-        const QString serverTime = reply->data().value("server_time").toString();
-        const qint64 offset = Clock::record(settings, serverTime, QDateTime::currentDateTime());
-        if (autoSetClock_ && Clock::isOff(offset) && Clock::setSystemClock(QDateTime::fromString(serverTime, "yyyy-MM-dd HH:mm:ss"))) {
-            Clock::record(settings, serverTime, QDateTime::currentDateTime());
+        // The config comes with the server's time. From it: the station's time zone (applied at once, and again at the next start), and how far
+        // this terminal's clock is from the server's, which is set right when the program may (setSystemClock) and the clock is more than a few
+        // seconds off. An older server sends only its local time: then it is compared as it is.
+        const QJsonObject time = reply->data();
+        const QString serverUtc = time.value("server_time_utc").toString();
+        if (time.contains("utc_offset_seconds")) {
+            Clock::keepTimeZone(settings, time.value("utc_offset_seconds").toInt(), time.value("timezone").toString());
+        }
+        if (Clock::utcOf(serverUtc).isValid()) {
+            const qint64 offset = Clock::recordUtc(settings, serverUtc, QDateTime::currentDateTimeUtc());
+            if (autoSetClock_ && Clock::needsSetting(offset) && Clock::setSystemClockUtc(Clock::utcOf(serverUtc))) {
+                Clock::recordUtc(settings, serverUtc, QDateTime::currentDateTimeUtc());
+            }
+        } else {
+            const QString serverTime = time.value("server_time").toString();
+            const qint64 offset = Clock::record(settings, serverTime, QDateTime::currentDateTime());
+            if (autoSetClock_ && Clock::isOff(offset) && Clock::setSystemClock(QDateTime::fromString(serverTime, "yyyy-MM-dd HH:mm:ss"))) {
+                Clock::record(settings, serverTime, QDateTime::currentDateTime());
+            }
         }
 
         if (!store_.applyConfig(reply->data(), &error)) {

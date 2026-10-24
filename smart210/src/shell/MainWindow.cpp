@@ -54,7 +54,7 @@
 
 MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const QString &databaseInfo, QSqlDatabase db,
                        QWidget *parent)
-    : QWidget(parent), db_(db), settings_(new Settings(db)), session_(new Session(db)), machineConfig_(new MachineConfig(db)), printingRemainder_(false)
+    : QWidget(parent), db_(db), settings_(new Settings(db)), session_(new Session(db)), machineConfig_(new MachineConfig(db)), printingRemainder_(false), restartWanted_(false)
 {
     setWindowTitle(tr("Gas Station Cashier"));
     themeFile_ = config.themeFile();
@@ -146,14 +146,16 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     content->addWidget(loanPage_);
     content->addWidget(reviewPage_);
     content->addWidget(settingsPage_);
-    content->addWidget(pinPage_);
-    content->addWidget(machinePage_);
 
+    // The PIN and Machine Config are not part of the cashier's program: they have the whole window, no sidebar, no header, no footer, and are reached from
+    // the login screen only (nobody is logged in then).
     pages_ = new QStackedWidget(this);
     pages_->addWidget(setupPage_);
     pages_->addWidget(gatePage_);
     pages_->addWidget(loginPage_);
     pages_->addWidget(shell_);
+    pages_->addWidget(pinPage_);
+    pages_->addWidget(machinePage_);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -167,6 +169,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     connect(pinPage_, SIGNAL(accepted()), this, SLOT(showMachineConfig()));
     connect(pinPage_, SIGNAL(cancelled()), this, SLOT(showSettingsAgain()));
     connect(machinePage_, SIGNAL(backRequested()), this, SLOT(showSettingsAgain()));
+    connect(machinePage_, SIGNAL(restartRequested()), this, SLOT(machineWasReset()));
     connect(shell_->sidebar(), SIGNAL(pageRequested(QString)), this, SLOT(sidebarClicked(QString)));
     connect(salesPage_->tabs(), SIGNAL(currentChanged(int)), this, SLOT(tabChanged()));
     connect(supplyPart_->tabs(), SIGNAL(currentChanged(int)), this, SLOT(tabChanged()));
@@ -240,6 +243,12 @@ QString MainWindow::currentPage() const
     if (page == loginPage_) {
         return "login";
     }
+    if (page == pinPage_) {
+        return "pin";
+    }
+    if (page == machinePage_) {
+        return "machine";
+    }
 
     QWidget *part = shell_->content()->currentWidget();
     if (part == salesPage_) {
@@ -265,12 +274,6 @@ QString MainWindow::currentPage() const
     }
     if (part == settingsPage_) {
         return "settings";
-    }
-    if (part == pinPage_) {
-        return "pin";
-    }
-    if (part == machinePage_) {
-        return "machine";
     }
 
     return QString();
@@ -496,15 +499,18 @@ void MainWindow::showPage(const QString &name)
         settingsPage_->setAbout(about_ + "\n" + tr("Server %1:%2, this terminal is %3")
                                              .arg(settings_->value(SettingKey::ServerHost))
                                              .arg(settings_->intValue(SettingKey::ServerPort))
-                                             .arg(settings_->value(SettingKey::DeviceName)));
+                                             .arg(settings_->value(SettingKey::DeviceName))
+                                             + "\n" + (Clock::zoneText(*settings_).isEmpty() ? tr("Time zone: not known yet") : tr("Time zone: %1").arg(Clock::zoneText(*settings_))));
     } else if (name == "pin") {
-        part = pinPage_;
-        key = "settings";
         pinPage_->reset();
+        pages_->setCurrentWidget(pinPage_); // outside the shell: the whole window
+
+        return;
     } else if (name == "machine") {
-        part = machinePage_;
-        key = "settings";
         machinePage_->reload();
+        pages_->setCurrentWidget(machinePage_);
+
+        return;
     } else {
         // Sales: the tab named, or the one that was open last
         part = salesPage_;
@@ -514,7 +520,6 @@ void MainWindow::showPage(const QString &name)
         reloadTab(salesPage_);
     }
 
-    // Machine Config can be opened from the login screen: until someone logs in, no other part of the program can be reached
     shell_->header()->setCashier(session_->isLoggedIn() ? tr("Cashier: %1").arg(session_->userName()) : QString());
     shell_->sidebar()->setEnabled(session_->isLoggedIn());
     shell_->content()->setCurrentWidget(part);
@@ -638,6 +643,12 @@ void MainWindow::showMachineConfig()
 }
 
 // Back from the PIN or from Machine Config: to Settings, or to the login when Machine Config was opened from there.
+void MainWindow::machineWasReset()
+{
+    restartWanted_ = true;
+    emit restartRequested();
+}
+
 void MainWindow::showSettingsAgain()
 {
     if (session_->isLoggedIn()) {

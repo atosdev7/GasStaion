@@ -98,15 +98,18 @@ QList<TicketSale::SpecStock> TicketSale::specs(QSqlDatabase db, const QString &f
     return list;
 }
 
-QList<TicketSale::Stock> TicketSale::stock(QSqlDatabase db, const QString &fuelType, int spec)
+QList<TicketSale::Stock> TicketSale::stock(QSqlDatabase db, const QString &fuelType, int spec, int limit)
 {
     QList<Stock> list;
 
     QSqlQuery query(db);
-    query.prepare("SELECT barcode, amount_kg FROM tickets WHERE fuel_type = ? AND spec = ? AND status = ? ORDER BY barcode");
+    query.prepare("SELECT barcode, amount_kg FROM tickets WHERE fuel_type = ? AND spec = ? AND status = ? ORDER BY barcode" + QString(limit > 0 ? " LIMIT ?" : ""));
     query.addBindValue(fuelType);
     query.addBindValue(spec);
     query.addBindValue(int(TicketStatus::Publish));
+    if (limit > 0) {
+        query.addBindValue(limit);
+    }
     if (query.exec()) {
         while (query.next()) {
             Stock one;
