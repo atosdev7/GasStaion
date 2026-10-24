@@ -239,4 +239,71 @@ class LoanTest extends TestCase
         $this->assertStringContainsString('fuel_type=D&amp;page=2', $first->getContent());
         $this->assertCount(2, $this->as('accountant')->get('/loans?fuel_type=D&page=2')->viewData('loans'));
     }
-}
+
+    public function testAWrongSettlementIsUndoneByAReversalAndTheTicketGoesBackToTheCustomer()
+    {
+        $loan = TicketLoan::forceCreate(['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 50, 'user_id' => 1]);
+        $this->soldTicket('0000000000000001', 'D', 0); // 5 kg
+        $this->as('accountant')->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001']);
+        $settlement = TicketLoanSettlement::first();
+        $this->assertEquals(5, $loan->fresh()->settled_amount_kg);
+
+        $this->post('/loans/settlements/' . $settlement->id . '/reverse')->assertRedirect('/loans')->assertSessionHas('status');
+
+        // the settlement is kept, its reversal is a line of its own: -5 kg, today, for the same loan and ticket
+        $this->assertEquals(5, $settlement->fresh()->amount_kg);
+        $reversal = TicketLoanSettlement::where('reverses_settlement_id', $settlement->id)->first();
+        $this->assertEquals(-5, $reversal->amount_kg);
+        $this->assertSame($loan->id, $reversal->loan_id);
+        $this->assertSame('0000000000000001', $reversal->ticket_barcode);
+        $this->assertSame(today()->toDateString(), $reversal->date);
+        $this->assertSame(2, TicketLoanSettlement::count());
+
+        // the loan owes the 5 kg again, and the ticket is sold again (the customer has it back)
+        $this->assertEquals(0, $loan->fresh()->settled_amount_kg);
+        $ticket = Ticket::find('0000000000000001');
+        $this->assertSame(config('ticket_statuses.sale'), $ticket->status);
+        $this->assertNull($ticket->supply_date);
+
+        // the same ticket can settle again
+        $this->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001'])->assertRedirect('/loans');
+        $this->assertEquals(5, $loan->fresh()->settled_amount_kg);
+
+        // the page lists both lines
+        $page = $this->get('/loans')->assertOk();
+        $page->assertSee('Tickets surrendered')->assertSee('-5.00');
+    }
+
+    public function testASettlementCannotBeReversedTwiceOrAfterItsTicketWasUsed()
+    {
+        $loan = TicketLoan::forceCreate(['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 50, 'user_id' => 1]);
+        $this->soldTicket('0000000000000001', 'D', 0);
+        $this->as('accountant')->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001']);
+        $settlement = TicketLoanSettlement::first();
+
+        // the ticket was supplied at a nozzle since: it cannot go back
+        Ticket::where('barcode', '0000000000000001')->update(['supplement_id' => 'a-supplement']);
+        $this->post('/loans/settlements/' . $settlement->id . '/reverse')->assertSessionHasErrors('settlement');
+        $this->assertSame(1, TicketLoanSettlement::count());
+        Ticket::where('barcode', '0000000000000001')->update(['supplement_id' => null]);
+
+        $this->post('/loans/settlements/' . $settlement->id . '/reverse')->assertSessionHasNoErrors();
+        $this->post('/loans/settlements/' . $settlement->id . '/reverse')->assertSessionHasErrors('settlement');
+        $reversal = TicketLoanSettlement::where('reverses_settlement_id', $settlement->id)->first();
+        $this->post('/loans/settlements/' . $reversal->id . '/reverse')->assertSessionHasErrors('settlement');
+        $this->assertSame(2, TicketLoanSettlement::count());
+        $this->assertEquals(0, $loan->fresh()->settled_amount_kg);
+    }
+
+    public function testOnlyThoseWhoManageLoansCanReverseASettlement()
+    {
+        $loan = TicketLoan::forceCreate(['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 50, 'user_id' => 1]);
+        $this->soldTicket('0000000000000001', 'D', 0);
+        $this->as('accountant')->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001']);
+        $settlement = TicketLoanSettlement::first();
+
+        foreach (['manager', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->post('/loans/settlements/' . $settlement->id . '/reverse')->assertForbidden();
+        }
+        $this->assertSame(1, TicketLoanSettlement::count());
+    }}

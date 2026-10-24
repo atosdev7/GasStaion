@@ -45,12 +45,12 @@ class SaleDeletion
         }
 
         $debtIds = Debt::where('sale_id', $sale->id)->pluck('id');
-        if ($debtIds->isNotEmpty() && DebtPayment::whereIn('debt_id', $debtIds)->exists()) {
+        if ($debtIds->isNotEmpty() && round((float) DebtPayment::whereIn('debt_id', $debtIds)->sum('amount'), 2) > 0) { // a payment that was reversed no longer counts
             return 'paid';
         }
 
         $loanIds = TicketLoan::where('sale_id', $sale->id)->pluck('id');
-        if ($loanIds->isNotEmpty() && TicketLoanSettlement::whereIn('loan_id', $loanIds)->exists()) {
+        if ($loanIds->isNotEmpty() && round((float) TicketLoanSettlement::whereIn('loan_id', $loanIds)->sum('amount_kg'), 2) > 0) {
             return 'settled';
         }
 

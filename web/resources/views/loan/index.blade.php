@@ -12,6 +12,9 @@
     @if (session('status'))
         <div class="alert alert-success">{{ session('status') }}</div>
     @endif
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
 
     <div class="row">
         <div class="col-md-4">
@@ -117,6 +120,53 @@
             </table>
         </div>
         <div class="card-footer">{{ $loans->links() }}</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">{{ __('debts.settlements') }}</h3></div>
+        <p class="text-muted px-3 pt-2 mb-0">{{ __('debts.settlements_hint') }}</p>
+        <div class="card-body table-responsive p-0">
+            <table class="table table-hover text-nowrap">
+                <thead>
+                <tr>
+                    <th>{{ __('debts.settled_on') }}</th>
+                    <th>{{ __('debts.customer_id') }}</th>
+                    <th>{{ __('debts.fuel_type') }}</th>
+                    <th>{{ __('debts.ticket_barcode') }}</th>
+                    <th class="text-right">{{ __('debts.amount_kg') }}</th>
+                    <th class="text-right">{{ __('debts.actions') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                @forelse ($settlements as $settlement)
+                    <tr>
+                        <td>{{ substr((string) ($settlement->date ?: $settlement->settled_at), 0, 10) }}</td>
+                        <td>{{ $settlement->loan ? ($customers[$settlement->loan->customer_id] ?? $settlement->loan->customer_id) : '' }}</td>
+                        <td>{{ $settlement->loan ? ($fuels[$settlement->loan->fuel_type] ?? $settlement->loan->fuel_type) : '' }}</td>
+                        <td>{{ $settlement->ticket_barcode }}</td>
+                        <td class="text-right {{ $settlement->amount_kg < 0 ? 'text-danger' : '' }}">{{ number_format($settlement->amount_kg, 2) }}</td>
+                        <td class="text-nowrap text-right">
+                            @if ($settlement->reverses_settlement_id)
+                                <span class="badge badge-secondary">{{ __('debts.settlement_reversal') }}</span>
+                            @elseif (isset($reversedSettlements[$settlement->id]))
+                                <span class="badge badge-secondary">{{ __('debts.reversed') }}</span>
+                            @else
+                                @can('loans.manage')
+                                    <form method="POST" action="{{ route('loans.settlements.reverse', $settlement->id) }}" class="d-inline" onsubmit="return confirm(@json(__('debts.reverse_settlement_confirm')))">
+                                        @csrf
+                                        <button type="submit" class="btn btn-xs btn-outline-danger">{{ __('debts.reverse') }}</button>
+                                    </form>
+                                @endcan
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="text-muted">{{ __('debts.no_data') }}</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">{{ $settlements->links() }}</div>
     </div>
 @endsection
 

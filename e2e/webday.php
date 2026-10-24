@@ -139,7 +139,8 @@ ok(Ticket::where('barcode', $back)->value('status') == config('ticket_statuses.p
 ok(money(Sale::find($credit->id)->total_amount) === 75.0, 'the original sale keeps its 75.00');
 $debtNow = money(Debt::with('adjustments')->find($debt->id)->net_amount);   // the debt keeps its amount, the return is an adjustment
 ok(money($debtNow - DebtPayment::where('debt_id', $debt->id)->sum('amount')) === 7.5, 'the customer still owes 7.50 (75 - 37.50 returned - 30 paid)');
-expect($debtNow === $debtBefore, 'the debt of the sale is still 75.00 as of its own day; the return is a separate entry (now the debt itself was cut to ' . number_format($debtNow, 2) . ')');
+$debtOwn = money(Debt::find($debt->id)->amount);
+ok($debtOwn === $debtBefore && money(DB::table('debt_adjustments')->where('debt_id', $debt->id)->sum('amount')) === -37.5, 'the debt of the sale is still 75.00 as of its own day; the return is a separate entry of -37.50 (REVIEW A2)');
 note('returned', $back);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -172,12 +173,21 @@ ok(substr((string) Ticket::where('barcode', $used)->value('supply_date'), 0, 10)
 note('used', $used);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-section('payments that should be refused');
-$r = $acct->send('POST', '/payments', ['customer_id' => $beta, 'debt_id' => $betaDebt->id, 'amount' => '100', 'payment_method' => 'bank', 'paid_date' => $today]);
-expect(DebtPayment::where('debt_id', $betaDebt->id)->count() === 0, 'a payment of 100.00 on a debt of 37.50 is refused; now ' . DebtPayment::where('debt_id', $betaDebt->id)->count() . ' payment was saved');
+section('payments: a date ahead is refused, a payment over the debt is kept with a credit, a wrong payment is reversed (REVIEW A3)');
 $r = $acct->send('POST', '/payments', ['customer_id' => $beta, 'amount' => '1', 'payment_method' => 'cash', 'paid_date' => date('Y-m-d', strtotime('+30 days'))]);
-expect(DebtPayment::where('customer_id', $beta)->where('paid_date', '>', $today)->count() === 0, 'a payment dated 30 days ahead is refused; now ' . DebtPayment::where('customer_id', $beta)->where('paid_date', '>', $today)->count() . ' saved');
-
+ok(DebtPayment::where('customer_id', $beta)->where('paid_date', '>', $today)->count() === 0, 'a payment dated 30 days ahead is refused');
+$before = DebtPayment::where('debt_id', $betaDebt->id)->count();
+$r = $acct->send('POST', '/payments', ['customer_id' => $beta, 'debt_id' => $betaDebt->id, 'amount' => '100', 'payment_method' => 'bank', 'paid_date' => $today]);
+$over = DebtPayment::where('debt_id', $betaDebt->id)->orderByDesc('id')->first();
+ok(DebtPayment::where('debt_id', $betaDebt->id)->count() === $before + 1 && $over && money($over->amount) === 100.0, 'a payment of 100.00 on a debt of 37.50 is kept: the customer may pay ahead');
+$net = money(Debt::with('adjustments')->find($betaDebt->id)->net_amount - DebtPayment::where('debt_id', $betaDebt->id)->sum('amount'));
+ok($net < 0, 'the debt shows a credit (' . number_format(-$net, 2) . ')');
+$r = $acct->send('POST', '/payments/' . $over->id . '/reverse', ['note' => 'typed by mistake']);
+$rev = DebtPayment::where('reverses_payment_id', $over->id)->first();
+ok($rev && money($rev->amount) === -100.0 && substr((string) $rev->paid_date, 0, 10) === $today, 'the wrong payment is reversed by a line of -100.00 dated today');
+ok(money(DebtPayment::find($over->id)->amount) === 100.0 && DebtPayment::where('debt_id', $betaDebt->id)->count() === $before + 2, 'the wrong payment itself stays in the list');
+$r = $acct->send('POST', '/payments/' . $over->id . '/reverse');
+ok(DebtPayment::where('reverses_payment_id', $over->id)->count() === 1, 'it cannot be reversed twice');
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 section('the accountant confirms the day (Daily Confirmation)');
 $unconfirmed = Sale::whereNull('confirmed_at')->get();

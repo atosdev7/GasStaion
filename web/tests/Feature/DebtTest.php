@@ -307,4 +307,127 @@ class DebtTest extends TestCase
         $this->assertCount(2, $this->as('accountant')->get('/payments')->viewData('unallocated'));
         $this->assertSame([$other->id], $this->as('accountant')->get('/payments?customer=' . $other->id)->viewData('unallocated')->pluck('customer_id')->all());
     }
-}
+
+    public function testAPaymentCannotBeDatedInTheFuture()
+    {
+        $this->as('accountant');
+        $this->recordPayment(['paid_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('paid_date');
+        $this->assertSame(0, DebtPayment::count());
+        $this->recordPayment(['paid_date' => today()->toDateString()])->assertRedirect('/payments');
+        $this->assertSame(1, DebtPayment::count());
+    }
+
+    public function testAPaymentOverTheBalanceIsKeptAndShowsACredit()
+    {
+        $debt = Debt::forceCreate([
+            'customer_id' => $this->customer->id, 'sale_id' => $this->sale(100)->id, 'amount' => 100, 'payment_method' => 'bank', 'user_id' => 1,
+        ]);
+        $this->as('accountant');
+
+        $response = $this->recordPayment(['debt_id' => $debt->id, 'amount' => 130, 'paid_date' => today()->toDateString()])->assertRedirect('/payments');
+        $response->assertSessionHas('warning');
+        $this->assertStringContainsString('credit of 30.00', session('warning'));
+        $this->assertSame(1, DebtPayment::count());                                        // kept: the customer may pay ahead
+
+        $page = $this->get('/payments')->assertOk();
+        $page->assertSee('Credit')->assertSee('-30.00');
+        $this->assertSame(-30.0, round($page->viewData('debts')->first()->balance, 2));
+        $this->get('/payments')->assertOk();                                                // the warning was shown once
+        $this->assertFalse(session()->has('warning'));
+    }
+
+    public function testAWrongPaymentIsUndoneByAReversalAndStaysInTheList()
+    {
+        $debt = Debt::forceCreate([
+            'customer_id' => $this->customer->id, 'sale_id' => $this->sale(100)->id, 'amount' => 100, 'payment_method' => 'bank', 'user_id' => 1,
+        ]);
+        $this->as('accountant');
+        $this->recordPayment(['debt_id' => $debt->id, 'amount' => 40, 'payment_method' => 'bank', 'paid_date' => '2026-09-23']);
+        $payment = DebtPayment::first();
+
+        $this->post('/payments/' . $payment->id . '/reverse', ['note' => 'typed twice'])->assertRedirect('/payments')->assertSessionHas('status');
+
+        // the wrong payment is untouched, its reversal is a line of its own: -40, today, same customer, debt and method
+        $this->assertEquals(40, $payment->fresh()->amount);
+        $this->assertSame('2026-09-23', substr((string) $payment->fresh()->paid_date, 0, 10));
+        $reversal = DebtPayment::where('reverses_payment_id', $payment->id)->first();
+        $this->assertEquals(-40, $reversal->amount);
+        $this->assertSame(today()->toDateString(), substr((string) $reversal->paid_date, 0, 10));
+        $this->assertSame($debt->id, $reversal->debt_id);
+        $this->assertSame('bank', $reversal->payment_method);
+        $this->assertStringContainsString('typed twice', $reversal->note);
+        $this->assertSame(2, DebtPayment::count());
+
+        // the debt owes its 100 again; the page lists both lines
+        $page = $this->get('/payments')->assertOk();
+        $this->assertSame(100.0, round($page->viewData('debts')->first()->balance, 2));
+        $this->assertSame(0.0, round((float) DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2));
+        $page->assertSee('Reversed')->assertSee('Reverses #' . $payment->id)->assertSee('-40.00');
+
+        // it cannot be reversed twice, and a reversal cannot be reversed
+        $this->post('/payments/' . $payment->id . '/reverse')->assertSessionHasErrors('payment');
+        $this->post('/payments/' . $reversal->id . '/reverse')->assertSessionHasErrors('payment');
+        $this->assertSame(2, DebtPayment::count());
+    }
+
+    public function testTheDebtSummaryShowsAReversalOnItsOwnDayAndLeavesTheDaysBefore()
+    {
+        $sale = $this->sale(100);
+        $sale->forceFill(['sale_date' => today()->subDays(5)->toDateString()])->save();                // an old debt
+        $debt = Debt::forceCreate([
+            'customer_id' => $this->customer->id, 'sale_id' => $sale->id, 'amount' => 100, 'payment_method' => 'bank', 'user_id' => 1,
+        ]);
+        $this->as('accountant');
+        $yesterday = today()->subDay()->toDateString();
+        $payment = DebtPayment::forceCreate([
+            'customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 40, 'payment_method' => 'bank', 'paid_date' => $yesterday, 'date' => $yesterday, 'user_id' => 1,
+        ]);
+        $this->post('/payments/' . $payment->id . '/reverse');
+
+        $row = function ($from, $to) {
+            return collect($this->get("/debt-summary?from=$from&to=$to")->viewData('payments'))->firstWhere('name', 'ACME');
+        };
+        $before = $row($yesterday, $yesterday);                                              // yesterday: the payment of 40 as it was
+        $this->assertEquals(40, $before['payments']['bank']);
+        $this->assertEquals(60, $before['closing']['bank']);
+        $reversalDay = $row(today()->toDateString(), today()->toDateString());               // today: -40 among the payments
+        $this->assertEquals(-40, $reversalDay['payments']['bank']);
+        $this->assertEquals(60, $reversalDay['opening']['bank']);
+        $this->assertEquals(100, $reversalDay['closing']['bank']);
+    }
+
+    public function testASaleWhoseOnlyPaymentWasReversedCanBeDeletedAgain()
+    {
+        $sale = $this->sale(100);
+        $debt = Debt::forceCreate([
+            'customer_id' => $this->customer->id, 'sale_id' => $sale->id, 'amount' => 100, 'payment_method' => 'bank', 'user_id' => 1,
+        ]);
+        $this->as('accountant');
+        $payment = DebtPayment::forceCreate([
+            'customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 40, 'payment_method' => 'bank', 'paid_date' => today()->toDateString(), 'user_id' => 1,
+        ]);
+
+        \App\Models\Tickets\Ticket::forceCreate([
+            'barcode' => '0000006000000001', 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => 1,
+            'status' => config('ticket_statuses.sale'), 'sale_id' => $sale->id,
+        ]);
+
+        $this->assertSame('paid', \App\Support\Sales\SaleDeletion::blocker($sale->fresh()));
+        $this->post('/payments/' . $payment->id . '/reverse');
+        $this->assertNotSame('paid', \App\Support\Sales\SaleDeletion::blocker($sale->fresh()));   // nothing is paid any more
+    }
+
+    public function testOnlyThoseWhoManagePaymentsCanReverseOne()
+    {
+        $debt = Debt::forceCreate([
+            'customer_id' => $this->customer->id, 'sale_id' => $this->sale(100)->id, 'amount' => 100, 'payment_method' => 'bank', 'user_id' => 1,
+        ]);
+        $payment = DebtPayment::forceCreate([
+            'customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 40, 'payment_method' => 'bank', 'paid_date' => today()->toDateString(), 'user_id' => 1,
+        ]);
+
+        foreach (['manager', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->post('/payments/' . $payment->id . '/reverse')->assertForbidden();
+        }
+        $this->assertSame(1, DebtPayment::count());
+    }}

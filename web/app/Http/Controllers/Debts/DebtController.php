@@ -7,7 +7,9 @@ use App\Models\Sales\Customer;
 use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Support\Admin\Audit;
+use App\Models\Admin\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -73,6 +75,12 @@ class DebtController extends Controller
             'filters' => $filters,
             'unallocated' => $unallocated,
             'customers' => Customer::withTrashed()->orderBy('name')->pluck('name', 'id'),
+            // the payments received, newest first (a reversal is a line of its own, with the negative amount)
+            'payments' => DebtPayment::with('debt.sale')->when(!empty($filters['customer']), function ($q) use ($filters) {
+                $q->where('customer_id', (int) $filters['customer']);
+            })->orderByDesc('paid_date')->orderByDesc('id')->paginate(25, ['*'], 'payments_page')->appends($request->query()),
+            'reversed' => DebtPayment::whereNotNull('reverses_payment_id')->pluck('reverses_payment_id')->flip(),
+            'users' => User::withTrashed()->pluck('name', 'id'),
             'totalOwed' => $debts->sum('net_amount'),
             'totalSettled' => $debts->sum('settled_amount'),
             'totalBalance' => $debts->sum('balance'),
@@ -98,7 +106,7 @@ class DebtController extends Controller
             'debt_id' => ['nullable', Rule::exists('debts', 'id')->whereNull('deleted_at')],
             'amount' => 'required|numeric|min:0.01|max:99999999',
             'payment_method' => ['required', Rule::in(self::PAYMENT_METHODS)],
-            'paid_date' => 'required|date',
+            'paid_date' => 'required|date|before_or_equal:today',   // not a day that has not come yet
             'note' => 'nullable|string|max:255',
         ]);
 
@@ -118,7 +126,44 @@ class DebtController extends Controller
         Audit::log('debt_payment', '#' . $payment->id . ' customer ' . $payment->customer_id
             . ($payment->debt_id ? ' debt ' . $payment->debt_id : ' (unallocated)') . ' amount ' . $payment->amount);
 
-        return redirect()->route('payments.index')->with('status', __('debts.created'));
+        // A payment larger than what the debt still owed is kept (the customer may pay ahead) and says so: the debt then shows a credit.
+        $response = redirect()->route('payments.index')->with('status', __('debts.created'));
+        if ($payment->debt_id) {
+            $debt = Debt::with('adjustments')->find($payment->debt_id);
+            $balance = round($debt->net_amount - DebtPayment::where('debt_id', $debt->id)->sum('amount'), 2);
+            if ($balance < 0) {
+                $response->with('warning', __('debts.payment_over', ['credit' => number_format(-$balance, 2)]));
+            }
+        }
+
+        return $response;
+    }
+
+    // Undoes a wrong payment by a counter entry: the negative amount, the same customer, debt and method, dated today. The payment stays in the list.
+    public function reverse(Request $request, $id)
+    {
+        $data = $request->validate(['note' => 'nullable|string|max:200']);
+
+        $reversal = DB::transaction(function () use ($id, $data) {
+            $payment = DebtPayment::lockForUpdate()->findOrFail($id);
+            if ($payment->isReversal()) {
+                throw ValidationException::withMessages(['payment' => __('debts.payment_is_reversal')]);
+            }
+            if ($payment->isReversed()) {
+                throw ValidationException::withMessages(['payment' => __('debts.payment_already_reversed')]);
+            }
+
+            return DebtPayment::forceCreate([
+                'customer_id' => $payment->customer_id, 'debt_id' => $payment->debt_id, 'amount' => 0 - $payment->amount,
+                'payment_method' => $payment->payment_method, 'paid_date' => today()->toDateString(), 'date' => today()->toDateString(),
+                'note' => trim('Reversal of #' . $payment->id . ' ' . ($data['note'] ?? '')), 'user_id' => auth()->id(),
+                'reverses_payment_id' => $payment->id,
+            ]);
+        });
+
+        Audit::log('debt_payment_reversal', '#' . $reversal->id . ' reverses #' . $reversal->reverses_payment_id . ' customer ' . $reversal->customer_id . ' amount ' . $reversal->amount);
+
+        return redirect()->route('payments.index')->with('status', __('debts.payment_reversed'));
     }
 
     // Debt rows with settled_amount/balance computed fresh from debt_payments — never stored (see

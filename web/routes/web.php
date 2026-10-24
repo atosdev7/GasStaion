@@ -119,6 +119,7 @@ Route::middleware(SetLocale::class)->group(function () {
         Route::middleware('can:payments.manage')->group(function () {
             Route::get('payments/create', 'Debts\DebtController@create')->name('payments.create');
             Route::post('payments', 'Debts\DebtController@store')->name('payments.store');
+            Route::post('payments/{id}/reverse', 'Debts\DebtController@reverse')->name('payments.reverse')->where('id', '[0-9]+');
         });
 
         Route::get('supplements', 'Supplements\SupplementController@index')->name('supplements.index')->middleware('can:supplements.view');
@@ -181,6 +182,7 @@ Route::middleware(SetLocale::class)->group(function () {
         Route::middleware('can:loans.manage')->group(function () {
             Route::get('loans/create', 'Debts\LoanController@create')->name('loans.create');
             Route::post('loans', 'Debts\LoanController@store')->name('loans.store');
+            Route::post('loans/settlements/{id}/reverse', 'Debts\LoanController@reverse')->name('loans.settlements.reverse');
         });
 
         $crud('users', 'Admin\UserController', 'users');

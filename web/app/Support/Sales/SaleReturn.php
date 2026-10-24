@@ -64,7 +64,7 @@ class SaleReturn
             }
             if ($isLoan) {
                 $loanIds = TicketLoan::where('sale_id', $sale->id)->pluck('id');
-                if ($loanIds->isNotEmpty() && TicketLoanSettlement::whereIn('loan_id', $loanIds)->exists()) {
+                if ($loanIds->isNotEmpty() && round((float) TicketLoanSettlement::whereIn('loan_id', $loanIds)->sum('amount_kg'), 2) > 0) {
                     throw self::refuse('loan_settled');
                 }
             }

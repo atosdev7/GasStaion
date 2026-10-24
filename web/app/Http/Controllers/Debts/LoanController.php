@@ -68,6 +68,13 @@ class LoanController extends Controller
             'filters' => $filters,
             'customers' => Customer::withTrashed()->orderBy('name')->pluck('name', 'id'),
             'fuels' => config('fuel_types'),
+            // the tickets surrendered, newest first (a reversal is a line of its own, with the negative kg)
+            'settlements' => TicketLoanSettlement::with(['loan' => function ($q) {
+                $q->withTrashed();
+            }])->when(!empty($filters['customer']), function ($q) use ($filters) {
+                $q->whereIn('loan_id', TicketLoan::withTrashed()->where('customer_id', (int) $filters['customer'])->select('id'));
+            })->orderByDesc('settled_at')->orderByDesc('id')->paginate(25, ['*'], 'settlements_page')->appends($request->query()),
+            'reversedSettlements' => TicketLoanSettlement::whereNotNull('reverses_settlement_id')->pluck('reverses_settlement_id')->flip(),
             'totalLoaned' => $loans->sum('amount_kg'),
             'totalSettled' => $loans->sum('settled_amount_kg'),
             'totalBalance' => $loans->sum('balance_kg'),
@@ -144,6 +151,47 @@ class LoanController extends Controller
         return redirect()->route('loans.index')->with('status', __('debts.settled_loan', [
             'kg' => $settlement->amount_kg,
         ]));
+    }
+
+    // Undoes a wrong settlement by a counter entry: the negative kg for the same loan and ticket, dated today. The ticket goes back to the customer
+    // (sold again, as it was before it was surrendered), unless it was used since.
+    public function reverse($id)
+    {
+        $reversal = DB::transaction(function () use ($id) {
+            $settlement = TicketLoanSettlement::lockForUpdate()->findOrFail($id);
+            if ($settlement->isReversal()) {
+                throw ValidationException::withMessages(['settlement' => __('debts.settlement_is_reversal')]);
+            }
+            if ($settlement->isReversed()) {
+                throw ValidationException::withMessages(['settlement' => __('debts.settlement_already_reversed')]);
+            }
+
+            $loan = TicketLoan::withTrashed()->lockForUpdate()->findOrFail($settlement->loan_id);
+            $ticket = Ticket::where('barcode', $settlement->ticket_barcode)->lockForUpdate()->first();
+            if ($ticket) {
+                // surrendered, not supplied at a nozzle: only then does it go back
+                if ((int) $ticket->status !== config('ticket_statuses.supply') || $ticket->supplement_id !== null) {
+                    throw ValidationException::withMessages(['settlement' => __('debts.settlement_ticket_used')]);
+                }
+                $ticket->forceFill(['status' => config('ticket_statuses.sale'), 'supply_date' => null])->save();
+            }
+
+            $reversal = TicketLoanSettlement::forceCreate([
+                'loan_id' => $loan->id, 'ticket_barcode' => $settlement->ticket_barcode, 'amount_kg' => 0 - $settlement->amount_kg,
+                'settled_at' => now(), 'date' => today()->toDateString(), 'comment' => 'Reversal of ' . $settlement->id,
+                'user_id' => auth()->id(), 'reverses_settlement_id' => $settlement->id,
+            ]);
+
+            $loan->settled_amount_kg = TicketLoanSettlement::where('loan_id', $loan->id)->sum('amount_kg');
+            $loan->save();
+
+            return $reversal;
+        });
+
+        Audit::log('ticket_loan_settlement_reversal', '#' . $reversal->id . ' reverses ' . $reversal->reverses_settlement_id . ' loan ' . $reversal->loan_id
+            . ' ticket ' . $reversal->ticket_barcode . ' ' . $reversal->amount_kg . 'kg');
+
+        return redirect()->route('loans.index')->with('status', __('debts.settlement_reversed'));
     }
 
     private function loansWithBalances()
