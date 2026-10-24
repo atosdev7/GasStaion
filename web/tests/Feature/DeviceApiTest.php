@@ -34,6 +34,40 @@ class DeviceApiTest extends TestCase
         $this->assertStringContainsString('application/json', $res->headers->get('Content-Type'));
     }
 
+    public function testTheServerTellsItsTimeInUtcItsZoneAndItsOffset()
+    {
+        $zone = date_default_timezone_get();
+        date_default_timezone_set('Asia/Seoul');   // the station's zone (APP_TIMEZONE): UTC+9, no daylight saving time
+        try {
+            $ping = $this->payload($this->get('/api/ping')->assertOk());
+
+            $this->assertSame('Asia/Seoul', $ping['timezone']);
+            $this->assertSame(32400, $ping['utc_offset_seconds']);
+            $this->assertRegExp('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $ping['server_time_utc']);
+            // the same moment twice: local time is UTC plus nine hours
+            $this->assertSame(32400, strtotime($ping['server_time'] . ' UTC') - strtotime($ping['server_time_utc'] . ' UTC'));
+
+            // a zone with daylight saving time: the offset is the one of this moment
+            date_default_timezone_set('America/New_York');
+            $new = $this->payload($this->get('/api/ping')->assertOk());
+            $this->assertContains($new['utc_offset_seconds'], [-18000, -14400]);
+            $this->assertSame($new['utc_offset_seconds'], strtotime($new['server_time'] . ' UTC') - strtotime($new['server_time_utc'] . ' UTC'));
+        } finally {
+            date_default_timezone_set($zone);
+        }
+    }
+
+    public function testTheDeviceAndConfigAnswersCarryTheTimeToo()
+    {
+        $this->registerDevice();
+
+        foreach (['/api/device', '/api/pull/config'] as $path) {
+            $x = $this->payload($this->get($path)->assertOk());
+            $this->assertSame(config('app.timezone'), $x['timezone'], $path);
+            $this->assertArrayHasKey('server_time_utc', $x);
+            $this->assertIsInt($x['utc_offset_seconds']);
+        }
+    }
     public function testPingTellsWhetherTheCallersAddressIsRegistered()
     {
         $x = $this->payload($this->get('/api/ping')->assertOk());

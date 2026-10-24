@@ -11,6 +11,7 @@ use App\Models\Tickets\Ticket;
 use App\Support\Sync\Api;
 use App\Support\Admin\Audit;
 use App\Support\Sync\Pull;
+use App\Support\Sync\ServerTime;
 use App\Support\Dashboard\TankLevels;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -43,9 +44,8 @@ class PullController extends Controller
                 ?: config('ticket_serial.device_base'));
         }
 
-        return Api::response([
+        return Api::response(ServerTime::fields() + [
             'status' => 'ok',
-            'server_time' => now()->format('Y-m-d H:i:s'),
             // What the device needs to write a ticket barcode of its own: the business sign (5 digits) and the reserved codes.
             'ticket_sign' => sprintf('%05d', config('ticket_sign')),
             'reserved_codes' => config('ticket_reserved_codes'),

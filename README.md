@@ -81,7 +81,7 @@ A Smart210 is recognised by the **IP address** it calls from. The admin adds eac
 
 | Call | Registered address needed | Purpose |
 |---|---|---|
-| `GET /api/ping` | no | Test the connection, get the server time, and `registered` (is the caller's address a device), `device_id`, `device_name` and `ip` |
+| `GET /api/ping` | no | Test the connection, get the server time (`server_time` in the station's zone, `server_time_utc`, the zone's `timezone` name and its `utc_offset_seconds` now: the same four come with `GET /api/device` and `GET /api/pull/config`), and `registered` (is the caller's address a device), `device_id`, `device_name` and `ip` |
 | `GET /api/device` | yes | Check that the address is registered, get the device settings |
 | `GET /api/pull/config` | yes | Small config, always sent whole: `fuel_types` (name, price, density), `tanks` (with `stock_kg`), `device` (PIN salt and hash, `purge_days`), and what the device needs to number a ticket of its own: `ticket_sign`, `reserved_codes` and `ticket_serial_floor` (per reserved code, the highest serial the web app holds in the device range). Replace the local copy with it |
 | `GET /api/pull/{table}?limit=` | yes | One page of rows not yet synced, for `users`, `customers`, `tickets` or `ticket_loans` (default 200, at most 500). Returns `rows`, `more` and `server_time`. A deleted row comes with `"deleted": true` |

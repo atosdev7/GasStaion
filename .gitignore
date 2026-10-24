@@ -17,3 +17,6 @@ Thumbs.db
 
 # the Smart210's local settings (config.ini.example is tracked)
 /smart210/config.ini
+
+# the manual of the Smart210 kit (a big third-party file, kept on this PC only)
+/用户手册.pdf

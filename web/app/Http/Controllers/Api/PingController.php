@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Admin\Device;
 use App\Support\Sync\Api;
+use App\Support\Sync\ServerTime;
 use Illuminate\Http\Request;
 
 class PingController extends Controller
@@ -15,9 +16,8 @@ class PingController extends Controller
     {
         $device = Device::where('ip_address', $request->ip())->first();
 
-        return Api::response([
+        return Api::response(ServerTime::fields() + [
             'status' => 'ok',
-            'server_time' => now()->format('Y-m-d H:i:s'),
             'registered' => $device !== null,
             'device_id' => $device ? (int) $device->id : null,
             'device_name' => $device ? $device->name : null,
