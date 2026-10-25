@@ -140,7 +140,7 @@ class BackupTest extends TestCase
 
         $response = $this->as('admin')->get('/backup?up_to=' . self::UP_TO)->assertOk();
 
-        $this->assertSame(['sale_items' => 0, 'sales' => 3, 'supplements' => 1, 'fuel_inbounds' => 1, 'tickets' => 2], $response->viewData('preview'));
+        $this->assertSame(['sale_items' => 0, 'sales' => 3, 'fuel_outbounds' => 1, 'supplements' => 1, 'fuel_inbounds' => 1, 'tickets' => 2], $response->viewData('preview'));
         $this->assertEquals([$this->tank->id => 400.0], $response->viewData('carry')); // 500 in - 100 out
         $this->assertSame(0, Backup::count());
     }
@@ -201,6 +201,34 @@ class BackupTest extends TestCase
         $zip->close();
     }
 
+    public function testTheOutboundRowsOfClearedSuppliesAndTheOnesByHandGoWithTheBackupAndTheStockStays()
+    {
+        $this->scenario();
+        foreach (['2026-09-12' => 20, '2026-09-20' => 15] as $date => $kg) {   // by hand: one inside the cut-off, one after it
+            $row = new \App\Models\Fuel\FuelOutbound;
+            $row->forceFill(['tank_id' => $this->tank->id, 'outbound_date' => $date, 'amount_kg' => $kg, 'user_id' => 1])->save();
+        }
+        $before = TankLevels::all()->first()->current;                           // 1000 + 800 - (100 + 40 + 7) - (20 + 15) = 1618
+        $this->assertEquals(1618, $before);
+        $this->assertSame(5, \App\Models\Fuel\FuelOutbound::count());
+
+        $preview = $this->as('admin')->get('/backup?up_to=' . self::UP_TO)->assertOk()->viewData('preview');
+        $this->assertSame(2, $preview['fuel_outbounds']);                          // the row of the supply of 09-10 and the one by hand of 09-12
+
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup')->assertSessionHas('status');
+
+        // what is left: the supply of 09-20, the supply that has no date yet, and the outbound by hand of 09-20
+        $this->assertSame([7.0, 15.0, 40.0], \App\Models\Fuel\FuelOutbound::orderBy('amount_kg')->pluck('amount_kg')->map(function ($kg) { return (float) $kg; })->all());
+        $this->assertEquals($before, TankLevels::all()->first()->current);        // 500 in, 120 out went into the carry-forward
+        $backup = Backup::first();
+        $this->assertEquals([$this->tank->id => 380], $backup->tank_carry);
+        $this->assertSame(2, $backup->cleared['fuel_outbounds']);
+
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open(storage_path('app/backups/test-exports/' . $backup->file)));
+        $this->assertCount(5, array_filter(explode("\n", $zip->getFromName('fuel_outbounds.jsonl'))));  // everything is exported before it is cleared
+        $zip->close();
+    }
     public function testDeletedSalesAndWhatWasCancelledWithThemAreNotExported()
     {
         $kept = $this->sale('2026-09-10');

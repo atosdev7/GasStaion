@@ -17,7 +17,7 @@
                     <th>{{ __('report.fuel_type') }}</th>
                     <th class="text-right">{{ __('report.opening') }}</th>
                     <th class="text-right">{{ __('report.inbound') }}</th>
-                    <th class="text-right">{{ __('report.supplied') }}</th>
+                    <th class="text-right">{{ __('report.outbound') }}</th>
                     <th class="text-right">{{ __('report.current') }}</th>
                     <th class="text-right">{{ __('report.capacity') }}</th>
                     <th class="text-right">{{ __('report.percent_full') }}</th>

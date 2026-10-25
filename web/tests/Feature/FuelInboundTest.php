@@ -133,14 +133,17 @@ class FuelInboundTest extends TestCase
 
     public function testPermissions()
     {
-        $this->as('accountant')->get('/inbound')->assertOk();           // inbound.view
-        $this->get('/inbound/create')->assertForbidden();                // no manage
-        $this->inbound($this->tankD, '6')->assertForbidden();
+        $this->as('accountant')->get('/inbound')->assertOk();           // the accountant adds inbounds too (inbound.manage)
+        $this->get('/inbound/create')->assertOk();
+        $this->inbound($this->tankD, '6')->assertRedirect('/inbound');
+        $this->assertSame(1, FuelInbound::count());
 
         $this->as('cashier')->get('/inbound')->assertForbidden();
+        $this->as('cashier')->get('/inbound/create')->assertForbidden();
         $this->as('assistant')->get('/inbound')->assertForbidden();
+        $this->as('assistant')->get('/inbound/create')->assertForbidden();
         $this->as('manager')->get('/inbound/create')->assertOk();
-        $this->assertSame(0, FuelInbound::count());
+        $this->assertSame(1, FuelInbound::count());
     }
 
     public function testListShowsTheDefaultBadge()
@@ -243,7 +246,7 @@ class FuelInboundTest extends TestCase
         $this->assertNull(FuelInbound::defaultCost($this->diesel));
     }
 
-    public function testTheListHasAnActionsColumnForTheManagerOnly()
+    public function testTheListHasAnActionsColumnForTheManagerAndTheAccountantOnly()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
@@ -255,10 +258,15 @@ class FuelInboundTest extends TestCase
         $this->assertSame(2, substr_count($page->getContent(), '>Delete</button>')); // one for each record
 
         $page = $this->as('accountant')->get('/inbound')->assertOk();
-        $page->assertDontSee('Actions')->assertDontSee(route('inbound.edit', $row->id));
+        $page->assertSee('Actions')->assertSee(route('inbound.edit', $row->id));
+        $this->get('/inbound/' . $row->id . '/edit')->assertOk();
+
+        // the assistant and the cashier see nothing of the fuel inbounds, and so nothing of their cost
+        $this->as('assistant')->get('/inbound')->assertForbidden();
         $this->get('/inbound/' . $row->id . '/edit')->assertForbidden();
         $this->put('/inbound/' . $row->id, ['tank_id' => $this->tankD->id, 'inbound_date' => '2026-09-20', 'amount_kg' => '1', 'cost' => '1'])->assertForbidden();
         $this->delete('/inbound/' . $row->id)->assertForbidden();
+        $this->as('cashier')->get('/inbound')->assertForbidden();
         $this->assertNotNull(FuelInbound::find($row->id));
     }
 

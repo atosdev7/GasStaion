@@ -197,7 +197,7 @@ class ReportSheets
         return [[
             'title' => __('report.title_tanks'),
             'headings' => [__('report.tank_id'), __('report.fuel_type'), __('report.opening'), __('report.inbound'),
-                __('report.supplied'), __('report.current'), __('report.capacity'), __('report.percent_full')],
+                __('report.outbound'), __('report.current'), __('report.capacity'), __('report.percent_full')],
             'rows' => $rows,
             'money' => [2, 3, 4, 5, 6],
         ]];

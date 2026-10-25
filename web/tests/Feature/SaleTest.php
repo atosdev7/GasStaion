@@ -834,4 +834,65 @@ class SaleTest extends TestCase
         $this->spotSell(5, ['price' => 0, 'usage' => 'self'])->assertSessionDoesntHaveErrors('price');
         $this->spotSell(5, ['price' => 0, 'usage' => 'other'])->assertSessionDoesntHaveErrors('price');
         $this->assertSame(2, Sale::count());
-    }}
+    }
+    // ---- the cost per kg: only admin, manager and accountant see it ----
+
+    private function defaultCost($cost)
+    {
+        $tank = \App\Models\Fuel\Tank::first() ?: \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => $this->diesel]);
+        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => $this->diesel, 'amount_kg' => 1000, 'cost' => $cost, 'is_default' => true,
+            'default_from' => '2020-01-01 00:00:00', 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+    }
+
+    public function testTheCostFieldIsOnTheSaleFormsOfAdminManagerAndAccountantOnly()
+    {
+        $this->defaultCost(6.5);
+
+        foreach (['/ticket-sales/create', '/spot-sales/create'] as $form) {
+            foreach (['admin', 'manager', 'accountant'] as $role) {
+                $html = $this->as($role)->get($form)->assertOk()->getContent();
+                $this->assertStringContainsString('name="cost"', $html, "$role $form");
+                if ($form === '/spot-sales/create') { // (the ticket form offers the fuel types that have tickets published)
+                    $this->assertStringContainsString('data-cost="6.5000"', $html, "$role $form");   // pre-filled with the default of the fuel type
+                }
+            }
+            $html = $this->as('assistant')->get($form)->assertOk()->getContent();
+            $this->assertStringNotContainsString('name="cost"', $html, "assistant $form");
+            $this->assertStringNotContainsString('data-cost="', $html, "assistant $form");       // not even in the page source
+            $this->assertStringNotContainsString('6.5000', $html, "assistant $form");
+        }
+        $this->as('cashier')->get('/ticket-sales/create')->assertForbidden();
+    }
+
+    private function newSale(array $before)
+    {
+        return Sale::whereNotIn('id', $before)->first();
+    }
+
+    public function testTheCostOfASaleIsTheDefaultOfItsFuelTypeUnlessAUserWhoSeesItTypesAnother()
+    {
+        $this->defaultCost(6.5);
+        $before = [];
+
+        // the assistant never sees the cost: what is sent is not taken, the default is
+        $this->as('assistant')->post('/ticket-sales', [
+            'sale_type' => 'spot', 'fuel_type' => $this->diesel, 'amount_kg' => 5, 'customer_id' => $this->customer->id, 'price' => 2, 'cost' => 99,
+            'usage' => 'sale', 'paid_amount' => 10,
+        ])->assertSessionHasNoErrors();
+        $this->assertEquals(6.5, $this->newSale($before)->cost);
+        $before = Sale::pluck('id')->all();
+
+        // the accountant: the cost the form showed, or another one typed
+        $this->as('accountant')->post('/ticket-sales', [
+            'sale_type' => 'spot', 'fuel_type' => $this->diesel, 'amount_kg' => 5, 'customer_id' => $this->customer->id, 'price' => 2,
+            'usage' => 'sale', 'paid_amount' => 10,
+        ])->assertSessionHasNoErrors();
+        $this->assertEquals(6.5, $this->newSale($before)->cost);                  // nothing sent: the default
+        $before = Sale::pluck('id')->all();
+        $this->post('/ticket-sales', [
+            'sale_type' => 'spot', 'fuel_type' => $this->diesel, 'amount_kg' => 5, 'customer_id' => $this->customer->id, 'price' => 2, 'cost' => 7.25,
+            'usage' => 'sale', 'paid_amount' => 10,
+        ])->assertSessionHasNoErrors();
+        $this->assertEquals(7.25, $this->newSale($before)->cost);
+    }
+}

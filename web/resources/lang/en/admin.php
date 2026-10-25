@@ -31,6 +31,7 @@ return [
     'backup_table_supplements' => 'Supplements',
     'backup_table_remainders' => 'Remainders',
     'backup_table_fuel_inbounds' => 'Fuel inbounds',
+    'backup_table_fuel_outbounds' => 'Fuel outbounds',
     'backup_table_tickets' => 'Supplied / restricted tickets',
 
     // Users, devices, fuel types, tanks, nozzles

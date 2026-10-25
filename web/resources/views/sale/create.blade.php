@@ -28,7 +28,7 @@
                         <label for="f_fuel_type">{{ __('sales.fuel_type') }}</label>
                         <select id="f_fuel_type" name="fuel_type" class="form-control @error('fuel_type') is-invalid @enderror">
                             @foreach ($stock->pluck('fuel_type')->unique() as $fuelType)
-                                <option value="{{ $fuelType }}" data-price="{{ $prices[$fuelType] ?? 0 }}" data-cost="{{ $costs[$fuelType] ?? '' }}"
+                                <option value="{{ $fuelType }}" data-price="{{ $prices[$fuelType] ?? 0 }}" @can('costs.view') data-cost="{{ $costs[$fuelType] ?? '' }}" @endcan
                                         {{ old('fuel_type') === $fuelType ? 'selected' : '' }}>
                                     {{ $fuels[$fuelType] ?? $fuelType }}
                                 </option>
@@ -36,11 +36,14 @@
                         </select>
                         @error('fuel_type') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
-                    <div class="form-group col-md-4">
-                        <label for="f_cost">{{ __('sales.cost') }}</label>
-                        <input id="f_cost" name="cost" type="number" step="0.0001" min="0" value="{{ old('cost') }}" class="form-control @error('cost') is-invalid @enderror">
-                        @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                    </div>
+                    @can('costs.view')
+                        {{-- the cost is filled with the default of the fuel type; the assistant never sees it (the server sets it) --}}
+                        <div class="form-group col-md-4">
+                            <label for="f_cost">{{ __('sales.cost') }}</label>
+                            <input id="f_cost" name="cost" type="number" step="0.0001" min="0" value="{{ old('cost') }}" class="form-control @error('cost') is-invalid @enderror">
+                            @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        </div>
+                    @endcan
                     <div class="form-group col-md-4">
                         <label for="f_price">{{ __('sales.price') }}</label>
                         <input id="f_price" name="price" type="number" step="0.01" min="0" value="{{ old('price') }}" class="form-control @error('price') is-invalid @enderror">
@@ -417,7 +420,7 @@
         var opt = fuelType.options[fuelType.selectedIndex];
         if (!opt) return;
         if (!price.value) price.value = opt.getAttribute('data-price') || '';
-        if (!cost.value) cost.value = opt.getAttribute('data-cost') || '';
+        if (cost && !cost.value) cost.value = opt.getAttribute('data-cost') || '';
     }
 
     function recalc() {

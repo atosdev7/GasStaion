@@ -3,6 +3,7 @@
 namespace App\Support\Dashboard;
 
 use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
@@ -104,11 +105,9 @@ class DashboardData
             $in[$r->tank_id][substr((string) $r->d, 0, 10)] = (float) $r->kg;
         }
         $out = [];
-        $supplied = Supplement::query()
-            ->join('nozzles', 'nozzles.id', '=', 'supplements.nozzle_id')
-            ->whereRaw('COALESCE(supplements.supply_date, DATE(supplements.supplied_at)) > ?', [$from])
-            ->selectRaw('nozzles.tank_id AS tank_id, COALESCE(supplements.supply_date, DATE(supplements.supplied_at)) AS d, SUM(supplements.out_amount_kg) AS kg')
-            ->groupBy('nozzles.tank_id', 'd')->get();
+        $supplied = FuelOutbound::where('outbound_date', '>', $from)
+            ->selectRaw('tank_id, outbound_date AS d, SUM(amount_kg) AS kg')
+            ->groupBy('tank_id', 'outbound_date')->get();
         foreach ($supplied as $r) {
             $out[$r->tank_id][substr((string) $r->d, 0, 10)] = (float) $r->kg;
         }

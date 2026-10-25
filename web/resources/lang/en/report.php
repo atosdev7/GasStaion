@@ -47,6 +47,7 @@ return [
     'unsold' => 'Published, unsold',
     'sold' => 'Sold',
     'supplied' => 'Supplied',
+    'outbound' => 'Outbound',
     'restricted' => 'Restricted',
     'direct' => 'Spot (direct)',
     'opening' => 'Opening',
@@ -54,7 +55,7 @@ return [
     'current' => 'Current',
     'capacity' => 'Capacity',
     'percent_full' => 'Full',
-    'tanks_hint' => 'All time, in kg. Supplied fuel is counted against the tank of the nozzle it came from.',
+    'tanks_hint' => 'All time, in kg. Outbound is the fuel supplied (counted against the tank the nozzle drew from at the time) and the outbounds made by hand.',
     'liters' => 'Litres',
     'low_tank' => ':tank is low: :kg kg left.',
 

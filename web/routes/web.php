@@ -42,6 +42,13 @@ Route::middleware(SetLocale::class)->group(function () {
         });
 
         Route::get('outbound', 'Fuel\OutboundController@index')->name('outbound.index')->middleware('can:outbound.view');
+        Route::middleware('can:outbound.manage')->group(function () {
+            Route::get('outbound/create', 'Fuel\OutboundController@create')->name('outbound.create');
+            Route::post('outbound', 'Fuel\OutboundController@store')->name('outbound.store');
+            Route::get('outbound/{id}/edit', 'Fuel\OutboundController@edit')->name('outbound.edit');
+            Route::put('outbound/{id}', 'Fuel\OutboundController@update')->name('outbound.update');
+            Route::delete('outbound/{id}', 'Fuel\OutboundController@destroy')->name('outbound.destroy');
+        });
         Route::get('tank-stock', 'Fuel\TankStockController@index')->name('tank-stock.index')->middleware('can:outbound.view');
 
         Route::get('ticket-inbound', 'Tickets\TicketInboundController@index')->name('ticket-inbound.index')->middleware('can:ticket_stock.view');

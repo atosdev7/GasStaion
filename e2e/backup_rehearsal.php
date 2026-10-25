@@ -207,8 +207,8 @@ ok(DB::table('sales')->where('sale_date', '<=', $upTo)->count() === 0 && DB::tab
     && DB::table('remainders')->where('remainder_date', '<=', $upTo)->count() === 0, 'no sale, supplement or remainder up to ' . $upTo . ' is left');
 ok(DB::table('sales')->count() === $salesNotCleared, 'sales without a date or after it are all still there (' . $salesNotCleared . ')');
 $fingerAfter = fingerprint(LIVE);
-ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'backups']) === [], 'every other table is untouched'
-    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'backups'])) . ')' : ''));
+ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups']) === [], 'every other table is untouched'
+    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups'])) . ')' : ''));
 foreach ($kept as $t) {
     if (isset($fingerBeforeClear[$t])) {
         $same = $fingerBeforeClear[$t] === $fingerAfter[$t];

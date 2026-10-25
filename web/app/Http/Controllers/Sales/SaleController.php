@@ -242,7 +242,7 @@ class SaleController extends Controller
                 'customer_id' => $data['customer_id'],
                 'sale_type' => 'ticket',
                 'fuel_type' => $fuelType,
-                'cost' => $data['cost'] ?? null,
+                'cost' => $this->costOf($data, $fuelType, $soldAt),
                 'price' => $data['price'],
                 'amount_kg' => $amountKg,
                 'payment_method' => $data['payment_method'] ?? 'cash',
@@ -319,7 +319,7 @@ class SaleController extends Controller
                 'customer_id' => $data['customer_id'],
                 'sale_type' => 'spot',
                 'fuel_type' => $fuelType,
-                'cost' => $data['cost'] ?? null,
+                'cost' => $this->costOf($data, $fuelType, $soldAt),
                 'price' => $data['price'],
                 'amount_kg' => $amountKg,
                 'payment_method' => 'cash', // spot sales are always cash, never a contract/bank sale
@@ -403,6 +403,17 @@ class SaleController extends Controller
         $date = $data['sale_date'] ?? today()->toDateString();
 
         return $date === today()->toDateString() ? now() : Carbon::parse($date . ' ' . now()->format('H:i:s'));
+    }
+
+    // The cost per kg of a sale: the cost the form showed (the default cost of the fuel type, which a user who may see costs can change), or, for a user
+    // who may not (the assistant), the default cost of the fuel type at the time of the sale. Nothing sent by such a user is taken.
+    private function costOf(array $data, $fuelType, $soldAt)
+    {
+        if (auth()->user() && auth()->user()->can('costs.view') && isset($data['cost']) && $data['cost'] !== '') {
+            return $data['cost'];
+        }
+
+        return FuelInbound::costAt($fuelType, $soldAt);
     }
 
     // A sale (usage "sale") has a price above 0: a price of 0 would be a free sale. Own use and other use have no amount, so any price does.

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Fuel\FuelOutbound;
 use App\Support\Admin\Audit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,8 @@ class ImportBackup extends Command
                 $n = $this->mergeTable($table, $zip->getStream($table . '.jsonl'));
                 $this->line("$table: $n rows");
             }
+            // an export made before the outbounds existed has supplies without rows (the merge raises no model events)
+            FuelOutbound::syncMissing();
         });
         $zip->close();
 

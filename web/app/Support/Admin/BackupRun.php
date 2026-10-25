@@ -5,6 +5,7 @@ namespace App\Support\Admin;
 use App\Models\Admin\Backup;
 use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
 use App\Models\Supplements\Supplement;
@@ -71,15 +72,13 @@ class BackupRun
         return $blockers;
     }
 
-    /** Net kg per tank in the rows a backup up to $upTo would clear: inbound minus supplied. */
+    /** Net kg per tank in the rows a backup up to $upTo would clear: inbound minus outbound (the supplies' rows and the ones made by hand). */
     public static function tankCarryForward($upTo)
     {
         $inbound = FuelInbound::where('inbound_date', '<=', $upTo)
             ->selectRaw('tank_id, SUM(amount_kg) AS kg')->groupBy('tank_id')->pluck('kg', 'tank_id');
-        // the supplies made with a card are not cleared, so they are not carried either
-        $supplied = Supplement::whereNotNull('supplements.supply_date')->whereNull('supplements.card_id')->where('supplements.supply_date', '<=', $upTo)
-            ->join('nozzles', 'nozzles.id', '=', 'supplements.nozzle_id')
-            ->selectRaw('nozzles.tank_id, SUM(supplements.out_amount_kg) AS kg')->groupBy('nozzles.tank_id')->pluck('kg', 'tank_id');
+        // the supplies made with a card are not cleared, so their rows are not carried either; a deleted row counts for nothing
+        $supplied = static::outboundsUpTo($upTo)->whereNull('deleted_at')->selectRaw('tank_id, SUM(amount_kg) AS kg')->groupBy('tank_id')->pluck('kg', 'tank_id');
 
         $result = [];
         foreach ($inbound->keys()->merge($supplied->keys())->unique() as $tankId) {
@@ -161,6 +160,19 @@ class BackupRun
         return storage_path('app/' . config('backup.export_dir') . '/' . $file);
     }
 
+    // The outbound rows that go with a backup up to $upTo (deleted ones too): the ones made by hand up to that day, and the rows of the supplies that
+    // are cleared (not the ones made with a card, and not a supply that has no date yet).
+    private static function outboundsUpTo($upTo)
+    {
+        $supplements = Supplement::withTrashed()->whereNull('card_id')->whereNotNull('supply_date')->where('supply_date', '<=', $upTo)->select('id');
+
+        return FuelOutbound::withTrashed()->where(function ($query) use ($upTo, $supplements) {
+            $query->where(function ($byHand) use ($upTo) {
+                $byHand->whereNull('supplement_id')->where('outbound_date', '<=', $upTo);
+            })->orWhereIn('supplement_id', $supplements);
+        });
+    }
+
     private static function clearable($upTo)
     {
         $endOfDay = Carbon::parse($upTo)->addDay();
@@ -177,6 +189,8 @@ class BackupRun
             // the items go before their sales (they are found through them)
             'sale_items' => SaleItem::whereIn('sale_id', Sale::withTrashed()->whereNull('card_id')->whereNotNull('sale_date')->where('sale_date', '<=', $upTo)->select('id')),
             'sales' => $byCheckout(Sale::class, 'sale_date')->whereNull('card_id'),
+            // the rows of the supplies go before them (they are found through them)
+            'fuel_outbounds' => static::outboundsUpTo($upTo),
             'supplements' => $byCheckout(Supplement::class, 'supply_date')->whereNull('card_id'),
             'fuel_inbounds' => FuelInbound::withTrashed()->where('inbound_date', '<=', $upTo),
             'tickets' => Ticket::where(function ($q) use ($endOfDay) {

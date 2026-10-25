@@ -11,8 +11,20 @@ return [
     'inbound_cost_hint' => 'Sales that were already made keep the cost they were made with.',
 
     // Fuel outbound
-    'outbound_per_tank' => 'Dispensed per tank',
+    'outbound_per_tank' => 'Outbound per tank',
     'all_tanks' => 'All tanks',
+    'outbound_hint' => 'The fuel that left the tanks. A supply adds its own row here by itself (and changes or removes it with the supply); fuel taken out in another way (a transfer, a sample, returned to the supplier) is added by hand.',
+    'outbound_date' => 'Outbound date',
+    'outbound_kind' => 'Kind',
+    'kind_supply' => 'Supply',
+    'kind_by_hand' => 'By hand',
+    'to_name' => 'To',
+    'outbound_created' => 'The outbound was added.',
+    'outbound_saved' => 'The outbound was saved.',
+    'outbound_deleted' => 'The outbound was deleted.',
+    'outbound_delete_confirm' => 'Delete this fuel outbound record? The tank stock goes up by its amount.',
+    'outbound_of_supply' => 'This row follows a supply: change or delete the supply instead.',
+    'supplies' => 'Supplies',
 
     // Fuel inbound
     'is_default' => 'Default cost for sales',
@@ -63,7 +75,7 @@ return [
     'stock_empty' => 'The tanks hold none of this fuel.',
     'stock_opening' => 'Opening (kg)',
     'stock_in' => 'Inbound (kg)',
-    'stock_out' => 'Supplied (kg)',
+    'stock_out' => 'Outbound (kg)',
     'clear_filters' => 'Clear',
     'search' => 'Search',
     'count' => 'Count',

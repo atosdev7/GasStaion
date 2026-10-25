@@ -13,7 +13,8 @@ return [
             'fuel.manage',
             'customers.manage',
             'inbound.manage',
-            'outbound.view',
+            'outbound.manage',
+            'costs.view',          // the cost per kg of a sale (the assistant and the cashier never see it)
             'ticket_stock.manage',
             'ticket_sales.manage',
             'payments.view',
@@ -40,8 +41,9 @@ return [
         'accountant' => [
             'fuel.view',
             'customers.manage',
-            'inbound.view',
-            'outbound.view',
+            'inbound.manage',
+            'outbound.manage',
+            'costs.view',
             'ticket_stock.view',
             'ticket_sales.manage',
             'payments.manage',

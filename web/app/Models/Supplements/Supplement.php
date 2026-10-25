@@ -4,6 +4,7 @@ namespace App\Models\Supplements;
 
 use App\Models\Admin\Device;
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\Nozzle;
 use App\Models\Tickets\Ticket;
 use App\Support\Cards\CardLedger;
@@ -31,9 +32,15 @@ class Supplement extends Model
 
         static::saved(function (Supplement $supplement) {
             CardLedger::syncSupplement($supplement);
+            FuelOutbound::syncSupplement($supplement); // the fuel that left the tank
         });
         static::deleted(function (Supplement $supplement) {
             CardLedger::reverseSupplement($supplement);
+            if ($supplement->isForceDeleting()) {
+                FuelOutbound::dropSupplement($supplement);
+            } else {
+                FuelOutbound::syncSupplement($supplement); // a deleted supply no longer counts
+            }
         });
     }
 
