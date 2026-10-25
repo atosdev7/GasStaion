@@ -39,6 +39,7 @@ NozzleDialog::NozzleDialog(QSqlDatabase db, BoardBus *bus, MachineConfig *config
     connect(timer_, SIGNAL(timeout()), this, SLOT(refresh()));
     timer_->start();
     refresh();
+    ui_->nzList->setFocus(); // the keyboard: the arrow keys choose, Enter is OK, Escape is Cancel
 }
 
 NozzleDialog::~NozzleDialog()
@@ -109,6 +110,15 @@ void NozzleDialog::refresh()
             item->setFlags(item->flags() & ~(Qt::ItemIsEnabled | Qt::ItemIsSelectable));
         } else if (info.number == chosen) {
             list->setCurrentItem(item);
+        }
+    }
+    // something is always chosen when a nozzle is free (the first one), so Enter alone answers the question; the arrow keys move to another
+    if (!list->currentItem()) {
+        for (int row = 0; row < list->count(); ++row) {
+            if (list->item(row)->flags() & Qt::ItemIsEnabled) {
+                list->setCurrentRow(row);
+                break;
+            }
         }
     }
     list->blockSignals(false);

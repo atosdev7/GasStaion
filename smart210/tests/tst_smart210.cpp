@@ -440,6 +440,7 @@ private slots:
     void theDispensersScreenShowsTheNozzlesInDetail();
     void aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATicket();
     void aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket();
+    void theNozzleQuestionIsAnsweredWithTheKeyboardAlone();
     void grabAllScreens();
     void theThemeComesFromTheResourcesOrFromAFileThatIsReadAgainWhenSaved();
     void theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsInTheOrderOfTheWebTables();
@@ -448,6 +449,7 @@ public slots:
     void answerTheSettleDialog();     // helper of the tests: the dialog of a ticket debt is open (modal): scan the tickets, then Settle or Close
     void answerTheMessageBox();       // helper of the tests: a question box is open (modal), note its text and press the button of boxAnswer_
     void answerTheNozzleQuestion();   // helper of the tests: the question of a spot sale set directly is open (modal), choose and press OK or Cancel
+    void answerTheNozzleQuestionWithTheKeyboard(); // the same with the keys only: note where the cursor is, move with the arrows, Enter or Escape
 
 private:
     QMessageBox::StandardButton boxAnswer_;
@@ -459,6 +461,8 @@ private:
     bool settleNow_;
     int nozzleRows_;
     int nozzleRowsEnabled_;
+    int nozzleFirstChosen_;     // the nozzle chosen when the question opened
+    bool nozzleListHasFocus_;
     QSqlDatabase openDatabase(bool migrate = true);
     static void removeTranslators();
     void serverKnowsThisTerminal();
@@ -4817,6 +4821,14 @@ void Smart210Test::onlyAnUnmovedSpotSaleOfTheLoggedInCashierMayBeDeleted()
     const SpotSale::Result supplied = SpotSale::create(db, spotInput(500), 7, now);
     run("UPDATE tickets SET status = 2 WHERE sale_id = '" + supplied.saleId + "'");
     QVERIFY(SaleDeletion::blocker(db, supplied.saleId, 7).contains("dispensed"));
+
+    // its ticket waits at a nozzle (a sale set directly): the board has its weight as the preset, so the sale stays until the ticket is out of the queue
+    const SpotSale::Result queued = SpotSale::create(db, spotInput(500), 7, now);
+    const qlonglong queuedBarcode = one("SELECT barcode FROM tickets WHERE sale_id = '" + queued.saleId + "'").toLongLong();
+    QVERIFY(SupplyQueue::add(db, 1, QString::number(queuedBarcode).rightJustified(16, '0'), "D", now).ok);
+    QVERIFY(SaleDeletion::blocker(db, queued.saleId, 7).contains("waits at nozzle 1"));
+    SupplyQueue::clear(db, 1);
+    QCOMPARE(SaleDeletion::blocker(db, queued.saleId, 7), QString());
 
     // a loan that was settled against, here or already counted from the web
     const SpotSale::Result loan = SpotSale::create(db, spotInput(2000, "ticket_loan"), 7, now);
@@ -10976,6 +10988,85 @@ void Smart210Test::answerTheNozzleQuestion()
         }
     }
     dialog->findChild<QPushButton *>(nozzleToChoose_ > 0 ? "nzOkButton" : "nzCancelButton")->click();
+}
+
+void Smart210Test::answerTheNozzleQuestionWithTheKeyboard()
+{
+    NozzleDialog *dialog = 0;
+    foreach (QWidget *widget, QApplication::topLevelWidgets()) {
+        if (NozzleDialog *found = qobject_cast<NozzleDialog *>(widget)) {
+            if (found->isVisible()) {
+                dialog = found;
+            }
+        }
+    }
+    if (dialog == 0) {
+        QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestionWithTheKeyboard()));
+
+        return;
+    }
+
+    QListWidget *list = dialog->findChild<QListWidget *>("nzList");
+    nozzleListHasFocus_ = (dialog->focusWidget() == list);
+    nozzleFirstChosen_ = dialog->nozzle();
+    if (nozzleToChoose_ <= 0) {
+        QTest::keyClick(list, Qt::Key_Escape);                         // Cancel
+        return;
+    }
+    for (int i = 0; i < 5 && dialog->nozzle() != nozzleToChoose_; ++i) {
+        QTest::keyClick(list, Qt::Key_Down);                          // the arrow keys choose (a nozzle that is busy is jumped over)
+    }
+    QTest::keyClick(list, Qt::Key_Return);                             // Enter is OK
+}
+
+void Smart210Test::theNozzleQuestionIsAnsweredWithTheKeyboardAlone()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(2), 3000);
+    PrintService printer(db, PrintOptions());
+    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    page.reload();
+
+    page.findChild<QComboBox *>("resultCombo")->setCurrentIndex(1);
+    QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
+    customer->setCurrentIndex(customer->findText("ACME"));
+    QLabel *status = page.findChild<QLabel *>("saleStatus");
+
+    // Enter answers with the first free nozzle (1), which was chosen when the question opened and has the cursor
+    QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "10");
+    nozzleToChoose_ = 1;
+    nozzleFirstChosen_ = -1;
+    nozzleListHasFocus_ = false;
+    QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestionWithTheKeyboard()));
+    page.findChild<QPushButton *>("saveSaleButton")->click();
+    QCOMPARE(nozzleFirstChosen_, 1);
+    QVERIFY(nozzleListHasFocus_);
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains("Nozzle 1: 10.00 kg are set"), 5000);
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);
+
+    // the arrow keys choose another nozzle: nozzle 1 has its preset (the board may not have said so yet, then it is still the first one chosen
+    // and the Down key moves to 2; otherwise 2 is the only free one and is chosen at once)
+    QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "5");
+    nozzleToChoose_ = 2;
+    nozzleFirstChosen_ = -1;
+    QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestionWithTheKeyboard()));
+    page.findChild<QPushButton *>("saveSaleButton")->click();
+    QVERIFY(nozzleFirstChosen_ == 1 || nozzleFirstChosen_ == 2);
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains("Nozzle 2: 5.00 kg are set"), 5000);
+
+    // Escape is Cancel: the sale stays, no nozzle gets it
+    QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "3");
+    nozzleToChoose_ = 0;
+    QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestionWithTheKeyboard()));
+    page.findChild<QPushButton *>("saveSaleButton")->click();
+    QVERIFY(status->text().contains("No nozzle was chosen"));
+    QCOMPARE(countRows("sales"), 3);
+    QCOMPARE(SupplyQueue::entries(db, 1).size() + SupplyQueue::entries(db, 2).size(), 2);
 }
 
 void Smart210Test::aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATicket()

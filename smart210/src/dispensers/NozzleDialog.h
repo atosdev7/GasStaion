@@ -14,7 +14,8 @@ class NozzleDialog;
 
 // The question after a spot sale that is set directly: which nozzle gets the weight as its preset. It lists the nozzles of the sale's fuel type
 // that work in auto mode, with what each one is doing now (the list follows the boards); the ones that are busy cannot be chosen. OK is the
-// chosen nozzle (nozzle()), Cancel leaves the sale saved without a nozzle.
+// chosen nozzle (nozzle()), Cancel leaves the sale saved without a nozzle. The keyboard is enough: the first free nozzle is chosen when the
+// question opens, the arrow keys choose another, Enter is OK and Escape is Cancel.
 class NozzleDialog : public QDialog
 {
     Q_OBJECT

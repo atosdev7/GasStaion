@@ -1,5 +1,6 @@
 #include "SaleDeletion.h"
 
+#include "SupplyQueue.h"
 #include "TicketStatus.h"
 
 #include <QObject>
@@ -35,6 +36,20 @@ QString SaleDeletion::blocker(QSqlDatabase db, const QString &saleId, int userId
     ticket.addBindValue(int(TicketStatus::Sale));
     if (ticket.exec() && ticket.next() && ticket.value(0).toInt() > 0) {
         return QObject::tr("Fuel was already dispensed for the ticket of this sale.");
+    }
+
+    // The ticket may not wait at a nozzle: its weight is already the preset of the board (a sale set directly), so the supplier could still fill
+    // with it after the sale was gone.
+    QSqlQuery queued(db);
+    queued.prepare("SELECT barcode FROM tickets WHERE sale_id = ?");
+    queued.addBindValue(saleId);
+    if (queued.exec()) {
+        while (queued.next()) {
+            const int nozzle = SupplyQueue::nozzleOf(db, queued.value(0).toLongLong());
+            if (nozzle > 0) {
+                return QObject::tr("The ticket of this sale waits at nozzle %1 for a fill: take it out of the queue first.").arg(nozzle);
+            }
+        }
     }
 
     // A loan that has been settled against has moved on.
