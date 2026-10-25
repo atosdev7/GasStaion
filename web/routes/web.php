@@ -116,6 +116,10 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::get('cards/{id}/pin', 'Cards\CardController@pinForm')->name('cards.pin');
             Route::post('cards/{id}/pin', 'Cards\CardController@pinSave')->name('cards.pin.save');
         });
+        Route::middleware('can:cards.free')->group(function () {
+            Route::post('cards/{id}/free', 'Cards\CardController@free')->name('cards.free');
+            Route::post('cards/{id}/unfree', 'Cards\CardController@unfree')->name('cards.unfree');
+        });
         Route::get('card-topups', 'Cards\TopUpController@index')->name('card-topups.index')->middleware('can:cards.view');
         Route::get('card-summary', 'Cards\CardSummaryController@index')->name('card-summary.index')->middleware('can:cards.view');
         Route::get('card-summary/export', 'Cards\CardSummaryController@export')->name('card-summary.export')->middleware('can:cards.view');

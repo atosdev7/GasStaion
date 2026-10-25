@@ -363,4 +363,34 @@ class CardSyncTest extends TestCase
         $result = $this->push('cards', [$this->cardRow(['uid' => 'CC03', 'holder_phone' => str_repeat('9', 31)])]);
         $this->assertSame([], $result['saved']);
     }
+
+    public function testAFreePaymentCardIsPulledWithItsFlagAndItsTopUpMayBeForNothing()
+    {
+        $card = Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + CardPin::make('1234'));
+        $free = ['price' => '0.00', 'total_amount' => '0.00', 'paid_amount' => '0.00'];
+
+        // a normal card: a top-up for nothing is refused, as every sale without a price
+        $nothing = $this->saleRow($card, $free);
+        $result = $this->push('sales', [$nothing]);
+        $this->assertSame([], $result['saved']);
+        $this->assertCount(1, $result['rejected']);
+
+        // the flag goes down with the card
+        $this->assertFalse($this->payload($this->get('/api/pull/cards')->assertOk())['rows'][0]['free_payment']);
+        $card->forceFill(['free_payment' => true])->save();
+        Carbon::setTestNow(Carbon::now()->addSeconds(10));
+        $row = $this->payload($this->get('/api/pull/cards')->assertOk())['rows'][0];
+        $this->assertTrue($row['free_payment']);
+
+        // a free payment card: the top-up for nothing is saved; the other rules stay (cash, no debt)
+        $this->assertSame([$nothing['id']], $this->push('sales', [$nothing])['saved']);
+        $this->assertEquals(40, $card->balance());
+        $this->assertCount(1, $this->push('sales', [$this->saleRow($card, $free + ['payment_method' => 'bank'])])['rejected']);
+        $spot = $this->saleRow($card, $free + ['sale_type' => 'spot', 'card_id' => null, 'customer_id' => null]);
+        $this->assertSame([], $this->push('sales', [$spot])['saved']);                                   // only a card sale may be for nothing
+
+        // the terminal never changes the flag, a card it pushes again keeps it
+        $this->push('cards', [['id' => $card->id, 'uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D', 'failed_attempts' => 0, 'status' => 'active'] + CardPin::make('1234')]);
+        $this->assertTrue((bool) $card->fresh()->free_payment);
+    }
 }

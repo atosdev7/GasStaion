@@ -6,7 +6,7 @@
 //
 //   e2e <scenario> <server host> <server port> <facts.json>
 //
-// Scenarios: basic (9.1), offline (9.2; see Offline.inc), restore, cards (the ledger of a card; see Cards.inc). Exit code 0 when every local check passed.
+// Scenarios: basic (9.1), offline (9.2; see Offline.inc), restore, cards (the ledger of a card; see Cards.inc), cardsmany (five cards, top-ups and fills several times; see Cards.inc). Exit code 0 when every local check passed.
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QEventLoop>
@@ -395,6 +395,8 @@ int main(int argc, char *argv[])
         code = restoreScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".");
     } else if (scenario == "cards") {
         code = cardsScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".");
+    } else if (scenario == "cardsmany") {
+        code = cardsManyScenario(terminal, argv[4], argc > 5 ? argv[5] : "php", argc > 6 ? argv[6] : ".");
     } else if (scenario == "devrun") {
         code = devrunScenario(terminal, argv[4]);
     } else if (scenario == "day") {

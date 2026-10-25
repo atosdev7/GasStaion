@@ -98,7 +98,7 @@ class Pull
                 // from the rows the web already holds; the terminal adds what it has not sent yet)
                 return [
                     'id' => $m->id, 'uid' => $m->uid, 'holder_name' => $m->holder_name, 'holder_phone' => $m->holder_phone, 'fuel_type' => $m->fuel_type,
-                    'pin_salt' => $m->pin_salt, 'pin_hash' => $m->pin_hash, 'failed_attempts' => (int) $m->failed_attempts, 'status' => $m->status,
+                    'pin_salt' => $m->pin_salt, 'pin_hash' => $m->pin_hash, 'failed_attempts' => (int) $m->failed_attempts, 'status' => $m->status, 'free_payment' => (bool) $m->free_payment,
                     'balance_kg' => number_format($m->balance(), 2, '.', ''), 'deleted' => $m->trashed(),
                 ];
             case 'card_transactions':

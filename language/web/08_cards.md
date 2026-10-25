@@ -15,6 +15,7 @@ Files: `app/Http/Controllers/CardController.php`, `resources/views/card/index.bl
 | `cards.all_fuel_types` | All fuel types |
 | `cards.all_statuses` | All states |
 | `cards.already_blocked` | This card is already blocked. |
+| `cards.already_free` | The card is a free payment card already. |
 | `cards.back_to_cards` | Cards |
 | `cards.balance` | Balance (kg) |
 | `cards.balance_after` | Balance after (kg) |
@@ -27,6 +28,14 @@ Files: `app/Http/Controllers/CardController.php`, `resources/views/card/index.bl
 | `cards.edit` | Edit card |
 | `cards.edit_button` | Edit |
 | `cards.edit_title` | Edit the card :card |
+| `cards.free_payment` | Free payment |
+| `cards.free_removed` | The card is a normal card again. |
+| `cards.made_free` | The card is a free payment card now. |
+| `cards.make_free` | Set as free payment card |
+| `cards.make_free_confirm` | Set this card as a free payment card? Its top-ups may then have a price of 0: the fuel is given without payment. |
+| `cards.not_free` | The card is not a free payment card. |
+| `cards.remove_free` | Remove free payment |
+| `cards.remove_free_confirm` | Remove the free payment from this card? Its top-ups need a price above 0 again. |
 | `cards.entry_type` | Entry |
 | `cards.from` | From |
 | `cards.fuel_type` | Fuel type |
@@ -87,6 +96,7 @@ Files: `app/Http/Controllers/TopUpController.php`, `resources/views/card/topups.
 | `cards.no_data` | No data for this period. |
 | `cards.payment_cash_only` | A card is paid in cash only: no bank, no debt. The price of the fuel is the default and can be changed. |
 | `cards.price` | Price per kg |
+| `cards.price_above_zero` | The price must be above 0. Only a free payment card is topped up for nothing. |
 | `cards.sale_date` | Sale date |
 | `cards.show` | Show |
 | `cards.time` | Time |

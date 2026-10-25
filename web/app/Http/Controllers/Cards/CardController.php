@@ -140,6 +140,33 @@ class CardController extends Controller
         return redirect()->route('cards.index')->with('status', __('cards.unblocked'));
     }
 
+    // A free payment card may be topped up for nothing (a price of 0). The manager and the admin set it on a card that is registered already, and take it away again.
+    public function free($id)
+    {
+        $card = Card::findOrFail($id);
+        if ($card->free_payment) {
+            throw ValidationException::withMessages(['card' => __('cards.already_free')]);
+        }
+
+        $card->forceFill(['free_payment' => true])->save();
+        Audit::log('card_free', '#' . $card->id . ' ' . $card->uid);
+
+        return redirect()->route('cards.index')->with('status', __('cards.made_free'));
+    }
+
+    public function unfree($id)
+    {
+        $card = Card::findOrFail($id);
+        if (!$card->free_payment) {
+            throw ValidationException::withMessages(['card' => __('cards.not_free')]);
+        }
+
+        $card->forceFill(['free_payment' => false])->save();
+        Audit::log('card_unfree', '#' . $card->id . ' ' . $card->uid);
+
+        return redirect()->route('cards.index')->with('status', __('cards.free_removed'));
+    }
+
     public function pinForm($id)
     {
         return view('card.pin', ['card' => Card::findOrFail($id), 'fuels' => config('fuel_types')]);

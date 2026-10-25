@@ -93,6 +93,65 @@ if ($scenario === 'cards') {
     exit($failures > 0 ? 1 : 0);
 }
 
+// ---- five cards: every ledger and balance of the web app is what the terminal worked out, and the records behind them agree ----
+
+if ($scenario === 'cardsmany') {
+    section('the cards');
+    ok(DB::table('cards')->count() === 5, 'five cards are on the web app (' . DB::table('cards')->count() . ')');
+    foreach ($facts['cards'] as $f) {
+        $card = App\Models\Cards\Card::find($f['id']);
+        ok($card && $card->uid === $f['uid'] && $card->fuel_type === 'D' && $card->status === 'active' && !$card->free_payment, $f['uid'] . ' is registered, active and a normal card');
+    }
+
+    section('the ledger of every card on the web app');
+    foreach ($facts['cards'] as $n => $f) {
+        $web = DB::table('card_transactions')->where('card_id', $f['id'])->orderBy('occurred_at')->orderBy('seq')->get();
+        ok($web->count() === $f['entries'], $f['uid'] . ' has ' . $f['entries'] . ' ledger entries (' . $web->count() . ')');
+        $balance = App\Support\Cards\CardLedger::balance($f['id']);
+        ok(abs($balance * 100 - $f['expected_x100']) < 0.5, $f['uid'] . ' holds ' . number_format($f['expected_x100'] / 100, 2) . ' kg (' . number_format($balance, 2) . ')');
+        $card = App\Models\Cards\Card::find($f['id']);
+        ok(abs($card->balance() - $card->balanceFromRecords()) < 0.005, $f['uid'] . ': the ledger agrees with the records that are left');
+        $last = $web->last();
+        ok($last && abs((float) $last->balance_kg - $balance) < 0.005, $f['uid'] . ': the running balance after the last entry is the balance');
+        $negative = $web->filter(function ($e) { return (float) $e->balance_kg < -0.004; })->count();
+        ok($negative === 0, $f['uid'] . ': the balance never fell below zero');
+        $topups = DB::table('sales')->where('card_id', $f['id'])->where('sale_type', 'card')->whereNull('deleted_at')->count();
+        $fills = DB::table('supplements')->where('card_id', $f['id'])->whereNull('deleted_at')->count();
+        ok($fills === 3, $f['uid'] . ' has three fills (' . $fills . ')');
+        $wanted = [3, 2, 4, 3, 4][$n];                            // card 2 lost its first top-up; cards 3 and 5 got one from the web
+        ok($topups === $wanted, $f['uid'] . ' has ' . $wanted . ' top-up sales left (' . $topups . ')');
+    }
+
+    section('what the web app did');
+    $deleted = DB::table('sales')->where('id', $facts['deleted_sale'])->first();
+    ok($deleted && $deleted->deleted_at !== null, 'the deleted top-up is still a row (deleted)');
+    ok(DB::table('card_transactions')->where('type', 'reversal')->where('source_id', $facts['deleted_sale'])->count() === 1, 'one reversal names the deleted top-up');
+    ok(DB::table('sales')->where('sale_type', 'card')->whereNull('deleted_at')->count() === 15 - 1 + 2, 'card sales left: 15 from the terminal, one deleted, two made on the web');
+
+    section('the terminal holds the same ledger');
+    $webAll = DB::table('card_transactions')->orderBy('card_id')->orderBy('occurred_at')->orderBy('seq')->get();
+    $local = $facts['ledger'];
+    ok(count($local) === $webAll->count() && $webAll->count() === 33, 'the same number of entries on both sides (' . count($local) . ' and ' . $webAll->count() . ')');
+    $same = count($local) === $webAll->count();
+    foreach ($webAll as $i => $entry) {
+        $l = $local[$i] ?? null;
+        $same = $same && $l && $l['id'] === $entry->id && $l['type'] === $entry->type && same($entry->kg, $l['kg']) && same($entry->balance_kg, $l['balance_kg']) && $l['source_id'] === $entry->source_id
+            && ($entry->total_amount === null || same($entry->total_amount, $l['total_amount']));   // the money of a top-up too (half cents)
+    }
+    ok($same, 'the same entries, kg and balances, in the same order');
+
+    section('the web app on its own');
+    ok(DB::table('sync_errors')->count() === 0, 'no sync errors were logged');
+    ok((int) $facts['pending'] === 0, 'the terminal has nothing left to upload');
+
+    if ($devBefore !== null) {
+        section('the dev database');
+        ok(e2e_dev_fingerprint() === $devBefore, 'the dev database `gasstation` was not touched');
+    }
+    echo "\n" . ($checks - $failures) . " of $checks checks passed\n";
+    exit($failures > 0 ? 1 : 0);
+}
+
 // ---- the day: the terminal program already ran this very comparison (as "basic") before the web staff changed things; only the dev database is checked here ----
 
 if ($scenario === 'day') {

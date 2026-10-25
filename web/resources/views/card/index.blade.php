@@ -77,10 +77,13 @@
                             @if ($card->status === 'locked')
                                 <small class="text-muted">{{ __('cards.tries', ['n' => $card->failed_attempts]) }}</small>
                             @endif
+                            @if ($card->free_payment)
+                                <span class="badge badge-info">{{ __('cards.free_payment') }}</span>
+                            @endif
                         </td>
                         <td>{{ $card->comment }}</td>
                         <td class="text-nowrap text-right">
-                            @canany(['cards.manage', 'cards.topup'])
+                            @canany(['cards.manage', 'cards.topup', 'cards.free'])
                                 <div class="btn-group card-actions">
                                     <button type="button" class="btn btn-xs btn-outline-secondary dropdown-toggle" data-toggle="dropdown" data-display="static" aria-haspopup="true" aria-expanded="false">{{ __('cards.actions') }}</button>
                                     <div class="dropdown-menu dropdown-menu-right">
@@ -104,6 +107,17 @@
                                             @else
                                                 <form method="POST" action="{{ route('cards.block', $card->id) }}" onsubmit="return confirm(@json(__('cards.block_confirm')))">@csrf
                                                     <button type="submit" class="dropdown-item text-danger"><i class="fas fa-ban fa-fw"></i> {{ __('cards.block') }}</button>
+                                                </form>
+                                            @endif
+                                        @endcan
+                                        @can('cards.free')
+                                            @if ($card->free_payment)
+                                                <form method="POST" action="{{ route('cards.unfree', $card->id) }}" onsubmit="return confirm(@json(__('cards.remove_free_confirm')))">@csrf
+                                                    <button type="submit" class="dropdown-item"><i class="fas fa-hand-holding-usd fa-fw"></i> {{ __('cards.remove_free') }}</button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('cards.free', $card->id) }}" onsubmit="return confirm(@json(__('cards.make_free_confirm')))">@csrf
+                                                    <button type="submit" class="dropdown-item"><i class="fas fa-gift fa-fw"></i> {{ __('cards.make_free') }}</button>
                                                 </form>
                                             @endif
                                         @endcan

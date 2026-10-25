@@ -8,6 +8,7 @@ use App\Models\Fuel\FuelType;
 use App\Models\Sales\Sale;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
+use App\Support\Sales\SaleAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -62,12 +63,17 @@ class TopUpController extends Controller
             'card_id' => ['required', 'uuid', Rule::exists('cards', 'id')->whereNull('deleted_at')],
             'amount_kg' => 'required|numeric|min:0.01|max:99999999',
             'price' => 'required|numeric|min:0|max:9999999',
-        ]);
+            'sale_date' => SaleAccess::dateRules($request->user(), ['nullable']),   // the day of the top-up; today when it is not sent, and not further back than backdate_days
+        ], SaleAccess::dateMessages());
 
         $sale = DB::transaction(function () use ($data) {
             $card = Card::lockForUpdate()->findOrFail($data['card_id']);
             if ($card->status === 'blocked') {
                 throw ValidationException::withMessages(['card_id' => __('cards.card_blocked')]);
+            }
+            // fuel is not given away: the price is above 0, unless the card is a free payment card
+            if ((float) $data['price'] <= 0 && !$card->free_payment) {
+                throw ValidationException::withMessages(['price' => __('cards.price_above_zero')]);
             }
 
             $kg = round((float) $data['amount_kg'], 2);
@@ -88,7 +94,7 @@ class TopUpController extends Controller
                 'unpaid_amount' => 0,
                 'receipt' => false,
                 'usage' => 'sale',
-                'sale_date' => today()->toDateString(),
+                'sale_date' => $data['sale_date'] ?? today()->toDateString(),
                 'synced' => false,
                 'user_id' => auth()->id(),
             ])->save();

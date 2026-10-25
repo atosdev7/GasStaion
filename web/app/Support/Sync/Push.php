@@ -189,7 +189,9 @@ class Push
         // The receipt is a yes/no on the web; the device sends nothing, or some text, for it.
         $d['receipt'] = !empty($d['receipt']);
 
-        if ($d['usage'] === 'sale' && $d['price'] <= 0) {
+        // (only a top-up of a free payment card may be for nothing)
+        $freeCard = $d['sale_type'] === 'card' && !empty($d['card_id']) && (bool) Card::where('id', $d['card_id'])->value('free_payment');
+        if ($d['usage'] === 'sale' && $d['price'] <= 0 && !$freeCard) {
             throw new RejectedRow('a sale needs a price above 0');
         }
         if (abs($d['paid_amount'] + $d['unpaid_amount'] - $d['total_amount']) > 0.01) {

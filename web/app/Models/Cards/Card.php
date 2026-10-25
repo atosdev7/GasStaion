@@ -22,6 +22,7 @@ class Card extends Model
 
     protected $casts = [
         'synced' => 'boolean',
+        'free_payment' => 'boolean',   // may be topped up with a price of 0 (set on the web by the manager or the admin)
     ];
 
     public function sales()

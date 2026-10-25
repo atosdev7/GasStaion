@@ -3,6 +3,7 @@
 #   powershell -File e2e\run.ps1 basic      9.1 only
 #   powershell -File e2e\run.ps1 offline    9.2 only
 #   powershell -File e2e\run.ps1 cards      the card ledger only
+#   powershell -File e2e\run.ps1 cardsmany  five cards: top-ups and fills several times, on the terminal and on the web app
 #   powershell -File e2e\run.ps1 day        a business day: the terminal and the web staff
 #   add -Builtin to serve the web app with PHP's built-in server instead of Apache
 # The web app runs in XAMPP (D:\xampp, PHP 7.4.33): by default in a second Apache of that XAMPP on port 8124 (e2e\apache\httpd-test.conf, the Apache
@@ -76,7 +77,7 @@ if (-not $Builtin) {
     Write-Host "web app: Apache + PHP 7.4.33 on port $port"
 }
 
-$scenarios = @("basic", "offline", "restore", "cards", "day")
+$scenarios = @("basic", "offline", "restore", "cards", "cardsmany", "day")
 if ($Only -ne "") { $scenarios = @($Only) }
 $failed = $false
 

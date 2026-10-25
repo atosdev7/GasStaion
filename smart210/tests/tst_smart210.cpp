@@ -10587,9 +10587,20 @@ void Smart210Test::theCardScreenRegistersTopsUpAndChecksThePin()
     QCOMPARE(panels->currentIndex(), 0);                                    // nothing until a card is read
 
     // a card that is not known is registered
-    QVERIFY(id->isReadOnly());                                              // the id is only read, never typed
+    QCOMPARE(id->isReadOnly(), CardReader::supported());                    // with a reader the id is only read; on a PC (no reader) it is typed
     QVERIFY(window.findChild<QPushButton *>("cardLookupButton") == 0);
     QVERIFY(!window.findChild<QPushButton *>("cardHistoryButton")->isEnabled());
+    if (!CardReader::supported()) {                                         // a PC: the id typed in the box and Enter read it like the reader would
+        QVERIFY(id->focusPolicy() != Qt::NoFocus);
+        QVERIFY(id->placeholderText().contains("Type the card id"));
+        id->setText(" 77 ee ");
+        QMetaObject::invokeMethod(id, "returnPressed");
+        QCOMPARE(id->text(), QString("77EE"));
+        QCOMPARE(panels->currentIndex(), 1);                                // not registered: the form
+        QVERIFY(message->text().contains("not registered"));
+    } else {
+        QVERIFY(id->focusPolicy() == Qt::NoFocus);
+    }
     window.findChild<CardPage *>()->showCard("04 a1 b2");
     QCOMPARE(id->text(), QString("04A1B2"));
     QCOMPARE(panels->currentIndex(), 1);

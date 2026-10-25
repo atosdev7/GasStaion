@@ -121,3 +121,168 @@ static int cardsScenario(Terminal &t, const QString &factsFile, const QString &p
 
     return 0;
 }
+
+// The "cardsmany" scenario: five cards, each topped up and filled three times on the terminal (round by round, so that the ledger of the five cards is
+// mixed), a fill that asks for more than the card holds (refused), upload; then the web app tops two cards up and deletes one of the terminal's top-ups
+// (cards_step.php); the terminal downloads. After every step the balance of every card on the terminal is the one worked out here, and at the end the web
+// app (verify.php) has the same ledger, balances and records for every card.
+static int cardsManyScenario(Terminal &t, const QString &factsFile, const QString &php, const QString &dir)
+{
+    const int CardCount = 5;
+    const int Rounds = 3;
+    QString message;
+
+    step("the first download");
+    check(t.download(&message), "the first download finishes (" + message + ")");
+    t.userId = t.one("SELECT id FROM users WHERE username = 'cash'").toInt();
+    check(t.userId > 0, "the cashier came down");
+
+    FakeBoards boards;
+    Plant::addBoards(&boards);
+    Plant plant(&t, &boards);
+    check(plant.login(), "the cashier logs in on the device");
+    check(plant.start(), "both nozzle boards answer behind the converter");
+
+    step("five cards are registered");
+    QStringList ids;
+    QStringList uids;
+    QList<qlonglong> expected;
+    for (int i = 0; i < CardCount; ++i) {
+        const QString uid = QString("E2EMANY%1").arg(i + 1, 2, 10, QChar('0'));
+        const Cards::Registration reg = Cards::registerCard(t.db(), uid, QString("Holder %1").arg(i + 1), "D", "1234", QString("139 0000 %1").arg(1000 + i));
+        check(reg.ok, "card " + uid + " is registered (" + reg.error + ")");
+        ids << reg.cardId;
+        uids << uid;
+        expected << 0;
+    }
+
+    // one fill on nozzle 1 (an automatic nozzle) with a card: select the nozzle (when it is not selected), start, let the board dispense, wait for the record
+    QString whyNot;
+    auto fill = [&](const QString &cardId, qlonglong kgX100) -> bool {
+        QString why;
+        if (!(plant.selection.current() == 1 && plant.selection.isSelected(1))) {
+            const int beeps = boards.board(1).beeps;
+            if (!plant.selection.select(1, &why)) {
+                whyNot = "select: " + why;
+
+                return false;
+            }
+            if (!waitFor([&]() { return plant.selection.current() == 1 && plant.selection.isSelected(1) && boards.board(1).beeps > beeps; })) {
+                whyNot = "the board did not beep";
+
+                return false;
+            }
+            pause(200);
+        }
+        const int before = plant.recorded;
+        if (!plant.supply.startCard(1, cardId, kgX100, &why)) {
+            whyNot = why;
+
+            return false;
+        }
+        if (!waitFor([&]() { return boards.board(1).state == BoardProtocol::StateDispensing; })) {
+            whyNot = "the board did not start";
+
+            return false;
+        }
+        boards.simulator().tick(1000000);
+        if (!waitFor([&]() { return plant.recorded > before && boards.board(1).state == BoardProtocol::StateIdle; })) {
+            whyNot = "the fill was not recorded (" + plant.lastMessage + ")";
+
+            return false;
+        }
+        // the terminal has seen the board idle again (its poll runs a few times a second): only then may the next fill start
+        if (!waitFor([&]() { return plant.bus.lastStatus(1).state == BoardProtocol::StateIdle; })) {
+            whyNot = "the poll still shows the board busy";
+
+            return false;
+        }
+        pause(300);
+
+        return true;
+    };
+
+    step("top-ups and fills, round by round");
+    const QDateTime base = QDateTime::currentDateTime().addSecs(-3600);
+    int counter = 0;
+    QStringList firstTopUpSale;
+    for (int round = 0; round < Rounds; ++round) {
+        for (int i = 0; i < CardCount; ++i) {
+            const qlonglong topX100 = 3000 + 500 * i + 250 * round;       // 30.00 + 5 kg per card + 2.50 kg per round
+            const qlonglong priceX100 = 700 + 25 * i;                       // 7.00 to 8.00
+            const qlonglong fillX100 = topX100 * 3 / 5;                     // 60% of what was topped up
+            const Cards::TopUpResult up = Cards::topUp(t.db(), ids.at(i), topX100, priceX100, t.userId, base.addSecs(20 * ++counter));
+            expected[i] += topX100;
+            check(up.ok && up.balanceX100 == expected.at(i) && up.totalX100 == (topX100 * priceX100 + 50) / 100, uids.at(i) + " round " + QString::number(round + 1) + ": top-up of "
+                  + QString::number(topX100 / 100.0, 'f', 2) + " kg, balance " + QString::number(expected.at(i) / 100.0, 'f', 2) + " (" + up.error + ")");
+            if (round == 0) {
+                firstTopUpSale << up.saleId;
+            }
+
+            if (round == 0 && i == 0) {                                     // a card cannot be filled with more than it holds
+                const bool tooMuch = fill(ids.at(i), expected.at(i) + 100);
+                check(!tooMuch && whyNot.contains("holds only"), "a fill of more than the card holds is refused (" + whyNot + ")");
+                check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), "the refused fill changed nothing");
+            }
+
+            const bool filled = fill(ids.at(i), fillX100);
+            expected[i] -= fillX100;
+            check(filled, uids.at(i) + " round " + QString::number(round + 1) + ": a fill of " + QString::number(fillX100 / 100.0, 'f', 2) + " kg is recorded (" + whyNot + ")");
+            check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), uids.at(i) + " holds " + QString::number(expected.at(i) / 100.0, 'f', 2) + " kg on the terminal");
+        }
+    }
+    check(t.one("SELECT COUNT(*) FROM supplements WHERE card_id IS NOT NULL").toInt() == CardCount * Rounds, "fifteen fills are recorded as supplements with a card");
+    check(t.one("SELECT COUNT(*) FROM sales WHERE sale_type = 'card'").toInt() == CardCount * Rounds, "fifteen top-ups are recorded as card sales");
+
+    step("Upload data");
+    int rejected = 0;
+    int saved = 0;
+    check(t.upload(QString(), &message, &rejected, &saved), "the upload finishes (" + message + ")");
+    check(rejected == 0, "the web app refused nothing (" + QString::number(rejected) + ")");
+    check(Uploader::pendingTotal(t.db()) == 0, "nothing waits any more");
+
+    step("the web app tops two cards up and deletes a top-up of the terminal");
+    bool ok = false;
+    const QMap<QString, QString> web2 = cardsStep(php, dir, QStringList() << "webtopup" << ids.at(2) << "12", &ok);
+    check(ok && !web2.value("sale").isEmpty(), "12.00 kg are topped up on the web on card 3");
+    expected[2] += 1200;
+    const QMap<QString, QString> web4 = cardsStep(php, dir, QStringList() << "webtopup" << ids.at(4) << "8", &ok);
+    check(ok && !web4.value("sale").isEmpty(), "8.00 kg are topped up on the web on card 5");
+    expected[4] += 800;
+    const QMap<QString, QString> deleted = cardsStep(php, dir, QStringList() << "delete" << firstTopUpSale.at(1), &ok);
+    expected[1] -= 3500;                                                 // the first top-up of card 2: 30.00 + 5.00
+    check(ok && deleted.value("balance") == QString::number(expected.at(1) / 100.0, 'f', 2), "the first top-up of card 2 (35.00 kg) is deleted on the web: its balance is "
+          + QString::number(expected.at(1) / 100.0, 'f', 2) + " (" + deleted.value("balance") + ")");
+
+    step("the terminal downloads: the same balances and ledgers");
+    check(t.download(&message), "the download finishes (" + message + ")");
+    const int entryCounts[] = {6, 7, 7, 6, 7};                           // 3 top-ups and 3 fills; the web top-ups and the reversal on top
+    for (int i = 0; i < CardCount; ++i) {
+        check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), uids.at(i) + " holds " + QString::number(expected.at(i) / 100.0, 'f', 2) + " kg on the terminal, as on the web app");
+        check(t.one("SELECT COUNT(*) FROM card_transactions WHERE card_id = '" + ids.at(i) + "'").toInt() == entryCounts[i], uids.at(i) + " has " + QString::number(entryCounts[i]) + " ledger entries");
+        const QList<CardLedger::Entry> entries = CardLedger::entries(t.db(), ids.at(i), 50);
+        bool noneProvisional = true;
+        for (int e = 0; e < entries.size(); ++e) {
+            noneProvisional = noneProvisional && !entries.at(e).provisional;
+        }
+        check(entries.size() == entryCounts[i] && noneProvisional, uids.at(i) + ": the History list shows the web app's entries, none marked as not confirmed");
+    }
+    check(Uploader::pendingTotal(t.db()) == 0, "the download changed nothing that waits");
+
+    QJsonObject extra;
+    QJsonArray cards;
+    for (int i = 0; i < CardCount; ++i) {
+        QJsonObject card;
+        card.insert("id", ids.at(i));
+        card.insert("uid", uids.at(i));
+        card.insert("expected_x100", expected.at(i));
+        card.insert("entries", entryCounts[i]);
+        cards.append(card);
+    }
+    extra.insert("cards", cards);
+    extra.insert("ledger", dump(t, "SELECT id, card_id, type, kg, balance_kg, price, total_amount, source_id, occurred_at, seq FROM card_transactions ORDER BY card_id, occurred_at, seq"));
+    extra.insert("deleted_sale", firstTopUpSale.at(1));
+    writeFacts(t, factsFile, extra);
+
+    return 0;
+}

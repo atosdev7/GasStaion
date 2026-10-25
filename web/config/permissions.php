@@ -40,6 +40,7 @@ return [
             'loans.view',
             'cards.manage',        // unlock, block / unblock a lost card, reset a PIN
             'cards.topup',         // top up an existing card on the web
+            'cards.free',          // set a registered card as a free payment card (top-ups with a price of 0), or take that away (the manager and the admin)
             'card_sales.delete',   // delete a card sale (cashier, assistant and accountant cannot)
         ],
 

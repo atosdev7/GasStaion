@@ -399,7 +399,8 @@ class CardTest extends TestCase
             $last = $at;
         }
         $sales = strpos($html, '>Sales Management<');
-        $this->assertTrue($sales < strpos($html, 'href="' . url('/card-sales') . '"') && strpos($html, 'href="' . url('/card-sales') . '"') < $group);
+        $cardSales = strpos($html, 'href="' . url('/card-sales') . '"');
+        $this->assertTrue($group < $sales && $sales < $cardSales);       // Cards Management comes first (user, 2026-10-25), Card Sales is in Sales Management
         $this->assertStringContainsString('>Card Sales<', $html);
 
         // the cashier and the assistant have no Cards Management; the cashier sees Card Sales (his own), the assistant none
@@ -513,5 +514,85 @@ class CardTest extends TestCase
             $this->as($role)->put('/cards/' . $card->id, ['holder_name' => 'Hacked'])->assertForbidden();
         }
         $this->assertSame('Li Wei Jr', $card->fresh()->holder_name);
+    }
+
+    public function testATopUpNeedsAPriceAboveZeroUnlessTheCardIsAFreePaymentCard()
+    {
+        $card = $this->card('AA01', 'Li Wei', 'D');
+        $free = $this->card('BB02', 'Wang Fang', 'D', ['free_payment' => true]);
+
+        // a normal card: no top-up for nothing
+        $this->as('manager')->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 40, 'price' => 0])->assertSessionHasErrors('price');
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 40, 'price' => '0.00'])->assertSessionHasErrors('price');
+        $this->assertSame(0, Sale::where('sale_type', 'card')->count());
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 40, 'price' => '0.01'])->assertSessionHasNoErrors();
+
+        // a free payment card: a price of 0 is accepted, the kg arrive and nothing was paid
+        $this->post('/card-topups', ['card_id' => $free->id, 'amount_kg' => 25, 'price' => 0])->assertSessionHasNoErrors()->assertRedirect('/card-topups');
+        $sale = Sale::where('card_id', $free->id)->first();
+        $this->assertEquals(0, $sale->price);
+        $this->assertEquals(0, $sale->total_amount);
+        $this->assertEquals(0, $sale->paid_amount);
+        $this->assertEquals(25, $free->balance());
+        $this->post('/card-topups', ['card_id' => $free->id, 'amount_kg' => 10, 'price' => 3])->assertSessionHasNoErrors();   // it may be paid, too
+
+        // the form knows which card is free (its price starts at 0)
+        $html = $this->get('/card-topups/create')->assertOk()->getContent();
+        $this->assertRegExp('/<option value="' . $free->id . '"[^>]*data-free="1"/s', $html);
+        $this->assertRegExp('/<option value="' . $card->id . '"[^>]*data-free="0"/s', $html);
+        $this->assertStringContainsString('name="price" type="number" step="0.01" min="0.01"', $html);
+    }
+
+    public function testTheManagerAndTheAdminSetARegisteredCardAsAFreePaymentCardAndTakeItAway()
+    {
+        $card = $this->card('AA01', 'Li Wei');
+        Card::where('id', $card->id)->toBase()->update(['synced' => true]);
+
+        // the list offers it, with its badge once it is set
+        $html = $this->as('manager')->get('/cards')->assertOk()->getContent();
+        $this->assertStringContainsString('action="' . route('cards.free', $card->id) . '"', $html);
+        $this->assertStringNotContainsString('badge badge-info">Free payment', $html);
+
+        $this->post('/cards/' . $card->id . '/free')->assertRedirect('/cards')->assertSessionHas('status');
+        $this->assertTrue((bool) $card->fresh()->free_payment);
+        $this->assertFalse((bool) $card->fresh()->synced);                                              // the terminal pulls it again
+        $html = $this->get('/cards')->getContent();
+        $this->assertStringContainsString('Free payment</span>', $html);
+        $this->assertStringContainsString('action="' . route('cards.unfree', $card->id) . '"', $html);
+        $this->get('/cards/' . $card->id . '/history')->assertOk()->assertSee('Free payment');
+        $this->post('/cards/' . $card->id . '/free')->assertSessionHasErrors('card');                  // already
+
+        $this->post('/cards/' . $card->id . '/unfree')->assertRedirect('/cards')->assertSessionHas('status');
+        $this->assertFalse((bool) $card->fresh()->free_payment);
+        $this->post('/cards/' . $card->id . '/unfree')->assertSessionHasErrors('card');                // not free
+
+        // the admin does it too; nobody else does (not even those who manage the cards)
+        $this->as('admin')->post('/cards/' . $card->id . '/free')->assertSessionHas('status');
+        foreach (['accountant', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->post('/cards/' . $card->id . '/unfree')->assertForbidden();
+            $this->post('/cards/' . $card->id . '/free')->assertForbidden();
+        }
+        $this->assertTrue((bool) $card->fresh()->free_payment);
+        $this->assertStringNotContainsString(route('cards.unfree', $card->id), $this->as('accountant')->get('/cards')->getContent());
+    }
+
+    public function testATopUpHasADateThatIsTodayByDefaultAndCannotBeTooOldOrInTheFuture()
+    {
+        $card = $this->card('AA01', 'Li Wei');
+
+        $html = $this->as('manager')->get('/card-topups/create')->assertOk()->getContent();
+        $this->assertStringContainsString('name="sale_date" type="date"', $html);
+        $this->assertStringContainsString('value="' . today()->toDateString() . '"', $html);
+
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2])->assertSessionHasNoErrors();
+        $this->assertSame(today()->toDateString(), Sale::where('sale_type', 'card')->first()->sale_date);                // not sent: today
+
+        $yesterday = today()->subDay()->toDateString();
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => $yesterday])->assertSessionHasNoErrors();
+        $this->assertSame(1, Sale::where('sale_type', 'card')->where('sale_date', $yesterday)->count());
+
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('sale_date');
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => 'yesterday'])->assertSessionHasErrors('sale_date');
+        $this->assertSame(2, Sale::where('sale_type', 'card')->count());
     }
 }

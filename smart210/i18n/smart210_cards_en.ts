@@ -210,125 +210,134 @@
         <translation>Nozzle status</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="158"/>
+        <location filename="../src/cards/CardPage.cpp" line="165"/>
         <source>Card reader: ready (%1).</source>
         <translation>Card reader: ready (%1).</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="156"/>
         <source>No card reader on this system.</source>
-        <translation>No card reader on this system.</translation>
+        <translation type="vanished">No card reader on this system.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="160"/>
+        <location filename="../src/cards/CardPage.cpp" line="67"/>
+        <source>Type the card id and press Enter</source>
+        <translation>Type the card id and press Enter</translation>
+    </message>
+    <message>
+        <location filename="../src/cards/CardPage.cpp" line="163"/>
+        <source>No card reader on this system: type the card id above and press Enter.</source>
+        <translation>No card reader on this system: type the card id above and press Enter.</translation>
+    </message>
+    <message>
+        <location filename="../src/cards/CardPage.cpp" line="167"/>
         <source>Card reader: not connected (%1).</source>
         <translation>Card reader: not connected (%1).</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="185"/>
+        <location filename="../src/cards/CardPage.cpp" line="198"/>
         <source>Read the card first.</source>
         <translation>Read the card first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="212"/>
+        <location filename="../src/cards/CardPage.cpp" line="225"/>
         <source>Not registered</source>
         <translation>Not registered</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="218"/>
+        <location filename="../src/cards/CardPage.cpp" line="231"/>
         <source>This card is not registered: enter the customer&apos;s name, the fuel type and the PIN.</source>
         <translation>This card is not registered: enter the customer&apos;s name, the fuel type and the PIN.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="242"/>
+        <location filename="../src/cards/CardPage.cpp" line="255"/>
         <source>This card is blocked (lost): it cannot be used or topped up.</source>
         <translation>This card is blocked (lost): it cannot be used or topped up.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="244"/>
+        <location filename="../src/cards/CardPage.cpp" line="257"/>
         <source>This card is locked after wrong PINs: it can be topped up, but only the manager or the accountant unlocks it on the web app.</source>
         <translation>This card is locked after wrong PINs: it can be topped up, but only the manager or the accountant unlocks it on the web app.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="263"/>
+        <location filename="../src/cards/CardPage.cpp" line="276"/>
         <source>(%1 wrong PINs)</source>
         <translation>(%1 wrong PINs)</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="269"/>
-        <location filename="../src/cards/CardPage.cpp" line="428"/>
+        <location filename="../src/cards/CardPage.cpp" line="282"/>
+        <location filename="../src/cards/CardPage.cpp" line="441"/>
         <source>Log in first.</source>
         <translation>Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="274"/>
+        <location filename="../src/cards/CardPage.cpp" line="287"/>
         <source>The two PINs are not the same.</source>
         <translation>The two PINs are not the same.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="291"/>
+        <location filename="../src/cards/CardPage.cpp" line="304"/>
         <source>The card is registered.</source>
         <translation>The card is registered.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="336"/>
-        <location filename="../src/cards/CardPage.cpp" line="423"/>
+        <location filename="../src/cards/CardPage.cpp" line="349"/>
+        <location filename="../src/cards/CardPage.cpp" line="436"/>
         <source>Read a card first.</source>
         <translation>Read a card first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="341"/>
+        <location filename="../src/cards/CardPage.cpp" line="354"/>
         <source>Enter the weight in kg, above 0 and up to 999999.</source>
         <translation>Enter the weight in kg, above 0 and up to 999999.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="346"/>
+        <location filename="../src/cards/CardPage.cpp" line="359"/>
         <source>Enter the price per kg.</source>
         <translation>Enter the price per kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="365"/>
+        <location filename="../src/cards/CardPage.cpp" line="378"/>
         <source>Topped up %1 kg for %2 (cash). The card holds %3 kg.</source>
         <translation>Topped up %1 kg for %2 (cash). The card holds %3 kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="381"/>
-        <location filename="../src/cards/CardPage.cpp" line="503"/>
+        <location filename="../src/cards/CardPage.cpp" line="394"/>
+        <location filename="../src/cards/CardPage.cpp" line="516"/>
         <source>Nozzle %1</source>
         <translation>Nozzle %1</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="433"/>
+        <location filename="../src/cards/CardPage.cpp" line="446"/>
         <source>This card is blocked (lost).</source>
         <translation>This card is blocked (lost).</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="433"/>
+        <location filename="../src/cards/CardPage.cpp" line="446"/>
         <source>This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.</source>
         <translation>This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="438"/>
+        <location filename="../src/cards/CardPage.cpp" line="451"/>
         <source>Enter the weight to supply.</source>
         <translation>Enter the weight to supply.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="443"/>
+        <location filename="../src/cards/CardPage.cpp" line="456"/>
         <source>The card holds only %1 kg.</source>
         <translation>The card holds only %1 kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="448"/>
+        <location filename="../src/cards/CardPage.cpp" line="461"/>
         <source>Choose a nozzle of the card&apos;s fuel type.</source>
         <translation>Choose a nozzle of the card&apos;s fuel type.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="474"/>
+        <location filename="../src/cards/CardPage.cpp" line="487"/>
         <source>Nozzle %1: %2 kg are set. Start the fill at the nozzle.</source>
         <translation>Nozzle %1: %2 kg are set. Start the fill at the nozzle.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="496"/>
+        <location filename="../src/cards/CardPage.cpp" line="509"/>
         <source>Nozzle %1: %2 kg were supplied. The card holds %3 kg.</source>
         <translation>Nozzle %1: %2 kg were supplied. The card holds %3 kg.</translation>
     </message>

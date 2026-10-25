@@ -54,6 +54,7 @@ public slots:
     void showCard(const QString &id);
 
 private slots:
+    void idEntered();
     void historyClicked();
     void registerClicked();
     void topUpClicked();

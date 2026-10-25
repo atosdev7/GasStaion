@@ -13,7 +13,7 @@
         <div class="col-md-5 col-6">
             <div class="info-box"><div class="info-box-content">
                 <span class="info-box-text">{{ $card->holder_name }} &middot; {{ $card->uid }}</span>
-                <span class="info-box-number">{{ $fuels[$card->fuel_type] ?? $card->fuel_type }}</span>
+                <span class="info-box-number">{{ $fuels[$card->fuel_type] ?? $card->fuel_type }}@if ($card->free_payment) <span class="badge badge-info">{{ __('cards.free_payment') }}</span>@endif</span>
             </div></div>
         </div>
     </div>

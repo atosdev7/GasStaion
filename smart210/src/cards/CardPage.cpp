@@ -60,6 +60,13 @@ CardPage::CardPage(QSqlDatabase db, Session *session, BoardBus *bus, MachineConf
 
     // the card: read by the reader
     idField_ = ui_->cardIdField;
+    // Without a reader on this system (a PC) the id is typed, and Enter reads it as if the card were put on the reader.
+    if (!CardReader::supported()) {
+        idField_->setReadOnly(false);
+        idField_->setFocusPolicy(Qt::StrongFocus);
+        idField_->setPlaceholderText(tr("Type the card id and press Enter"));
+        connect(idField_, SIGNAL(returnPressed()), this, SLOT(idEntered()));
+    }
     readerStatus_ = ui_->cardReaderStatus;
     holder_ = ui_->cardHolder;
     fuel_ = ui_->cardFuel;
@@ -153,7 +160,7 @@ void CardPage::reload()
 void CardPage::readerChanged()
 {
     if (!CardReader::supported()) {
-        readerStatus_->setText(tr("No card reader on this system."));
+        readerStatus_->setText(tr("No card reader on this system: type the card id above and press Enter."));
     } else if (reader_->isOpen()) {
         readerStatus_->setText(tr("Card reader: ready (%1).").arg(reader_->config().port));
     } else {
@@ -164,6 +171,12 @@ void CardPage::readerChanged()
 void CardPage::showPanel(int index)
 {
     panels_->setCurrentIndex(index);
+}
+
+// Enter in the id box (only where there is no reader): the typed id is read like one from the reader.
+void CardPage::idEntered()
+{
+    showCard(idField_->text());
 }
 
 // The latest top-ups and fills of the card that is shown.

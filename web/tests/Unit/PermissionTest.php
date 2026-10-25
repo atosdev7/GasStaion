@@ -90,4 +90,15 @@ class PermissionTest extends TestCase
         $this->assertTrue(Gate::forUser($this->user('accountant'))->allows('payments.manage'));
         $this->assertFalse(Gate::forUser($this->user('cashier'))->allows('payments.manage'));
     }
+
+    public function testOnlyTheManagerAndTheAdminSetAFreePaymentCard()
+    {
+        foreach (['admin', 'manager'] as $role) {
+            $this->assertTrue($this->user($role)->hasPermission('cards.free'), $role);
+        }
+        foreach (['accountant', 'assistant', 'cashier'] as $role) {
+            $this->assertFalse($this->user($role)->hasPermission('cards.free'), $role);
+        }
+        $this->assertTrue($this->user('accountant')->hasPermission('cards.manage'));   // the accountant manages the cards, but cannot give a card free fuel
+    }
 }
