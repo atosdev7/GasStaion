@@ -4,23 +4,19 @@ namespace App\Support\Sales;
 
 use App\Models\Cards\Card;
 use App\Models\Sales\Sale;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 // Deleting a card sale (a top-up entered wrong). Only the manager may (permission card_sales.delete, the route). Refused when the sale is confirmed,
-// older than config('sales.delete_days'), or when the card has been used since: the balance would go below zero. A top-up is never refunded, so
+// or when the card has been used since: the balance would go below zero. A top-up is never refunded, so
 // there is no return of a card sale.
 class CardSales
 {
-    // null when the sale may be deleted, otherwise why not: confirmed, too_old or used.
+    // null when the sale may be deleted, otherwise why not: confirmed or used.
     public static function blocker(Sale $sale)
     {
         if ($sale->confirmed_at) {
             return 'confirmed';
-        }
-        if (Carbon::parse($sale->sale_date)->lt(today()->subDays(config('sales.delete_days')))) {
-            return 'too_old';
         }
 
         $card = Card::withTrashed()->find($sale->card_id);

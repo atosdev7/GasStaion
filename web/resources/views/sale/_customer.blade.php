@@ -1,7 +1,7 @@
 {{-- The customer of a sale: AdminLTE's Select2 (type to find a customer); a name that is not there yet can be added right here (customers.manage). --}}
 @php
     $selectedNew = old('new_customer');
-    $selectedId = old('customer_id', $selectedNew ? '' : $customers->keys()->first());
+    $selectedId = old('customer_id', $selectedNew ? '' : (isset($defaultCustomer) ? $defaultCustomer : $customers->keys()->first()));
     $canAdd = auth()->user()->can('customers.manage');
 @endphp
 <label for="f_customer_name">{{ __('sales.customer_id') }}</label>

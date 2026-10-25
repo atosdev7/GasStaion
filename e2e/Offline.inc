@@ -154,7 +154,7 @@ static int offlineScenario(Terminal &t, const QString &factsFile, const QString 
     check(first, "the first download finishes (" + message + ")");
     t.userId = t.one("SELECT id FROM users WHERE username = 'cash'").toInt();
     const int acme = t.customer("ACME");
-    const int self = t.customer("Self");
+    const int self = t.customer("Individual");
     MachineConfig config(t.db());
     {
         BoardProtocol::BoardConfig autoConfig;

@@ -129,12 +129,12 @@ static int devrunScenario(Terminal &t, const QString &factsFile)
     QList<int> customers;
     {
         QSqlQuery q(t.db());
-        q.exec("SELECT id FROM customers WHERE deleted = 0 AND name <> 'Self' ORDER BY id");
+        q.exec("SELECT id FROM customers WHERE deleted = 0 AND name <> 'Individual' ORDER BY id");
         while (q.next()) {
             customers << q.value(0).toInt();
         }
     }
-    const int self = t.one("SELECT id FROM customers WHERE name = 'Self'").toInt();
+    const int self = t.one("SELECT id FROM customers WHERE name = 'Individual'").toInt();
     check(customers.size() >= 4 && self > 0, "the customers came down (" + QString::number(customers.size()) + ")");
     if (!downloaded || customers.isEmpty()) {
         return 1;

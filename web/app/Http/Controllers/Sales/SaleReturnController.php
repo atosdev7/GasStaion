@@ -9,6 +9,7 @@ use App\Models\Debts\DebtPayment;
 use App\Models\Sales\Sale;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
+use App\Support\Sales\SaleAccess;
 use App\Support\Sales\SaleReturn;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,7 @@ class SaleReturnController extends Controller
     {
         $sale = Sale::findOrFail($id);
         abort_if($sale->isReturn() || $sale->sale_type === 'card', 404); // a top-up of a card is never refunded
+        SaleAccess::authorizeChange(auth()->user(), $sale);
 
         $debt = Debt::with('adjustments')->where('sale_id', $sale->id)->first();
 
@@ -56,6 +58,7 @@ class SaleReturnController extends Controller
         }
 
         abort_if(Sale::where('id', $id)->where('sale_type', 'card')->exists(), 404);
+        SaleAccess::authorizeChange(auth()->user(), Sale::findOrFail($id));
 
         $result = SaleReturn::create($id, $data['ticket_barcodes'], $all, $data['comment'] ?? null);
 

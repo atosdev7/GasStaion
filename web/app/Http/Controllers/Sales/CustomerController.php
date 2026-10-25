@@ -36,9 +36,9 @@ class CustomerController extends CrudController
         return $data;
     }
 
-    // The built-in "Self" customer can never be deleted.
+    // The built-in "Individual" customer can never be changed or deleted.
     protected function canModify($customer)
     {
-        return !$customer->is_self;
+        return !$customer->is_default;
     }
 }

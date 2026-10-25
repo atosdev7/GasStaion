@@ -159,6 +159,9 @@ Files: `resources/views/sale/index.blade.php`, `resources/views/sale/create_spot
 | `sales.spec` | Spec (cylinder weight) |
 | `sales.spot_sale` | Spot sale |
 | `sales.spot_sale_cash_hint` | Spot sales are always paid in cash. |
+| `sales.sale_date_too_old` | A sale cannot be dated more than :days days back. Ask the manager. |
+| `sales.paid_more_than_total` | The paid amount :paid is more than the total :total: only :total was recorded. Check the value you typed. |
+| `sales.paid_more_warning` | The paid amount is more than the total: it could be a wrong value (only the total is recorded). |
 | `sales.start_serial` | Start serial |
 | `sales.ticket_sale` | Ticket sale |
 | `sales.total_amount` | Total amount |
@@ -217,7 +220,6 @@ Files: `app/Http/Controllers/CustomerController.php`
 | `sale_delete.blocked_returned` | Tickets of this sale were already returned, so the sale cannot be deleted. |
 | `sale_delete.blocked_settled` | Tickets were already surrendered for this sale's loan, so the sale cannot be deleted. |
 | `sale_delete.blocked_ticket_used` | A ticket of this sale was already used or restricted, so the sale cannot be deleted. |
-| `sale_delete.blocked_too_old` | This sale is too old to delete. Use a return entry instead. |
 | `sale_delete.deleted` | The sale was deleted and everything it did was undone. |
 | `sale_delete.ticket_sale_deleted` | The sale of this ticket was deleted, so its restriction cannot be lifted. |
 | `sale_edit.confirmed` | This sale is confirmed, so it cannot be edited. A manager can take the confirmation back first. |

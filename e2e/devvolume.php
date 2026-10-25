@@ -160,7 +160,7 @@ $acme = $cust('ACME Trading');
 $beta = $cust('Beta Ltd');
 $cedar = $cust('Cedar Logistics');
 $delta = $cust('Delta Taxi');
-$self = $cust('Self');
+$self = (int) one('SELECT id FROM customers WHERE is_default = 1'); // "Individual"
 echo "Dev web app: $base (database " . $env['DB_DATABASE'] . "), today is $today\n";
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------

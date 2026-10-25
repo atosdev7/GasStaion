@@ -46,7 +46,7 @@ mysql -u root -e "CREATE DATABASE gasstation CHARACTER SET utf8mb4 COLLATE utf8m
 php artisan migrate --seed
 ```
 
-The seeder creates the `admin` user, the built-in `Self` customer and the default device settings.
+The seeder creates the `admin` user, the built-in `Individual` customer and the default device settings.
 
 ### Start the server
 

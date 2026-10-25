@@ -85,7 +85,6 @@ Each key is shown with its English text (the web app is English only). A key is 
 | `sales.activate` | Activate |
 | `sales.active` | Active |
 | `sales.blocked_confirmed` | It is confirmed and can no longer be deleted. |
-| `sales.blocked_too_old` | It is too old to be deleted. |
 | `sales.blocked_used` | The card was used since: its balance would go below zero. |
 | `sales.created` | Created. |
 | `sales.deactivate` | Deactivate |

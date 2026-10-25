@@ -22,11 +22,11 @@ class DatabaseSeeder extends Seeder
             'pos_hash' => DeviceHash::make($salt, 'admin123'),
         ]);
 
-        // The built-in "Self" customer (own use).
-        if (!DB::table('customers')->where('is_self', true)->exists()) {
+        // The built-in "Individual" customer (own use, other use, and the buyers who pay cash and need no name).
+        if (!DB::table('customers')->where('is_default', true)->exists()) {
             DB::table('customers')->insert([
-                'name' => 'Self',
-                'is_self' => true,
+                'name' => 'Individual',
+                'is_default' => true,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);

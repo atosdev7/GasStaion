@@ -83,7 +83,7 @@ class SaleReturnTest extends TestCase
         return $count === null ? $codes : array_slice($codes, 0, $count);
     }
 
-    private function giveBack($sale, array $barcodes, $role = 'assistant', $extra = [])
+    private function giveBack($sale, array $barcodes, $role = 'manager', $extra = [])
     {
         return $this->as($role)->post('/ticket-sales/' . $sale->id . '/return', $extra + ['ticket_barcodes' => implode("\n", $barcodes)]);
     }
@@ -185,7 +185,7 @@ class SaleReturnTest extends TestCase
         $used = $this->barcodes($sale, 1)[0];
         Ticket::whereKey($used)->update(['status' => config('ticket_statuses.restrict')]);
 
-        $this->as('assistant')->post('/ticket-sales/' . $sale->id . '/return', ['all' => 1])->assertRedirect('/ticket-sales');
+        $this->as('manager')->post('/ticket-sales/' . $sale->id . '/return', ['all' => 1])->assertRedirect('/ticket-sales');
 
         $return = $this->returnRows($sale)->first();
         $this->assertEquals(-15, $return->amount_kg);
@@ -301,12 +301,12 @@ class SaleReturnTest extends TestCase
         $this->giveBack($sale, $this->barcodes($sale, 1));
         $return = $this->returnRows($sale)->first();
 
-        $this->as('assistant')->get('/ticket-sales/' . $return->id . '/return')->assertNotFound();
+        $this->as('manager')->get('/ticket-sales/' . $return->id . '/return')->assertNotFound();
         $this->assertRefused($this->giveBack($return, ['0000006000000001']), 'is_return');
 
         $gone = $this->sell(1);
-        $this->as('assistant')->delete('/ticket-sales/' . $gone->id);
-        $this->as('assistant')->get('/ticket-sales/' . $gone->id . '/return')->assertNotFound();
+        $this->as('manager')->delete('/ticket-sales/' . $gone->id);
+        $this->as('manager')->get('/ticket-sales/' . $gone->id . '/return')->assertNotFound();
         $this->giveBack($gone, ['0000006000000001'])->assertNotFound();
     }
 
@@ -317,11 +317,11 @@ class SaleReturnTest extends TestCase
         $this->giveBack($sale, $this->barcodes($sale, 1));
         $return = $this->returnRows($sale)->first();
 
-        $this->as('assistant')->delete('/ticket-sales/' . $sale->id)->assertSessionHasErrors('sale');
+        $this->as('manager')->delete('/ticket-sales/' . $sale->id)->assertSessionHasErrors('sale');
         $this->assertSame(__('sale_delete.blocked_returned'), session('errors')->first('sale'));
         $this->assertNotNull(Sale::find($sale->id));
 
-        $this->as('assistant')->delete('/ticket-sales/' . $return->id)->assertSessionHasErrors('sale');
+        $this->as('manager')->delete('/ticket-sales/' . $return->id)->assertSessionHasErrors('sale');
         $this->assertSame(__('sale_delete.blocked_is_return'), session('errors')->first('sale'));
         $this->assertNotNull(Sale::find($return->id));
     }
@@ -349,7 +349,7 @@ class SaleReturnTest extends TestCase
         $this->publishTickets(5);
         $sale = $this->sell(3, ['paid_amount' => 5]);
 
-        $this->as('assistant')->get('/ticket-sales/' . $sale->id . '/return')->assertOk()
+        $this->as('manager')->get('/ticket-sales/' . $sale->id . '/return')->assertOk()
             ->assertSee(__('sale_return.title'))->assertSee('25.00'); // still owed: 30 - 5
     }
 
@@ -357,15 +357,15 @@ class SaleReturnTest extends TestCase
     {
         $this->publishTickets(5);
         $sale = $this->sell(2);
-        $this->as('assistant')->get('/ticket-sales')->assertSee('/ticket-sales/' . $sale->id . '/return');
+        $this->as('manager')->get('/ticket-sales')->assertSee('/ticket-sales/' . $sale->id . '/return');
 
         $this->giveBack($sale, $this->barcodes($sale, 1));
-        $this->as('assistant')->get('/ticket-sales')->assertOk()
+        $this->as('manager')->get('/ticket-sales')->assertOk()
             ->assertSee(__('sale_return.badge'))
             ->assertSee(__('sale_return.returned_kg', ['kg' => '5.00']));
 
         $this->giveBack($sale, $this->barcodes($sale));
-        $this->as('assistant')->get('/ticket-sales')->assertDontSee('/ticket-sales/' . $sale->id . '/return');
+        $this->as('manager')->get('/ticket-sales')->assertDontSee('/ticket-sales/' . $sale->id . '/return');
     }
 
     public function testReportsNetOutReturnsAndCountOnlyOriginalSales()

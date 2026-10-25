@@ -10,7 +10,6 @@ return [
     'deleted_note' => 'Kept for review. A deleted sale is erased for good when the accountant confirms its date.',
     'deleted_at' => 'Deleted at',
     'blocked_confirmed' => 'This sale was confirmed, so it can no longer be deleted. Use a return entry instead.',
-    'blocked_too_old' => 'This sale is too old to delete. Use a return entry instead.',
     'blocked_ticket_used' => 'A ticket of this sale was already used or restricted, so the sale cannot be deleted.',
     'blocked_paid' => 'A payment was recorded against this sale\'s debt, so the sale cannot be deleted.',
     'blocked_settled' => 'Tickets were already surrendered for this sale\'s loan, so the sale cannot be deleted.',

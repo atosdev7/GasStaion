@@ -32,6 +32,9 @@ return [
 
     // Spot sales
     'spot_sale_cash_hint' => 'Spot sales are always paid in cash.',
+    'sale_date_too_old' => 'A sale cannot be dated more than :days days back. Ask the manager.',
+    'paid_more_than_total' => 'The paid amount :paid is more than the total :total: only :total was recorded. Check the value you typed.',
+    'paid_more_warning' => 'The paid amount is more than the total: it could be a wrong value (only the total is recorded).',
 
     // Customers
     'phone' => 'Phone',
@@ -105,7 +108,6 @@ return [
     // Copied from cards.php
     'cards_deleted' => 'The top-up is deleted.',
     'blocked_confirmed' => 'It is confirmed and can no longer be deleted.',
-    'blocked_too_old' => 'It is too old to be deleted.',
     'blocked_used' => 'The card was used since: its balance would go below zero.',
     'holder' => 'Customer name',
     'uid' => 'Card ID',

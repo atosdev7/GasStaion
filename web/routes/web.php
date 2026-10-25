@@ -76,7 +76,7 @@ Route::middleware(SetLocale::class)->group(function () {
         });
 
         Route::get('ticket-sales', 'Sales\SaleController@index')->name('ticket-sales.index')->middleware('can:ticket_sales.view');
-        Route::get('spot-sales', 'Sales\SaleController@indexSpot')->name('spot-sales.index')->middleware('can:ticket_sales.view');
+        Route::get('spot-sales', 'Sales\SaleController@indexSpot')->name('spot-sales.index')->middleware('can:spot_sales.view');
         Route::delete('ticket-sales/{id}', 'Sales\SaleController@destroy')->name('ticket-sales.destroy')->middleware('can:sales.delete');
         Route::middleware('can:sales.return')->group(function () {
             Route::get('ticket-sales/{id}/return', 'Sales\SaleReturnController@create')->name('ticket-sales.return');
@@ -84,9 +84,9 @@ Route::middleware(SetLocale::class)->group(function () {
         });
         Route::middleware('can:ticket_sales.manage')->group(function () {
             Route::get('ticket-sales/create', 'Sales\SaleController@create')->name('ticket-sales.create');
-            Route::get('spot-sales/create', 'Sales\SaleController@createSpot')->name('spot-sales.create');
-            Route::post('ticket-sales', 'Sales\SaleController@store')->name('ticket-sales.store');
+            Route::post('ticket-sales', 'Sales\SaleController@store')->name('ticket-sales.store'); // (a spot sale needs spot_sales.manage: checked in store())
         });
+        Route::get('spot-sales/create', 'Sales\SaleController@createSpot')->name('spot-sales.create')->middleware('can:spot_sales.manage');
         Route::get('ticket-sales/{id}', 'Sales\SaleController@show')->name('ticket-sales.show')->middleware('can:ticket_sales.view')->where('id', '[0-9a-fA-F-]{36}');
         // the date, comment and receipt of a sale (the permission is checked for the kind of sale in the controller)
         Route::get('ticket-sales/{id}/edit', 'Sales\SaleEditController@edit')->name('ticket-sales.edit')->where('id', '[0-9a-fA-F-]{36}');
@@ -98,7 +98,7 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::post('ticket-publish/{id}/unconfirm', 'Confirmations\UnconfirmController@ticketPublish')->name('ticket-publish.unconfirm')->where('id', '[0-9]+');
         });
 
-        Route::get('card-sales', 'Sales\CardSaleController@index')->name('card-sales.index')->middleware('can:ticket_sales.view');
+        Route::get('card-sales', 'Sales\CardSaleController@index')->name('card-sales.index')->middleware('can:card_sales.view');
         Route::delete('card-sales/{id}', 'Sales\CardSaleController@destroy')->name('card-sales.destroy')->middleware('can:card_sales.delete');
 
         Route::get('cards', 'Cards\CardController@index')->name('cards.index')->middleware('can:cards.view');

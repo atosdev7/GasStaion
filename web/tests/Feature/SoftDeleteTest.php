@@ -73,13 +73,13 @@ class SoftDeleteTest extends TestCase
         $this->assertFalse((bool) User::withTrashed()->find($u->id)->active); // untouched by delete
     }
 
-    public function testNobodyDeletesTheirOwnAccountOrTheSelfCustomer()
+    public function testNobodyDeletesTheirOwnAccountOrTheIndividualCustomer()
     {
         $admin = $this->as('admin')->app->make('auth')->user();
         $this->delete('/users/' . $admin->id)->assertForbidden();
         $this->assertNotNull(User::find($admin->id));
 
-        $self = Customer::where('is_self', true)->first();
+        $self = Customer::where('is_default', true)->first();
         $this->delete('/customers/' . $self->id)->assertForbidden();
         $this->assertNotNull(Customer::find($self->id));
     }
@@ -89,10 +89,13 @@ class SoftDeleteTest extends TestCase
         $f = FuelType::forceCreate(['fuel_type' => 'D', 'price' => 7]);
         $f->delete();
 
-        $this->as('accountant'); // fuel.view only
+        $this->as('assistant'); // no fuel permission at all
         $this->delete('/fuel/D')->assertForbidden();
         $this->post('/fuel/D/restore')->assertForbidden();
-        $this->get('/fuel?trashed=1')->assertOk(); // viewing (including trash) is fine
+        $this->get('/fuel?trashed=1')->assertForbidden();
+
+        $this->as('accountant'); // manages the fuel types, like the manager
+        $this->get('/fuel?trashed=1')->assertOk();
     }
 
     public function testEveryMasterDataScreenSupportsDeleteAndRestore()

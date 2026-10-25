@@ -15,6 +15,10 @@ return [
             'inbound.manage',
             'outbound.manage',
             'costs.view',          // the cost per kg of a sale (the assistant and the cashier never see it)
+            'sales.all',           // sees and works on every kind of sale (the assistant on every ticket sale; the cashier only looks at his own)
+            'spot_sales.manage',   // spot sales (the assistant works on ticket sales only)
+            'card_sales.view',     // the card sales (top-ups) list
+            'sales.backdate',      // dates a sale further back than config('sales.backdate_days') (the admin has everything)
             'ticket_stock.manage',
             'ticket_sales.manage',
             'payments.view',
@@ -39,11 +43,15 @@ return [
         ],
 
         'accountant' => [
-            'fuel.view',
+            'fuel.manage',         // sets the price of a fuel type (the default price of a sale), like the manager
             'customers.manage',
             'inbound.manage',
             'outbound.manage',
             'costs.view',
+            'sales.all',
+            'spot_sales.manage',
+            'card_sales.view',
+            'cards.topup',         // (the accountant tops up and edits, but does not delete a card sale: that is the manager's and the admin's)
             'ticket_stock.manage', // adds, changes and deletes ticket inbounds and publishes blank tickets, like the assistant
             'ticket_sales.manage',
             'payments.manage',
@@ -75,9 +83,13 @@ return [
             'sales.return',
         ],
 
+        // the cashier works on the Smart210; on the web he only looks at the sales he issued himself (spot, ticket and card sales); he has no
+        // Ticket Management (not even the lookup)
         'cashier' => [
             'customers.view',
-            'tickets.lookup',
+            'ticket_sales.view',
+            'spot_sales.view',
+            'card_sales.view',
         ],
     ],
 

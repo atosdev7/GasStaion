@@ -21,6 +21,12 @@ class SaleEditTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['sales.backdate_days' => 100000]); // (the limit is tested in SaleTest; the dates here are fixed ones)
+    }
+
     private function as($role)
     {
         $user = User::where('role', $role)->first() ?: User::forceCreate([
@@ -161,16 +167,25 @@ class SaleEditTest extends TestCase
         $spot = $this->sale('2026-10-01');
         $card = $this->cardSale('2026-10-01');
 
-        foreach (['manager', 'accountant', 'assistant'] as $role) {
+        // admin, manager and accountant edit every kind of sale
+        foreach (['admin', 'manager', 'accountant'] as $role) {
             $this->as($role)->get('/ticket-sales/' . $spot->id . '/edit')->assertOk();
-        }
-        foreach (['manager', 'accountant'] as $role) {
             $this->as($role)->get('/ticket-sales/' . $card->id . '/edit')->assertOk();
         }
-        // the assistant edits ticket and spot sales, not the top-ups of a card
-        $this->as('assistant')->get('/ticket-sales/' . $card->id . '/edit')->assertForbidden();
-        $this->put('/ticket-sales/' . $card->id, ['sale_date' => '2026-10-01', 'comment' => 'x'])->assertForbidden();
-        $this->assertNull($card->fresh()->comment);
+        // the assistant works on every ticket sale (his own and the ones of the others), not on a spot sale or a top-up
+        $other = $this->sale('2026-10-01', ['sale_type' => 'ticket']);
+        $this->as('assistant');
+        $own = $this->sale('2026-10-01', ['sale_type' => 'ticket', 'user_id' => auth()->id()]);
+        foreach ([$own, $other] as $sale) {
+            $this->get('/ticket-sales/' . $sale->id . '/edit')->assertOk();
+            $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-01', 'comment' => 'ticket'])->assertRedirect();
+            $this->assertSame('ticket', $sale->fresh()->comment);
+        }
+        foreach ([$spot, $card] as $sale) {
+            $this->get('/ticket-sales/' . $sale->id . '/edit')->assertForbidden();
+            $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-01', 'comment' => 'x'])->assertForbidden();
+            $this->assertNull($sale->fresh()->comment);
+        }
         $this->as('cashier')->get('/ticket-sales/' . $spot->id . '/edit')->assertForbidden();
         $this->put('/ticket-sales/' . $spot->id, ['sale_date' => '2026-10-01', 'comment' => 'x'])->assertForbidden();
     }
@@ -207,12 +222,14 @@ class SaleEditTest extends TestCase
         $this->assertStringNotContainsString('/ticket-sales/' . $done->id . '/edit', $html);
         $this->assertStringContainsString('Confirmed: take the confirmation back to edit it', $html);
 
-        // the cashier does not see the sales, the assistant sees the edit
-        $this->as('assistant')->get('/spot-sales')->assertOk()->assertSee('/ticket-sales/' . $open->id . '/edit');
+        // the manager sees the edit; the assistant has no spot sales; the cashier has no edit
+        $this->as('manager')->get('/spot-sales')->assertOk()->assertSee('/ticket-sales/' . $open->id . '/edit');
+        $this->as('assistant')->get('/spot-sales')->assertForbidden();
 
         $card = $this->cardSale('2026-10-01');
         $this->as('manager')->get('/card-sales')->assertOk()->assertSee('/ticket-sales/' . $card->id . '/edit');
-        $this->as('assistant')->get('/card-sales')->assertOk()->assertDontSee('/ticket-sales/' . $card->id . '/edit');
+        $this->as('accountant')->get('/card-sales')->assertOk()->assertSee('/ticket-sales/' . $card->id . '/edit');
+        $this->as('assistant')->get('/card-sales')->assertForbidden();
     }
 
     public function testEveryRecordOfTheDateStaysOnTheConfirmationPageAndAConfirmedOneShowsItsState()

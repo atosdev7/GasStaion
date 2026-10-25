@@ -34,8 +34,8 @@ return [
         'label' => 'group_sales', 'icon' => 'fa-cash-register',
         'items' => [
             ['label' => 'ticket_sales', 'route' => 'ticket-sales.index', 'permission' => 'ticket_sales.view'],
-            ['label' => 'spot_sales',   'route' => 'spot-sales.index',   'permission' => 'ticket_sales.view'],
-            ['label' => 'card_sales',   'route' => 'card-sales.index',   'permission' => 'ticket_sales.view'],
+            ['label' => 'spot_sales',   'route' => 'spot-sales.index',   'permission' => 'spot_sales.view'],
+            ['label' => 'card_sales',   'route' => 'card-sales.index',   'permission' => 'card_sales.view'],
             ['label' => 'customers',    'route' => 'customers.index',    'permission' => 'customers.view'],
         ],
     ],

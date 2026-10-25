@@ -144,15 +144,15 @@ ok($debtOwn === $debtBefore && money(DB::table('debt_adjustments')->where('debt_
 note('returned', $back);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-section('a wrong spot sale is entered and deleted');
-$r = $assistant->send('POST', '/ticket-sales', [
+section('a wrong spot sale is entered and deleted (by the accountant: the assistant has no spot sales)');
+$r = $acct->send('POST', '/ticket-sales', [
     'sale_type' => 'spot', 'fuel_type' => 'D', 'amount_kg' => '3', 'customer_id' => $beta, 'price' => '7.5', 'usage' => 'sale', 'paid_amount' => '22.5', 'sale_date' => $today,
 ]);
 ok($r['status'] === 302, 'the spot sale is saved');
 $wrong = Sale::where('customer_id', $beta)->where('sale_type', 'spot')->orderByDesc('created_at')->first();
 ok($wrong && money($wrong->total_amount) === 22.5, '3 kg x 7.50 = 22.50');
 $wrongTicket = Ticket::where('sale_id', $wrong->id)->value('barcode');
-$r = $assistant->send('DELETE', '/ticket-sales/' . $wrong->id);
+$r = $acct->send('DELETE', '/ticket-sales/' . $wrong->id);
 ok(Sale::onlyTrashed()->where('id', $wrong->id)->exists(), 'the sale is deleted (kept for review)');
 ok(Ticket::where('barcode', $wrongTicket)->value('status') == config('ticket_statuses.restrict'), 'its ticket can no longer be used (restricted)');
 note('restricted', $wrongTicket);
@@ -219,7 +219,7 @@ if ($terminalTicketSale) {
     $before = money($terminalTicketSale->total_amount);
     $debtBefore = Debt::where('sale_id', $terminalTicketSale->id)->value('amount');
     if ($spare) {
-        $r = $assistant->send('POST', '/ticket-sales/' . $terminalTicketSale->id . '/return', ['ticket_barcodes' => $spare]);
+        $r = $acct->send('POST', '/ticket-sales/' . $terminalTicketSale->id . '/return', ['ticket_barcodes' => $spare]); // (the cashier's sale: the accountant works on every sale, the assistant only on his own)
         $late = Sale::where('reverses_sale_id', $terminalTicketSale->id)->first();
         ok($late && $late->confirmed_at === null && money($late->total_amount) < 0 && substr((string) $late->sale_date, 0, 10) === $today, 'a return of a confirmed sale is a new entry dated today');
         ok(money(Sale::find($terminalTicketSale->id)->total_amount) === $before, 'the confirmed sale keeps its figures');

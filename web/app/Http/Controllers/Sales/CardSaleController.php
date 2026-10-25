@@ -8,10 +8,12 @@ use App\Models\Sales\Sale;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
 use App\Support\Sales\CardSales;
+use App\Support\Sales\SaleAccess;
 use Illuminate\Http\Request;
 
 // Card Sales (Sales Management): the sales of type card, that is the top-ups of the cards, in the layout of the other sales lists. A card sale is
-// cash only, has no customer (the card has the name) and cannot be returned; only the manager can delete one.
+// cash only, has no customer (the card has the name) and cannot be returned; the manager (and the admin) delete them, the manager and the accountant edit them.
+// The cashier looks at the ones he issued.
 class CardSaleController extends Controller
 {
     public function index(Request $request)
@@ -21,7 +23,7 @@ class CardSaleController extends Controller
             'card' => 'nullable|uuid',
         ]);
 
-        $query = Sale::where('sale_type', 'card')->orderByDesc('sale_date')->orderByDesc('created_at');
+        $query = SaleAccess::scope(Sale::where('sale_type', 'card'), $request->user(), 'card')->orderByDesc('sale_date')->orderByDesc('created_at'); // the cashier: his own
         if (!empty($filters['sale_date'])) {
             $query->where('sale_date', $filters['sale_date']);
         }

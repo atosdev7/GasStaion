@@ -324,7 +324,7 @@ class SaleTest extends TestCase
 
         foreach (['/ticket-sales/create', '/spot-sales/create'] as $url) {
             $this->get($url)->assertOk()
-                ->assertSee('id="f_sale_date" name="sale_date" type="date" max="' . today()->toDateString() . '" value="' . today()->toDateString() . '"', false);
+                ->assertSee('id="f_sale_date" name="sale_date" type="date" min="" max="' . today()->toDateString() . '" value="' . today()->toDateString() . '"', false);
         }
     }
 
@@ -393,19 +393,19 @@ class SaleTest extends TestCase
         $before = Customer::count();
 
         // a ticket sale to a name that is not a customer yet: the customer is added with the sale
-        $this->sell(1, ['customer_id' => null, 'new_customer' => '  Fresh Buyer ', 'usage' => 'self', 'paid_amount' => null])->assertSessionHasNoErrors();
+        $this->sell(1, ['customer_id' => null, 'new_customer' => '  Fresh Buyer '])->assertSessionHasNoErrors();
         $new = Customer::where('name', 'Fresh Buyer')->first();
         $this->assertNotNull($new);
         $this->assertFalse((bool) $new->synced); // the terminal gets it with the next download
         $this->assertSame($new->id, Sale::first()->customer_id);
 
         // the same name again (in another case) is the same customer, a spot sale too
-        $this->spotSell(2, ['customer_id' => null, 'new_customer' => 'FRESH buyer', 'usage' => 'self', 'paid_amount' => null])->assertSessionHasNoErrors();
+        $this->spotSell(2, ['customer_id' => null, 'new_customer' => 'FRESH buyer'])->assertSessionHasNoErrors();
         $this->assertSame($before + 1, Customer::count());
         $this->assertSame(2, Sale::where('customer_id', $new->id)->count());
 
         // a customer that was chosen wins over the typed name
-        $this->sell(1, ['customer_id' => $this->customer->id, 'new_customer' => 'Ignored', 'usage' => 'self', 'paid_amount' => null]);
+        $this->sell(1, ['customer_id' => $this->customer->id, 'new_customer' => 'Ignored']);
         $this->assertNull(Customer::where('name', 'Ignored')->first());
     }
 
@@ -420,7 +420,7 @@ class SaleTest extends TestCase
         $before = Customer::count();
         $this->as('assistant'); // sells, but cannot manage customers
         $this->sell(1, ['customer_id' => null, 'new_customer' => 'Not Allowed'])->assertSessionHasErrors('new_customer');
-        $this->spotSell(1, ['customer_id' => null, 'new_customer' => 'Not Allowed'])->assertSessionHasErrors('new_customer');
+        $this->spotSell(1, ['customer_id' => null, 'new_customer' => 'Not Allowed'])->assertForbidden(); // (the assistant has no spot sales)
         $this->assertSame($before, Customer::count());
         $this->assertSame(0, Sale::count());
     }
@@ -439,7 +439,11 @@ class SaleTest extends TestCase
             $this->assertStringContainsString("$('#f_customer_name')", $html);
             $this->assertStringContainsString('plugins/select2/js/select2.min.js', $html);
 
-            $this->assertRegExp('/data-can-add="0"/', $this->as('assistant')->get($url)->assertOk()->getContent(), $url);
+            if ($url === '/spot-sales/create') {
+                $this->as('assistant')->get($url)->assertForbidden(); // the assistant has no spot sales
+            } else {
+                $this->assertRegExp('/data-can-add="0"/', $this->as('assistant')->get($url)->assertOk()->getContent(), $url);
+            }
         }
     }
 
@@ -774,7 +778,10 @@ class SaleTest extends TestCase
         $this->as('accountant')->get('/ticket-sales')->assertOk();
         $this->sell(1)->assertRedirect('/ticket-sales'); // accountant can sell
 
-        $this->as('cashier')->get('/ticket-sales')->assertForbidden();
+        // the cashier only looks (at his own sales): no form, no sale
+        $this->as('cashier')->get('/ticket-sales')->assertOk();
+        $this->get('/ticket-sales/create')->assertForbidden();
+        $this->sell(1)->assertForbidden();
     }
 
     public function testScreensRender()
@@ -817,15 +824,24 @@ class SaleTest extends TestCase
         $this->get('/ticket-sales?deleted=1')->assertOk()->assertDontSee('23.5');
     }
 
-    public function testCashierAndOthersWithoutTheSalesPermissionCannotOpenSpotSales()
+    public function testSpotSalesAreForAdminManagerAndAccountantAndTheCashierLooksAtHisOwn()
     {
-        $this->as('cashier')->get('/spot-sales')->assertForbidden();
-        $this->as('assistant')->get('/spot-sales')->assertOk();
+        $this->as('assistant')->get('/spot-sales')->assertForbidden();
+        $this->get('/spot-sales/create')->assertForbidden();
+        $this->spotSell(5)->assertForbidden();
+        $this->assertSame(0, Sale::count());
+        foreach (['admin', 'manager', 'accountant', 'cashier'] as $role) {
+            $this->as($role)->get('/spot-sales')->assertOk();
+        }
+        foreach (['admin', 'manager', 'accountant'] as $role) {
+            $this->as($role)->get('/spot-sales/create')->assertOk();
+        }
+        $this->as('cashier')->get('/spot-sales/create')->assertForbidden();
     }
 
     public function testASaleNeedsAPriceAboveZeroButOwnUseAndOtherUseDoNot()
     {
-        $this->as('assistant');
+        $this->as('accountant');
         $this->spotSell(5, ['price' => 0])->assertSessionHasErrors('price');
         $this->assertStringContainsString('above 0', session('errors')->first('price'));
         $this->assertSame(0, Sale::count());
@@ -856,6 +872,9 @@ class SaleTest extends TestCase
                     $this->assertStringContainsString('data-cost="6.5000"', $html, "$role $form");   // pre-filled with the default of the fuel type
                 }
             }
+            if ($form === '/spot-sales/create') {
+                continue; // (the assistant has no spot sales)
+            }
             $html = $this->as('assistant')->get($form)->assertOk()->getContent();
             $this->assertStringNotContainsString('name="cost"', $html, "assistant $form");
             $this->assertStringNotContainsString('data-cost="', $html, "assistant $form");       // not even in the page source
@@ -872,12 +891,13 @@ class SaleTest extends TestCase
     public function testTheCostOfASaleIsTheDefaultOfItsFuelTypeUnlessAUserWhoSeesItTypesAnother()
     {
         $this->defaultCost(6.5);
-        $before = [];
 
         // the assistant never sees the cost: what is sent is not taken, the default is
+        $this->publishTickets(10);
+        $before = Sale::pluck('id')->all();
         $this->as('assistant')->post('/ticket-sales', [
-            'sale_type' => 'spot', 'fuel_type' => $this->diesel, 'amount_kg' => 5, 'customer_id' => $this->customer->id, 'price' => 2, 'cost' => 99,
-            'usage' => 'sale', 'paid_amount' => 10,
+            'sale_type' => 'ticket', 'fuel_type' => $this->diesel, 'lines' => [['spec' => 0, 'quantity' => 1]], 'customer_id' => $this->customer->id, 'price' => 2, 'cost' => 99,
+            'usage' => 'sale', 'payment_method' => 'cash', 'paid_amount' => 10,
         ])->assertSessionHasNoErrors();
         $this->assertEquals(6.5, $this->newSale($before)->cost);
         $before = Sale::pluck('id')->all();
@@ -894,5 +914,116 @@ class SaleTest extends TestCase
             'usage' => 'sale', 'paid_amount' => 10,
         ])->assertSessionHasNoErrors();
         $this->assertEquals(7.25, $this->newSale($before)->cost);
+    }
+
+    public function testIndividualIsTheCustomerOfOwnUseOtherUseAndOfASpotSaleWithNobodyNamed()
+    {
+        $this->publishTickets(20);
+        $individual = Customer::where('is_default', true)->first();
+        $this->assertSame('Individual', $individual->name);
+
+        // own use and other use are always Individual, whoever was chosen or typed (the assistant cannot add customers and is not refused)
+        $this->as('assistant');
+        foreach (['self', 'other'] as $usage) {
+            $before = Sale::pluck('id')->all();
+            $this->sell(1, ['usage' => $usage, 'paid_amount' => null, 'customer_id' => $this->customer->id])->assertSessionHasNoErrors();
+            $this->assertSame($individual->id, $this->newSale($before)->customer_id, $usage);
+
+            $before = Sale::pluck('id')->all();
+            $this->sell(1, ['usage' => $usage, 'paid_amount' => null, 'customer_id' => null, 'new_customer' => 'Not Allowed'])->assertSessionHasNoErrors();
+            $this->assertSame($individual->id, $this->newSale($before)->customer_id, $usage);
+        }
+        $this->assertNull(Customer::where('name', 'Not Allowed')->first());
+
+        // a sale and a ticket loan still name their customer
+        $this->sell(1, ['customer_id' => null, 'new_customer' => null])->assertSessionHasErrors('customer_id');
+        $this->sell(1, ['usage' => 'ticket_loan', 'paid_amount' => null, 'customer_id' => null, 'new_customer' => null])->assertSessionHasErrors('customer_id');
+
+        // a spot sale with nobody named is Individual; with a customer chosen it is that customer's
+        $this->as('manager');
+        $before = Sale::pluck('id')->all();
+        $this->spotSell(2, ['customer_id' => null])->assertSessionHasNoErrors();
+        $this->assertSame($individual->id, $this->newSale($before)->customer_id);
+        $before = Sale::pluck('id')->all();
+        $this->spotSell(2)->assertSessionHasNoErrors();
+        $this->assertSame($this->customer->id, $this->newSale($before)->customer_id);
+
+        // the spot form starts with Individual, and the customer is hidden for own use and other use
+        $response = $this->get('/spot-sales/create')->assertOk();
+        $this->assertSame($individual->id, $response->viewData('defaultCustomer'));
+        $this->assertStringContainsString('value="' . $individual->id . '" selected', $response->getContent());
+        $this->assertStringContainsString("customerPart.style.display = usage.value === 'self' || usage.value === 'other' ? 'none' : ''", $response->getContent());
+        $this->assertStringContainsString("customerPart.style.display = usage.value === 'self' || usage.value === 'other' ? 'none' : ''", $this->get('/ticket-sales/create')->getContent());
+
+        $this->assertSame(1, Customer::where('is_default', true)->count());
+    }
+
+    public function testASaleCannotBeDatedFurtherBackThanTheLimitExceptByTheManager()
+    {
+        $this->publishTickets(20);
+        config(['sales.backdate_days' => 3]);
+        $limit = today()->subDays(3)->toDateString();
+        $tooOld = today()->subDays(4)->toDateString();
+
+        foreach (['accountant', 'assistant'] as $role) {
+            $this->as($role);
+            $this->sell(1, ['sale_date' => $tooOld])->assertSessionHasErrors('sale_date');
+            $this->assertStringContainsString('3 days back', session('errors')->first('sale_date'));
+            $this->sell(1, ['sale_date' => $limit])->assertSessionHasNoErrors();
+        }
+        $this->as('accountant');
+        $this->spotSell(2, ['sale_date' => $tooOld])->assertSessionHasErrors('sale_date');
+        $this->spotSell(2, ['sale_date' => $limit])->assertSessionHasNoErrors();
+        $this->assertStringContainsString('min="' . $limit . '"', $this->get('/spot-sales/create')->getContent());
+        $this->assertStringContainsString('min="' . $limit . '"', $this->get('/ticket-sales/create')->getContent());
+
+        // the manager (and the admin) have no limit
+        foreach (['manager', 'admin'] as $role) {
+            $this->as($role);
+            $this->sell(1, ['sale_date' => today()->subDays(40)->toDateString()])->assertSessionHasNoErrors();
+        }
+
+        // the limit is a setting
+        config(['sales.backdate_days' => 10]);
+        $this->as('accountant');
+        $this->sell(1, ['sale_date' => $tooOld])->assertSessionHasNoErrors();
+
+        // changing the date of a sale: the same limit for the new day; the comment of an old sale can still be changed
+        config(['sales.backdate_days' => 3]);
+        $sale = Sale::where('sale_date', $tooOld)->first();
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => today()->subDays(5)->toDateString()])->assertSessionHasErrors('sale_date');
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => $tooOld, 'comment' => 'checked'])->assertSessionHasNoErrors();
+        $this->assertSame('checked', $sale->fresh()->comment);
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => $limit])->assertSessionHasNoErrors();
+        $this->as('manager')->put('/ticket-sales/' . $sale->id, ['sale_date' => today()->subDays(60)->toDateString()])->assertSessionHasNoErrors();
+    }
+
+    public function testMorePaidThanTheTotalIsKeptAsTheTotalAndWarned()
+    {
+        $this->publishTickets(10);
+        $this->as('manager');
+
+        // 1 ticket of 5 kg x price 2 = 10, 30 typed
+        $before = Sale::pluck('id')->all();
+        $this->sell(1, ['paid_amount' => 30])->assertRedirect('/ticket-sales')->assertSessionHas('warning');
+        $sale = $this->newSale($before);
+        $this->assertEquals(10, $sale->paid_amount);
+        $this->assertEquals(0, $sale->unpaid_amount);
+        $this->assertStringContainsString('more than the total', session('warning'));
+        $this->get('/ticket-sales')->assertSee('alert alert-warning', false)->assertSee('more than the total');
+
+        $this->spotSell(2, ['paid_amount' => 50])->assertSessionHas('warning'); // total 4
+
+        // exactly the total, less than the total, own use: no warning
+        $this->sell(1, ['paid_amount' => 10])->assertSessionMissing('warning');
+        $this->sell(1, ['paid_amount' => 4])->assertSessionMissing('warning');
+        $this->sell(1, ['usage' => 'self', 'paid_amount' => 99])->assertSessionMissing('warning');
+
+        // the forms warn while the amount is typed
+        foreach (['/ticket-sales/create', '/spot-sales/create'] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertStringContainsString('id="f_paid_warning"', $html, $url);
+            $this->assertStringContainsString("paidWarning.style.display = paid > total + 0.004 ? '' : 'none'", $html, $url);
+        }
     }
 }

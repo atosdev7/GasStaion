@@ -137,7 +137,8 @@ class TicketLookupTest extends TestCase
         $this->as('manager')->get('/tickets/lookup')->assertOk();
         $this->as('accountant')->get('/tickets/lookup')->assertOk();
         $this->as('assistant')->get('/tickets/lookup')->assertOk();
-        $this->as('cashier')->get('/tickets/lookup')->assertOk();
+        $this->as('cashier')->get('/tickets/lookup')->assertForbidden(); // the cashier has no Ticket Management
+        $this->get('/tickets/lookup?modal=1&barcode=' . \App\Support\Tickets\Barcode::make('D', 0, 1))->assertForbidden();
     }
 
     public function testLookupShowsTheBatchDateOfAPublishedTicket()
@@ -152,10 +153,6 @@ class TicketLookupTest extends TestCase
         $this->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()
             ->assertSee('#' . $batch->id)->assertSee('2026-09-18')->assertSee('(1 - 5)')
             ->assertSee(route('ticket-publish.show', $batch->id));
-
-        // the cashier may look tickets up but not see the stock: no link
-        $this->as('cashier')->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()
-            ->assertSee('2026-09-18')->assertDontSee(route('ticket-publish.show', $batch->id));
 
         // the date of the batch changed later (by the database: a batch cannot be changed on the screens): the lookup follows
         $batch->forceFill(['date' => '2026-09-20'])->save();
@@ -263,11 +260,11 @@ class TicketLookupTest extends TestCase
         $this->get('/tickets/lookup?supplied=x')->assertSessionHasErrors('supplied');
     }
 
-    public function testACashierSeesTheTableToo()
+    public function testAnAssistantSeesTheTableToo()
     {
         $this->publishSome();
 
-        $page = $this->as('cashier')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
+        $page = $this->as('assistant')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
         $this->assertSame(10, $page->viewData('tickets')->total());
         $page->assertSee(\App\Support\Tickets\Barcode::make('D', 1, 1))->assertDontSee(route('ticket-publish.show', $this->batchIds[1])); // no link to the batch page
     }
@@ -298,10 +295,10 @@ class TicketLookupTest extends TestCase
         $this->post('/tickets/' . $blank . '/restrict')->assertRedirect(route('tickets.lookup'));
     }
 
-    public function testACashierSeesDetailsButNoRestrictOrLift()
+    public function testAnAssistantSeesDetailsButNoRestrictOrLift()
     {
         $this->publishSome();
-        $page = $this->as('cashier')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
+        $page = $this->as('assistant')->get('/tickets/lookup?batch=' . $this->batchIds[1])->assertOk();
 
         $page->assertSee(__('tickets.ticket_details'))
             ->assertDontSee(route('tickets.restrict', \App\Support\Tickets\Barcode::make('D', 1, 3)))

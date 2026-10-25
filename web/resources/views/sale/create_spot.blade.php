@@ -9,12 +9,12 @@
             <input type="hidden" name="sale_type" value="spot">
             <div class="card-body">
                 <div class="row">
-                    <div class="form-group col-md-4">
+                    <div class="form-group col-md-4" id="f_customer_part">
                         @include('sale._customer')
                     </div>
                     <div class="form-group col-md-4">
                         <label for="f_sale_date">{{ __('sales.sale_date') }}</label>
-                        <input id="f_sale_date" name="sale_date" type="date" max="{{ date('Y-m-d') }}" value="{{ old('sale_date', date('Y-m-d')) }}" class="form-control @error('sale_date') is-invalid @enderror">
+                        <input id="f_sale_date" name="sale_date" type="date" min="{{ \App\Support\Sales\SaleAccess::earliestDate(auth()->user()) }}" max="{{ date('Y-m-d') }}" value="{{ old('sale_date', date('Y-m-d')) }}" class="form-control @error('sale_date') is-invalid @enderror">
                         @error('sale_date') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
                 </div>
@@ -66,6 +66,7 @@
                         <label for="f_paid_amount">{{ __('sales.paid_amount') }}</label>
                         <input id="f_paid_amount" name="paid_amount" type="number" step="0.01" min="0" value="{{ old('paid_amount') }}" class="form-control @error('paid_amount') is-invalid @enderror">
                         @error('paid_amount') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        <small id="f_paid_warning" class="form-text text-danger" style="display: none">{{ __('sales.paid_more_warning') }}</small>
                     </div>
                     <div class="form-group col-md-4 f_payment_part">
                         <label>{{ __('sales.unpaid_amount') }}</label>
@@ -131,6 +132,8 @@
     var unpaidAmountDisplay = document.getElementById('f_unpaid_amount_display');
     var usage = document.getElementById('f_usage');
     var paymentParts = document.querySelectorAll('.f_payment_part');
+    var paidWarning = document.getElementById('f_paid_warning');
+    var customerPart = document.getElementById('f_customer_part');
 
     function totalAmount() {
         var kg = parseFloat(amountKg.value);
@@ -148,6 +151,8 @@
         var paid = parseFloat(paidAmount.value);
         if (isNaN(paid)) paid = 0;
         unpaidAmountDisplay.value = Math.max(total - paid, 0).toFixed(2);
+        // more paid than the total is probably a wrong value (the sale keeps the total as paid)
+        paidWarning.style.display = paid > total + 0.004 ? '' : 'none';
     }
 
     function fillPriceAndCostFromFuelType() {
@@ -162,6 +167,8 @@
         for (var i = 0; i < paymentParts.length; i++) {
             paymentParts[i].style.display = usage.value === 'sale' ? '' : 'none';
         }
+        // own use and other use are always the customer "Individual"; no customer chosen is "Individual" too
+        customerPart.style.display = usage.value === 'self' || usage.value === 'other' ? 'none' : '';
     }
 
     usage.addEventListener('change', togglePaymentParts);

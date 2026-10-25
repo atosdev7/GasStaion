@@ -9,16 +9,14 @@ use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
 use App\Models\Tickets\Ticket;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 // Deleting a sale is for wrong input only, so it is refused as soon as the sale has moved on: confirmed by the
-// accountant, older than config('sales.delete_days'), a ticket used or restricted, a payment tied to its debt, or a loan
-// settlement. A deleted sale is soft-deleted and kept for review; confirming its date erases it for good (purge()).
+// accountant, a ticket used or restricted, a payment tied to its debt, or a loan settlement (no time limit of its own). A deleted sale is soft-deleted and kept for review; confirming its date erases it for good (purge()).
 class SaleDeletion
 {
-    // null when the sale may be deleted, otherwise why not: card, is_return, confirmed, returned, too_old, ticket_used, paid or settled.
+    // null when the sale may be deleted, otherwise why not: card, is_return, confirmed, returned, ticket_used, paid or settled.
     public static function blocker(Sale $sale, $lock = false)
     {
         if ($sale->sale_type === 'card') {
@@ -32,9 +30,6 @@ class SaleDeletion
         }
         if (Sale::where('reverses_sale_id', $sale->id)->exists()) {
             return 'returned';
-        }
-        if (Carbon::parse($sale->sale_date)->lt(today()->subDays(config('sales.delete_days')))) {
-            return 'too_old';
         }
 
         // Every ticket must still be sold and unused. No tickets at all (a backup cleared them) cannot be verified.

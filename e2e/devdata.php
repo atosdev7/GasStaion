@@ -146,7 +146,7 @@ $acme = one("SELECT id FROM customers WHERE name = 'ACME Trading'");
 $beta = one("SELECT id FROM customers WHERE name = 'Beta Ltd'");
 $cedar = one("SELECT id FROM customers WHERE name = 'Cedar Logistics'");
 $delta = one("SELECT id FROM customers WHERE name = 'Delta Taxi'");
-$self = one("SELECT id FROM customers WHERE name = 'Self'");
+$self = one("SELECT id FROM customers WHERE is_default = 1"); // "Individual"
 
 section('opening balances by the accountant (what existed before the program)', 'opening');
 $acct = login('accountant1', 'secret1');
@@ -169,16 +169,16 @@ foreach ([['D:0', 150], ['D:1', 80], ['A:0', 60]] as $t) {
 
 section('sales, five days, by the assistant', 'sales');
 $assistant = login('assistant1', 'secret1');
-$ticket = function ($label, $fuel, $spec, $qty, $customer, $price, $usage, $method, $paid, $back) use ($assistant) {
+$ticket = function ($label, $fuel, $spec, $qty, $customer, $price, $usage, $method, $paid, $back) use ($assistant, $manager) { // (a day further back than the accountant and the assistant may date a sale is the manager's)
     $f = ['sale_type' => 'ticket', 'fuel_type' => $fuel, 'lines' => [['spec' => $spec, 'quantity' => $qty]], 'customer_id' => $customer, 'price' => $price, 'usage' => $usage, 'sale_date' => day($back)];
     if ($usage === 'sale') {
         $f += ['payment_method' => $method, 'paid_amount' => $paid];
     }
 
-    return act(day($back) . ' ' . $label, $assistant, 'POST', '/ticket-sales', $f, '/ticket-sales');
+    return act(day($back) . ' ' . $label, ($back > 3 ? $manager : $assistant), 'POST', '/ticket-sales', $f, '/ticket-sales');
 };
-$spot = function ($label, $fuel, $kg, $customer, $price, $paid, $back) use ($assistant) {
-    return act(day($back) . ' ' . $label, $assistant, 'POST', '/ticket-sales', ['sale_type' => 'spot', 'fuel_type' => $fuel, 'amount_kg' => $kg, 'customer_id' => $customer, 'price' => $price, 'usage' => 'sale', 'paid_amount' => $paid, 'sale_date' => day($back)], '/spot-sales');
+$spot = function ($label, $fuel, $kg, $customer, $price, $paid, $back) use ($acct, $manager) { // (spot sales are the accountant's: the assistant works on ticket sales only)
+    return act(day($back) . ' ' . $label, ($back > 3 ? $manager : $acct), 'POST', '/ticket-sales', ['sale_type' => 'spot', 'fuel_type' => $fuel, 'amount_kg' => $kg, 'customer_id' => $customer, 'price' => $price, 'usage' => 'sale', 'paid_amount' => $paid, 'sale_date' => day($back)], '/spot-sales');
 };
 $ticket('ACME buys 4 x 5 kg Diesel, cash', 'D', 0, 4, $acme, '7.5', 'sale', 'cash', '150', 4);
 $ticket('Beta buys 3 x 10 kg Diesel on credit (bank, nothing paid)', 'D', 1, 3, $beta, '7.5', 'sale', 'bank', '0', 4);
@@ -200,7 +200,7 @@ $ticket('Delta Taxi takes 2 x 5 kg on a ticket loan', 'D', 0, 2, $delta, '7.5', 
 section('a wrong spot sale is entered and deleted', 'wrong');
 if ($spot('Delta Taxi, spot sale 3 kg Gasoline (wrong)', 'A', '3', $delta, '8.2', '24.6', 0)) {
     $wrong = one("SELECT id FROM sales WHERE sale_type = 'spot' AND amount_kg = 3 ORDER BY created_at DESC LIMIT 1");
-    act('the wrong sale is deleted', $assistant, 'DELETE', '/ticket-sales/' . $wrong, [], '/spot-sales');
+    act('the wrong sale is deleted', $acct, 'DELETE', '/ticket-sales/' . $wrong, [], '/spot-sales');
 }
 
 section('payments by the accountant', 'payments');

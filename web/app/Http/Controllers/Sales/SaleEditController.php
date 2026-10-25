@@ -11,6 +11,7 @@ use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
+use App\Support\Sales\SaleAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,7 @@ class SaleEditController extends Controller
     {
         $sale = Sale::findOrFail($id);
         abort_unless(Gate::allows($sale->sale_type === 'card' ? 'card_sales.edit' : 'sales.edit'), 403);
+        SaleAccess::authorizeChange(auth()->user(), $sale); // the kind of sale, and whose it is
 
         return $sale;
     }
@@ -62,11 +64,13 @@ class SaleEditController extends Controller
             return redirect($back)->withErrors(['sale' => __('sale_edit.confirmed')]);
         }
 
+        // (the limit of backdate_days is for a day the sale is moved to: a sale that is old already keeps its day when only the comment changes)
+        $moving = substr((string) $sale->sale_date, 0, 10) !== (string) $request->input('sale_date');
         $data = $request->validate([
-            'sale_date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'sale_date' => $moving ? SaleAccess::dateRules($request->user(), ['required']) : 'required|date_format:Y-m-d|before_or_equal:today',
             'comment' => 'nullable|string|max:255',
             'receipt' => 'nullable|boolean',
-        ]);
+        ], SaleAccess::dateMessages());
 
         $before = '#' . $sale->id . ' ' . $sale->sale_type . ' ' . $sale->sale_date . ' / ' . $sale->comment . ' / receipt ' . (int) $sale->receipt;
         $moved = substr((string) $sale->sale_date, 0, 10) !== $data['sale_date'];

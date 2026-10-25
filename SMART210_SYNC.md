@@ -10,6 +10,8 @@ Each entry: the date, the web change (with the `WORK_PLAN.md` row), what the Sma
 
 | Date | Web change | What the Smart210 has to do | Status |
 | --- | --- | --- | --- |
+| 2026-10-25 | The built-in customer "Self" is now "Individual" and its flag is `is_default` instead of `is_self` in the customers download (9.4cr). Own use, other use and the buyers who pay cash and need no name are all this customer. | The download sends both `is_default` and the old `is_self` (same value) so nothing breaks meanwhile; read `is_default` to sort the customer first; use Individual as the customer of a self use / other use sale and as the default customer of a spot sale (the cashier writes what is known in the comment). | open |
+| 2026-10-25 | A sale cannot be dated more than `sales.backdate_days` days back on the web (9.4cr); a sale deleted on the web has no time limit. | Nothing: the terminal sells today. | none |
 
 ## Done (the Smart210 already follows the web app)
 

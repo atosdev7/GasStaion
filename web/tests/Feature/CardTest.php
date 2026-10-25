@@ -92,16 +92,20 @@ class CardTest extends TestCase
             $this->as($role)->get('/card-summary')->assertForbidden();
             $this->as($role)->post('/cards/' . $card->id . '/block')->assertForbidden();
         }
-        // the manager tops up on the web, the accountant does not
-        $this->as('manager')->get('/card-topups/create')->assertOk();
-        $this->as('accountant')->get('/card-topups/create')->assertForbidden();
-        $this->as('accountant')->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 1, 'price' => 1])->assertForbidden();
+        // the manager and the accountant top up on the web (admin too); the assistant and the cashier do not
+        foreach (['admin', 'manager', 'accountant'] as $role) {
+            $this->as($role)->get('/card-topups/create')->assertOk();
+        }
+        foreach (['assistant', 'cashier'] as $role) {
+            $this->as($role)->get('/card-topups/create')->assertForbidden();
+            $this->as($role)->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 1, 'price' => 1])->assertForbidden();
+        }
         $this->assertSame(0, Sale::where('sale_type', 'card')->count());
-        // the card sales are seen with the other sales
-        foreach (['manager', 'accountant', 'assistant'] as $role) {
+        // the card sales are seen with the other sales by admin, manager and accountant; the cashier looks at his own; the assistant has none
+        foreach (['admin', 'manager', 'accountant', 'cashier'] as $role) {
             $this->as($role)->get('/card-sales')->assertOk();
         }
-        $this->as('cashier')->get('/card-sales')->assertForbidden();
+        $this->as('assistant')->get('/card-sales')->assertForbidden();
     }
 
     public function testTheCardListShowsTheBalanceAndHasFilters()
@@ -273,9 +277,11 @@ class CardTest extends TestCase
         $card = $this->card('AA01', 'Li Wei');
         $sale = $this->topUp($card, 50);
 
-        // the actions: the manager sees Delete, the accountant and the assistant do not
-        $this->assertStringContainsString(route('card-sales.destroy', $sale->id), $this->as('manager')->get('/card-sales')->getContent());
-        foreach (['accountant', 'assistant'] as $role) {
+        // the actions: the manager (and the admin) see Delete, the accountant, the assistant and the cashier do not
+        foreach (['manager', 'admin'] as $role) {
+            $this->assertStringContainsString(route('card-sales.destroy', $sale->id), $this->as($role)->get('/card-sales')->getContent(), $role);
+        }
+        foreach (['accountant', 'assistant', 'cashier'] as $role) {
             $this->assertStringNotContainsString(route('card-sales.destroy', $sale->id), $this->as($role)->get('/card-sales')->getContent(), $role);
             $this->as($role)->delete('/card-sales/' . $sale->id)->assertForbidden();
             $this->assertNotNull(Sale::find($sale->id), $role);
@@ -300,13 +306,13 @@ class CardTest extends TestCase
         $this->assertEquals(20, $card->fresh()->balance());
         $this->assertFalse((bool) $card->fresh()->synced);
 
-        // confirmed or too old: never
+        // confirmed: never; an old one is deleted like any other (there is no time limit)
         $confirmed = $this->topUp($card, 5, null, ['confirmed_at' => now(), 'confirmed_by' => 1]);
         $this->delete('/card-sales/' . $confirmed->id)->assertSessionHasErrors('sale');
         $this->assertStringContainsString('confirmed', session('errors')->first('sale'));
-        $old = $this->topUp($card, 5, today()->subDays(config('sales.delete_days') + 1)->toDateString());
-        $this->delete('/card-sales/' . $old->id)->assertSessionHasErrors('sale');
-        $this->assertStringContainsString('too old', session('errors')->first('sale'));
+        $old = $this->topUp($card, 5, today()->subDays(40)->toDateString());
+        $this->delete('/card-sales/' . $old->id)->assertSessionHasNoErrors();
+        $this->assertNull(Sale::find($old->id));
     }
 
     public function testACardSaleIsOnlyOpenedOnItsSalePageAndCannotBeReturned()
@@ -385,11 +391,13 @@ class CardTest extends TestCase
         $this->assertTrue($sales < strpos($html, 'href="' . url('/card-sales') . '"') && strpos($html, 'href="' . url('/card-sales') . '"') < $group);
         $this->assertStringContainsString('>Card Sales<', $html);
 
-        // the cashier sees none of it, the assistant only Card Sales
-        $this->assertStringNotContainsString('Cards Management', $this->as('cashier')->get('/')->assertOk()->getContent());
+        // the cashier and the assistant have no Cards Management; the cashier sees Card Sales (his own), the assistant none
+        $cashier = $this->as('cashier')->get('/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('Cards Management', $cashier);
+        $this->assertStringContainsString('>Card Sales<', $cashier);
         $assistant = $this->as('assistant')->get('/')->assertOk()->getContent();
         $this->assertStringNotContainsString('Cards Management', $assistant);
-        $this->assertStringContainsString('>Card Sales<', $assistant);
+        $this->assertStringNotContainsString('>Card Sales<', $assistant);
 
         // each page marks only itself in the menu
         foreach (['/cards', '/card-topups', '/card-summary', '/card-sales'] as $path) {

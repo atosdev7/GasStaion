@@ -74,7 +74,7 @@ class SaleDeleteTest extends TestCase
         });
     }
 
-    private function deleteSale($sale, $role = 'assistant')
+    private function deleteSale($sale, $role = 'manager')
     {
         return $this->as($role)->delete('/ticket-sales/' . $sale->id);
     }
@@ -153,33 +153,16 @@ class SaleDeleteTest extends TestCase
         $this->assertSame(2, Ticket::where('sale_id', $sale->id)->count());
     }
 
-    public function testASaleOlderThanTheWindowCannotBeDeleted()
+    public function testAnOldSaleCanBeDeletedWhileNothingHasMovedOn()
     {
+        // there is no time limit: what stops a delete is a ticket that moved on, a confirmation and so on
         $this->publishTickets(5);
         $old = $this->sell(2);
-        $recent = $this->sell(1);
-        Sale::whereKey($old->id)->update(['sale_date' => today()->subDays(4)->toDateString()]);
-        Sale::whereKey($recent->id)->update(['sale_date' => today()->subDays(2)->toDateString()]);
+        Sale::whereKey($old->id)->update(['sale_date' => today()->subDays(40)->toDateString()]);
 
-        $this->assertBlocked($this->deleteSale($old), 'too_old');
-        $this->assertNotDeleted($old);
-
-        $this->deleteSale($recent)->assertSessionHasNoErrors(); // inside the 3 days
-        $this->assertNull(Sale::find($recent->id));
-    }
-
-    public function testTheWindowComesFromTheConfig()
-    {
-        $this->publishTickets(5);
-        $sale = $this->sell(2);
-        Sale::whereKey($sale->id)->update(['sale_date' => today()->subDays(2)->toDateString()]);
-        config(['sales.delete_days' => 1]);
-
-        $this->assertBlocked($this->deleteSale($sale), 'too_old');
-
-        config(['sales.delete_days' => 5]);
-        $this->deleteSale($sale)->assertSessionHasNoErrors();
-        $this->assertNull(Sale::find($sale->id));
+        $this->deleteSale($old)->assertSessionHasNoErrors();
+        $this->assertNull(Sale::find($old->id));
+        $this->assertSame(5, Ticket::where('status', config('ticket_statuses.publish'))->count());
     }
 
     public function testASaleWithAUsedOrRestrictedTicketCannotBeDeleted()
@@ -260,12 +243,22 @@ class SaleDeleteTest extends TestCase
     public function testWhoMayDelete()
     {
         $this->publishTickets(10);
-        foreach (['assistant', 'accountant', 'manager', 'admin'] as $role) {
+        // admin, manager and accountant delete any sale (the sales here were made by the manager)
+        foreach (['accountant', 'manager', 'admin'] as $role) {
             $sale = $this->sell(1);
             $this->deleteSale($sale, $role)->assertSessionHasNoErrors();
             $this->assertNull(Sale::find($sale->id), $role);
         }
 
+        // the assistant has every ticket sale (his own and the ones of the others), but no spot sale
+        $sale = $this->sell(1);
+        $this->deleteSale($sale, 'assistant')->assertSessionHasNoErrors();
+        $this->assertNull(Sale::find($sale->id));
+        $spot = $this->spotSell(5);
+        $this->deleteSale($spot, 'assistant')->assertForbidden();
+        $this->assertNotDeleted($spot);
+
+        // the cashier cannot change any
         $sale = $this->sell(1);
         $this->deleteSale($sale, 'cashier')->assertForbidden();
         $this->assertNotDeleted($sale);
@@ -280,7 +273,7 @@ class SaleDeleteTest extends TestCase
         $confirmed = $this->sell(1);
         Sale::whereKey($confirmed->id)->update(['confirmed_at' => now(), 'confirmed_by' => 1]);
 
-        $html = $this->as('assistant')->get('/ticket-sales')->assertOk()->getContent();
+        $html = $this->as('manager')->get('/ticket-sales')->assertOk()->getContent();
 
         // The quote ends the URL, so the Return link (the same URL plus /return) does not count as a delete form.
         $this->assertStringContainsString('action="' . route('ticket-sales.destroy', $open->id) . '"', $html);
@@ -295,7 +288,7 @@ class SaleDeleteTest extends TestCase
         $gone = $this->sell(3);
         $this->deleteSale($gone);
 
-        $this->as('assistant')->get('/ticket-sales?deleted=1')->assertOk()
+        $this->as('manager')->get('/ticket-sales?deleted=1')->assertOk()
             ->assertSee(__('sale_delete.deleted_note'))
             ->assertSee('15') // the deleted sale's 3 x 5 kg
             ->assertDontSee(__('sale_delete.delete') . '</button>', false);

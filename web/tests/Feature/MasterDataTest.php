@@ -45,8 +45,9 @@ class MasterDataTest extends TestCase
         $this->as('manager')->get('/fuel')->assertOk();
         $this->as('manager')->get('/devices')->assertOk();
         $this->as('manager')->get('/devices/create')->assertForbidden(); // devices.view only
-        $this->as('accountant')->get('/fuel')->assertOk();
-        $this->as('accountant')->get('/fuel/create')->assertForbidden();
+        $this->as('accountant')->get('/fuel')->assertOk();   // the accountant sets the price of a fuel type, like the manager
+        $this->as('accountant')->get('/fuel/create')->assertOk();
+        $this->as('assistant')->get('/fuel')->assertForbidden();
         $this->as('assistant')->get('/customers')->assertOk();
         $this->as('assistant')->get('/customers/create')->assertForbidden();
     }
@@ -154,13 +155,13 @@ class MasterDataTest extends TestCase
 
     // ---- customers ----
 
-    public function testCustomerCrudAndSelfCannotBeDeleted()
+    public function testCustomerCrudAndIndividualCannotBeChangedOrDeleted()
     {
         $this->as('accountant')->post('/customers', ['name' => 'ACME', 'phone' => '123'])->assertRedirect('/customers');
         $c = Customer::where('name', 'ACME')->first();
         $this->assertFalse((bool) $c->synced);
 
-        $self = Customer::where('is_self', true)->first();
+        $self = Customer::where('is_default', true)->first();
         $this->post('/customers/' . $self->id . '/toggle')->assertStatus(404); // no active toggle
         $this->delete('/customers/' . $self->id)->assertForbidden();
         $this->assertNotNull(Customer::find($self->id));

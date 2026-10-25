@@ -14,6 +14,7 @@ use App\Models\Debts\TicketLoan;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
 use App\Support\Tickets\Barcode;
+use App\Support\Sales\SaleAccess;
 use App\Support\Sales\SaleDeletion;
 use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
@@ -63,6 +64,7 @@ class SaleController extends Controller
         $query = $deleted
             ? Sale::onlyTrashed()->where('sale_type', $saleType)->orderByDesc('deleted_at')
             : Sale::where('sale_type', $saleType)->orderByDesc('sale_date')->orderByDesc('created_at');
+        SaleAccess::scope($query, $request->user(), $saleType); // the cashier sees the sales he issued
         if (!empty($filters['sale_date'])) {
             $query->where('sale_date', $filters['sale_date']);
         }
@@ -109,6 +111,7 @@ class SaleController extends Controller
     public function show(Request $request, $id)
     {
         $sale = Sale::withTrashed()->findOrFail($id);
+        abort_unless(SaleAccess::canSee($request->user(), $sale), 403);
         $user = User::find($sale->user_id);
         $customer = Customer::withTrashed()->find($sale->customer_id);
         $card = $sale->card_id ? \App\Models\Cards\Card::withTrashed()->find($sale->card_id) : null;
@@ -127,6 +130,7 @@ class SaleController extends Controller
     // For a sale entered wrong: undoes it (see SaleDeletion), as long as it has not moved on.
     public function destroy($id)
     {
+        SaleAccess::authorizeChange(auth()->user(), Sale::findOrFail($id));
         $sale = SaleDeletion::delete($id);
 
         Audit::log('sale_delete', '#' . $sale->id . ' ' . $sale->sale_type . '/' . $sale->usage . ' ' . $sale->amount_kg . 'kg, total ' . $sale->total_amount);
@@ -157,6 +161,7 @@ class SaleController extends Controller
         return view('sale.create_spot', [
             'fuels' => config('fuel_types'),
             'customers' => Customer::orderBy('name')->pluck('name', 'id'),
+            'defaultCustomer' => Customer::individual()->id, // a buyer who pays cash and needs no name
             'prices' => FuelType::pluck('price', 'fuel_type'),
             'costs' => $this->defaultCosts(),
         ]);
@@ -165,6 +170,7 @@ class SaleController extends Controller
     public function store(Request $request)
     {
         $saleType = $request->input('sale_type');
+        abort_if($saleType === 'spot' && !$request->user()->can('spot_sales.manage'), 403);
         abort_unless(in_array($saleType, self::SALE_TYPES, true), 422);
 
         return $saleType === 'spot' ? $this->storeSpot($request) : $this->storeTicket($request);
@@ -178,7 +184,10 @@ class SaleController extends Controller
             'lines.*.spec' => ['required', Rule::in(array_keys(config('ticket_specs')))],
             'lines.*.quantity' => 'required|integer|min:1|max:100000',
             'lines.*.start_serial' => 'nullable|integer|min:1|max:' . Barcode::MAX_SERIAL,
-            'customer_id' => ['required_without:new_customer', 'nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')],
+            // a sale and a ticket loan name their customer; own use and other use are always "Individual"
+            'customer_id' => [Rule::requiredIf(function () use ($request) {
+                return in_array($request->input('usage'), ['sale', 'ticket_loan'], true) && !$request->filled('new_customer');
+            }), 'nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'new_customer' => 'nullable|string|max:100', // a name typed in the form that is not a customer yet
             'price' => ['required', 'numeric', 'min:0', 'max:9999999', self::priceAboveZeroForASale()],
             'cost' => 'nullable|numeric|min:0|max:9999999',
@@ -186,9 +195,9 @@ class SaleController extends Controller
             'payment_method' => ['required_if:usage,sale', 'nullable', Rule::in(self::PAYMENT_METHODS)],
             'paid_amount' => 'required_if:usage,sale|nullable|numeric|min:0|max:99999999',
             'receipt' => 'nullable|boolean',
-            'sale_date' => 'nullable|date_format:Y-m-d|before_or_equal:today', // the day of the sale; today when it is not sent
+            'sale_date' => SaleAccess::dateRules($request->user(), ['nullable']), // the day of the sale; today when it is not sent, and not further back than backdate_days
             'comment' => 'nullable|string|max:255',
-        ]);
+        ], SaleAccess::dateMessages());
 
         $this->checkNewCustomer($data);
         $fuelType = $data['fuel_type'];
@@ -283,7 +292,7 @@ class SaleController extends Controller
         return redirect()->route('ticket-sales.index')->with('status', __('sales.sold', [
             'count' => $sale->getAttribute('ticket_count'),
             'total' => $sale->total_amount,
-        ]));
+        ]))->with('warning', $this->overpaidWarning($data, $sale));
     }
 
     private function storeSpot(Request $request)
@@ -291,16 +300,16 @@ class SaleController extends Controller
         $data = $request->validate([
             'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
             'amount_kg' => 'required|numeric|min:0.01|max:999999',
-            'customer_id' => ['required_without:new_customer', 'nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')], // nobody named: "Individual"
             'new_customer' => 'nullable|string|max:100', // a name typed in the form that is not a customer yet
             'price' => ['required', 'numeric', 'min:0', 'max:9999999', self::priceAboveZeroForASale()],
             'cost' => 'nullable|numeric|min:0|max:9999999',
             'usage' => ['required', Rule::in(self::USAGES)],
             'paid_amount' => 'required_if:usage,sale|nullable|numeric|min:0|max:99999999',
             'receipt' => 'nullable|boolean',
-            'sale_date' => 'nullable|date_format:Y-m-d|before_or_equal:today', // the day of the sale; today when it is not sent
+            'sale_date' => SaleAccess::dateRules($request->user(), ['nullable']), // the day of the sale; today when it is not sent, and not further back than backdate_days
             'comment' => 'nullable|string|max:255',
-        ]);
+        ], SaleAccess::dateMessages());
 
         $this->checkNewCustomer($data);
         $fuelType = $data['fuel_type'];
@@ -364,26 +373,41 @@ class SaleController extends Controller
         return redirect()->route('spot-sales.index')->with('status', __('sales.sold_spot', [
             'kg' => $amountKg,
             'total' => $totalAmount,
-        ]));
+        ]))->with('warning', $this->overpaidWarning($data, $sale));
+    }
+
+    // The sale keeps at most its total as paid, so more typed than that is probably a wrong value: said after the sale is saved.
+    private function overpaidWarning(array $data, $sale)
+    {
+        $typed = round((float) ($data['paid_amount'] ?? 0), 2);
+
+        return $data['usage'] === 'sale' && $typed > (float) $sale->total_amount + 0.004
+            ? __('sales.paid_more_than_total', ['paid' => $typed, 'total' => $sale->total_amount]) : null;
     }
 
     // A customer typed into the sale form: only for people who may add customers.
     private function checkNewCustomer(array $data)
     {
-        if (empty($data['customer_id']) && trim((string) ($data['new_customer'] ?? '')) !== '' && !auth()->user()->can('customers.manage')) {
+        if (!in_array($data['usage'], ['self', 'other'], true) && empty($data['customer_id']) && trim((string) ($data['new_customer'] ?? '')) !== '' && !auth()->user()->can('customers.manage')) {
             throw ValidationException::withMessages(['new_customer' => __('sales.customer_cannot_add')]);
         }
     }
 
-    // The customer of the sale: the one chosen, else the customer with the typed name (a name that is there already, in any case, is not
-    // added twice), else a new one.
+    // The customer of the sale: "Individual" for own use and other use; else the one chosen, else the customer with the typed name (a name that is
+    // there already, in any case, is not added twice), else a new one; nobody named (a spot sale) is "Individual" too.
     private function customerFor(array $data)
     {
+        if (in_array($data['usage'], ['self', 'other'], true)) {
+            return Customer::individual()->id;
+        }
         if (!empty($data['customer_id'])) {
             return $data['customer_id'];
         }
 
-        $name = trim((string) $data['new_customer']);
+        $name = trim((string) ($data['new_customer'] ?? ''));
+        if ($name === '') {
+            return Customer::individual()->id;
+        }
         $existing = Customer::whereRaw('LOWER(name) = ?', [mb_strtolower($name, 'UTF-8')])->first();
         if ($existing) {
             return $existing->id;

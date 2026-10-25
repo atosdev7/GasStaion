@@ -79,7 +79,8 @@ class Pull
             case 'customers':
                 return [
                     'id' => (int) $m->id, 'name' => $m->name, 'phone' => $m->phone,
-                    'is_self' => (bool) $m->is_self, 'deleted' => $m->trashed(),
+                    'is_default' => (bool) $m->is_default, 'is_self' => (bool) $m->is_default, // (is_self: the name the terminal reads until it follows, SMART210_SYNC.md)
+                    'deleted' => $m->trashed(),
                 ];
             case 'tickets':
                 // Press tickets store no amount: it comes from their spec.

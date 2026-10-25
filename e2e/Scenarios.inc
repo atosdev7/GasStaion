@@ -32,7 +32,7 @@ static int basicScenario(Terminal &t, const QString &factsFile)
     t.userId = t.one("SELECT id FROM users WHERE username = 'cash'").toInt();
     const int acme = t.customer("ACME");
     const int beta = t.customer("Beta Ltd");
-    const int self = t.customer("Self");
+    const int self = t.customer("Individual");
     check(t.userId > 0 && acme > 0 && beta > 0 && self > 0, "the cashier and the customers came down");
 
     FakeBoards boards;

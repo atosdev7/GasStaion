@@ -73,7 +73,8 @@
         </div>
     @endif
 
-    @if ($ticket->sale)
+    {{-- the sale of the ticket: only to those who may see that sale (the assistant: his own ticket sales) --}}
+    @if ($ticket->sale && \App\Support\Sales\SaleAccess::canSee(auth()->user(), $ticket->sale))
         <div class="card">
             <div class="card-header"><h3 class="card-title">{{ __('menu.ticket_sales') }}</h3></div>
             <div class="card-body">
@@ -89,7 +90,7 @@
         </div>
     @endif
 
-    @if ($ticket->loanSettlement)
+    @if ($ticket->loanSettlement && auth()->user()->can('loans.view'))
         <div class="card">
             <div class="card-header"><h3 class="card-title">{{ __('menu.ticket_loans') }}</h3></div>
             <div class="card-body">
