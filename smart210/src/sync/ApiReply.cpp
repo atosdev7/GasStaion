@@ -7,7 +7,7 @@
 
 ApiReply::ApiReply(int timeoutMs, QObject *parent)
     : QObject(parent), manager_(0), post_(false), timeoutMs_(timeoutMs), reply_(0), ok_(false), busy_(false), networkError_(false),
-      timedOut_(false), httpStatus_(0)
+      timedOut_(false), httpStatus_(0), retries_(0), waitedMs_(0)
 {
     timer_ = new QTimer(this);
     timer_->setSingleShot(true);
@@ -57,6 +57,28 @@ void ApiReply::replyFinished()
     if (httpStatus_ == 0) {
         networkError_ = true;
         message_ = tr("Cannot reach the server: %1").arg(reply_->errorString());
+        emit finished();
+
+        return;
+    }
+
+    if (httpStatus_ == 429) {
+        // too many requests: wait as long as the server asks, then ask again (the same request, on a new connection)
+        bool numeric = false;
+        const int seconds = QString::fromLatin1(reply_->rawHeader("Retry-After")).trimmed().toInt(&numeric);
+        const int waitMs = qMin(numeric && seconds >= 0 ? seconds * 1000 : int(DefaultWaitMs), int(LongestWaitMs));
+        if (retries_ < MaxRetries && waitedMs_ + waitMs <= MaxWaitMs) {
+            ++retries_;
+            waitedMs_ += waitMs;
+            reply_->deleteLater();
+            reply_ = 0;
+            emit throttled(waitMs);
+            QTimer::singleShot(waitMs, this, SLOT(sendNow()));
+
+            return;
+        }
+        busy_ = true;
+        message_ = tr("The server is busy (too many requests), try again in a minute.");
         emit finished();
 
         return;

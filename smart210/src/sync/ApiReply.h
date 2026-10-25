@@ -16,7 +16,12 @@ class QTimer;
 // ok()      the server answered 2xx with {"status": "ok", ...}
 // data()    the whole JSON object the server sent (empty when there was none)
 // message() what to show the user when !ok(): the server's own message, or a plain description of what went wrong
-// isBusy()  the server is running a backup (503 with {"status": "busy"}): keep the data and ask again in a minute
+// isBusy()  the server is running a backup (503 with {"status": "busy"}), or still refuses with 429 (too many requests) after the waits below: keep
+//           the data and ask again in a minute
+//
+// A 429 (the server's limit of calls a minute for this address) is not an answer: the reply waits as long as the server asks (the Retry-After header, in
+// seconds; 5 seconds when it gives none; at most a minute each time) and sends the same request again, up to MaxRetries times and MaxWaitMs of waiting in
+// all. The limiter refuses a call before anything is done with it, so asking again is safe. throttled() tells the client, which holds back its next calls.
 class ApiReply : public QObject
 {
     Q_OBJECT
@@ -35,8 +40,16 @@ public:
     QString message() const { return message_; }
     QJsonObject data() const { return data_; }
 
+    static const int MaxRetries = 5;
+    static const int MaxWaitMs = 120000;
+    static const int DefaultWaitMs = 5000;
+    static const int LongestWaitMs = 60000;
+
+    int retries() const { return retries_; } // how many times a 429 made this reply wait
+
 signals:
     void finished();
+    void throttled(int waitMs); // a 429: the reply waits this long and asks again
 
 private slots:
     void sendNow();
@@ -56,6 +69,8 @@ private:
     bool networkError_;
     bool timedOut_;
     int httpStatus_;
+    int retries_;
+    int waitedMs_;
     QString message_;
     QJsonObject data_;
 };

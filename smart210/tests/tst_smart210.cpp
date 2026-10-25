@@ -127,6 +127,8 @@ private slots:
     void pingReturnsTheServerTime();
     void anErrorReplyShowsTheServersMessage();
     void aBusyServerIsRecognized();
+    void aTooManyRequestsAnswerIsWaitedOutAndAskedAgain();
+    void aServerThatKeepsRefusingWithTooManyRequestsEndsAsBusy();
     void callsLeaveOneIntervalApart();
     void anAnswerThatIsNotJsonIsAnError();
     void aClosedPortIsANetworkError();
@@ -900,6 +902,59 @@ void Smart210Test::aBusyServerIsRecognized()
     QVERIFY(!reply->ok());
     QVERIFY(reply->isBusy());
     QVERIFY(reply->message().contains("busy"));
+}
+
+void Smart210Test::aTooManyRequestsAnswerIsWaitedOutAndAskedAgain()
+{
+    server_->setRetryAfter("1");
+    server_->reply("/api/ping", 429, json("{\"message\":\"Too Many Attempts.\"}"));
+    server_->replyNext("/api/ping", 200, json("{\"status\":\"ok\"}"));
+    ApiClient client;
+    client.setServer("127.0.0.1", server_->port());
+    ApiClient other; // the program holds back, not only the client that was refused
+    other.setServer("127.0.0.1", server_->port());
+
+    QTime time;
+    time.start();
+    ApiReply *reply = client.ping();
+    QSignalSpy throttled(reply, SIGNAL(throttled(int)));
+    QSignalSpy finished(reply, SIGNAL(finished()));
+    QVERIFY(throttled.wait(3000));
+    QCOMPARE(throttled.at(0).at(0).toInt(), 1000);                       // what Retry-After said
+    QCOMPARE(finished.size(), 0);                                        // nothing failed
+
+    ApiReply *later = other.ping();                                      // asked while the pause runs: it waits as well
+    QSignalSpy laterDone(later, SIGNAL(finished()));
+    QVERIFY(finished.wait(5000));
+    QVERIFY(laterDone.size() > 0 || laterDone.wait(5000));
+
+    QVERIFY(reply->ok());
+    QCOMPARE(reply->retries(), 1);
+    QCOMPARE(server_->log(), QStringList() << "GET /api/ping" << "GET /api/ping" << "GET /api/ping"); // refused, asked again, the other call
+    QVERIFY2(time.elapsed() >= 950, qPrintable(QString::number(time.elapsed())));
+    QVERIFY(later->ok());
+}
+
+void Smart210Test::aServerThatKeepsRefusingWithTooManyRequestsEndsAsBusy()
+{
+    server_->setRetryAfter("0");                                         // asked again at once, to see the end
+    server_->reply("/api/ping", 429, json("{\"message\":\"Too Many Attempts.\"}"));
+    ApiClient client;
+    client.setServer("127.0.0.1", server_->port());
+
+    ApiReply *reply = client.ping();
+    QSignalSpy finished(reply, SIGNAL(finished()));
+    QVERIFY(finished.wait(10000));
+
+    QVERIFY(!reply->ok());
+    QVERIFY(reply->isBusy());                                            // kept data, tried again by the next beat
+    QVERIFY2(reply->message().contains("too many requests"), qPrintable(reply->message()));
+    QCOMPARE(reply->retries(), ApiReply::MaxRetries);
+    QCOMPARE(server_->log().size(), 1 + ApiReply::MaxRetries);
+
+    // without a Retry-After the wait is five seconds, and a wait that would pass the total is not made
+    QCOMPARE(int(ApiReply::DefaultWaitMs), 5000);
+    QVERIFY(ApiReply::MaxRetries * ApiReply::DefaultWaitMs <= ApiReply::MaxWaitMs);
 }
 
 void Smart210Test::anAnswerThatIsNotJsonIsAnError()

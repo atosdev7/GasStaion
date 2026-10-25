@@ -160,4 +160,17 @@ class DeviceApiTest extends TestCase
         $this->postJson('/api/sync/begin')->assertOk();
         $this->postJson('/api/sync/begin')->assertOk();
     }
+
+    public function testTooManyCallsAreAnswered429WithHowLongToWaitAndTheLimitIsRead()
+    {
+        // the terminal reads the 429 and the Retry-After header and asks again after that many seconds (ApiClient / ApiReply)
+        config(['sync.throttle_per_minute' => 3]);
+        $this->get('/api/ping')->assertOk();
+        $this->get('/api/ping')->assertOk();
+        $this->get('/api/ping')->assertOk();
+
+        $res = $this->get('/api/ping')->assertStatus(429);
+        $this->assertGreaterThan(0, (int) $res->headers->get('Retry-After'));
+        $this->assertLessThanOrEqual(60, (int) $res->headers->get('Retry-After'));
+    }
 }

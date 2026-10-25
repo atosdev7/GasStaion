@@ -11,7 +11,7 @@ powershell -ExecutionPolicy Bypass -File e2e\run.ps1 offline  # 9.2
 It builds the Smart210 side (qmake, Qt 5.15 desktop), makes the scratch database `gasstation_e2e` new, starts the web app on port 8124 against it,
 in a second Apache of XAMPP 7.4.33 (`e2e/apache/httpd-test.conf`; the Apache service on port 80 is not touched; `-Builtin` uses PHP's built-in
 server instead) with PHP 7.4.33 as its module and for every script here (`D:\xampp\php\php.exe`). The scratch environment (the database, the
-60-requests-a-minute API limit raised with `API_THROTTLE_PER_MINUTE`, the backup folders) reaches Apache through `SetEnv` lines that the script
+200-requests-a-minute API limit raised with `API_THROTTLE_PER_MINUTE`, the backup folders) reaches Apache through `SetEnv` lines that the script
 writes to `web/storage/logs/apache-e2e-env.conf`. It runs the terminal, then compares the two. The dev database
 `gasstation` is never used: `verify.php` checks at the end that its row counts are what they were before. XAMPP's MariaDB must be running; it is left
 running.

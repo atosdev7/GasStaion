@@ -67,9 +67,19 @@ ApiReply *ApiClient::send(const QNetworkRequest &request, const QByteArray &body
     nextFreeMs = at + minIntervalMs;
 
     ApiReply *reply = new ApiReply(timeoutMs_, this);
+    connect(reply, SIGNAL(throttled(int)), this, SLOT(pause(int)));
     reply->send(&manager_, request, body, post, int(at - now));
 
     return reply;
+}
+
+// The server's limit is for the address, so every call of the program waits, not only the one that was refused.
+void ApiClient::pause(int ms)
+{
+    const qint64 until = callClock.elapsed() + ms;
+    if (until > nextFreeMs) {
+        nextFreeMs = until;
+    }
 }
 
 ApiReply *ApiClient::get(const QString &path)

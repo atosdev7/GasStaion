@@ -36,6 +36,7 @@ public:
         replies_[path] = QList<Answer>() << qMakePair(status, body);
     }
     void replyNext(const QString &path, int status, const QByteArray &body) { replies_[path] << qMakePair(status, body); }
+    void setRetryAfter(const QByteArray &seconds) { retryAfter_ = seconds; } // sent with every 429
     void hang(const QString &path) { replies_[path] = QList<Answer>() << qMakePair(-1, QByteArray()); }
 
     QList<Request> requests() const { return requests_; }
@@ -104,13 +105,15 @@ private slots:
             return; // never answers
         }
 
-        socket->write("HTTP/1.1 " + QByteArray::number(answer.first) + " X\r\nContent-Type: application/json\r\nContent-Length: "
+        socket->write("HTTP/1.1 " + QByteArray::number(answer.first) + " X\r\nContent-Type: application/json\r\n"
+                      + (answer.first == 429 && !retryAfter_.isEmpty() ? "Retry-After: " + retryAfter_ + "\r\n" : QByteArray()) + "Content-Length: "
                       + QByteArray::number(answer.second.size()) + "\r\nConnection: close\r\n\r\n" + answer.second);
         socket->disconnectFromHost();
     }
 
 private:
     QTcpServer server_;
+    QByteArray retryAfter_;
     QHash<QString, QList<Answer> > replies_;
     QHash<QTcpSocket *, QByteArray> buffers_;
     QList<Request> requests_;

@@ -34,6 +34,9 @@ public:
     // The connection test: server time, and whether the web app has registered this terminal's address.
     ApiReply *ping();
 
+private slots:
+    void pause(int ms); // a reply was told to wait (HTTP 429): no call of the program leaves for this long
+
 private:
     QNetworkRequest request(const QString &path) const;
     ApiReply *send(const QNetworkRequest &request, const QByteArray &body, bool post);
