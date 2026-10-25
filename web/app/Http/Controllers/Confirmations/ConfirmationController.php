@@ -40,8 +40,8 @@ class ConfirmationController extends Controller
         $data = $request->validate(['date' => 'nullable|date_format:Y-m-d|before_or_equal:today']);
 
         $waiting = $this->waitingByDate();
-        // Without a chosen date: the oldest one still waiting, since that is what should be confirmed first.
-        $date = $data['date'] ?? ($waiting ? min(array_keys($waiting)) : today()->toDateString());
+        // Without a chosen date: today (the waiting dates under the date box lead to the older ones).
+        $date = $data['date'] ?? today()->toDateString();
 
         return [
             'date' => $date,

@@ -11,7 +11,7 @@
                 <label for="f_to" class="mr-2">{{ __('debts.to') }}</label>
                 <input id="f_to" name="to" type="date" value="{{ $to }}" class="form-control mr-3">
                 <button type="submit" class="btn btn-primary">{{ __('debts.show') }}</button>
-                <a href="{{ route('debt-summary.export', ['from' => $from, 'to' => $to]) }}" class="btn btn-outline-success ml-2"><i class="fas fa-file-excel"></i> {{ __('debts.export_xls') }}</a>
+                <a href="{{ route('debt-summary.export', ['from' => $from, 'to' => $to]) }}" class="btn btn-outline-success ml-auto"><i class="fas fa-file-excel"></i> {{ __('debts.export_xls') }}</a>
             </form>
             @if ($errors->any())
                 <div class="text-danger mt-2">{{ $errors->first() }}</div>

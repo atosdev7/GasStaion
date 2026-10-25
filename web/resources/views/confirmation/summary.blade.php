@@ -15,7 +15,7 @@
     <div class="card">
         <div class="card-body">
             <div class="clearfix mb-2">
-                <a href="{{ route('confirmations.summary-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
+                <a href="{{ route('confirmations.summary-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm float-right"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
             </div>
             @include('confirmation._summary')
         </div>

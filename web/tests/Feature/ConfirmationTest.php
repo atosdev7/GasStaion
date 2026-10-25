@@ -169,11 +169,14 @@ class ConfirmationTest extends TestCase
         $this->assertStringContainsString($ticketGas->id, $ticket);
         $this->assertStringContainsString($ticketDiesel->id, $ticket);
         $this->assertStringNotContainsString($spotGas->id, $ticket);
-        // the spot tab is ONE table too, with gasoline on the left and diesel on the right in the same row
+        // the spot tab has a table for each fuel type, the gasoline one and the diesel one under it, with one Excel button above them
         $spot = $pane('spot');
-        $this->assertSame(1, substr_count($spot, '<table'));
-        $this->assertRegExp('/<th colspan="9" class="text-center ">Gasoline \(2\)<\/th>\s*<th colspan="9" class="text-center border-left">Diesel \(1\)<\/th>/', $spot);
-        $this->assertSame(1, substr_count($spot, '<tbody>'));
+        $this->assertSame(2, substr_count($spot, '<table'));
+        $this->assertRegExp('/<h6[^>]*>Gasoline \(2\)<\/h6>.*<table.*<h6[^>]*>Diesel \(1\)<\/h6>.*<table/s', $spot);
+        $this->assertSame(0, substr_count($spot, 'border-left">Diesel'));                       // not side by side
+        $this->assertSame(1, substr_count($spot, 'fa-file-excel'));
+        $this->assertRegExp('/<h6[^>]*>Gasoline \(2\)<\/h6>\s*<a href="[^"]*sales-export[^"]*"[^>]*><i class="fas fa-file-excel">/', $spot);   // the button is at the right of the first heading
+        $this->assertSame(2, substr_count($spot, '<tbody>'));
         $this->assertSame(3, substr_count($spot, 'name="sales[]"'));
         $this->assertStringContainsString($spotDiesel->id, $spot);
         // card sales: one table with a Fuel type column, the name is the holder of the card, the payment is cash
@@ -701,15 +704,21 @@ class ConfirmationTest extends TestCase
         $this->as('assistant')->get('/confirmations/summary-export?date=2026-10-01')->assertForbidden();
     }
 
-    public function testWithoutADateTheOldestWaitingOneIsShown()
+    public function testWithoutADateTodayIsShownOnEveryPage()
     {
-        $this->sale('2026-10-03');
         $old = $this->sale('2026-10-01');
-        $this->sale('2026-10-02', ['confirmed_at' => now(), 'confirmed_by' => 1]);
+        $today = $this->sale(today()->toDateString());
 
+        // the oldest waiting date is not chosen for the cashier any more: it is one of the badges under the date box
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee($old->id)
-            ->assertSee('value="2026-10-01"', false);
+            ->assertSee($today->id)
+            ->assertDontSee($old->id)
+            ->assertSee('value="' . today()->toDateString() . '"', false)
+            ->assertSee('2026-10-01 (1)');
+        foreach (['overview', 'fuel', 'tickets', 'supplements', 'debts', 'summary'] as $page) {
+            $this->get('/confirmations/' . $page)->assertOk()->assertSee('value="' . today()->toDateString() . '"', false);
+        }
+        $this->get('/confirmations?date=2026-10-01')->assertOk()->assertSee($old->id)->assertSee('value="2026-10-01"', false);
     }
 
     public function testTheWaitingDatesAreListedWithTheirCounts()
@@ -718,9 +727,17 @@ class ConfirmationTest extends TestCase
         $this->sale('2026-10-01');
         $this->supplement('2026-10-02');
 
+        // each page shows the count of its own records, and only the dates that have some
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (0 / 0 / 2 / 0 / 0)')
-            ->assertSee('2026-10-02 (0 / 0 / 0 / 1 / 0)');
+            ->assertSee('2026-10-01 (2)')
+            ->assertDontSee('2026-10-02 (');
+        $this->get('/confirmations/supplements')->assertOk()->assertSee('2026-10-02 (1)')->assertDontSee('2026-10-01 (');
+        $this->get('/confirmations/overview')->assertOk()->assertSee('2026-10-01 (2)')->assertSee('2026-10-02 (1)');   // all the pages added up
+        $this->get('/confirmations/summary')->assertOk()->assertSee('2026-10-01 (2)')->assertSee('2026-10-02 (1)');
+        // on the summary a waiting date leads to the overview of that date, on the other pages to the same page
+        $this->get('/confirmations/summary')->assertSee('href="' . route('confirmations.overview', ['date' => '2026-10-01']) . '"', false)
+            ->assertDontSee('href="' . route('confirmations.summary', ['date' => '2026-10-01']) . '"', false);
+        $this->get('/confirmations')->assertSee('href="' . route('confirmations.index', ['date' => '2026-10-01']) . '"', false);
     }
 
     public function testConfirmingStampsOnlyTheCheckedRecords()
@@ -926,6 +943,28 @@ class ConfirmationTest extends TestCase
         $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'debts'])->assertSessionHasErrors('debts');   // nothing checked
     }
 
+    public function testTheWaitingDatesSuggestTheLatestFiveAndSayHowManyOlderOnesThereAre()
+    {
+        foreach (['2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26'] as $date) {
+            $this->sale($date);
+        }
+
+        $page = $this->as('manager')->get('/confirmations?date=2026-09-20')->assertOk();
+        foreach (['2026-09-26', '2026-09-25', '2026-09-24', '2026-09-23', '2026-09-22'] as $date) {
+            $page->assertSee($date . ' (1)');                                      // the five newest
+        }
+        $page->assertDontSee('2026-09-21 (1)')->assertDontSee('2026-09-20 (1)')->assertSee('+ 2 older: choose the date');
+        $html = $page->getContent();
+        $this->assertLessThan(strpos($html, '2026-09-22 (1)'), strpos($html, '2026-09-26 (1)'));   // newest first
+
+        // the waiting dates stand under the date box, not beside it
+        $this->assertStringNotContainsString('justify-content-between', substr($html, strpos($html, 'f_date') - 400, 900));
+        $this->assertLessThan(strpos($html, __('confirm.waiting') . ':'), strpos($html, 'id="f_date"'));
+
+        // five or fewer: no note
+        $this->as('manager')->get('/confirmations/supplements')->assertOk()->assertDontSee('older: choose the date');
+    }
+
     public function testTheWaitingDatesCountTheFuelStockAndTheDebtsToo()
     {
         \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
@@ -936,8 +975,10 @@ class ConfirmationTest extends TestCase
         $this->fuelOutbound('2026-10-01');
         $this->fuelInbound('2026-10-04', ['confirmed_at' => now(), 'confirmed_by' => 1]);     // confirmed: not waiting
 
-        // fuel stock / ticket stock / sales / supplements / debts
-        $this->as('manager')->get('/confirmations')->assertOk()->assertSee('2026-10-01 (2 / 0 / 0 / 0 / 3)')->assertDontSee('2026-10-04 (');
+        // each page counts its own: the fuel stock the inbound and the outbound, the debts the two payments and the settlement
+        $this->as('manager')->get('/confirmations/fuel')->assertOk()->assertSee('2026-10-01 (2)')->assertDontSee('2026-10-04 (');
+        $this->get('/confirmations/debts')->assertOk()->assertSee('2026-10-01 (3)')->assertDontSee('2026-10-04 (');
+        $this->get('/confirmations')->assertOk()->assertDontSee('2026-10-01 (');                                   // nothing of the sales waits
         $this->get('/confirmations?date=2026-10-04')->assertOk()->assertSee(__('confirm.already', ['fuel' => 1, 'tickets' => 0, 'sales' => 0, 'supplements' => 0, 'debts' => 0]));
     }
 
@@ -1151,9 +1192,10 @@ class ConfirmationTest extends TestCase
         $this->publishBatch('2026-10-01');
         $this->inbound('2026-10-03');
 
-        $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (0 / 3 / 1 / 0 / 0)')
-            ->assertSee('2026-10-03 (0 / 1 / 0 / 0 / 0)');
+        $this->as('manager')->get('/confirmations/tickets')->assertOk()
+            ->assertSee('2026-10-01 (3)')
+            ->assertSee('2026-10-03 (1)');
+        $this->get('/confirmations')->assertOk()->assertSee('2026-10-01 (1)')->assertDontSee('2026-10-03 (');     // the sales page counts the sale only
     }
 
     public function testConfirmingTheTicketStockStampsOnlyTheCheckedRecordsOfTheDate()

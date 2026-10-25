@@ -10,7 +10,7 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.tickets'])
+    @include('confirmation._header', ['route' => 'confirmations.tickets', 'area' => 'tickets'])
 
     {{-- The blank ticket stock of the date: the ticket inbounds (a negative quantity takes blank tickets out) and the publishes. The confirm button confirms the
          ones checked that are not confirmed yet; Unconfirm (a manager) sends the same form to its own address (formaction). --}}

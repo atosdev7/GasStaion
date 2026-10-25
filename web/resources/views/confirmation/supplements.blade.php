@@ -10,7 +10,7 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.supplements'])
+    @include('confirmation._header', ['route' => 'confirmations.supplements', 'area' => 'supplements'])
 
     {{-- Supplements (to confirm; one table, the first fuel type on the left, the second on the right) / Remainders (the remainders of the date) --}}
     <div class="card card-outline card-primary card-outline-tabs">
@@ -29,7 +29,7 @@
                         <input type="hidden" name="from" value="supplements">
 
                         <div class="clearfix mb-2">
-                            <a href="{{ route('confirmations.supplements-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
+                            <a href="{{ route('confirmations.supplements-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm float-right"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
                         </div>
                         @include('confirmation._supplements_table')
 
@@ -44,7 +44,7 @@
 
                 <div class="tab-pane fade" id="tab-remainders" role="tabpanel">
                     <div class="clearfix mb-2">
-                        <a href="{{ route('confirmations.remainders-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
+                        <a href="{{ route('confirmations.remainders-export', ['date' => $date]) }}" class="btn btn-outline-success btn-sm float-right"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover text-nowrap">

@@ -10,7 +10,7 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.fuel'])
+    @include('confirmation._header', ['route' => 'confirmations.fuel', 'area' => 'fuel'])
 
     {{-- The fuel stock of the date: the fuel inbounds and the fuel outbounds made by hand (the outbound of a supply follows the supply). The confirm button confirms the
          ones checked that are not confirmed yet; Unconfirm (a manager) sends the same form to its own address (formaction). --}}

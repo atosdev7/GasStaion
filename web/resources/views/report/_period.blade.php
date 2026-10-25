@@ -17,7 +17,7 @@
             <label for="f_to" class="mr-2">{{ __('report.to') }}</label>
             <input id="f_to" name="to" type="date" value="{{ $to }}" class="form-control mr-3">
             <button type="submit" class="btn btn-primary">{{ __('report.show') }}</button>
-            <button type="submit" name="export" value="xls" class="btn btn-outline-success ml-2"><i class="fas fa-file-excel"></i> {{ __('report.export_xls') }}</button>
+            <button type="submit" name="export" value="xls" class="btn btn-outline-success ml-auto"><i class="fas fa-file-excel"></i> {{ __('report.export_xls') }}</button>
         </form>
         @if ($errors->any())
             <div class="text-danger mt-2">{{ $errors->first() }}</div>

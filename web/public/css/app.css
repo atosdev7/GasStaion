@@ -50,9 +50,10 @@ body, .content-wrapper, .main-sidebar, .main-header {
 .bootstrap-datetimepicker-widget.dropdown-menu:not(.timepicker-sbs) { width: 19rem; max-width: none; white-space: normal; }
 .bootstrap-datetimepicker-widget table { width: 100%; }
 
-/* every table of the pages has vertical borders between its columns (and at its sides) */
+/* every table of the pages has vertical borders between its columns (and at its sides) and a line under its last row (also under a Total row) */
 .content-wrapper .table th, .content-wrapper .table td { border-left: 1px solid #dee2e6; }
 .content-wrapper .table th:last-child, .content-wrapper .table td:last-child { border-right: 1px solid #dee2e6; }
+.content-wrapper .table { border-bottom: 1px solid #dee2e6; }
 
 /* dashboard charts (inline SVG) */
 .dash-chart { width: 100%; height: auto; display: block; }

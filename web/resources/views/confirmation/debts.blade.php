@@ -10,7 +10,7 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.debts'])
+    @include('confirmation._header', ['route' => 'confirmations.debts', 'area' => 'debts'])
 
     {{-- The debts of the date: the debt payments received (a reversal is a line of its own, with the negative amount) and the settlements of the ticket loans (the tickets
          given back; a reversal has the negative kg). The debts and the ticket loans themselves are not confirmed. The confirm button confirms the ones checked that

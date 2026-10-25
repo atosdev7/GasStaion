@@ -6,9 +6,11 @@
 @php($specs = count($sides) === 1 ? ($sides[0]['specs'] ?? []) : [])
 @php($lines = max(array_map(function ($side) { return $side['rows']->count(); }, $sides)))
 @php($many = count($sides) > 1)
-<div class="clearfix mb-2">
-    <a href="{{ $export }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
-</div>
+@if ($showExport ?? true)
+    <div class="clearfix mb-2">
+        <a href="{{ $export }}" class="btn btn-outline-success btn-sm float-right"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
+    </div>
+@endif
 <div class="table-responsive">
     <table class="table table-sm table-hover text-nowrap">
         <thead>

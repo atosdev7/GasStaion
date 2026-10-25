@@ -10,7 +10,7 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.index'])
+    @include('confirmation._header', ['route' => 'confirmations.index', 'area' => 'sales'])
 
     @if ($deletedSales)
         <div class="alert alert-warning">{{ __('confirm.will_erase', ['count' => $deletedSales]) }}</div>
@@ -37,10 +37,23 @@
                             <input type="hidden" name="from" value="sales">
                             <input type="hidden" name="tab" value="{{ $block }}">
 
-                            @include('confirmation._sales_table', [
-                                'sides' => $group['sides'],
-                                'export' => route('confirmations.sales-export', ['date' => $date, 'block' => $block]),
-                            ])
+                            {{-- a tab with the fuel types apart (the spot sales) shows one table for each, one under the other; the Excel button stands at the right of the
+                                 heading of the first --}}
+                            @foreach (count($group['sides']) > 1 ? $group['sides'] : [null] as $part)
+                                @if ($part)
+                                    <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+                                        <h6 class="font-weight-bold mb-0">{{ $part['title'] }}</h6>
+                                        @if ($loop->first)
+                                            <a href="{{ route('confirmations.sales-export', ['date' => $date, 'block' => $block]) }}" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel"></i> {{ __('confirm.export_xls') }}</a>
+                                        @endif
+                                    </div>
+                                @endif
+                                @include('confirmation._sales_table', [
+                                    'sides' => $part ? [$part] : $group['sides'],
+                                    'export' => route('confirmations.sales-export', ['date' => $date, 'block' => $block]),
+                                    'showExport' => !$part,
+                                ])
+                            @endforeach
 
                             @if ($group['rows']->contains(function ($sale) { return !$sale->confirmed_at; }) || $deletedSales)
                                 <button type="submit" class="btn btn-success" onclick="return confirm(@json(__('confirm.confirm_question', ['date' => $date])))">
