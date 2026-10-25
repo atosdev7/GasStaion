@@ -60,6 +60,63 @@ bool BoardBus::hasBoard(int address) const
     return indexOf(address) >= 0;
 }
 
+void BoardBus::setBoardEnabled(int address, bool enabled)
+{
+    const int index = indexOf(address);
+    if (index < 0 || boards_.at(index).enabled == enabled) {
+        return;
+    }
+
+    boards_[index].enabled = enabled;
+    if (!enabled) {
+        // what waits for it fails, and it is offline from now on (an answer that is still on its way is dropped, see gotAnswer)
+        failPending(index, ErrNoConnection);
+        if (boards_.at(index).online) {
+            boards_[index].online = false;
+            boards_[index].missed = 0;
+            boards_[index].status = Status();
+            emit boardOnlineChanged(address, false);
+        }
+    } else {
+        boards_[index].lastTry = 0; // asked in the next round
+    }
+}
+
+void BoardBus::setBoardPolled(int address, bool polled)
+{
+    const int index = indexOf(address);
+    if (index < 0 || boards_.at(index).polled == polled) {
+        return;
+    }
+
+    boards_[index].polled = polled;
+    if (!polled) {
+        // from now on it is not asked about its status: it is not online (nothing is known), and what it said last is forgotten
+        boards_[index].missed = 0;
+        boards_[index].status = Status();
+        if (boards_.at(index).online) {
+            boards_[index].online = false;
+            emit boardOnlineChanged(address, false);
+        }
+    } else {
+        boards_[index].lastTry = 0; // asked in the next round
+    }
+}
+
+bool BoardBus::isPolled(int address) const
+{
+    const int index = indexOf(address);
+
+    return index >= 0 && boards_.at(index).polled;
+}
+
+bool BoardBus::canTalk(int address) const
+{
+    const int index = indexOf(address);
+
+    return index >= 0 && connected_ && boards_.at(index).enabled && (boards_.at(index).online || !boards_.at(index).polled);
+}
+
 bool BoardBus::isOnline(int address) const
 {
     const int index = indexOf(address);
@@ -187,7 +244,7 @@ void BoardBus::linkDown()
 bool BoardBus::send(int address, int command, const QByteArray &data)
 {
     const int index = indexOf(address);
-    if (index < 0 || !connected_ || !boards_.at(index).online || boards_.at(index).hasPending || data.size() > MaxData) {
+    if (index < 0 || !canTalk(address) || boards_.at(index).hasPending || data.size() > MaxData) {
         return false;
     }
     Board &board = boards_[index];
@@ -215,6 +272,13 @@ void BoardBus::failPending(int index, int error)
 
 bool BoardBus::due(const Board &board, qint64 now) const
 {
+    if (!board.enabled) {
+        return false;
+    }
+    if (!board.polled) {
+        return board.hasPending; // only a command that waits for it is sent
+    }
+
     return board.online || now - board.lastTry >= offlineRetryMs_;
 }
 
@@ -307,10 +371,16 @@ void BoardBus::gotAnswer(int index, const Frame &frame)
     answerTimer_->stop();
     waitingFor_ = -1;
 
+    if (!boards_.at(index).enabled) {
+        scheduleNext(0); // switched off while the question was on its way: the answer is dropped
+
+        return;
+    }
+
     Board &board = boards_[index];
     board.seq = (board.seq + 1) & 0xFF; // only a good answer moves SEQ on
     board.missed = 0;
-    if (!board.online) {
+    if (!board.online && board.polled) { // a board that is not polled is never online: nothing is known of it between its commands
         board.online = true;
         emit boardOnlineChanged(board.address, true);
     }

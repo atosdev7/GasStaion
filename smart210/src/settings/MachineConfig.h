@@ -8,8 +8,9 @@
 #include <QString>
 
 // What the technician sets on the terminal (Settings > Machine Config): the nozzles, the port the converter connects to, and the server
-// address (see ServerForm). The nozzles are the boards 1 to NozzleCount: the number of a nozzle is the address of its board. A board
-// holds its own config (mode, fuel type, density, pulses per litre); what is kept here is what the board last reported (see
+// address (see ServerForm). The nozzles are added by hand here (Add nozzle): a nozzle is a board address from 1 to NozzleCount that the technician
+// gave to a fuel type, and only the nozzles that were added are asked, shown and used; a board that answers at another address is ignored. The number
+// of a nozzle is the address of its board. A board holds its own config (mode, fuel type, density, pulses per litre); what is kept here is what the board last reported (see
 // NozzleConfigSync), plus the tank, which the board does not know and which is picked here. Every change is written to the change log
 // with the cashier who was logged in.
 class MachineConfig
@@ -17,17 +18,18 @@ class MachineConfig
 public:
     struct Nozzle {
         Nozzle() : id(0), number(0), tankId(0), mode(BoardProtocol::ModeAuto), density(-1), pulsesPerLiter(-1) {}
-        int id;               // 0 while the board has never answered
+        int id;               // 0 for a nozzle that was not added
         int number;           // 1 to NozzleCount, also the board's address
-        QString fuelType;     // as the board reported it
+        QString fuelType;
         QString tank;         // name; empty when none is assigned
         int tankId;           // 0 when none is assigned
         int mode;             // BoardProtocol::ModeAuto or ModeManual
-        qlonglong density;    // kg per litre x 10000; -1 when the board has none
-        qlonglong pulsesPerLiter; // x100; -1 when the board has none
-        QString seenAt;       // when the board last answered with its config; empty if never
+        qlonglong density;    // kg per litre x 10000; -1 when none
+        qlonglong pulsesPerLiter; // x100; -1 when none
+        QString seenAt;       // when the config was last stored (verified after a send, or read from the board); empty if never
 
         bool seen() const { return !seenAt.isEmpty(); }
+        bool exists() const { return id > 0; } // added on Machine Config
     };
 
     struct Fuel {
@@ -60,9 +62,33 @@ public:
     // (Cash One)". Nothing is written while no file is set. They are not kept in the database and never uploaded.
     void setLogFile(const QString &path) { logFile_ = path; }
 
-    // Always NozzleCount entries, numbers 1 to NozzleCount; a nozzle whose board never answered is blank (seen() is false).
+    // The nozzles that were added, by number; a nozzle whose config was not set yet (sent to its board and verified, or read from it) has seen()
+    // false. A number that was not added has no entry.
     QList<Nozzle> nozzles() const;
-    Nozzle nozzle(int number) const;
+    Nozzle nozzle(int number) const; // not exists() when it was not added
+    bool isConfigured(int number) const { return nozzle(number).exists(); }
+
+    // Adds a nozzle: the board address (1 to NozzleCount, not added yet), the fuel type it dispenses (a fuel type of the last download) and its
+    // tank: a nozzle must be connected to a tank that holds its fuel type (0: the tank this address had before, or the only tank of the fuel type;
+    // refused when there is none). Its config (mode, density, pulses per litre) is set later
+    // on Machine Config: sent to the board, or read from it.
+    // False, with the reason, when it is not possible. Logged.
+    bool addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why);
+
+    // Takes a nozzle away: it is not asked, shown or used any more, and the web app is told. Refused while a fill is open on it or tickets are
+    // queued on it (see removeBlocker()). Its records stay.
+    bool removeNozzle(int number, int userId, QString *why);
+
+    // Why a nozzle cannot be removed now (a fill is open, or tickets are queued on it), empty when it can.
+    QString removeBlocker(int number) const;
+
+    // Why the config of a nozzle cannot be changed now (a fill is open, or tickets are queued on it: they were checked against its fuel type),
+    // empty when it can.
+    QString configBlocker(int number) const;
+
+    // The tank the nozzle keeps for this fuel type: its own (or the given current one) when it holds the fuel type, else the only tank that does,
+    // else none (0). A nozzle must be connected to a tank.
+    int tankFor(const QString &fuelType, int currentTankId) const;
 
     // The fuel types of the last config download.
     QList<Fuel> fuels() const;
@@ -70,9 +96,14 @@ public:
     // The tanks of the last config download, to pick from (all, or only those holding this fuel type).
     QList<Tank> tanks(const QString &fuelType = QString()) const;
 
-    // The board answered with its config: it becomes the nozzle's config (the nozzle is made on the first answer). The tank is kept when it
-    // still holds the board's fuel type; otherwise the only tank with that fuel type is taken, or none. Not logged (see describe()).
+    // Saves a config as the nozzle's: what the board confirmed after a send, or what it reported when it was read. Only for a nozzle that was added
+    // (false for any other address). The tank is kept when it still holds the fuel type; otherwise the only tank with that fuel type is taken, or
+    // none. Not logged (see describe()).
     bool storeBoardConfig(int number, const BoardProtocol::BoardConfig &config);
+
+    // Saves a config typed on Machine Config (the Update button): it is the nozzle's config from now on, whether its board has it yet or not, and it
+    // is logged with the user. The tank follows the fuel type as in storeBoardConfig().
+    bool saveConfig(int number, const BoardProtocol::BoardConfig &config, int userId);
 
     // Picks the tank of a nozzle that has answered; the tank must hold the nozzle's fuel type. The nozzle waits for the next upload.
     bool setTank(int number, int tankId);
@@ -87,7 +118,6 @@ public:
 
 private:
     static int rememberedTank(int number);
-    int tankFor(const QString &fuelType, int currentTankId) const;
 
     QSqlDatabase db_;
     QString logFile_;

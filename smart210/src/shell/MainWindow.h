@@ -88,6 +88,7 @@ private slots:
     void startFirstDownload();
     void autoDownload();
     void autoUpload();
+    void sendNozzles();
     void hangulModeChanged(bool on);
     void downloadFinished(bool ok, const QString &message);
     void showStartOrLogin();

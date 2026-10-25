@@ -51,7 +51,7 @@ DispensersPage::DispensersPage(QSqlDatabase db, BoardBus *bus, MachineConfig *co
     link_ = ui_->dispensersLink;
 
     table_ = ui_->dispensersTable;
-    table_->setRowCount(MachineConfig::NozzleCount);
+    table_->setRowCount(0); // a row for each nozzle that was added: refresh() makes them
     table_->setColumnCount(Columns);
     table_->setHorizontalHeaderLabels(QStringList() << tr("Nozzle") << tr("Mode") << tr("Fuel type") << tr("Density") << tr("Preset (kg)")
                                                     << tr("Dispensed (kg)") << tr("Status"));
@@ -93,6 +93,7 @@ void DispensersPage::refresh()
     Theme::setState(link_, bus_->isConnected() ? "" : "warning");
 
     const QList<MachineConfig::Nozzle> nozzles = config_->nozzles();
+    table_->setRowCount(nozzles.size());
     for (int i = 0; i < nozzles.size(); ++i) {
         const MachineConfig::Nozzle &nozzle = nozzles.at(i);
         const bool online = bus_->isOnline(nozzle.number);
@@ -101,10 +102,12 @@ void DispensersPage::refresh()
         QString state;
         if (!bus_->isConnected()) {
             state = tr("No converter");
+        } else if (nozzle.mode == ModeManual && !bus_->isPolled(nozzle.number)) {
+            state = tr("Not polled"); // a nozzle in manual mode: nothing is asked of its board, the cashier types its supplies
         } else if (!online) {
             state = tr("No answer");
         } else if (!nozzle.seen()) {
-            state = tr("Reading the config...");
+            state = tr("Config not set");
         } else {
             switch (status.state) {
             case StateSelected:

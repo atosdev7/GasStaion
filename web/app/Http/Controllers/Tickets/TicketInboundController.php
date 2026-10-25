@@ -13,11 +13,31 @@ use Illuminate\Validation\Rule;
 // (numbering happens on publish, see TicketPublishController).
 class TicketInboundController extends Controller
 {
-    public function index()
+    // Every filter sits in the head of its column: the day of the inbound, the fuel type and the spec.
+    public function index(Request $request)
     {
+        $filters = $request->validate([
+            'inbound_date' => 'nullable|date_format:Y-m-d',
+            'fuel_type' => ['nullable', Rule::in(array_keys(config('fuel_types')))],
+            'spec' => ['nullable', Rule::in(array_keys(config('ticket_specs')))],
+        ]);
+
+        $query = TicketInbound::orderByDesc('inbound_date')->orderByDesc('id');
+        if (!empty($filters['inbound_date'])) {
+            $query->where('inbound_date', $filters['inbound_date']);
+        }
+        if (!empty($filters['fuel_type'])) {
+            $query->where('fuel_type', $filters['fuel_type']);
+        }
+        if (isset($filters['spec']) && $filters['spec'] !== '') {
+            $query->where('spec', (int) $filters['spec']);
+        }
+
         return view('ticket_inbound.index', [
-            'rows' => TicketInbound::orderByDesc('inbound_date')->orderByDesc('id')->get(),
+            'rows' => $query->paginate(50)->appends($request->query()),
+            'filters' => $filters,
             'fuels' => config('fuel_types'),
+            'specs' => config('ticket_specs'),
         ]);
     }
 

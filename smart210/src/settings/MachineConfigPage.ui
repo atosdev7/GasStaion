@@ -121,7 +121,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="upperRow" stretch="0,1">
+        <layout class="QHBoxLayout" name="upperRow" stretch="1,0">
          <property name="leftMargin"><number>0</number></property>
          <property name="topMargin"><number>0</number></property>
          <property name="rightMargin"><number>0</number></property>
@@ -191,16 +191,6 @@
                <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
               </widget>
              </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="nozzleTankLabel">
-               <property name="text"><string>Tank</string></property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QComboBox" name="nozzleTank">
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
             </layout>
            </item>
            <item>
@@ -211,8 +201,8 @@
              <property name="bottomMargin"><number>0</number></property>
              <property name="spacing"><number>6</number></property>
              <item>
-              <widget class="QPushButton" name="sendNozzleButton">
-               <property name="text"><string>Send</string></property>
+              <widget class="QPushButton" name="updateNozzleButton">
+               <property name="text"><string>Update</string></property>
                <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
               </widget>
              </item>
@@ -234,6 +224,61 @@
           </layout>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="addNozzleBox">
+         <property name="title"><string>Add a nozzle</string></property>
+         <layout class="QHBoxLayout" name="addNozzleLayout" stretch="0,0,0,1,0,1,0">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QLabel" name="addNozzleNumberLabel">
+            <property name="text"><string>Nozzle</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="addNozzleNumber">
+            <property name="minimumSize"><size><width>80</width><height>38</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="addNozzleFuelLabel">
+            <property name="text"><string>Fuel type</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="addNozzleFuel">
+            <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="addNozzleTankLabel">
+            <property name="text"><string>Tank</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="addNozzleTank">
+            <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="addNozzleButton">
+            <property name="text"><string>Add nozzle</string></property>
+            <property name="minimumSize"><size><width>150</width><height>38</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="addNozzleHint">
+         <property name="text"><string>Only the nozzles added here are asked, shown and used: the number is the address of the board. The config of a nozzle is kept here: Update saves it here and puts it on the board, Read takes it from the board. Remove a nozzle with the button in its row.</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+         <property name="sub" stdset="0"><bool>true</bool></property>
+        </widget>
        </item>
       </layout>
      </widget>

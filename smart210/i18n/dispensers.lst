@@ -3,3 +3,4 @@ src/dispensers/DispensersPage.ui
 src/dispensers/NozzleDialog.cpp
 src/dispensers/NozzleDialog.ui
 src/dispensers/BoardProtocol.cpp
+src/dispensers/NozzleConfigSync.cpp

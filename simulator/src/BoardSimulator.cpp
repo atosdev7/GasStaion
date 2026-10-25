@@ -323,7 +323,9 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
         } else if (!wanted.isValid()) {
             reply = nak(f, ErrBadValue);
         } else {
-            b.config = wanted;
+            if (!b.keepsNoConfig) {
+                b.config = wanted;
+            }
             reply = ok(f, configData(b.config));
         }
         break;

@@ -23,6 +23,7 @@
 #include <QVariant>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTimer>
@@ -32,7 +33,7 @@ namespace {
 const int LogLines = 12;
 
 // the columns of the nozzle table
-enum { ColNozzle, ColStatus, ColMode, ColFuel, ColDensity, ColPulses, ColTank, Columns };
+enum { ColNozzle, ColStatus, ColMode, ColFuel, ColDensity, ColPulses, ColTank, ColRemove, Columns };
 
 QString subject(const QString &what)
 {
@@ -84,16 +85,18 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     table_ = ui_->nozzleTable;
     table_->setColumnCount(Columns);
     table_->setHorizontalHeaderLabels(QStringList() << tr("Nozzle") << tr("Status") << tr("Mode") << tr("Fuel type") << tr("Density")
-                                                    << tr("Pulses per litre") << tr("Tank"));
-    table_->horizontalHeader()->setStretchLastSection(true);
+                                                    << tr("Pulses per litre") << tr("Tank") << QString());
+    table_->horizontalHeader()->setStretchLastSection(false);
+    table_->horizontalHeader()->setSectionResizeMode(ColTank, QHeaderView::Stretch);
     table_->setColumnWidth(ColNozzle, 84);
-    table_->setColumnWidth(ColStatus, 140);
-    table_->setColumnWidth(ColMode, 90);
-    table_->setColumnWidth(ColFuel, 90);
+    table_->setColumnWidth(ColStatus, 130);
+    table_->setColumnWidth(ColMode, 84);
+    table_->setColumnWidth(ColFuel, 116);
     table_->setColumnWidth(ColDensity, 100);
     table_->setColumnWidth(ColPulses, 140);
+    table_->setColumnWidth(ColRemove, 90);
     table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    table_->setFixedWidth(510);
+    table_->verticalHeader()->setDefaultSectionSize(40); // the Remove button of a row fits in it
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -105,13 +108,21 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     table_->setMinimumHeight(6 * 36 + 46);
 
     selected_ = ui_->selectedNozzle;
+    // its text changes with the pick (a long hint, then "Nozzle 2"): it wraps and does not size the form column, or the table would change its width
+    selected_->setWordWrap(true);
+    selected_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    selected_->setMinimumHeight(selected_->fontMetrics().lineSpacing() * 2);
     mode_ = ui_->nozzleMode;
     mode_->addItem(tr("Auto"), BoardProtocol::ModeAuto);
     mode_->addItem(tr("Manual"), BoardProtocol::ModeManual);
     fuel_ = ui_->nozzleFuel;
     density_ = ui_->nozzleDensity;
     pulses_ = ui_->nozzlePulses;
-    tank_ = ui_->nozzleTank;
+    // the form is narrow, the table gets the rest of the tab
+    mode_->setMaximumWidth(180);
+    fuel_->setMaximumWidth(180);
+    density_->setMaximumWidth(180);
+    pulses_->setMaximumWidth(180);
 
     converterPort_ = ui_->converterPort;
     converterPort_->setValidator(new QIntValidator(1, 65535, converterPort_));
@@ -152,13 +163,15 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(uploadMode_, SIGNAL(activated(int)), this, SLOT(uploadModePicked()));
     connect(ui_->saveUploadModeButton, SIGNAL(clicked()), this, SLOT(saveUploadMode()));
     connect(ui_->saveReviewOptionsButton, SIGNAL(clicked()), this, SLOT(saveReviewOptions()));
+    connect(ui_->addNozzleButton, SIGNAL(clicked()), this, SLOT(addNozzlePressed()));
+    connect(ui_->addNozzleFuel, SIGNAL(activated(int)), this, SLOT(addFuelPicked()));
     connect(ui_->cleanDataButton, SIGNAL(clicked()), this, SLOT(cleanDataPressed()));
     connect(ui_->clearConfigButton, SIGNAL(clicked()), this, SLOT(clearConfigPressed()));
     resetTimer_ = new QTimer(this);
     resetTimer_->setSingleShot(true);
     resetTimer_->setInterval(6000);
     connect(resetTimer_, SIGNAL(timeout()), this, SLOT(disarmReset()));
-    connect(ui_->sendNozzleButton, SIGNAL(clicked()), this, SLOT(sendNozzle()));
+    connect(ui_->updateNozzleButton, SIGNAL(clicked()), this, SLOT(updateNozzle()));
     connect(ui_->readNozzlesButton, SIGNAL(clicked()), this, SLOT(readNozzles()));
     connect(table_, SIGNAL(itemSelectionChanged()), this, SLOT(rowSelected()));
     connect(fuel_, SIGNAL(activated(int)), this, SLOT(fuelPicked()));
@@ -171,6 +184,8 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(ui_->checkPrinterButton, SIGNAL(clicked()), this, SLOT(checkPrinter()));
     connect(printer_, SIGNAL(finished(bool,QString)), this, SLOT(printerChecked(bool,QString)));
     connect(nozzles_, SIGNAL(changed()), this, SLOT(nozzlesChanged()));
+    connect(nozzles_, SIGNAL(readDone(int)), this, SLOT(readDone(int)));
+    connect(nozzles_, SIGNAL(readFailed(int,QString)), this, SLOT(readFailed(int,QString)));
     connect(nozzles_, SIGNAL(updateDone(int)), this, SLOT(updateDone(int)));
     connect(nozzles_, SIGNAL(updateFailed(int,QString)), this, SLOT(updateFailed(int,QString)));
 }
@@ -184,6 +199,7 @@ void MachineConfigPage::reload()
 {
     disarmReset();
     showResetBox();
+    fillAddForm();
     server_->reload();
     serverBefore_ = settings_->value(SettingKey::ServerHost) + ":" + QString::number(settings_->intValue(SettingKey::ServerPort, 80));
 
@@ -225,8 +241,6 @@ void MachineConfigPage::reload()
     fillForm(0);
     fillTable();
     fillLog();
-
-    nozzles_->refresh(); // the boards are asked again for their config
 }
 
 // The nozzle table: one line per board, with its status and what it reported.
@@ -241,53 +255,54 @@ void MachineConfigPage::fillTable()
         QString status;
         if (!nozzles_->isLinked()) {
             status = tr("No converter");
+        } else if (nozzles_->differs(nozzle.number)) {
+            status = tr("Board differs"); // the saved config was not confirmed by the board: press Update (or Read)
+        } else if (!nozzles_->isPolled(nozzle.number)) {
+            status = tr("Not polled"); // a nozzle in manual mode
         } else if (!nozzles_->isOnline(nozzle.number)) {
             status = tr("No answer");
         } else if (!nozzle.seen()) {
-            status = tr("Reading...");
+            status = tr("Not set"); // its config was not sent to the board or read from it yet
         } else {
             status = tr("Online");
         }
-        if (!nozzles_->lastError(nozzle.number).isEmpty() && nozzles_->isOnline(nozzle.number)) {
+        if (!nozzles_->lastError(nozzle.number).isEmpty() && nozzles_->canTalk(nozzle.number)) {
             status = nozzles_->lastError(nozzle.number);
         }
 
         QStringList cells;
         cells << QString::number(nozzle.number) << status;
-        if (nozzle.seen()) {
-            cells << (nozzle.mode == BoardProtocol::ModeManual ? tr("Manual") : tr("Auto")) << nozzle.fuelType
-                  << (nozzle.density < 0 ? QString() : Decimal::format(nozzle.density, 4))
-                  << (nozzle.pulsesPerLiter < 0 ? QString() : Decimal::format(nozzle.pulsesPerLiter, 2))
-                  << (nozzle.tank.isEmpty() ? tr("(pick a tank)") : nozzle.tank);
-        } else {
-            cells << QString() << QString() << QString() << QString() << QString();
-        }
-        for (int column = 0; column < Columns; ++column) {
+        // what the terminal holds for the nozzle (its own database), whether the board has it or not
+        cells << (nozzle.mode == BoardProtocol::ModeManual ? tr("Manual") : tr("Auto")) << nozzle.fuelType
+              << (nozzle.density < 0 ? QString() : Decimal::format(nozzle.density, 4))
+              << (nozzle.pulsesPerLiter < 0 ? QString() : Decimal::format(nozzle.pulsesPerLiter, 2))
+              << (nozzle.tank.isEmpty() ? tr("(no tank)") : nozzle.tank);
+        for (int column = 0; column < ColRemove; ++column) {
             table_->setItem(i, column, new QTableWidgetItem(cells.at(column)));
         }
+        table_->item(i, 0)->setData(Qt::UserRole, nozzle.number);
+
+        // the Remove button of the row: it knows the nozzle by its number, and a click asks before anything is removed
+        QPushButton *remove = new QPushButton(tr("Remove"));
+        remove->setObjectName("removeNozzle" + QString::number(nozzle.number));
+        remove->setProperty("nozzle", nozzle.number);
+        remove->setStyleSheet("font-size: 18px; min-height: 0px; padding: 2px 6px; margin: 3px 4px;");
+        connect(remove, SIGNAL(clicked()), this, SLOT(removeNozzlePressed()));
+        table_->setCellWidget(i, ColRemove, remove);
     }
 
     if (selectedNumber_ > 0) {
         table_->blockSignals(true);
-        table_->selectRow(selectedNumber_ - 1);
+        for (int row = 0; row < table_->rowCount(); ++row) {
+            if (table_->item(row, 0)->data(Qt::UserRole).toInt() == selectedNumber_) {
+                table_->selectRow(row);
+            }
+        }
         table_->blockSignals(false);
     }
 }
 
-// The tanks that hold this fuel type, with the given one picked (or the first).
-void MachineConfigPage::fillTanks(const QString &fuelType, int selectTankId)
-{
-    tank_->clear();
-    tank_->addItem(tr("(none)"), 0);
-    const QList<MachineConfig::Tank> tanks = config_->tanks(fuelType);
-    for (int i = 0; i < tanks.size(); ++i) {
-        tank_->addItem(tanks.at(i).name, tanks.at(i).id);
-    }
-    const int at = tank_->findData(selectTankId);
-    tank_->setCurrentIndex(at >= 0 ? at : (tanks.size() == 1 ? 1 : 0));
-}
-
-// The form shows the nozzle's config as the board reported it (or a start for a board that has none yet).
+// The form shows the nozzle's config as this terminal holds it (the density of the fuel type and no pulses yet for a nozzle just added).
 void MachineConfigPage::fillForm(int number)
 {
     selectedNumber_ = number;
@@ -295,7 +310,6 @@ void MachineConfigPage::fillForm(int number)
         selected_->setText(tr("Pick a nozzle in the table to change its config."));
         density_->clear();
         pulses_->clear();
-        fillTanks(QString(), 0);
 
         return;
     }
@@ -303,15 +317,14 @@ void MachineConfigPage::fillForm(int number)
     const MachineConfig::Nozzle nozzle = config_->nozzle(number);
     selected_->setText(tr("Nozzle %1").arg(number));
     mode_->setCurrentIndex(mode_->findData(nozzle.mode));
-    int at = nozzle.seen() ? fuel_->findData(nozzle.fuelType) : 0;
-    if (nozzle.seen() && at < 0 && !nozzle.fuelType.isEmpty()) {
-        fuel_->addItem(nozzle.fuelType, nozzle.fuelType); // a fuel type the web app does not have: kept as the board has it
+    int at = fuel_->findData(nozzle.fuelType);
+    if (at < 0 && !nozzle.fuelType.isEmpty()) {
+        fuel_->addItem(nozzle.fuelType, nozzle.fuelType); // a fuel type the web app does not have: kept as it is
         at = fuel_->count() - 1;
     }
     fuel_->setCurrentIndex(at);
     density_->setText(nozzle.density < 0 ? QString() : Decimal::format(nozzle.density, 4));
     pulses_->setText(nozzle.pulsesPerLiter < 0 ? QString() : Decimal::format(nozzle.pulsesPerLiter, 2));
-    fillTanks(fuel_->itemData(fuel_->currentIndex()).toString(), nozzle.tankId);
     if (density_->text().isEmpty()) {
         fuelPicked();
     }
@@ -320,17 +333,17 @@ void MachineConfigPage::fillForm(int number)
 void MachineConfigPage::rowSelected()
 {
     const int row = table_->currentRow();
-    if (row < 0) {
+    if (row < 0 || !table_->item(row, 0)) {
         return;
     }
-    fillForm(row + 1);
+    disarmReset(); // another nozzle: a Remove that was pressed once is not for this one
+    fillForm(table_->item(row, 0)->data(Qt::UserRole).toInt());
 }
 
-// Another fuel type: its tanks, and its density from the web app when the field is empty.
+// Another fuel type: its density from the web app when the field is empty.
 void MachineConfigPage::fuelPicked()
 {
     const QString code = fuel_->itemData(fuel_->currentIndex()).toString();
-    fillTanks(code, 0);
 
     if (density_->text().trimmed().isEmpty()) {
         foreach (const MachineConfig::Fuel &fuel, config_->fuels()) {
@@ -346,14 +359,51 @@ void MachineConfigPage::nozzlesChanged()
     fillTable();
 }
 
+// Read: the config of the picked nozzle is asked of its board, and what the board holds becomes the nozzle's config (nothing is read by itself).
 void MachineConfigPage::readNozzles()
 {
-    nozzles_->refresh();
-    showStatus(nozzles_->isLinked() ? tr("Reading the boards...") : tr("There is no connection to the boards."), nozzles_->isLinked());
+    if (selectedNumber_ < 1 || !config_->isConfigured(selectedNumber_)) {
+        showStatus(tr("Pick a nozzle in the table first."), false);
+
+        return;
+    }
+    if (!nozzles_->isLinked()) {
+        showStatus(tr("There is no connection to the boards."), false);
+
+        return;
+    }
+    if (!nozzles_->canTalk(selectedNumber_)) {
+        showStatus(tr("The board of nozzle %1 does not answer.").arg(selectedNumber_), false);
+
+        return;
+    }
+    if (!nozzles_->read(selectedNumber_, session_->userId())) {
+        showStatus(tr("The board of nozzle %1 is busy. Try again.").arg(selectedNumber_), false);
+
+        return;
+    }
+    showStatus(tr("Reading the board of nozzle %1...").arg(selectedNumber_), true);
+}
+
+void MachineConfigPage::readDone(int number)
+{
+    fillTable();
+    if (number == selectedNumber_) {
+        fillForm(number);
+    }
+    fillLog();
+    showStatus(tr("The config of nozzle %1 was read from its board and saved.").arg(number), true);
+    emit nozzlesEdited();
+}
+
+void MachineConfigPage::readFailed(int number, const QString &message)
+{
+    fillTable();
+    showStatus(tr("Nozzle %1: %2").arg(number).arg(message), false);
 }
 
 // What is typed is checked, then sent to the board; the board's answer decides what is kept.
-void MachineConfigPage::sendNozzle()
+void MachineConfigPage::updateNozzle()
 {
     if (selectedNumber_ < 1) {
         showStatus(tr("Pick a nozzle in the table first."), false);
@@ -385,34 +435,64 @@ void MachineConfigPage::sendNozzle()
     wanted.density = quint16(density);
     wanted.pulsesX100 = quint32(pulses);
 
-    if (!nozzles_->isOnline(selectedNumber_)) {
-        showStatus(tr("The board of nozzle %1 does not answer.").arg(selectedNumber_), false);
+    const QString blocker = config_->configBlocker(selectedNumber_);
+    if (!blocker.isEmpty()) {
+        alert(tr("Update the nozzle"), blocker);
 
         return;
     }
-    if (!nozzles_->update(selectedNumber_, wanted, tank_->itemData(tank_->currentIndex()).toInt(), session_->userId())) {
-        showStatus(tr("The config could not be sent. Try again."), false);
+    if (config_->tankFor(wanted.fuelType, config_->nozzle(selectedNumber_).tankId) == 0) {
+        alert(tr("Update the nozzle"), tr("Nozzle %1 must be connected to a tank that holds fuel type %2, and none can be taken for it. Remove the nozzle and add it again with its tank.")
+                                           .arg(selectedNumber_).arg(wanted.fuelType));
 
         return;
     }
 
-    showStatus(tr("Sent to the board of nozzle %1. Waiting for its answer...").arg(selectedNumber_), true);
+    // Update saves the config in this terminal's database first: it is the nozzle's config whether the board takes it or not (the tank belongs to the
+    // web app, not to the board: it stays, and follows the fuel type when that changes). Then it tries to send it to the board and to verify it.
+    if (!config_->saveConfig(selectedNumber_, wanted, session_->userId())) {
+        showStatus(tr("The config could not be saved."), false);
+
+        return;
+    }
+    nozzles_->setDiffers(selectedNumber_, true); // until the board has confirmed it
+    fillTable();
+    fillForm(selectedNumber_);
+    fillLog();
+    emit nozzlesEdited();
+
+    if (!nozzles_->isLinked()) {
+        nozzles_->syncBoards();
+        showStatus(tr("Saved. There is no connection to the boards, so nozzle %1 was not updated: press Update again later.").arg(selectedNumber_), false);
+
+        return;
+    }
+    if (!nozzles_->canTalk(selectedNumber_)) {
+        nozzles_->syncBoards(); // (the polling follows the mode that was saved)
+        showStatus(tr("Saved. The board of nozzle %1 does not answer, so it was not updated: press Update again when it answers.").arg(selectedNumber_), false);
+
+        return;
+    }
+    if (!nozzles_->send(selectedNumber_, wanted)) {
+        nozzles_->syncBoards();
+        showStatus(tr("Saved. The board of nozzle %1 is busy: press Update again to send it.").arg(selectedNumber_), false);
+
+        return;
+    }
+
+    showStatus(tr("Saved. Sent to the board of nozzle %1. Waiting for it to confirm...").arg(selectedNumber_), true);
 }
 
 void MachineConfigPage::updateDone(int number)
 {
     fillTable();
-    if (number == selectedNumber_) {
-        fillForm(number);
-    }
-    fillLog();
-    showStatus(tr("The board of nozzle %1 confirmed the config.").arg(number), true);
+    showStatus(tr("Nozzle %1: the board holds the config as saved. Verified.").arg(number), true);
 }
 
 void MachineConfigPage::updateFailed(int number, const QString &message)
 {
     fillTable();
-    showStatus(tr("Nozzle %1: %2").arg(number).arg(message), false);
+    showStatus(tr("Nozzle %1: saved here, but the board was not updated: %2").arg(number).arg(message), false);
 }
 
 // The length only matters for a fixed frame.
@@ -608,6 +688,111 @@ void MachineConfigPage::showStatus(const QString &message, bool ok)
 {
     Theme::setState(status_, ok ? "ok" : "error");
     status_->setText(message);
+}
+
+// Something that cannot be done now: the reason is shown in a box (and in the status line).
+void MachineConfigPage::alert(const QString &title, const QString &reason)
+{
+    showStatus(reason, false);
+    QMessageBox::warning(this, title, reason);
+}
+
+// The form of Add nozzle: the addresses not added yet, the fuel types of the last download and the tanks that hold the fuel type.
+void MachineConfigPage::fillAddForm()
+{
+    const int keepNumber = ui_->addNozzleNumber->itemData(ui_->addNozzleNumber->currentIndex()).toInt();
+    const QString keepFuel = ui_->addNozzleFuel->itemData(ui_->addNozzleFuel->currentIndex()).toString();
+
+    ui_->addNozzleNumber->clear();
+    for (int number = 1; number <= MachineConfig::NozzleCount; ++number) {
+        if (!config_->isConfigured(number)) {
+            ui_->addNozzleNumber->addItem(QString::number(number), number);
+        }
+    }
+    ui_->addNozzleNumber->setCurrentIndex(qMax(0, ui_->addNozzleNumber->findData(keepNumber)));
+
+    ui_->addNozzleFuel->clear();
+    foreach (const MachineConfig::Fuel &fuel, config_->fuels()) {
+        ui_->addNozzleFuel->addItem(fuel.code + "  " + fuel.name, fuel.code);
+    }
+    ui_->addNozzleFuel->setCurrentIndex(qMax(0, ui_->addNozzleFuel->findData(keepFuel)));
+    addFuelPicked();
+
+    ui_->addNozzleButton->setEnabled(ui_->addNozzleNumber->count() > 0 && ui_->addNozzleFuel->count() > 0);
+}
+
+void MachineConfigPage::addFuelPicked()
+{
+    ui_->addNozzleTank->clear();
+    foreach (const MachineConfig::Tank &tank, config_->tanks(ui_->addNozzleFuel->itemData(ui_->addNozzleFuel->currentIndex()).toString())) {
+        ui_->addNozzleTank->addItem(tank.name, tank.id);
+    }
+    // (the first tank of the fuel type is picked; none: Add nozzle says that a nozzle must be connected to a tank)
+}
+
+void MachineConfigPage::addNozzlePressed()
+{
+    const int number = ui_->addNozzleNumber->itemData(ui_->addNozzleNumber->currentIndex()).toInt();
+    const QString fuel = ui_->addNozzleFuel->itemData(ui_->addNozzleFuel->currentIndex()).toString();
+    const int tank = ui_->addNozzleTank->itemData(ui_->addNozzleTank->currentIndex()).toInt();
+
+    QString why;
+    if (!config_->addNozzle(number, fuel, tank, session_->userId(), &why)) {
+        if (tank <= 0 && !fuel.isEmpty()) {
+            alert(tr("Add a nozzle"), why); // no tank holds this fuel type
+        } else {
+            showStatus(why, false);
+        }
+
+        return;
+    }
+    nozzles_->syncBoards(); // its board is polled from now on (its config is not read: type it and press Send, or press Read)
+    selectedNumber_ = number;
+    fillTable();
+    fillForm(number);
+    fillAddForm();
+    fillLog();
+    showStatus(tr("Nozzle %1 was added. Enter its config and press Send, or press Read to take it from its board.").arg(number), true);
+    emit nozzlesEdited();
+}
+
+// The Remove button of a row: the technician is asked first, and the nozzle is removed only when it is confirmed.
+void MachineConfigPage::removeNozzlePressed()
+{
+    QPushButton *button = qobject_cast<QPushButton *>(sender());
+    const int number = button ? button->property("nozzle").toInt() : 0;
+    if (number < 1 || !config_->isConfigured(number)) {
+        return;
+    }
+    disarmReset();
+    const QString blocker = config_->removeBlocker(number);
+    if (!blocker.isEmpty()) {
+        alert(tr("Remove the nozzle"), blocker);
+
+        return;
+    }
+    if (QMessageBox::question(this, tr("Remove the nozzle"),
+                              tr("Remove nozzle %1? It is not asked, shown or used any more.").arg(number),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+
+    QString why;
+    if (!config_->removeNozzle(number, session_->userId(), &why)) {
+        alert(tr("Remove the nozzle"), why);
+
+        return;
+    }
+    nozzles_->syncBoards();
+    if (selectedNumber_ == number) {
+        selectedNumber_ = 0;
+    }
+    fillTable();
+    fillForm(selectedNumber_);
+    fillAddForm();
+    fillLog();
+    showStatus(tr("Nozzle %1 was removed.").arg(number), true);
+    emit nozzlesEdited();
 }
 
 // The records that wait for the upload decide whether Clean Data may be used at all: they exist nowhere else.

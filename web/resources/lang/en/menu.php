@@ -23,6 +23,7 @@ return [
     'customers' => 'Customers',
     'inbounds' => 'Inbounds',
     'outbounds' => 'Outbounds',
+    'tank_stock' => 'Tank Stock Summary',
     'inbound' => 'Fuel Inbound',
     'ticket_inbound' => 'Ticket Inbound',
     'ticket_publish' => 'Ticket Publish',

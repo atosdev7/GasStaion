@@ -446,4 +446,63 @@ class TicketPublishTest extends TestCase
         $this->assertSame('2026-09-19', substr((string) $batches[0]->fresh()->date, 0, 10));
         $this->put('/ticket-publish/' . $batches[0]->id, ['start_serial' => 1, 'end_serial' => 5, 'date' => 'nope'])->assertSessionHasErrors('date');
     }
-}
+
+    public function testTheBatchTableFiltersByDateFuelTypeAndSpec()
+    {
+        $this->as('manager');
+        $this->receive(100, 0);
+        $this->receive(100, 2);
+        $this->receive(100, 0, 'A');
+        $this->post('/ticket-publish', ['stock_item' => $this->diesel . ':0', 'start_serial' => 1, 'end_serial' => 10, 'date' => '2026-10-01']);
+        $this->post('/ticket-publish', ['stock_item' => $this->diesel . ':2', 'start_serial' => 1, 'end_serial' => 20, 'date' => '2026-10-02']);
+        $this->post('/ticket-publish', ['stock_item' => 'A:0', 'start_serial' => 1, 'end_serial' => 30, 'date' => '2026-10-02']);
+        $counts = function ($query) {
+            return $this->get('/ticket-publish' . $query)->assertOk()->viewData('batches')->pluck('count')->map(function ($n) {
+                return (int) $n;
+            })->all();
+        };
+
+        $this->assertSame([30, 20, 10], $counts(''));                                // everything, the last batch first
+        $this->assertSame([10], $counts('?date=2026-10-01'));                        // the day of the batch
+        $this->assertSame([30, 20], $counts('?date=2026-10-02'));
+        $this->assertSame([20, 10], $counts('?fuel_type=' . $this->diesel));         // the fuel type
+        $this->assertSame([30], $counts('?fuel_type=A'));
+        $this->assertSame([30, 10], $counts('?spec=0'));                             // the spec (spec 0 is 5 kg: a value, not "no filter")
+        $this->assertSame([20], $counts('?spec=2'));
+        $this->assertSame([], $counts('?spec=3'));
+        $this->assertSame([10], $counts('?fuel_type=' . $this->diesel . '&spec=0'));  // together
+        $this->assertSame([20], $counts('?date=2026-10-02&fuel_type=' . $this->diesel . '&spec=2'));
+
+        $this->get('/ticket-publish?date=nope')->assertSessionHasErrors('date');
+        $this->get('/ticket-publish?fuel_type=Z')->assertSessionHasErrors('fuel_type');
+        $this->get('/ticket-publish?spec=9')->assertSessionHasErrors('spec');
+
+        // the filters are in the head of the table and keep what was chosen; those who may not publish see them too
+        $html = $this->get('/ticket-publish?date=2026-10-02&fuel_type=' . $this->diesel . '&spec=2')->assertOk()->getContent();
+        $this->assertStringContainsString('id="ticket-publish-filters"', $html);
+        $this->assertStringContainsString('name="date" form="ticket-publish-filters" type="date" value="2026-10-02"', $html);
+        $this->assertRegExp('/<option value="' . $this->diesel . '" selected>/', $html);
+        $this->assertRegExp('/<option value="2" selected>15 kg<\/option>/', $html);
+        $this->assertStringContainsString('All fuel types', $html);
+        $this->assertStringContainsString('All specs', $html);
+        $this->as('accountant')->get('/ticket-publish?spec=2')->assertOk()->assertSee('ticket-publish-filters');
+        $this->get('/ticket-publish?spec=3')->assertOk()->assertSee('No data');
+    }
+
+    public function testTheBatchTableIsPagedByFiftyAndKeepsTheFilters()
+    {
+        $this->as('manager');
+        for ($i = 1; $i <= 52; $i++) {
+            \App\Models\Tickets\TicketPublish::forceCreate([
+                'fuel_type' => $this->diesel, 'spec' => 0, 'code' => '06', 'start_serial' => $i * 10, 'end_serial' => $i * 10 + 9, 'count' => 10,
+                'date' => '2026-09-20', 'user_id' => 1,
+            ]);
+        }
+
+        $first = $this->get('/ticket-publish?fuel_type=' . $this->diesel)->assertOk();
+        $this->assertCount(50, $first->viewData('batches'));
+        $this->assertSame(52, $first->viewData('batches')->total());
+        $this->assertStringContainsString('fuel_type=' . $this->diesel . '&amp;page=2', $first->getContent());
+        $this->assertCount(2, $this->get('/ticket-publish?fuel_type=' . $this->diesel . '&page=2')->viewData('batches'));
+        $this->assertCount(0, $this->get('/ticket-publish?fuel_type=A')->viewData('batches'));
+    }}

@@ -10,10 +10,15 @@
 #include <QSqlDatabase>
 #include <QString>
 
-// Keeps the nozzles' config in step with the boards. The nozzles are the boards 1 to MachineConfig::NozzleCount: every board that answers
-// is asked for its config (GET_CONFIG), and what it reports is saved as the nozzle's config. A change made on the Machine Config page is
-// sent to the board (SET_CONFIG); the board answers with what it stored, a read follows, and that is what is kept. The terminal never
-// keeps a config the board did not confirm. The converter connects to this terminal (BoardBus listens).
+// Moves a nozzle's config between this terminal and its board. The config of a nozzle (mode, fuel type, density, pulses per litre) is kept in
+// the database of this terminal, and nothing reads it from a board by itself. The nozzles are the ones added on Machine Config (a board address
+// from 1 to MachineConfig::NozzleCount each).
+//
+//   send()    sends the config to the board (SET_CONFIG; the page saved it in the database first, see MachineConfig::saveConfig). The board answers
+//             with what it stored; when that is exactly what was sent, the board is verified (updateDone()), otherwise updateFailed() says what it holds.
+//   read()    asks the board for its config (GET_CONFIG) and saves what it reports as the nozzle's config (a board that holds none is not saved).
+//
+// The converter connects to this terminal (BoardBus listens).
 class NozzleConfigSync : public QObject
 {
     Q_OBJECT
@@ -28,21 +33,35 @@ public:
 
     bool isLinked() const { return bus_->isConnected(); }
     bool isOnline(int number) const { return bus_->isOnline(number); }
+    bool isPolled(int number) const { return bus_->isPolled(number); } // false for a nozzle in manual mode: its board is not polled
+    bool canTalk(int number) const { return bus_->canTalk(number); }  // a config can be sent to or read from its board now
 
-    // Asks every board that answers for its config again.
-    void refresh();
+    // After a nozzle was added, removed or its config saved on Machine Config: the boards of the nozzles that exist are asked, the others are not,
+    // and a nozzle in manual mode is out of the polling (only its config is sent or read when asked).
+    void syncBoards();
 
-    // Sends the config to the board; the nozzle's tank (0: leave it) is applied when the board has confirmed. False when the board is not
-    // answering, an update is already on its way, or the config is not one a board accepts. The result comes as updateDone() or updateFailed().
-    bool update(int number, const BoardProtocol::BoardConfig &config, int tankId, int userId);
+    // Sends the config to the board. False when the board is not answering, a send or a read is already on its way, or the config is not one a
+    // board accepts. The result comes as updateDone() or updateFailed().
+    bool send(int number, const BoardProtocol::BoardConfig &config);
+
+    // Reads the config of the board and saves it as the nozzle's. False when the board is not answering or a read or an update is already on its
+    // way. The result comes as readDone() or readFailed().
+    bool read(int number, int userId = 0);
+
+    // A nozzle whose saved config the board has not confirmed: an Update was saved here but could not be sent, or the board did not keep it. It is
+    // kept across restarts (a setting) and cleared by a verified Update, a Read, or removing the nozzle.
+    bool differs(int number) const;
+    void setDiffers(int number, bool differs);
 
     // The reason the last read or update of this board failed; empty when it went well.
     QString lastError(int number) const { return errors_.value(number); }
 
 signals:
     void changed();                                  // a link, a board or a stored config changed: the page may show it again
-    void updateDone(int number);                     // the board confirmed
+    void updateDone(int number);                     // the board holds the config as it was sent
     void updateFailed(int number, const QString &message);
+    void readDone(int number);                       // the board's config is now the nozzle's
+    void readFailed(int number, const QString &message);
 
 private slots:
     void boardOnline(int address, bool online);
@@ -52,19 +71,20 @@ private slots:
 
 private:
     struct Update {
-        Update() : tankId(0), userId(0), sent(false) {}
+        Update() : sent(false) {}
         BoardProtocol::BoardConfig config;
-        int tankId;
-        int userId;
         bool sent;
-        MachineConfig::Nozzle before;
     };
 
     void work(); // sends what waits for a board that is free: updates first, then reads
+    void failUpdate(int number, const QString &text);
+    void failRead(int number, const QString &text);
 
+    QSqlDatabase db_;
     MachineConfig config_;
     BoardBus *bus_;
-    QSet<int> reads_;               // boards to ask for their config
+    QHash<int, int> reading_;       // boards a read was asked of and has not answered yet: nozzle number => the user who asked
+    QSet<int> reads_;               // the ones of them whose command is not sent yet
     QHash<int, Update> updates_;    // by nozzle number
     QHash<int, QString> errors_;
 };

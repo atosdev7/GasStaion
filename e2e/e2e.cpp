@@ -240,6 +240,9 @@ struct Plant {
         BoardProtocol::BoardConfig manualConfig = autoConfig;
         manualConfig.mode = BoardProtocol::ModeManual;
         if (firstTime) {
+            QString why;
+            config.addNozzle(1, "D", 0, 0, &why); // the nozzles are added by hand on Machine Config; their configs are set here (a technician would Send or Read them)
+            config.addNozzle(2, "D", 0, 0, &why);
             config.storeBoardConfig(1, autoConfig);
             config.storeBoardConfig(2, manualConfig);
             const int tank = terminal->one("SELECT id FROM tanks ORDER BY id LIMIT 1").toInt();

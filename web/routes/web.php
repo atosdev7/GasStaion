@@ -42,6 +42,7 @@ Route::middleware(SetLocale::class)->group(function () {
         });
 
         Route::get('outbound', 'Fuel\OutboundController@index')->name('outbound.index')->middleware('can:outbound.view');
+        Route::get('tank-stock', 'Fuel\TankStockController@index')->name('tank-stock.index')->middleware('can:outbound.view');
 
         Route::get('ticket-inbound', 'Tickets\TicketInboundController@index')->name('ticket-inbound.index')->middleware('can:ticket_stock.view');
         Route::middleware('can:ticket_stock.manage')->group(function () {

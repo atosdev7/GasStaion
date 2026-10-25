@@ -164,6 +164,9 @@ static int offlineScenario(Terminal &t, const QString &factsFile, const QString 
         autoConfig.pulsesX100 = 100000;
         BoardProtocol::BoardConfig manualConfig = autoConfig;
         manualConfig.mode = BoardProtocol::ModeManual;
+        QString why;
+        config.addNozzle(1, "D", 0, 0, &why); // added by hand, as the technician does on Machine Config
+        config.addNozzle(2, "D", 0, 0, &why);
         config.storeBoardConfig(1, autoConfig);
         config.storeBoardConfig(2, manualConfig);
         const int tank = t.one("SELECT id FROM tanks ORDER BY id LIMIT 1").toInt();
@@ -519,6 +522,8 @@ static int restoreScenario(Terminal &t, const QString &factsFile, const QString 
     autoConfig.fuelType = "D";
     autoConfig.density = 8300;
     autoConfig.pulsesX100 = 100000;
+    QString why;
+    config.addNozzle(1, "D", 0, 0, &why); // added by hand, as the technician does on Machine Config
     config.storeBoardConfig(1, autoConfig);
     config.setTank(1, t.one("SELECT id FROM tanks ORDER BY id LIMIT 1").toInt());
 

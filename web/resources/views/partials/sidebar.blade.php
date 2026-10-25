@@ -1,5 +1,5 @@
 <nav class="mt-2">
-    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+    <ul class="nav nav-pills nav-sidebar nav-child-indent flex-column" data-widget="treeview" role="menu" data-accordion="false">
         @foreach (config('menu') as $group)
             @php
                 $items = array_values(array_filter($group['items'], function ($item) {

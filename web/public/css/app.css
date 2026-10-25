@@ -75,3 +75,8 @@ body, .content-wrapper, .main-sidebar, .main-header {
 .dash-ready { fill: #17a2b8; background: #17a2b8; }
 .dash-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; }
 .dash-legend { margin-top: 4px; }
+
+/* The items of a sub menu stand a little to the right of the main menu, so that the two are told apart at a glance (AdminLTE's nav-child-indent gives 1rem; the icons of the sub items are smaller and quieter). */
+.nav-sidebar.nav-child-indent .nav-treeview { padding-left: 1.5rem; }
+.nav-sidebar .nav-treeview > .nav-item > .nav-link { font-size: .95rem; }
+.nav-sidebar .nav-treeview > .nav-item > .nav-link .nav-icon { font-size: .8rem; }

@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -220,18 +221,27 @@ private slots:
     void aNewDatabaseGetsTheMachineConfigurationBack();
     void withoutAPinMachineConfigStaysClosed();
     void nozzlesAreAlwaysTheBoardsOneToSix();
+    void aNozzleIsAddedByHandCheckedAndKeptUpToDateFromItsBoard();
+    void aRemovedNozzleGoesAwayAndTheWebAppIsToldInTheOrderTheyWereMade();
+    void aBoardAtAnAddressThatWasNotAddedIsNotAskedAndMakesNoNozzle();
+    void aNewNozzleHoldsItsFuelTypeTankAndDensityAndItsConfigIsSentLater();
+    void nozzlesAreAddedAndRemovedOnTheMachineConfigPage();
     void aBoardsConfigBecomesTheNozzlesConfig();
     void theTankIsKeptOrPickedByFuelType();
     void theNozzleLineForTheLogIsInNoLanguage();
     void whatTheBoardsReportedSurvivesAConfigDownload();
     void nozzlesWithATankAreUploadedFirstAndMarkedUploaded();
-    void everyBoardThatAnswersIsAskedForItsConfig();
-    void aBlankBoardIsStoredAsNotConfigured();
-    void aConfigChangeIsSentConfirmedReadAgainAndKept();
+    void nothingIsReadFromABoardUntilItIsAskedFor();
+    void aBlankBoardIsNotSavedWhenItIsRead();
+    void aConfigChangeIsSentVerifiedAndKept();
+    void aBoardThatDoesNotKeepTheConfigFailsTheVerification();
+    void aNozzleInManualModeIsOutOfThePollingButItsConfigCanStillBeSentAndRead();
     void aRefusedConfigChangeKeepsTheOldConfig();
+    void aReadThatWouldLeaveTheNozzleWithoutATankIsRefused();
+    void aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndAnAddNeedsATank();
     void aConfigIsNotSentToABoardThatDoesNotAnswerOrWithBadValues();
-    void whatABoardChangedByItselfIsPickedUpOnRefresh();
-    void aBoardThatComesBackIsAskedForItsConfigAgain();
+    void whatABoardChangedByItselfIsPickedUpWhenItIsRead();
+    void aBoardThatComesBackIsNotAskedForItsConfig();
     void theNozzleTableShowsTheBoardsAndTheirStatus();
     void aBadConfigIsCheckedBeforeItIsSent();
     void aChangeIsSentToTheBoardAndShownWhenItConfirms();
@@ -268,6 +278,7 @@ private slots:
     void anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedOnes();
     void theUploadModeIsPickedAndSavedOnMachineConfig();
     void theTerminalUploadsByItselfInTheAutomaticModes();
+    void aNozzleGoesToTheWebAppByItselfWhateverTheUploadMode();
     void pressingUploadSendsEverythingAndEmptiesTheScreen();
     void aFailedUploadSaysSoAndCanBePressedAgain();
     void refusedRecordsStayListedWithTheirReason();
@@ -428,9 +439,12 @@ private slots:
 
 public slots:
     void answerTheSettleDialog();     // helper of the tests: the dialog of a ticket debt is open (modal): scan the tickets, then Settle or Close
+    void answerTheMessageBox();       // helper of the tests: a question box is open (modal), note its text and press the button of boxAnswer_
     void answerTheNozzleQuestion();   // helper of the tests: the question of a spot sale set directly is open (modal), choose and press OK or Cancel
 
 private:
+    QMessageBox::StandardButton boxAnswer_;
+    QString boxText_;
     int nozzleToChoose_;
     QStringList settleTickets_;
     QStringList settleSeen_;   // what the dialog said after each ticket
@@ -478,6 +492,7 @@ private:
     void addLoansAndSoldTickets();
     void addRecordsOfSeveralDays();
     void addNozzles();
+    void addNozzleRows(const QList<int> &numbers);
     void setUpSupplying();
     QVariant one(const QString &sql);
 
@@ -2760,6 +2775,14 @@ void Smart210Test::aCashierAddedOnTheWebAppearsOnTheLoginScreenAfterADownload()
 
 // ---- machine config ----
 
+// Nozzles that were added by hand (no fuel type, no tank: the board reports its config when it answers).
+void Smart210Test::addNozzleRows(const QList<int> &numbers)
+{
+    foreach (int number, numbers) {
+        run("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, synced, deleted) VALUES (" + QString::number(number) + ", 0, '', " + QString::number(number) + ", 0, 0, 0)");
+    }
+}
+
 void Smart210Test::addNozzles()
 {
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
@@ -3473,6 +3496,36 @@ void Smart210Test::theTerminalUploadsByItselfInTheAutomaticModes()
     Settings(db).setValue(SettingKey::UploadMode, "continuous");
     QTRY_COMPARE_WITH_TIMEOUT(one("SELECT synced FROM sales WHERE id = 'old'").toInt(), 1, 10000);
     QCOMPARE(one("SELECT synced FROM sales WHERE id = 'recent'").toInt(), 0);
+}
+
+void Smart210Test::aNozzleGoesToTheWebAppByItselfWhateverTheUploadMode()
+{
+    setUpSellingTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("INSERT INTO sales (id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, synced) "
+        "VALUES ('waits', '2020-01-01 10:00:00', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 7, '2020-01-01', 0)");
+    run("UPDATE nozzles SET synced = 1");
+    serveUploads();
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':['5'],'rejected':[]}"));
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.setUploadIntervalMs(100);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);   // the first download is done
+    QTest::qWait(500);
+    QVERIFY(!server_->log().contains("POST /api/push/nozzles"));   // nothing waits
+
+    // a nozzle that was added on Machine Config goes up at once in the manual mode, and only the nozzle: the sale waits for the cashier
+    QVERIFY(Settings(db).value(SettingKey::UploadMode).isEmpty() || Settings(db).value(SettingKey::UploadMode) == "manual");
+    run("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, synced, deleted) VALUES (5, 1, 'D', 5, 0, 0, 0)");
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("POST /api/push/nozzles"), 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(one("SELECT synced FROM nozzles WHERE number = 5").toInt(), 1, 10000);
+    QTest::qWait(300);
+    QVERIFY(!server_->log().contains("POST /api/push/sales"));
+    QCOMPARE(one("SELECT synced FROM sales WHERE id = 'waits'").toInt(), 0);
+    QCOMPARE(footerWaiting(window), QString("Waiting for upload: 1"));
 }
 
 void Smart210Test::pressingUploadSendsEverythingAndEmptiesTheScreen()
@@ -6094,16 +6147,264 @@ void Smart210Test::nozzlesAreAlwaysTheBoardsOneToSix()
 {
     MachineConfig config(openDatabase());
 
-    const QList<MachineConfig::Nozzle> list = config.nozzles();
-
-    QCOMPARE(list.size(), MachineConfig::NozzleCount);
-    QCOMPARE(MachineConfig::NozzleCount, 6);
-    for (int i = 0; i < list.size(); ++i) {
-        QCOMPARE(list.at(i).number, i + 1);
-        QVERIFY(!list.at(i).seen()); // no board has answered yet
-        QCOMPARE(list.at(i).pulsesPerLiter, qlonglong(-1));
+    // nothing is detected by itself: a terminal that is new has no nozzle, and a board that answers makes none
+    QVERIFY(config.nozzles().isEmpty());
+    QCOMPARE(MachineConfig::NozzleCount, 6);   // the addresses that can be added are 1 to 6
+    for (int number = 1; number <= MachineConfig::NozzleCount; ++number) {
+        QVERIFY(!config.isConfigured(number));
+        QVERIFY(!config.nozzle(number).exists());
+        QVERIFY(!config.nozzle(number).seen());
+        QVERIFY(!config.storeBoardConfig(number, boardConfig("D", 8300, 100000)));
     }
     QCOMPARE(countRows("nozzles"), 0);
+}
+void Smart210Test::aNozzleIsAddedByHandCheckedAndKeptUpToDateFromItsBoard()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2', 'A', 5000000, 100000)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 800, NULL)");
+    addUser(7, "Cash One", "secret1");
+    MachineConfig config(db);
+    config.setLogFile(changeLog());
+    QString why;
+
+    // what is refused
+    QVERIFY(!config.addNozzle(0, "D", 0, 7, &why));
+    QVERIFY2(why.contains("1 to 6"), qPrintable(why));
+    QVERIFY(!config.addNozzle(7, "D", 0, 7, &why));
+    QVERIFY(!config.addNozzle(1, "", 0, 7, &why));
+    QVERIFY2(why.contains("fuel type"), qPrintable(why));
+    QVERIFY(!config.addNozzle(1, "Z", 0, 7, &why));                        // a fuel type the web app does not have
+    QVERIFY(!config.addNozzle(1, "D", 2, 7, &why));                        // tank 2 holds gasoline
+    QVERIFY2(why.contains("does not hold"), qPrintable(why));
+    QCOMPARE(countRows("nozzles"), 0);
+
+    // a nozzle: its number, its fuel type and, here, the only tank of that fuel type; the board has not answered yet
+    QVERIFY2(config.addNozzle(1, "D", 0, 7, &why), qPrintable(why));
+    MachineConfig::Nozzle nozzle = config.nozzle(1);
+    QVERIFY(nozzle.exists());
+    QVERIFY(!nozzle.seen());
+    QCOMPARE(nozzle.fuelType, QString("D"));
+    QCOMPARE(nozzle.tankId, 1);
+    QVERIFY(config.isConfigured(1));
+    QVERIFY(!config.isConfigured(2));
+    QCOMPARE(config.nozzles().size(), 1);
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 1);                    // it has a tank: the web app is told
+    QVERIFY(!config.addNozzle(1, "D", 0, 7, &why));                         // not twice
+    QVERIFY2(why.contains("added already"), qPrintable(why));
+    QVERIFY(config.addNozzle(3, "A", 2, 7, &why));                          // its tank given
+    QCOMPARE(config.nozzle(3).tankId, 2);
+    QCOMPARE(config.nozzles().size(), 2);
+    QCOMPARE(config.nozzles().at(0).number, 1);                             // by number
+    QCOMPARE(config.nozzles().at(1).number, 3);
+
+    // the board answers: its config is kept for the nozzle (the board's fuel type counts), another address makes nothing
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 120000)));
+    QVERIFY(config.nozzle(1).seen());
+    QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(120000));
+    QVERIFY(!config.storeBoardConfig(2, boardConfig("D", 8300, 120000)));
+    QCOMPARE(countRows("nozzles"), 2);
+
+    // the change log says who added what
+    const QList<MachineConfig::Change> changes = config.recentChanges(5);
+    QVERIFY(changes.size() >= 2);
+    QCOMPARE(changes.at(0).what, QString("nozzle:3"));
+    QCOMPARE(changes.at(0).newValue, QString("added A"));
+    QCOMPARE(changes.at(0).userName, QString("Cash One"));
+}
+
+void Smart210Test::aRemovedNozzleGoesAwayAndTheWebAppIsToldInTheOrderTheyWereMade()
+{
+    configureServer();
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    MachineConfig config(db);
+    QString why;
+    QVERIFY(config.addNozzle(1, "D", 0, 0, &why));
+    QVERIFY(config.addNozzle(2, "D", 0, 0, &why));
+    run("UPDATE nozzles SET synced = 1");                                   // both went up before
+
+    // a nozzle with an open fill cannot be removed
+    run("INSERT INTO supply_sessions (nozzle_number, preset_kg, started_at) VALUES (1, 3000, '2026-10-24 09:00:00')");
+    QVERIFY(!config.removeNozzle(1, 0, &why));
+    QVERIFY2(why.contains("fill is open"), qPrintable(why));
+    QVERIFY(config.isConfigured(1));
+    run("DELETE FROM supply_sessions");
+    QVERIFY(!config.removeNozzle(5, 0, &why));                              // not added
+    QVERIFY2(why.contains("was not added"), qPrintable(why));
+
+    // removed: gone from the list, the web app is told; the same number can be added again, and the two go up in the order they were made
+    QVERIFY2(config.removeNozzle(1, 0, &why), qPrintable(why));
+    QVERIFY(!config.isConfigured(1));
+    QCOMPARE(config.nozzles().size(), 1);
+    QVERIFY(!config.storeBoardConfig(1, boardConfig("D", 8300, 120000)));  // its board is ignored now
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 1);
+    QVERIFY(config.addNozzle(1, "D", 0, 0, &why));
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 2);
+
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':['1','1'],'rejected':[]}"));
+    Uploader uploader(db);
+    QString message;
+    QVERIFY(uploadOk(uploader, &message));
+    const QJsonArray rows = QJsonDocument::fromJson(server_->requests().at(0).body).object().value("rows").toArray();
+    QCOMPARE(rows.size(), 2);
+    QCOMPARE(rows.at(0).toObject().value("deleted").toBool(), true);          // the removed one first
+    QCOMPARE(rows.at(1).toObject().value("deleted").toBool(), false);         // then the new one with the same number
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 0);                      // each answer marked its own row
+
+    // a nozzle that never had a tank never went up: removing it tells the web app nothing
+    QVERIFY(config.addNozzle(4, "D", 0, 0, &why));                            // it takes the only tank of diesel...
+    run("UPDATE nozzles SET tank_id = 0, synced = 0 WHERE number = 4");      // ...so it is made one without
+
+    QVERIFY(config.removeNozzle(4, 0, &why));
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 0);
+}
+
+void Smart210Test::nozzlesAreAddedAndRemovedOnTheMachineConfigPage()
+{
+    setUpLoggedInTerminalWithAPin();                                         // nozzles 1 and 2 were added; tank T1 holds diesel
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (3, 'T3', 'A', 5000000, 100000)");
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+
+    QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
+    QComboBox *number = window.findChild<QComboBox *>("addNozzleNumber");
+    QComboBox *fuel = window.findChild<QComboBox *>("addNozzleFuel");
+    QComboBox *tank = window.findChild<QComboBox *>("addNozzleTank");
+    QPushButton *add = window.findChild<QPushButton *>("addNozzleButton");
+    QLabel *status = window.findChild<QLabel *>("machineStatus");
+    QCOMPARE(table->rowCount(), 2);
+    QStringList numbers;
+    for (int i = 0; i < number->count(); ++i) {
+        numbers << number->itemText(i);
+    }
+    QCOMPARE(numbers, QStringList() << "3" << "4" << "5" << "6");           // the addresses not added yet
+    QCOMPARE(fuel->count(), 2);                                              // the fuel types of the last download
+
+    // gasoline at address 4, on its only tank
+    number->setCurrentIndex(number->findText("4"));
+    fuel->setCurrentIndex(fuel->findData("A"));
+    fuel->activated(fuel->currentIndex());
+    QCOMPARE(tank->currentText(), QString("T3"));
+    add->click();
+    QVERIFY2(status->text().contains("Nozzle 4 was added"), qPrintable(status->text()));
+    QCOMPARE(table->rowCount(), 3);
+    QCOMPARE(table->item(2, 0)->text(), QString("4"));                       // by number: 1, 2, 4
+    QCOMPARE(table->item(2, 6)->text(), QString("T3"));                       // the tank chosen when adding shows before the board has reported
+    QCOMPARE(number->findText("4"), -1);                                     // no longer free to add
+    QCOMPARE(window.findChild<QLabel *>("selectedNozzle")->text(), QString("Nozzle 4"));
+    QCOMPARE(QSqlDatabase::database(connection_).exec("SELECT COUNT(*) FROM nozzles WHERE number = 4 AND tank_id = 3 AND fuel_type = 'A'").next(), true);
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Nozzle 4: - -> added A"));
+
+    // every row has its own Remove button; a click asks first, and No keeps the nozzle
+    for (int row = 0; row < table->rowCount(); ++row) {
+        QVERIFY(qobject_cast<QPushButton *>(table->cellWidget(row, 7)) != 0);
+    }
+    QCOMPARE(window.findChild<QPushButton *>("removeNozzleButton"), static_cast<QPushButton *>(0));   // the one button for the picked nozzle is gone
+    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(2, 7));
+    QCOMPARE(remove->text(), QString("Remove"));
+    boxAnswer_ = QMessageBox::No;
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    remove->click();
+    QVERIFY2(boxText_.contains("Remove nozzle 4"), qPrintable(boxText_));
+    QCOMPARE(table->rowCount(), 3);
+    QVERIFY(QSqlDatabase::database(connection_).exec("SELECT 1 FROM nozzles WHERE number = 4 AND deleted = 0").next());
+
+    // Yes removes that row's nozzle, whichever row is picked in the table
+    table->selectRow(0);
+    boxAnswer_ = QMessageBox::Yes;
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    remove->click();
+    QVERIFY2(boxText_.contains("Remove nozzle 4"), qPrintable(boxText_));
+    QVERIFY2(status->text().contains("Nozzle 4 was removed"), qPrintable(status->text()));
+    QCOMPARE(table->rowCount(), 2);
+    QVERIFY(!QSqlDatabase::database(connection_).exec("SELECT 1 FROM nozzles WHERE number = 4 AND deleted = 0").next());
+    QCOMPARE(window.findChild<QLabel *>("selectedNozzle")->text(), QString("Nozzle 1"));   // the picked nozzle stays picked
+    QVERIFY(number->findText("4") >= 0);                                     // free to add again
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Nozzle 4: added A -> removed"));
+
+    // the rows that are left keep their own buttons
+    QCOMPARE(table->cellWidget(1, 7)->property("nozzle").toInt(), 2);
+}
+void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndAnAddNeedsATank()
+{
+    setUpLoggedInTerminalWithAPin();                                         // nozzles 1 and 2 were added; tank T1 holds diesel
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+    QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
+    QLabel *status = window.findChild<QLabel *>("machineStatus");
+    QPushButton *update = window.findChild<QPushButton *>("updateNozzleButton");
+    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(0, 7));
+    table->selectRow(0);
+    window.findChild<QLineEdit *>("nozzlePulses")->setText("1500");
+    boxAnswer_ = QMessageBox::Ok;
+
+    // tickets are queued on nozzle 1: nothing is saved, nothing is removed, and the reason is shown in a box
+    run("INSERT INTO supply_queue (barcode, nozzle_number, amount_kg, position, added_at) VALUES (1000000000000001, 1, 500, 1, '2026-10-24 10:00:00')");
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    update->click();
+    QVERIFY2(boxText_.contains("Tickets are queued on nozzle 1"), qPrintable(boxText_));
+    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));                // not saved
+    QVERIFY(status->text().contains("Tickets are queued"));
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    remove->click();
+    QVERIFY2(boxText_.contains("Tickets are queued on nozzle 1"), qPrintable(boxText_));
+    QCOMPARE(table->rowCount(), 2);                                          // still there (and no question was asked)
+
+    // a fill is open on it
+    run("DELETE FROM supply_queue");
+    QVERIFY(SupplyQueue::begin(QSqlDatabase::database(connection_), 1, 1000, QDateTime::currentDateTime()));
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    update->click();
+    QVERIFY2(boxText_.contains("A fill is open on nozzle 1"), qPrintable(boxText_));
+    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    remove->click();
+    QVERIFY2(boxText_.contains("A fill is open on nozzle 1"), qPrintable(boxText_));
+    QCOMPARE(table->rowCount(), 2);
+
+    // when the fill is over the update goes through (saved here; there is no board in this test)
+    SupplyQueue::end(QSqlDatabase::database(connection_), 1);
+    update->click();
+    QVERIFY2(status->text().startsWith("Saved."), qPrintable(status->text()));
+    QCOMPARE(table->item(0, 5)->text(), QString("1500.00"));
+
+    // an Add needs a tank: no tank holds this fuel type, so it is refused with a box
+    QComboBox *fuel = window.findChild<QComboBox *>("addNozzleFuel");
+    QComboBox *number = window.findChild<QComboBox *>("addNozzleNumber");
+    QComboBox *tank = window.findChild<QComboBox *>("addNozzleTank");
+    fuel->setCurrentIndex(fuel->findData("A"));
+    fuel->activated(fuel->currentIndex());
+    QCOMPARE(tank->count(), 0);
+    number->setCurrentIndex(number->findText("4"));
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    window.findChild<QPushButton *>("addNozzleButton")->click();
+    QVERIFY2(boxText_.contains("must be connected to a tank"), qPrintable(boxText_));
+    QCOMPARE(table->rowCount(), 2);
 }
 
 void Smart210Test::aBoardsConfigBecomesTheNozzlesConfig()
@@ -6112,6 +6413,7 @@ void Smart210Test::aBoardsConfigBecomesTheNozzlesConfig()
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2', 'A', 5000000, 100000)");
     MachineConfig config(db);
+    addNozzleRows(QList<int>() << 2);
 
     QVERIFY(config.storeBoardConfig(2, boardConfig("D", 8300, 123450, BoardProtocol::ModeManual)));
 
@@ -6134,13 +6436,14 @@ void Smart210Test::aBoardsConfigBecomesTheNozzlesConfig()
     QVERIFY(config.storeBoardConfig(2, boardConfig("D", 8400, 130000)));
     QCOMPARE(config.nozzle(2).pulsesPerLiter, qlonglong(130000));
     QCOMPARE(Uploader::pending(db).value("nozzles"), 0);
-    QCOMPARE(countRows("nozzles"), 1);
+    QCOMPARE(countRows("nozzles"), 1);                  // a board's answer makes no nozzle: only the added one is kept
     // another fuel type: the tank follows, and the web app is told
     QVERIFY(config.storeBoardConfig(2, boardConfig("A", 7400, 130000)));
     QCOMPARE(config.nozzle(2).tankId, 2);
     QCOMPARE(Uploader::pending(db).value("nozzles"), 1);
 
     // a board straight from the factory: nothing set yet
+    addNozzleRows(QList<int>() << 3);
     QVERIFY(config.storeBoardConfig(3, BoardProtocol::BoardConfig()));
     QVERIFY(config.nozzle(3).seen());
     QCOMPARE(config.nozzle(3).density, qlonglong(-1));
@@ -6190,6 +6493,7 @@ void Smart210Test::aNewDatabaseGetsTheMachineConfigurationBack()
         settings.setInt(SettingKey::ServerPort, 8080);
         settings.setValue(SettingKey::PrinterHost, "192.168.1.9");
         MachineConfig config(db);
+        addNozzleRows(QList<int>() << 1);
         QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
         QVERIFY(config.setTank(1, 2));
     }
@@ -6209,6 +6513,7 @@ void Smart210Test::aNewDatabaseGetsTheMachineConfigurationBack()
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2', 'D', 5000000, 100000)");
     MachineConfig config(fresh);
+    addNozzleRows(QList<int>() << 1); // added again by hand on the new card
     QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
     QCOMPARE(config.nozzle(1).tankId, 2);
 }
@@ -6220,6 +6525,7 @@ void Smart210Test::theTankIsKeptOrPickedByFuelType()
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2', 'D', 5000000, 100000)");
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (3, 'T3', 'A', 5000000, 100000)");
     MachineConfig config(db);
+    addNozzleRows(QList<int>() << 1);
 
     QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
     QCOMPARE(config.nozzle(1).tankId, 0);                 // two tanks hold diesel: the technician picks
@@ -6265,6 +6571,7 @@ void Smart210Test::whatTheBoardsReportedSurvivesAConfigDownload()
     QString error;
     QVERIFY(store.applyConfig(configObject(), &error)); // brings tank 1 (diesel)
     MachineConfig config(db);
+    addNozzleRows(QList<int>() << 1);
     QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 120000)));
 
     QVERIFY(store.applyConfig(configObject(), &error)); // the config download does not touch nozzles
@@ -6279,6 +6586,7 @@ void Smart210Test::nozzlesWithATankAreUploadedFirstAndMarkedUploaded()
 {
     configureServer();
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 2 << 5);
     MachineConfig config(openDatabase());
     QVERIFY(config.storeBoardConfig(2, boardConfig("D", 8300, 120000)));
     QVERIFY(config.storeBoardConfig(5, boardConfig("X", 8300, 120000))); // no tank holds fuel X: not uploaded
@@ -6319,10 +6627,97 @@ struct NozzleRig {
 
 }
 
-void Smart210Test::everyBoardThatAnswersIsAskedForItsConfig()
+void Smart210Test::aBoardAtAnAddressThatWasNotAddedIsNotAskedAndMakesNoNozzle()
 {
     QSqlDatabase db = openDatabase();
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    addNozzleRows(QList<int>() << 1);                                        // only nozzle 1 was added
+    NozzleRig rig(db);
+    rig.boards.add(1);
+    rig.boards.add(2);                                                       // board 2 is there and answers, but nobody added nozzle 2
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+    MachineConfig config(db);
+
+    QTRY_VERIFY_WITH_TIMEOUT(rig.bus.isOnline(1), 5000);
+    QTest::qWait(500);
+    QVERIFY(!rig.bus.isOnline(2));                                           // it is not even asked
+    QVERIFY(!config.isConfigured(2));
+    QCOMPARE(config.nozzles().size(), 1);
+    QCOMPARE(countRows("nozzles"), 1);
+    QVERIFY(!rig.bus.getConfig(2));                                          // and no command goes to it
+    QVERIFY(!rig.sync.read(2));
+
+    // the technician adds nozzle 2: its board is polled from then on (its config is not read by itself)
+    QString why;
+    QVERIFY2(config.addNozzle(2, "D", 0, 0, &why), qPrintable(why));
+    rig.sync.syncBoards();
+    QTRY_VERIFY_WITH_TIMEOUT(rig.bus.isOnline(2), 5000);
+    QTest::qWait(300);
+    QVERIFY(!config.nozzle(2).seen());
+
+    // removed: switched off again, offline at once
+    QVERIFY(config.removeNozzle(2, 0, &why));
+    rig.sync.syncBoards();
+    QVERIFY(!rig.bus.isOnline(2));
+    QTest::qWait(300);
+    QVERIFY(!rig.bus.isOnline(2));
+    QVERIFY(rig.bus.isOnline(1));
+}
+
+void Smart210Test::aNewNozzleHoldsItsFuelTypeTankAndDensityAndItsConfigIsSentLater()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1 Gasoline', 'A', 5000000, 100000)");
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2 Diesel', 'D', 5000000, 100000)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 800, 7400)");
+    MachineConfig config(db);
+    config.setLogFile(changeLog());
+    QString why;
+    // the technician adds nozzle 1 as Gasoline on the gasoline tank; its board still holds Diesel (a configured board: auto, D, 0.8300, 1000.00)
+    QVERIFY2(config.addNozzle(1, "A", 1, 0, &why), qPrintable(why));
+    NozzleRig rig(db);
+    rig.boards.add(1);
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
+    QTest::qWait(300);
+
+    // the nozzle holds what was chosen, the density of its fuel type, no pulses yet; nothing was read from the board and the board is untouched
+    MachineConfig::Nozzle nozzle = config.nozzle(1);
+    QCOMPARE(nozzle.fuelType, QString("A"));
+    QCOMPARE(nozzle.tankId, 1);
+    QCOMPARE(nozzle.density, qlonglong(7400));
+    QCOMPARE(nozzle.pulsesPerLiter, qlonglong(-1));
+    QVERIFY(!nozzle.seen());                                                     // its config is not set yet
+    QCOMPARE(rig.boards.board(1).config.fuelType, QString("D"));
+    QVERIFY(!rig.boards.board(1).commands.contains(int(BoardProtocol::CmdGetConfig)));
+    QVERIFY(!rig.boards.board(1).commands.contains(int(BoardProtocol::CmdSetConfig)));
+
+    // Update: the config is saved here first (the nozzle has it at once), then the board gets Gasoline and verifies it
+    QSignalSpy done(&rig.sync, SIGNAL(updateDone(int)));
+    BoardProtocol::BoardConfig wanted = boardConfig("A", 7400, 120000);
+    QVERIFY(config.saveConfig(1, wanted, 0));
+    QVERIFY(config.nozzle(1).seen());
+    QCOMPARE(rig.boards.board(1).config.fuelType, QString("D"));              // the board has not been told yet
+    QVERIFY(rig.sync.send(1, wanted));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
+    QCOMPARE(rig.boards.board(1).config.fuelType, QString("A"));
+    QCOMPARE(rig.boards.board(1).config.pulsesX100, quint32(120000));
+    nozzle = config.nozzle(1);
+    QVERIFY(nozzle.seen());
+    QCOMPARE(nozzle.fuelType, QString("A"));
+    QCOMPARE(nozzle.tankId, 1);
+    QCOMPARE(nozzle.pulsesPerLiter, qlonglong(120000));
+}
+
+void Smart210Test::nothingIsReadFromABoardUntilItIsAskedFor()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 1 << 2 << 3);
     NozzleRig rig(db);
     rig.boards.add(1);
     rig.boards.add(2);
@@ -6331,42 +6726,59 @@ void Smart210Test::everyBoardThatAnswersIsAskedForItsConfig()
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
 
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen() && config.nozzle(2).seen() && config.nozzle(3).seen(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1) && rig.sync.isOnline(2) && rig.sync.isOnline(3), 5000);
+    QTest::qWait(500);
+    QVERIFY(rig.sync.isLinked());
+    QVERIFY(!rig.sync.isOnline(4));
+    for (int number = 1; number <= 3; ++number) {                                  // they are polled, and never asked for their config
+        QVERIFY(!config.nozzle(number).seen());
+        QVERIFY(!rig.boards.board(number).commands.contains(int(BoardProtocol::CmdGetConfig)));
+    }
 
+    // Read asks one board, and what it holds becomes the nozzle's config
+    QSignalSpy done(&rig.sync, SIGNAL(readDone(int)));
+    QVERIFY(rig.sync.read(1));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
+    QCOMPARE(done.at(0).at(0).toInt(), 1);
+    QVERIFY(config.nozzle(1).seen());
     QCOMPARE(config.nozzle(1).fuelType, QString("D"));
     QCOMPARE(config.nozzle(1).density, qlonglong(8300));
     QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(100000));
     QCOMPARE(config.nozzle(1).tank, QString("T1"));
-    QVERIFY(rig.sync.isLinked());
-    QVERIFY(rig.sync.isOnline(1));
-    QVERIFY(!rig.sync.isOnline(4));
-    QVERIFY(!config.nozzle(4).seen()); // no board there: no nozzle
-    QVERIFY(!config.nozzle(6).seen());
-    QCOMPARE(rig.boards.board(1).commands.first(), int(BoardProtocol::CmdGetConfig));
+    QVERIFY(!config.nozzle(2).seen());                                             // the others were not asked
+    QVERIFY(!rig.boards.board(2).commands.contains(int(BoardProtocol::CmdGetConfig)));
+    QVERIFY(!rig.sync.read(4));                                                    // not added
 }
 
-void Smart210Test::aBlankBoardIsStoredAsNotConfigured()
+void Smart210Test::aBlankBoardIsNotSavedWhenItIsRead()
 {
     QSqlDatabase db = openDatabase();
+    addNozzleRows(QList<int>() << 1);
     NozzleRig rig(db);
     rig.boards.addBlank(1);
     QVERIFY(rig.sync.start(freePort()));
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
+    QSignalSpy done(&rig.sync, SIGNAL(readDone(int)));
+    QSignalSpy failed(&rig.sync, SIGNAL(readFailed(int,QString)));
 
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen(), 5000);
+    QVERIFY(rig.sync.read(1));
 
-    QCOMPARE(config.nozzle(1).density, qlonglong(-1));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
+    QCOMPARE(done.size(), 0);
+    QVERIFY(failed.at(0).at(1).toString().contains("no config"));
+    QVERIFY(!config.nozzle(1).seen());                                             // the terminal's own config stays as it was
     QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(-1));
-    QCOMPARE(config.nozzle(1).fuelType, QString());
 }
 
-void Smart210Test::aConfigChangeIsSentConfirmedReadAgainAndKept()
+void Smart210Test::aConfigChangeIsSentVerifiedAndKept()
 {
     QSqlDatabase db = openDatabase();
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (2, 'T2', 'D', 5000000, 100000)");
     addUser(7, "Cash One", "secret1");
+    addNozzleRows(QList<int>() << 1);
     NozzleRig rig(db);
     rig.sync.setLogFile(changeLog());
     rig.boards.add(1);
@@ -6374,35 +6786,38 @@ void Smart210Test::aConfigChangeIsSentConfirmedReadAgainAndKept()
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
     config.setLogFile(changeLog());
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
     QSignalSpy done(&rig.sync, SIGNAL(updateDone(int)));
     QSignalSpy failed(&rig.sync, SIGNAL(updateFailed(int,QString)));
 
-    QVERIFY(rig.sync.update(1, boardConfig("D", 8250, 123450, BoardProtocol::ModeManual), 2, 7));
+    const BoardProtocol::BoardConfig wanted = boardConfig("D", 8250, 123450, BoardProtocol::ModeManual);
+    QVERIFY(config.saveConfig(1, wanted, 7));
+    QVERIFY(rig.sync.send(1, wanted));
 
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
     QCOMPARE(failed.size(), 0);
     QCOMPARE(rig.boards.board(1).config.pulsesX100, quint32(123450)); // the board has it
     QCOMPARE(rig.boards.board(1).config.mode, int(BoardProtocol::ModeManual));
     const MachineConfig::Nozzle nozzle = config.nozzle(1);
-    QCOMPARE(nozzle.pulsesPerLiter, qlonglong(123450));                // and so has the terminal: what the board reported
+    QVERIFY(nozzle.seen());
+    QCOMPARE(nozzle.pulsesPerLiter, qlonglong(123450));                // and so has the terminal
     QCOMPARE(nozzle.density, qlonglong(8250));
     QCOMPARE(nozzle.mode, int(BoardProtocol::ModeManual));
-    QCOMPARE(nozzle.tankId, 2);
-    // asked, set, and asked again
-    QTRY_VERIFY_WITH_TIMEOUT(rig.boards.board(1).commands.size() >= 3, 5000);
-    QCOMPARE(rig.boards.board(1).commands.mid(0, 3), QList<int>() << int(BoardProtocol::CmdGetConfig) << int(BoardProtocol::CmdSetConfig) << int(BoardProtocol::CmdGetConfig));
+    // one command: the config was set and verified by the board's own answer, nothing was asked before or after
+    QTest::qWait(300);
+    QCOMPARE(rig.boards.board(1).commands, QList<int>() << int(BoardProtocol::CmdSetConfig));
     // logged once, with the cashier
     const QList<MachineConfig::Change> log = config.recentChanges(10);
     QCOMPARE(log.size(), 1);
     QCOMPARE(log.at(0).what, QString("nozzle:1"));
     QCOMPARE(log.at(0).userName, QString("Cash One"));
-    QCOMPARE(log.at(0).newValue, QString("manual D 0.8250 1234.50 T2"));
+    QCOMPARE(log.at(0).newValue, QString("manual D 0.8250 1234.50"));
 }
 
-void Smart210Test::aRefusedConfigChangeKeepsTheOldConfig()
+void Smart210Test::aBoardThatDoesNotKeepTheConfigFailsTheVerification()
 {
     QSqlDatabase db = openDatabase();
+    addNozzleRows(QList<int>() << 1);
     NozzleRig rig(db);
     rig.sync.setLogFile(changeLog());
     rig.boards.add(1);
@@ -6410,12 +6825,98 @@ void Smart210Test::aRefusedConfigChangeKeepsTheOldConfig()
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
     config.setLogFile(changeLog());
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen(), 5000);
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
+    QSignalSpy done(&rig.sync, SIGNAL(updateDone(int)));
+    QSignalSpy failed(&rig.sync, SIGNAL(updateFailed(int,QString)));
+
+    rig.boards.board(1).keepsNoConfig = true; // it answers, but holds what it held
+    const BoardProtocol::BoardConfig wanted = boardConfig("D", 8300, 150000);
+    QVERIFY(config.saveConfig(1, wanted, 0));
+    QVERIFY(rig.sync.send(1, wanted));
+
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
+    QCOMPARE(done.size(), 0);
+    QVERIFY2(failed.at(0).at(1).toString().contains("did not keep"), qPrintable(failed.at(0).at(1).toString()));
+    QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(150000));      // saved here: the terminal's config is what was typed, the board is behind
+    QCOMPARE(rig.boards.board(1).config.pulsesX100, quint32(100000));
+    QCOMPARE(rig.sync.lastError(1), failed.at(0).at(1).toString());
+}
+
+void Smart210Test::aNozzleInManualModeIsOutOfThePollingButItsConfigCanStillBeSentAndRead()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 1 << 2);
+    MachineConfig config(db);
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000, BoardProtocol::ModeManual)));   // nozzle 1: manual
+    QVERIFY(config.storeBoardConfig(2, boardConfig("D", 8300, 100000, BoardProtocol::ModeAuto)));     // nozzle 2: auto
+    NozzleRig rig(db);
+    rig.boards.add(1);
+    rig.boards.add(2);
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+
+    // the auto nozzle is polled, the manual one is not asked at all: not online, no status, no POLL reaches its board
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(2), 5000);
+    QTest::qWait(500);
+    QVERIFY(rig.sync.isPolled(2));
+    QVERIFY(!rig.sync.isPolled(1));
+    QVERIFY(!rig.sync.isOnline(1));
+    QVERIFY(rig.boards.pollsOf(2) > 3);
+    QCOMPARE(rig.boards.pollsOf(1), 0);
+    QVERIFY(rig.sync.canTalk(1));                                                // but a command can still be sent to it
+
+    // Read works without polling, and the board stays unpolled
+    QSignalSpy read(&rig.sync, SIGNAL(readDone(int)));
+    rig.boards.board(1).config.pulsesX100 = 150000;
+    rig.boards.board(1).config.mode = BoardProtocol::ModeManual;                 // what the board holds is manual too
+    QVERIFY(rig.sync.read(1));
+    QTRY_COMPARE_WITH_TIMEOUT(read.size(), 1, 5000);
+    QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(150000));
+    QVERIFY(!rig.sync.isPolled(1));
+    QCOMPARE(rig.boards.pollsOf(1), 0);
+    QCOMPARE(rig.boards.board(1).commands, QList<int>() << int(BoardProtocol::CmdGetConfig));
+
+    // Update to auto: the config goes to the unpolled board, then the board is polled
+    QSignalSpy done(&rig.sync, SIGNAL(updateDone(int)));
+    const BoardProtocol::BoardConfig toAuto = boardConfig("D", 8300, 150000, BoardProtocol::ModeAuto);
+    QVERIFY(config.saveConfig(1, toAuto, 0));
+    QVERIFY(rig.sync.send(1, toAuto));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isPolled(1) && rig.sync.isOnline(1), 5000);
+    QVERIFY(rig.boards.pollsOf(1) >= 1);
+
+    // Update to manual: sent while it is polled, then it is out of the polling again and offline
+    const BoardProtocol::BoardConfig toManual = boardConfig("D", 8300, 150000, BoardProtocol::ModeManual);
+    QVERIFY(config.saveConfig(1, toManual, 0));
+    QVERIFY(rig.sync.send(1, toManual));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!rig.sync.isPolled(1) && !rig.sync.isOnline(1), 5000);
+    const int polls = rig.boards.pollsOf(1);
+    QTest::qWait(400);
+    QCOMPARE(rig.boards.pollsOf(1), polls);
+    QCOMPARE(rig.boards.board(1).config.mode, int(BoardProtocol::ModeManual));
+}
+
+void Smart210Test::aRefusedConfigChangeKeepsTheOldConfig()
+{
+    QSqlDatabase db = openDatabase();
+    addNozzleRows(QList<int>() << 1);
+    NozzleRig rig(db);
+    rig.sync.setLogFile(changeLog());
+    rig.boards.add(1);
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+    MachineConfig config(db);
+    config.setLogFile(changeLog());
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
     QSignalSpy done(&rig.sync, SIGNAL(updateDone(int)));
     QSignalSpy failed(&rig.sync, SIGNAL(updateFailed(int,QString)));
 
     rig.boards.board(1).state = BoardProtocol::StateSelected; // a nozzle in use takes no new config
-    QVERIFY(rig.sync.update(1, boardConfig("D", 8300, 999900), 0, 0));
+    QVERIFY(rig.sync.send(1, boardConfig("D", 8300, 999900)));
 
     QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
     QCOMPARE(done.size(), 0);
@@ -6428,57 +6929,89 @@ void Smart210Test::aRefusedConfigChangeKeepsTheOldConfig()
 void Smart210Test::aConfigIsNotSentToABoardThatDoesNotAnswerOrWithBadValues()
 {
     QSqlDatabase db = openDatabase();
+    addNozzleRows(QList<int>() << 1);
     NozzleRig rig(db);
     rig.boards.add(1);
     QVERIFY(rig.sync.start(freePort()));
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
-    MachineConfig config(db);
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
 
-    QVERIFY(!rig.sync.update(5, boardConfig("D", 8300, 100000), 0, 0));  // no board 5
-    QVERIFY(!rig.sync.update(1, boardConfig("D", 0, 100000), 0, 0));     // density 0
-    QVERIFY(!rig.sync.update(1, boardConfig("D", 8300, 0), 0, 0));       // pulses 0
-    QVERIFY(!rig.sync.update(1, boardConfig("", 8300, 100000), 0, 0));   // no fuel type
-    QVERIFY(!rig.sync.update(1, boardConfig("D", 30000, 100000), 0, 0)); // density out of range
-    QCOMPARE(rig.boards.board(1).executed, 1); // only the first read ever reached the board
+    QVERIFY(!rig.sync.send(5, boardConfig("D", 8300, 100000)));  // no board 5
+    QVERIFY(!rig.sync.send(1, boardConfig("D", 0, 100000)));     // density 0
+    QVERIFY(!rig.sync.send(1, boardConfig("D", 8300, 0)));       // pulses 0
+    QVERIFY(!rig.sync.send(1, boardConfig("", 8300, 100000)));   // no fuel type
+    QVERIFY(!rig.sync.send(1, boardConfig("D", 30000, 100000))); // density out of range
+    QCOMPARE(rig.boards.board(1).executed, 0);                           // nothing reached the board
 }
 
-void Smart210Test::whatABoardChangedByItselfIsPickedUpOnRefresh()
+void Smart210Test::whatABoardChangedByItselfIsPickedUpWhenItIsRead()
 {
     QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 2);
     NozzleRig rig(db);
     rig.boards.add(2);
     QVERIFY(rig.sync.start(freePort()));
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(2).seen(), 5000);
-    QCOMPARE(config.nozzle(2).pulsesPerLiter, qlonglong(100000));
+    QVERIFY(config.storeBoardConfig(2, boardConfig("D", 8300, 100000)));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(2), 5000);
 
     rig.boards.board(2).config.pulsesX100 = 150000; // changed at the board itself
-    rig.sync.refresh();
+    QTest::qWait(300);
+    QCOMPARE(config.nozzle(2).pulsesPerLiter, qlonglong(100000)); // not noticed by itself
+    QSignalSpy done(&rig.sync, SIGNAL(readDone(int)));
+    QVERIFY(rig.sync.read(2, 0));
 
-    QTRY_COMPARE_WITH_TIMEOUT(config.nozzle(2).pulsesPerLiter, qlonglong(150000), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
+    QCOMPARE(config.nozzle(2).pulsesPerLiter, qlonglong(150000));
 }
 
-void Smart210Test::aBoardThatComesBackIsAskedForItsConfigAgain()
+void Smart210Test::aReadThatWouldLeaveTheNozzleWithoutATankIsRefused()
 {
     QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 1);
+    NozzleRig rig(db);
+    rig.boards.add(1);
+    rig.boards.board(1).config.fuelType = "A";                                  // the board holds gasoline, no tank does
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+    MachineConfig config(db);
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
+    QSignalSpy failed(&rig.sync, SIGNAL(readFailed(int,QString)));
+    rig.sync.setDiffers(1, true);
+
+    QVERIFY(rig.sync.read(1));
+
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
+    QVERIFY(failed.at(0).at(1).toString().contains("connected to a tank"));
+    QCOMPARE(config.nozzle(1).fuelType, QString("D"));                          // nothing was saved
+    QVERIFY(rig.sync.differs(1));                                               // and what was not confirmed stays marked
+}
+
+void Smart210Test::aBoardThatComesBackIsNotAskedForItsConfig()
+{
+    QSqlDatabase db = openDatabase();
+    addNozzleRows(QList<int>() << 1);
     NozzleRig rig(db);
     rig.boards.add(1);
     QVERIFY(rig.sync.start(freePort()));
     rig.boards.connectTo(quint16(rig.bus.listenPort()));
     MachineConfig config(db);
-    QTRY_VERIFY_WITH_TIMEOUT(config.nozzle(1).seen(), 5000);
+    QVERIFY(config.storeBoardConfig(1, boardConfig("D", 8300, 100000)));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
     rig.boards.board(1).silent = true;
     QTRY_VERIFY_WITH_TIMEOUT(!rig.sync.isOnline(1), 5000);
     rig.boards.board(1).config.pulsesX100 = 170000; // while it was away
-    const int reads = rig.boards.board(1).commands.size();
 
     rig.boards.board(1).silent = false;
 
     QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1), 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(config.nozzle(1).pulsesPerLiter, qlonglong(170000), 5000);
-    QVERIFY(rig.boards.board(1).commands.size() > reads);
+    QTest::qWait(500);
+    QCOMPARE(config.nozzle(1).pulsesPerLiter, qlonglong(100000));      // the terminal's config is its own
+    QVERIFY(!rig.boards.board(1).commands.contains(int(BoardProtocol::CmdGetConfig)));
 }
 
 // ---- the nozzle table of the Machine Config page ----
@@ -6497,7 +7030,7 @@ void Smart210Test::theNozzleTableShowsTheBoardsAndTheirStatus()
     QCOMPARE(window.currentPage(), QString("machine"));
 
     QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
-    QCOMPARE(table->rowCount(), 6);
+    QCOMPARE(table->rowCount(), 2);                                // the two nozzles that were added, not six boards
     QCOMPARE(table->item(0, 0)->text(), QString("1"));
     QCOMPARE(table->item(0, 1)->text(), QString("No converter")); // nothing is connected in this test
     QCOMPARE(table->item(0, 2)->text(), QString("Auto"));
@@ -6506,14 +7039,23 @@ void Smart210Test::theNozzleTableShowsTheBoardsAndTheirStatus()
     QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));
     QCOMPARE(table->item(0, 6)->text(), QString("T1"));
     QCOMPARE(table->item(1, 5)->text(), QString("1234.50"));
-    QCOMPARE(table->item(2, 3)->text(), QString()); // board 3 never answered
-    QCOMPARE(table->item(5, 0)->text(), QString("6"));
+    QCOMPARE(table->item(1, 0)->text(), QString("2"));
 
+    // picking a nozzle fills the form: neither the table nor the form changes its width (the text of the label above the form is not what sizes it)
+    window.resize(1280, 720);
+    window.show();
+    window.findChild<QTabWidget *>("machineTabs")->setCurrentIndex(1);
+    QTest::qWait(200);
+    const int tableWidth = table->width();
+    const int formWidth = window.findChild<QLineEdit *>("nozzleDensity")->width();
     table->selectRow(0);
+    QTest::qWait(200);
+    QCOMPARE(table->width(), tableWidth);
+    QCOMPARE(window.findChild<QLineEdit *>("nozzleDensity")->width(), formWidth);
     QCOMPARE(window.findChild<QLineEdit *>("nozzleDensity")->text(), QString("0.8300"));
     QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1200.00"));
     QCOMPARE(window.findChild<QComboBox *>("nozzleFuel")->currentData().toString(), QString("D"));
-    QCOMPARE(window.findChild<QComboBox *>("nozzleTank")->currentText(), QString("T1"));
+    QCOMPARE(window.findChild<QComboBox *>("nozzleTank"), static_cast<QComboBox *>(0)); // the tank is the web app's: the form has no field for it
 }
 
 void Smart210Test::aBadConfigIsCheckedBeforeItIsSent()
@@ -6528,7 +7070,7 @@ void Smart210Test::aBadConfigIsCheckedBeforeItIsSent()
     window.findChild<QLineEdit *>("pinField")->setText("4821");
     window.findChild<QPushButton *>("pinOkButton")->click();
     QLabel *status = window.findChild<QLabel *>("machineStatus");
-    QPushButton *send = window.findChild<QPushButton *>("sendNozzleButton");
+    QPushButton *send = window.findChild<QPushButton *>("updateNozzleButton");
 
     send->click();
     QVERIFY(status->text().contains("Pick a nozzle"));
@@ -6544,9 +7086,10 @@ void Smart210Test::aBadConfigIsCheckedBeforeItIsSent()
     QVERIFY(status->text().contains("pulses"));
 
     window.findChild<QLineEdit *>("nozzlePulses")->setText("1234.5");
-    send->click(); // good values, but no board answers
-    QVERIFY(status->text().contains("does not answer"));
-    QCOMPARE(changes().recentChanges(100).size(), 0);
+    send->click(); // good values, but no board answers: they are saved here all the same
+    QVERIFY2(status->text().startsWith("Saved.") && status->text().contains("was not updated"), qPrintable(status->text()));
+    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(0, 5)->text(), QString("1234.50"));
+    QCOMPARE(changes().recentChanges(100).size(), 1);
 }
 
 void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
@@ -6576,29 +7119,45 @@ void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
     QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
     QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 1)->text(), QString("Online"), 5000);
     QTRY_COMPARE_WITH_TIMEOUT(table->item(1, 1)->text(), QString("Online"), 5000);
-    QCOMPARE(table->item(2, 1)->text(), QString("No answer")); // board 3 is not there
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 5)->text(), QString("1000.00"), 5000); // the board's own value replaced the stored one
+    QCOMPARE(table->rowCount(), 2);                            // only the nozzles that were added: a board 3 that answered would make no row
+    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));  // the terminal's own value: the board (1000.00) is not read by itself
 
     table->selectRow(0);
-    QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1000.00"));
+    QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1200.00"));
     window.findChild<QComboBox *>("nozzleMode")->setCurrentIndex(1); // manual
     window.findChild<QLineEdit *>("nozzlePulses")->setText("1234.5");
-    QComboBox *tank = window.findChild<QComboBox *>("nozzleTank");
-    tank->setCurrentIndex(tank->findText("T3"));
-    window.findChild<QPushButton *>("sendNozzleButton")->click();
+    window.findChild<QPushButton *>("updateNozzleButton")->click();
     QVERIFY(window.findChild<QLabel *>("machineStatus")->text().contains("Waiting"));
 
     QTRY_COMPARE_WITH_TIMEOUT(boards.board(1).config.pulsesX100, quint32(123450), 5000);
     QCOMPARE(boards.board(1).config.mode, int(BoardProtocol::ModeManual));
-    QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("confirmed"), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("Verified"), 5000);
     QCOMPARE(table->item(0, 2)->text(), QString("Manual"));
     QCOMPARE(table->item(0, 5)->text(), QString("1234.50"));
-    QCOMPARE(table->item(0, 6)->text(), QString("T3"));
+    QCOMPARE(table->item(0, 6)->text(), QString("T1"));                // the nozzle keeps its tank
     QListWidget *log = window.findChild<QListWidget *>("changeLog");
     QVERIFY(log->count() >= 1);
     QVERIFY(log->item(0)->text().contains("Cash One"));
     QVERIFY(log->item(0)->text().contains("Nozzle 1"));
-    QVERIFY(log->item(0)->text().contains("manual D 0.8300 1234.50 T3"));
+    QVERIFY(log->item(0)->text().contains("manual D 0.8300 1234.50 T1"));
+
+    // a board that does not keep what it was sent fails the check: the terminal keeps its old config and says so
+    boards.board(1).keepsNoConfig = true;
+    window.findChild<QLineEdit *>("nozzlePulses")->setText("999");
+    window.findChild<QPushButton *>("updateNozzleButton")->click();
+    QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("did not keep"), 5000);
+    QVERIFY(window.findChild<QLabel *>("machineStatus")->text().contains("saved here"));
+    QCOMPARE(table->item(0, 5)->text(), QString("999.00"));     // saved in the terminal's database all the same
+    QCOMPARE(Settings(QSqlDatabase::database(connection_)).value(SettingKey::NozzlesNotOnBoard), QString("1")); // and marked: the board has not confirmed it
+    boards.board(1).keepsNoConfig = false;
+
+    // Read takes the config of the picked nozzle from its board and saves it; the form shows it
+    boards.board(1).config.pulsesX100 = 150000; // changed at the board itself
+    window.findChild<QPushButton *>("readNozzlesButton")->click();
+    QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("was read from its board and saved"), 5000);
+    QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1500.00"));
+    QCOMPARE(table->item(0, 5)->text(), QString("1500.00"));
+    QCOMPARE(Settings(QSqlDatabase::database(connection_)).value(SettingKey::NozzlesNotOnBoard), QString()); // the terminal holds what the board holds again
 }
 
 void Smart210Test::theConverterPortIsSavedAndListenedOn()
@@ -7126,9 +7685,15 @@ void Smart210Test::withoutEvdevTheSupplierScannerStaysIdle()
 
 namespace {
 
-// Nozzles 1 to 4 have answered with their config: 1 and 2 auto, 3 manual, 4 auto (its board is not there).
-void storeNozzles(MachineConfig *config)
+// Nozzles 1 to 4 were added and have answered with their config: 1 and 2 auto, 3 manual, 4 auto (its board is not there).
+void storeNozzles(MachineConfig *config, const QString &connection)
 {
+    // the nozzles were added by hand (a nozzle is only kept up to date from its board when it was added)
+    QSqlQuery add(QSqlDatabase::database(connection));
+    for (int number = 1; number <= 4; ++number) {
+        add.exec("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, synced, deleted) VALUES (" + QString::number(number) + ", 0, '', " + QString::number(number) + ", 0, 0, 0)");
+    }
+
     BoardProtocol::BoardConfig autoConfig;
     autoConfig.mode = BoardProtocol::ModeAuto;
     autoConfig.fuelType = "D";
@@ -7149,7 +7714,7 @@ void Smart210Test::aSelectKeyAtTheDispenserChoosesTheNozzleAndPressingAgainLetsI
 {
     QSqlDatabase db = openDatabase();
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
     FakeBoards boards;
     boards.add(1);
     boards.add(2);
@@ -7188,7 +7753,7 @@ void Smart210Test::tappingANozzleSelectsItOnItsBoardAndTappingAgainLetsItGo()
 {
     QSqlDatabase db = openDatabase();
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
     FakeBoards boards;
     boards.add(1);
     boards.add(2);
@@ -7229,7 +7794,7 @@ void Smart210Test::aNozzleThatCannotBeChosenSaysWhy()
 {
     QSqlDatabase db = openDatabase();
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
     FakeBoards boards;
     boards.add(1);
     boards.add(3); // its config says manual
@@ -7275,7 +7840,7 @@ void Smart210Test::theChosenNozzleIsLetGoWhenItsBoardIsFreeOrGone()
 {
     QSqlDatabase db = openDatabase();
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
     FakeBoards boards;
     boards.add(1);
     boards.add(2);
@@ -7301,6 +7866,11 @@ void Smart210Test::theChosenNozzleIsLetGoWhenItsBoardIsFreeOrGone()
 void Smart210Test::theSessionsTabListsTheNozzlesAndOnlyLooksAtThem()
 {
     setUpLoggedInTerminalWithAPin();
+    addNozzleRows(QList<int>() << 3 << 4); // added by hand: board 3 answers (its nozzle is set to manual here), board 4 is not there
+    {
+        MachineConfig seed(QSqlDatabase::database(connection_));
+        QVERIFY(seed.storeBoardConfig(3, boardConfig("D", 8300, 100000, BoardProtocol::ModeManual)));
+    }
     FakeBoards boards;
     boards.add(1);
     boards.add(2);
@@ -7318,11 +7888,11 @@ void Smart210Test::theSessionsTabListsTheNozzlesAndOnlyLooksAtThem()
     QTableWidget *table = window.findChild<QTableWidget *>("supplyTable");
     QLabel *current = window.findChild<QLabel *>("supplyCurrent");
     QLabel *message = window.findChild<QLabel *>("supplyMessage");
-    QCOMPARE(table->rowCount(), 6);
+    QCOMPARE(table->rowCount(), 4);                                      // the nozzles that were added: 1 to 4
 
     // the nozzles that answer show their config and "Free"; the rest "No answer"
     QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 3)->text(), QString("Free"), 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(2, 3)->text(), QString("Free"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(table->item(2, 3)->text(), QString("Not polled"), 5000);     // nozzle 3 is in manual mode: out of the polling
     QCOMPARE(table->item(0, 0)->text(), QString("1"));
     QVERIFY(table->item(0, 1)->text().startsWith("D"));
     QCOMPARE(table->item(0, 2)->text(), QString("Auto"));
@@ -7355,14 +7925,14 @@ void Smart210Test::theSessionsTabListsTheNozzlesAndOnlyLooksAtThem()
     QTRY_COMPARE_WITH_TIMEOUT(table->item(1, 3)->text(), QString("Selected"), 3000);         // one nozzle at a time: 2 is chosen, 1 is not
     QCOMPARE(table->item(0, 3)->text(), QString("Free"));
 
-    // a manual fill typed at the dispenser shows its weight as it runs
+    // a manual fill typed at the dispenser is not seen at all: its board is not polled
     QVERIFY(boards.simulator().typeAmount(3, 8000));
     QVERIFY(boards.simulator().liftGun(3));
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(2, 3)->text(), QString("Dispensing"), 5000);
     boards.simulator().tick(2000);
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(2, 5)->text(), QString("2.00"), 5000);
-    boards.simulator().tick(10000);
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(2, 3)->text(), QString("Free"), 5000);              // the end of a manual fill is not reported
+    QTest::qWait(600);
+    QCOMPARE(table->item(2, 3)->text(), QString("Not polled"));
+    QCOMPARE(table->item(2, 5)->text(), QString());
+    QCOMPARE(boards.pollsOf(3), 0);
 
     window.showPage("spot");
     QCOMPARE(window.currentPage(), QString("spot"));
@@ -7568,6 +8138,7 @@ void Smart210Test::nozzlesAreNotCountedAsWaitingButGoUpWithTheNextUpload()
     QSqlDatabase db = openDatabase();
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
     MachineConfig config(db);
+    addNozzleRows(QList<int>() << 1);
     BoardProtocol::BoardConfig board;
     board.fuelType = "D";
     board.density = 8300;
@@ -7838,7 +8409,7 @@ void Smart210Test::setUpSupplying()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000046, 'D', 0, 500, 2, 1)"); // used
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000047, 'D', 0, 500, 3, 1)"); // restricted
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
 }
 
 void Smart210Test::aTicketJoinsANozzlesQueueOnlyWhenItPassesTheChecks()
@@ -10049,6 +10620,25 @@ void Smart210Test::answerTheSettleDialog()
     dialog->findChild<QPushButton *>(settleNow_ ? "settleButton" : "settleCloseButton")->click();
 }
 
+void Smart210Test::answerTheMessageBox()
+{
+    QMessageBox *box = 0;
+    foreach (QWidget *widget, QApplication::topLevelWidgets()) {
+        if (QMessageBox *found = qobject_cast<QMessageBox *>(widget)) {
+            if (found->isVisible()) {
+                box = found;
+            }
+        }
+    }
+    if (box == 0) {
+        QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+
+        return;
+    }
+    boxText_ = box->text();
+    box->button(boxAnswer_)->click();
+}
+
 void Smart210Test::answerTheNozzleQuestion()
 {
     NozzleDialog *dialog = 0;
@@ -10410,7 +11000,7 @@ void Smart210Test::theDispensersScreenShowsTheNozzlesInDetail()
     setUpLoggedInTerminalWithAPin();
     QSqlDatabase db = QSqlDatabase::database(connection_);
     MachineConfig nozzles(db);
-    storeNozzles(&nozzles);                                                 // nozzles 1, 2 and 4 auto, 3 manual, all Diesel at 0.8300
+    storeNozzles(&nozzles, connection_);                                                 // nozzles 1, 2 and 4 auto, 3 manual, all Diesel at 0.8300
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", QDateTime::currentDateTime()).ok);   // 15.00 kg queued on nozzle 1
     AppConfig config;
@@ -10508,7 +11098,7 @@ void Smart210Test::theSelectKeyOnlyTellsAndTheSelectCommandChoosesTheNozzleAndLe
 {
     QSqlDatabase db = openDatabase();
     MachineConfig config(db);
-    storeNozzles(&config);
+    storeNozzles(&config, connection_);
     FakeBoards boards;
     boards.add(1);
     boards.add(2);

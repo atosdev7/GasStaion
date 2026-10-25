@@ -97,6 +97,9 @@ static bool startDevBoards(Plant &plant, Terminal &t)
     BoardProtocol::BoardConfig diesel = gasoline;
     diesel.fuelType = "D";
     diesel.density = 8300;
+    QString why;
+    plant.config.addNozzle(1, "A", 0, 0, &why); // added by hand, as the technician does on Machine Config
+    plant.config.addNozzle(2, "D", 0, 0, &why);
     plant.config.storeBoardConfig(1, gasoline);
     plant.config.storeBoardConfig(2, diesel);
     plant.config.setTank(1, t.one("SELECT id FROM tanks WHERE name LIKE 'T1%' LIMIT 1").toInt());

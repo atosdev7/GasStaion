@@ -18,6 +18,8 @@
     @endif
 
     <div class="card">
+        {{-- every filter sits in the head of its own column; the inputs belong to this form by their form attribute --}}
+        <form method="GET" action="{{ route('ticket-inbound.index') }}" id="ticket-inbound-filters"></form>
         <div class="card-body table-responsive p-0">
             <table class="table table-hover text-nowrap">
                 <thead>
@@ -31,9 +33,40 @@
                         <th class="text-right" style="width: 1%">{{ __('tickets.actions') }}</th>
                     @endcan
                 </tr>
+                <tr class="filters">
+                    <th><input name="inbound_date" form="ticket-inbound-filters" type="date" value="{{ $filters['inbound_date'] ?? '' }}" class="form-control form-control-sm" style="min-width: 150px" onchange="document.getElementById('ticket-inbound-filters').submit()"></th>
+                    <th>
+                        <select name="fuel_type" form="ticket-inbound-filters" class="form-control form-control-sm" onchange="document.getElementById('ticket-inbound-filters').submit()">
+                            <option value="">{{ __('tickets.all_fuel_types') }}</option>
+                            @foreach ($fuels as $key => $name)
+                                <option value="{{ $key }}" {{ ($filters['fuel_type'] ?? '') === (string) $key ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
+                        </select>
+                    </th>
+                    <th>
+                        <select name="spec" form="ticket-inbound-filters" class="form-control form-control-sm" onchange="document.getElementById('ticket-inbound-filters').submit()">
+                            <option value="">{{ __('tickets.all_specs') }}</option>
+                            @foreach ($specs as $key => $kg)
+                                <option value="{{ $key }}" {{ (string) ($filters['spec'] ?? '') === (string) $key ? 'selected' : '' }}>{{ $kg }} {{ __('tickets.kg') }}</option>
+                            @endforeach
+                        </select>
+                    </th>
+                    <th colspan="2">
+                        @cannot('ticket_stock.manage')
+                            <button type="submit" form="ticket-inbound-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
+                            <a href="{{ route('ticket-inbound.index') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
+                        @endcannot
+                    </th>
+                    @can('ticket_stock.manage')
+                        <th class="text-nowrap text-right">
+                            <button type="submit" form="ticket-inbound-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
+                            <a href="{{ route('ticket-inbound.index') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
+                        </th>
+                    @endcan
+                </tr>
                 </thead>
                 <tbody>
-                @foreach ($rows as $row)
+                @forelse ($rows as $row)
                     <tr>
                         <td>{{ $row->inbound_date }}</td>
                         <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
@@ -52,9 +85,12 @@
                             </td>
                         @endcan
                     </tr>
-                @endforeach
+                @empty
+                    <tr><td colspan="6" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
+                @endforelse
                 </tbody>
             </table>
         </div>
+        <div class="card-footer">{{ $rows->links() }}</div>
     </div>
 @endsection

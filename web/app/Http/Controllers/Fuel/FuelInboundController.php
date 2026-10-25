@@ -11,10 +11,32 @@ use Illuminate\Support\Facades\DB;
 
 class FuelInboundController extends Controller
 {
-    public function index()
+    // Every filter sits in the head of its column: the day of the inbound, a part of the "from" and of the note, and the cost per kg.
+    public function index(Request $request)
     {
+        $filters = $request->validate([
+            'inbound_date' => 'nullable|date_format:Y-m-d',
+            'from_name' => 'nullable|string|max:100',
+            'cost' => 'nullable|numeric|min:0|max:999999',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $query = FuelInbound::orderByDesc('inbound_date')->orderByDesc('id');
+        if (!empty($filters['inbound_date'])) {
+            $query->where('inbound_date', $filters['inbound_date']);
+        }
+        foreach (['from_name', 'note'] as $column) {
+            if (isset($filters[$column]) && $filters[$column] !== '') {
+                $query->where($column, 'like', '%' . addcslashes($filters[$column], '%_\\') . '%');
+            }
+        }
+        if (isset($filters['cost']) && $filters['cost'] !== '') {
+            $query->whereRaw('ROUND(cost, 4) = ?', [round((float) $filters['cost'], 4)]);
+        }
+
         return view('inbound.index', [
-            'rows' => FuelInbound::orderByDesc('inbound_date')->orderByDesc('id')->get(),
+            'rows' => $query->paginate(50)->appends($request->query()),
+            'filters' => $filters,
             'tanks' => Tank::pluck('name', 'id'),
             'fuels' => config('fuel_types'),
         ]);

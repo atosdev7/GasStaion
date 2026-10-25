@@ -45,10 +45,13 @@ signals:
     void backRequested();
     void cardReaderChanged();   // the card reader's settings were saved: the reader is started again with them
     void restartRequested();    // Clean Data or Clear Config was done: the program has to start again
+    void nozzlesEdited();       // a nozzle was added, removed or changed: the web app should be told
 
 private slots:
-    void sendNozzle();
+    void updateNozzle();
     void readNozzles();
+    void readDone(int number);
+    void readFailed(int number, const QString &message);
     void rowSelected();
     void fuelPicked();
     void nozzlesChanged();
@@ -64,6 +67,9 @@ private slots:
     void savePrinter();
     void checkPrinter();
     void printerChecked(bool ok, const QString &message);
+    void addNozzlePressed();
+    void removeNozzlePressed();
+    void addFuelPicked();
     void cleanDataPressed();
     void clearConfigPressed();
     void disarmReset();
@@ -73,11 +79,12 @@ private:
     Ui::MachineConfigPage *ui_;
     void fillTable();
     void fillForm(int number);
-    void fillTanks(const QString &fuelType, int selectTankId);
     void fillLog();
     bool storePrinter();
     void showStatus(const QString &message, bool ok);
     void showResetBox();
+    void fillAddForm();
+    void alert(const QString &title, const QString &reason);
     void armReset(int which);
 
     MachineConfig *config_;
@@ -97,7 +104,6 @@ private:
     QComboBox *fuel_;
     QLineEdit *density_;
     QLineEdit *pulses_;
-    QComboBox *tank_;
     QLineEdit *converterPort_;
     QLineEdit *cardPort_;
     QComboBox *cardBaud_;

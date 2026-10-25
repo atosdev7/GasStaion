@@ -66,7 +66,7 @@ SupplyPage::SupplyPage(QSqlDatabase db, BoardBus *bus, MachineConfig *config, Su
     ui_->setupUi(this);
 
     table_ = ui_->supplyTable;
-    table_->setRowCount(MachineConfig::NozzleCount);
+    table_->setRowCount(0); // a row for each nozzle that was added: refresh() makes them
     table_->setColumnCount(Columns);
     table_->setHorizontalHeaderLabels(QStringList() << tr("Nozzle") << tr("Fuel type") << tr("Mode") << tr("Status") << tr("Tickets (kg - count)") << tr("Dispensed (kg)"));
     table_->horizontalHeader()->setStretchLastSection(true);
@@ -157,6 +157,7 @@ void SupplyPage::refresh()
 
     const QList<MachineConfig::Nozzle> nozzles = config_->nozzles();
     const QList<MachineConfig::Fuel> fuels = config_->fuels();
+    table_->setRowCount(nozzles.size());
 
     for (int i = 0; i < nozzles.size(); ++i) {
         const MachineConfig::Nozzle &nozzle = nozzles.at(i);
@@ -177,10 +178,12 @@ void SupplyPage::refresh()
         QString state;
         if (!bus_->isConnected()) {
             state = tr("No converter");
+        } else if (nozzle.mode == ModeManual && !bus_->isPolled(nozzle.number)) {
+            state = tr("Not polled"); // a nozzle in manual mode: nothing is asked of its board, the cashier types its supplies
         } else if (!online) {
             state = tr("No answer");
         } else if (!nozzle.seen()) {
-            state = tr("Reading the config...");
+            state = tr("Config not set");
         } else {
             switch (status.state) {
             case StateSelected:
@@ -339,7 +342,8 @@ void SupplyPage::sessionMessage(const QString &text, bool good)
 // A click only looks at the nozzle; nothing is sent to the board.
 void SupplyPage::rowClicked(int row)
 {
-    viewed_ = row + 1;
+    const QList<MachineConfig::Nozzle> nozzles = config_->nozzles();
+    viewed_ = row >= 0 && row < nozzles.size() ? nozzles.at(row).number : 0; // the rows are the nozzles that were added, by number
     refresh();
 }
 

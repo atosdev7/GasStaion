@@ -173,4 +173,59 @@ class TicketInboundTest extends TestCase
         $this->assertSame(10, (int) $row->fresh()->quantity);
     }
 
-}
+
+    public function testTheInboundTableFiltersByDateFuelTypeAndSpec()
+    {
+        $this->as('manager');
+        $this->post('/ticket-inbound', ['fuel_type' => $this->diesel, 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-10-01']);
+        $this->post('/ticket-inbound', ['fuel_type' => $this->diesel, 'spec' => 2, 'quantity' => 200, 'inbound_date' => '2026-10-02']);
+        $this->post('/ticket-inbound', ['fuel_type' => 'A', 'spec' => 0, 'quantity' => 300, 'inbound_date' => '2026-10-02']);
+        $quantities = function ($query) {
+            return $this->get('/ticket-inbound' . $query)->assertOk()->viewData('rows')->pluck('quantity')->map(function ($q) {
+                return (int) $q;
+            })->all();
+        };
+
+        $this->assertSame([300, 200, 100], $quantities(''));                         // everything, the newest day first
+        $this->assertSame([100], $quantities('?inbound_date=2026-10-01'));           // the day
+        $this->assertSame([300, 200], $quantities('?inbound_date=2026-10-02'));
+        $this->assertSame([200, 100], $quantities('?fuel_type=' . $this->diesel));   // the fuel type
+        $this->assertSame([300], $quantities('?fuel_type=A'));
+        $this->assertSame([300, 100], $quantities('?spec=0'));                       // the spec (spec 0 is 5 kg: it is a value, not "no filter")
+        $this->assertSame([200], $quantities('?spec=2'));
+        $this->assertSame([], $quantities('?spec=3'));
+        $this->assertSame([100], $quantities('?fuel_type=' . $this->diesel . '&spec=0'));   // together
+        $this->assertSame([200], $quantities('?inbound_date=2026-10-02&fuel_type=' . $this->diesel . '&spec=2'));
+
+        $this->get('/ticket-inbound?inbound_date=nope')->assertSessionHasErrors('inbound_date');
+        $this->get('/ticket-inbound?fuel_type=Z')->assertSessionHasErrors('fuel_type');
+        $this->get('/ticket-inbound?spec=9')->assertSessionHasErrors('spec');
+
+        // the filters are in the head of the table and keep what was chosen
+        $html = $this->get('/ticket-inbound?inbound_date=2026-10-02&fuel_type=' . $this->diesel . '&spec=2')->assertOk()->getContent();
+        $this->assertStringContainsString('id="ticket-inbound-filters"', $html);
+        $this->assertStringContainsString('name="inbound_date" form="ticket-inbound-filters" type="date" value="2026-10-02"', $html);
+        $this->assertRegExp('/<option value="' . $this->diesel . '" selected>/', $html);
+        $this->assertRegExp('/<option value="2" selected>15 kg<\/option>/', $html);
+        $this->assertStringContainsString('All fuel types', $html);
+        $this->assertStringContainsString('All specs', $html);
+        $this->get('/ticket-inbound?spec=3')->assertOk()->assertSee('No data');
+    }
+
+    public function testTheInboundTableIsPagedByFiftyAndKeepsTheFilters()
+    {
+        $this->as('manager');
+        for ($i = 1; $i <= 52; $i++) {
+            \App\Models\Tickets\TicketInbound::forceCreate([
+                'fuel_type' => $this->diesel, 'spec' => $i % 2, 'quantity' => $i, 'inbound_date' => '2026-09-20', 'user_id' => 1,
+            ]);
+        }
+        \App\Models\Tickets\TicketInbound::forceCreate(['fuel_type' => 'A', 'spec' => 0, 'quantity' => 1, 'inbound_date' => '2026-09-20', 'user_id' => 1]);
+
+        $first = $this->get('/ticket-inbound?fuel_type=' . $this->diesel)->assertOk();
+        $this->assertCount(50, $first->viewData('rows'));
+        $this->assertSame(52, $first->viewData('rows')->total());                                      // the Gasoline one is not counted
+        $this->assertStringContainsString('fuel_type=' . $this->diesel . '&amp;page=2', $first->getContent());
+        $this->assertCount(2, $this->get('/ticket-inbound?fuel_type=' . $this->diesel . '&page=2')->viewData('rows'));
+        $this->assertSame(53, $this->get('/ticket-inbound')->viewData('rows')->total());
+    }}

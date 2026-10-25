@@ -15,6 +15,7 @@ const char *const DeviceId = "device_id";
 const char *const DeviceName = "device_name";
 const char *const UploadMode = "upload_mode";
 const char *const ShowSalesWithoutReceipt = "show_sales_without_receipt";
+const char *const NozzlesNotOnBoard = "nozzles_not_on_board";
 const char *const PurgeDays = "purge_days";
 const char *const PinSalt = "pin_salt";
 const char *const PinHash = "pin_hash";

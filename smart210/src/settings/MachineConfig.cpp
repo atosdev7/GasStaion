@@ -2,6 +2,7 @@
 
 #include "Decimal.h"
 #include "Settings.h"
+#include "SupplyQueue.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -43,21 +44,152 @@ QList<MachineConfig::Nozzle> MachineConfig::nozzles() const
         known.insert(nozzle.number, nozzle);
     }
 
-    QList<Nozzle> list;
-    for (int number = 1; number <= NozzleCount; ++number) {
-        Nozzle nozzle = known.value(number);
-        nozzle.number = number;
-        list.append(nozzle);
-    }
-
-    return list;
+    return known.values(); // by number
 }
 
 MachineConfig::Nozzle MachineConfig::nozzle(int number) const
 {
-    const QList<Nozzle> all = nozzles();
+    foreach (const Nozzle &nozzle, nozzles()) {
+        if (nozzle.number == number) {
+            return nozzle;
+        }
+    }
 
-    return number >= 1 && number <= all.size() ? all.at(number - 1) : Nozzle();
+    return Nozzle();
+}
+
+bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why)
+{
+    QString reason;
+    bool known = false;
+    foreach (const Fuel &fuel, fuels()) {
+        known = known || fuel.code == fuelType;
+    }
+    if (number < 1 || number > NozzleCount) {
+        reason = QObject::tr("The nozzle number is from 1 to %1.").arg(NozzleCount);
+    } else if (isConfigured(number)) {
+        reason = QObject::tr("Nozzle %1 is added already.").arg(number);
+    } else if (!known) {
+        reason = QObject::tr("Choose the fuel type of the nozzle.");
+    }
+
+    int tank = 0;
+    if (reason.isEmpty() && tankId > 0) {
+        foreach (const Tank &t, tanks(fuelType)) {
+            if (t.id == tankId) {
+                tank = tankId;
+            }
+        }
+        if (tank == 0) {
+            reason = QObject::tr("That tank does not hold this fuel type.");
+        }
+    }
+    if (reason.isEmpty() && tank == 0) {
+        tank = tankFor(fuelType, rememberedTank(number)); // the tank this address had before, or the only tank of the fuel type
+    }
+    if (reason.isEmpty() && tank == 0) {
+        reason = QObject::tr("A nozzle must be connected to a tank: choose the tank of the nozzle (there is no tank for this fuel type to take).");
+    }
+
+    if (!reason.isEmpty()) {
+        if (why) {
+            *why = reason;
+        }
+
+        return false;
+    }
+
+    // the config starts as auto with the density of the fuel type (from the web app); the pulses per litre are typed on Machine Config, and the
+    // config counts (seen()) once it was sent to the board and verified, or read from it
+    QVariant density(QVariant::Int);
+    foreach (const Fuel &fuel, fuels()) {
+        if (fuel.code == fuelType && fuel.density > 0) {
+            density = int(fuel.density);
+        }
+    }
+
+    QSqlQuery insert(db_);
+    insert.prepare("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, density, seen_at, synced, deleted) VALUES (?, ?, ?, ?, 0, ?, NULL, 0, 0)");
+    insert.addBindValue(number);
+    insert.addBindValue(tank);
+    insert.addBindValue(fuelType);
+    insert.addBindValue(number);
+    insert.addBindValue(density);
+    if (!insert.exec()) {
+        if (why) {
+            *why = QObject::tr("The nozzle could not be saved.");
+        }
+
+        return false;
+    }
+    if (tank > 0) {
+        Settings::setDeviceValue("nozzle_tank_" + QString::number(number), QString::number(tank));
+    }
+    logChange(QString("nozzle:%1").arg(number), QString(), QString("added %1").arg(fuelType), userId);
+
+    return true;
+}
+
+bool MachineConfig::removeNozzle(int number, int userId, QString *why)
+{
+    const Nozzle current = nozzle(number);
+    if (!current.exists()) {
+        if (why) {
+            *why = QObject::tr("Nozzle %1 was not added.").arg(number);
+        }
+
+        return false;
+    }
+    const QString blocker = removeBlocker(number);
+    if (!blocker.isEmpty()) {
+        if (why) {
+            *why = blocker;
+        }
+
+        return false;
+    }
+
+    QSqlQuery remove(db_);
+    // (a nozzle without a tank never went up: there is nothing to tell the web app)
+    remove.prepare("UPDATE nozzles SET deleted = 1, synced = CASE WHEN tank_id > 0 THEN 0 ELSE 1 END WHERE id = ?");
+    remove.addBindValue(current.id);
+    QSqlQuery config(db_);
+    config.prepare("DELETE FROM nozzle_config WHERE nozzle_id = ?");
+    config.addBindValue(current.id);
+    if (!remove.exec() || !config.exec()) {
+        if (why) {
+            *why = QObject::tr("The nozzle could not be removed.");
+        }
+
+        return false;
+    }
+    logChange(QString("nozzle:%1").arg(number), QString("added %1").arg(current.fuelType), QString("removed"), userId);
+
+    return true;
+}
+
+QString MachineConfig::removeBlocker(int number) const
+{
+    if (SupplyQueue::session(db_, number).exists) {
+        return QObject::tr("A fill is open on nozzle %1. Finish or clear it first.").arg(number);
+    }
+    if (!SupplyQueue::entries(db_, number).isEmpty()) {
+        return QObject::tr("Tickets are queued on nozzle %1. Remove them from its queue first.").arg(number);
+    }
+
+    return QString();
+}
+
+QString MachineConfig::configBlocker(int number) const
+{
+    if (SupplyQueue::session(db_, number).exists) {
+        return QObject::tr("A fill is open on nozzle %1. Its config can be changed when the fill is over.").arg(number);
+    }
+    if (!SupplyQueue::entries(db_, number).isEmpty()) {
+        return QObject::tr("Tickets are queued on nozzle %1. Remove them from its queue before changing its config.").arg(number);
+    }
+
+    return QString();
 }
 
 QList<MachineConfig::Fuel> MachineConfig::fuels() const
@@ -115,8 +247,8 @@ int MachineConfig::tankFor(const QString &fuelType, int currentTankId) const
 
 bool MachineConfig::storeBoardConfig(int number, const BoardConfig &config)
 {
-    if (number < 1 || number > NozzleCount) {
-        return false;
+    if (number < 1 || number > NozzleCount || !isConfigured(number)) {
+        return false; // only a nozzle that was added has a config
     }
 
     const QString fuelText = config.fuelType.isNull() ? QString("") : config.fuelType; // a null string would bind as NULL
@@ -130,35 +262,26 @@ bool MachineConfig::storeBoardConfig(int number, const BoardConfig &config)
 
     int id = 0;
     QSqlQuery save(db_);
-    if (find.next()) {
+    if (find.next()) { // always: the nozzle was added (checked above)
         id = find.value(0).toInt();
         const int tankId = tankFor(config.fuelType, find.value(1).toInt() > 0 ? find.value(1).toInt() : rememberedTank(number));
+        const QString fuel = fuelText;
         // only the tank and the fuel type go to the web app: a change of the rest does not need an upload
-        const bool forWeb = tankId != find.value(1).toInt() || config.fuelType != find.value(2).toString();
+        const bool forWeb = tankId != find.value(1).toInt() || fuel != find.value(2).toString();
         save.prepare(QString("UPDATE nozzles SET tank_id = ?, fuel_type = ?, board_address = ?, mode = ?, density = ?, seen_at = ?%1 WHERE id = ?")
                          .arg(forWeb ? ", synced = 0" : ""));
         save.addBindValue(tankId);
-        save.addBindValue(fuelText);
+        save.addBindValue(fuel);
         save.addBindValue(number);
         save.addBindValue(config.mode);
         save.addBindValue(density);
         save.addBindValue(now);
         save.addBindValue(id);
     } else {
-        save.prepare("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, density, seen_at, synced, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)");
-        save.addBindValue(number);
-        save.addBindValue(tankFor(config.fuelType, rememberedTank(number)));
-        save.addBindValue(fuelText);
-        save.addBindValue(number);
-        save.addBindValue(config.mode);
-        save.addBindValue(density);
-        save.addBindValue(now);
+        return false;
     }
     if (!save.exec()) {
         return false;
-    }
-    if (id == 0) {
-        id = save.lastInsertId().toInt();
     }
 
     QSqlQuery pulses(db_);
@@ -172,6 +295,20 @@ bool MachineConfig::storeBoardConfig(int number, const BoardConfig &config)
     }
 
     return pulses.exec();
+}
+
+bool MachineConfig::saveConfig(int number, const BoardConfig &config, int userId)
+{
+    const QString was = describe(nozzle(number));
+    if (!storeBoardConfig(number, config)) {
+        return false;
+    }
+    const QString now = describe(nozzle(number));
+    if (was != now) {
+        logChange(QString("nozzle:%1").arg(number), was, now, userId);
+    }
+
+    return true;
 }
 
 bool MachineConfig::setTank(int number, int tankId)

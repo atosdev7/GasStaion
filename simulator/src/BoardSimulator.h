@@ -25,7 +25,7 @@ public:
         Board()
             : state(0), flags(0), fault(0), gunUp(false), beeps(0), resultId(0), nextId(100), presetG(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
               haveSeq(false), lastSeq(0), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
-              silent(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true),
+              silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true),
               clockOffsetSecs(QDateTime::currentDateTime().secsTo(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0))))
         {
         }
@@ -46,6 +46,7 @@ public:
         int dropCommandOnce;    // the answer to this command (first time it is sent) is not sent
         int corruptCommandOnce; // the answer to this command (first time it is sent) goes out with a wrong CRC
         bool silent;            // never answers
+        bool keepsNoConfig;     // a faulty board: SET_CONFIG is answered but the new config is not kept (the answer holds the old one)
         int silentMsLeft;       // when above 0, silent ends after this long (a power cut)
         int flowGramsPerSecond; // how fast a fill runs
         double accumulated;     // grams so far in the fill, with the part of a gram

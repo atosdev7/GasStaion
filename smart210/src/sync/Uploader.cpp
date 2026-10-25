@@ -31,7 +31,7 @@ QString waiting(const QString &table)
         return "synced = 0 AND deleted = 0"; // a card registered here, or one whose wrong PINs / lock were counted here
     }
     if (table == "nozzles") {
-        return "synced = 0 AND deleted = 0 AND tank_id > 0"; // the web app needs the tank
+        return "synced = 0 AND tank_id > 0"; // the web app needs the tank; a nozzle that was removed goes too (the web app deletes it)
     }
     if (table == "tickets") {
         return QString("synced = 0 AND status IN (%1, %2)").arg(TicketStatus::Sale).arg(TicketStatus::Supply);
@@ -218,7 +218,7 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
         row.insert("number", q.value("number").toInt());
         row.insert("tank_id", q.value("tank_id").toInt());
         row.insert("board_address", q.value("number").toInt()); // the board's address is the nozzle's number
-        row.insert("deleted", false);
+        row.insert("deleted", q.value("deleted").toInt() != 0);
     } else if (table == "cards") {
         // The PIN goes as the salted hash it is kept as, never as typed. The web app takes from an existing card only its wrong tries and a lock.
         row.insert("id", q.value("id").toString());
@@ -328,7 +328,7 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
 }
 
 Uploader::Uploader(QSqlDatabase db, QObject *parent)
-    : QObject(parent), db_(db), client_(this), started_(false), tableIndex_(0), saved_(0), rejected_(0)
+    : QObject(parent), db_(db), client_(this), started_(false), nozzlesOnly_(false), tableIndex_(0), saved_(0), rejected_(0)
 {
 }
 
@@ -355,6 +355,11 @@ QString Uploader::waitingCondition(const QString &table, const QString &date, co
     return whereOf(table, date, before);
 }
 
+int Uploader::nozzlesWaiting(QSqlDatabase db)
+{
+    return pending(db).value("nozzles");
+}
+
 // What the cashier sees as waiting: records. The nozzles are not records (they go up with the next upload, so that the supplements have
 // their nozzle on the web app) and are not counted.
 int Uploader::pendingTotal(QSqlDatabase db, const QString &date, const QString &before)
@@ -372,15 +377,31 @@ int Uploader::pendingTotal(QSqlDatabase db, const QString &date, const QString &
 
 void Uploader::upload(const QString &date, const QString &before)
 {
+    begin(date, before, false);
+}
+
+void Uploader::uploadNozzles()
+{
+    begin(QString(), QString(), true);
+}
+
+void Uploader::begin(const QString &date, const QString &before, bool nozzlesOnly)
+{
     if (started_) {
         return;
     }
     date_ = date;
     before_ = before;
+    nozzlesOnly_ = nozzlesOnly;
 
     Settings settings(db_);
     if (settings.value(SettingKey::ServerHost).isEmpty()) {
-        emit uploadFinished(false, tr("No server is set up."));
+        if (nozzlesOnly_) {
+            nozzlesOnly_ = false;
+            emit nozzlesUploaded(false);
+        } else {
+            emit uploadFinished(false, tr("No server is set up."));
+        }
 
         return;
     }
@@ -402,6 +423,10 @@ void Uploader::sendNext()
 
     while (tableIndex_ < all.size()) {
         const QString table = all.at(tableIndex_);
+        if (nozzlesOnly_ && table != "nozzles") {
+            ++tableIndex_;
+            continue;
+        }
         const QStringList refused = refused_.value(table);
 
         QString sql = selectOf(table) + " WHERE " + whereOf(table, date_, before_);
@@ -468,11 +493,15 @@ void Uploader::replyFinished()
 
         // the time of the upload is kept: after a restore of the web app's database it tells what the restored dump cannot hold (nozzles have none)
         QSqlQuery update(db_);
-        update.prepare("UPDATE " + table + " SET synced = 1" + QString(table == "nozzles" ? "" : ", uploaded_at = ?") + " WHERE " + keyColumn(table) + " = ?");
-        if (table != "nozzles") {
+        if (table == "nozzles") {
+            // a removed nozzle and a new one can have the same number: they go in the order they were made, and each answer is for the oldest that waits
+            update.prepare("UPDATE nozzles SET synced = 1 WHERE id = (SELECT MIN(id) FROM nozzles WHERE number = ? AND synced = 0)");
+            update.addBindValue(keyValue(table, key));
+        } else {
+            update.prepare("UPDATE " + table + " SET synced = 1, uploaded_at = ? WHERE " + keyColumn(table) + " = ?");
             update.addBindValue(uploadedAt);
+            update.addBindValue(keyValue(table, key));
         }
-        update.addBindValue(keyValue(table, key));
         update.exec();
 
         QSqlQuery clear(db_);
@@ -524,6 +553,13 @@ void Uploader::finish(bool ok, const QString &message)
 {
     started_ = false;
     running_.clear();
+
+    if (nozzlesOnly_) {
+        nozzlesOnly_ = false;
+        emit nozzlesUploaded(ok);
+
+        return;
+    }
 
     QString text = message;
     if (ok) {

@@ -11,6 +11,7 @@ use App\Support\Tickets\TicketStock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 // Turn blank ticket stock (see TicketInboundController) into numbered tickets. Sign and code are
@@ -24,11 +25,31 @@ class TicketPublishController extends Controller
 {
     const MAX_QUANTITY = 50000;
 
-    public function index()
+    // Every filter sits in the head of its column: the day of the batch, the fuel type and the spec.
+    public function index(Request $request)
     {
+        $filters = $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'fuel_type' => ['nullable', Rule::in(array_keys(config('fuel_types')))],
+            'spec' => ['nullable', Rule::in(array_keys(config('ticket_specs')))],
+        ]);
+
+        $query = TicketPublish::orderByDesc('id');
+        if (!empty($filters['date'])) {
+            $query->where('date', $filters['date']);
+        }
+        if (!empty($filters['fuel_type'])) {
+            $query->where('fuel_type', $filters['fuel_type']);
+        }
+        if (isset($filters['spec']) && $filters['spec'] !== '') {
+            $query->where('spec', (int) $filters['spec']);
+        }
+
         return view('ticket_publish.index', [
-            'batches' => TicketPublish::orderByDesc('id')->get(),
+            'batches' => $query->paginate(50)->appends($request->query()),
+            'filters' => $filters,
             'fuels' => config('fuel_types'),
+            'specs' => config('ticket_specs'),
         ]);
     }
 

@@ -13,6 +13,7 @@ extern const char *const ServerPort;
 extern const char *const DeviceId;     // the web app's id of this device (set when the server knew this address)
 extern const char *const DeviceName;
 extern const char *const UploadMode;    // "manual", "close" (at the close of the day) or "continuous" (see AutoUpload), Machine Config
+extern const char *const NozzlesNotOnBoard; // the numbers ("1,3") of the nozzles whose saved config the board has not confirmed yet (Update that failed or was not sent)
 extern const char *const ShowSalesWithoutReceipt; // "1" (default) or "0": the Review screen lists the sales without a receipt or leaves them out, Machine Config
 extern const char *const PurgeDays;    // how long synced records stay on the device
 extern const char *const PinSalt;      // the Machine Config PIN, as the web app keeps it (salt and hash)

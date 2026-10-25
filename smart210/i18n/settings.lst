@@ -6,3 +6,4 @@ src/settings/ServerForm.cpp
 src/settings/ServerForm.ui
 src/settings/PinPage.cpp
 src/settings/PinPage.ui
+src/settings/MachineConfig.cpp

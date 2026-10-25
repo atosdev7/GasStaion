@@ -33,18 +33,26 @@ public:
     // With `before` (yyyy-MM-dd HH:mm:ss) only the records made before that moment go (what the automatic modes send).
     void upload(const QString &date = QString(), const QString &before = QString());
 
+    // Sends only the nozzles that wait (added, removed or changed on Machine Config), whatever the upload mode is: the web app should know the
+    // nozzles of the station without waiting for the cashier to upload the records. nozzlesUploaded() follows instead of uploadFinished().
+    void uploadNozzles();
+
     int savedCount() const { return saved_; }
     int rejectedCount() const { return rejected_; }
 
     // The tables in upload order, and how many rows of each wait for an upload.
     static QStringList tables();
     static QMap<QString, int> pending(QSqlDatabase db, const QString &date = QString(), const QString &before = QString());
+    static int nozzlesWaiting(QSqlDatabase db); // the nozzles that wait for their upload (they are not records, see pendingTotal)
     static int pendingTotal(QSqlDatabase db, const QString &date = QString(), const QString &before = QString());
 
     // The SQL condition of the rows of a table that wait for an upload (what pending() counts and an upload sends).
     static QString waitingCondition(const QString &table, const QString &date = QString(), const QString &before = QString());
 
 signals:
+    // The result of uploadNozzles(): ok when the web app answered (a nozzle it refused stays waiting, with the reason in `upload_errors`).
+    void nozzlesUploaded(bool ok);
+
     // ok: the web app answered every batch (rejected rows are not a failure of the upload; see rejectedCount()).
     // Otherwise message says why it stopped (no connection, busy server, ...).
     void uploadFinished(bool ok, const QString &message);
@@ -53,12 +61,14 @@ private slots:
     void replyFinished();
 
 private:
+    void begin(const QString &date, const QString &before, bool nozzlesOnly);
     void sendNext();
     void finish(bool ok, const QString &message);
 
     QSqlDatabase db_;
     ApiClient client_;
     bool started_;
+    bool nozzlesOnly_; // this run sends the nozzles only
     QString date_;    // the date this upload is limited to (empty: all)
     QString before_;  // the moment this upload is limited to: only records made before it (empty: all)
     QString running_; // the table of the batch in flight

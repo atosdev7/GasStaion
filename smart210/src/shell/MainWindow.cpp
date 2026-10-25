@@ -170,6 +170,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     connect(pinPage_, SIGNAL(cancelled()), this, SLOT(showSettingsAgain()));
     connect(machinePage_, SIGNAL(backRequested()), this, SLOT(showSettingsAgain()));
     connect(machinePage_, SIGNAL(restartRequested()), this, SLOT(machineWasReset()));
+    connect(machinePage_, SIGNAL(nozzlesEdited()), this, SLOT(sendNozzles()));
     connect(shell_->sidebar(), SIGNAL(pageRequested(QString)), this, SLOT(sidebarClicked(QString)));
     connect(salesPage_->tabs(), SIGNAL(currentChanged(int)), this, SLOT(tabChanged()));
     connect(supplyPart_->tabs(), SIGNAL(currentChanged(int)), this, SLOT(tabChanged()));
@@ -361,12 +362,30 @@ void MainWindow::autoUpload()
         return;
     }
 
+    // the nozzles go up whatever the mode is: the web app should know the nozzles of the station (and the supplements need theirs there)
+    if (Uploader::nozzlesWaiting(db_) > 0) {
+        uploader_->uploadNozzles();
+
+        return;
+    }
+
     const QString cutoff = AutoUpload::cutoff(AutoUpload::modeOf(settings_->value(SettingKey::UploadMode)), QDateTime::currentDateTime());
     if (cutoff.isEmpty() || Uploader::pendingTotal(db_, QString(), cutoff) == 0) {
         return;
     }
 
     uploader_->upload(QString(), cutoff);
+}
+
+// A nozzle was added, removed or changed on Machine Config: the web app is told now, not with the next upload of the records.
+void MainWindow::sendNozzles()
+{
+    if (!setup_->isConfigured() || !settings_->boolValue(SettingKey::InitialDone) || sync_->isRunning() || uploader_->isRunning()) {
+        return; // the next beat of autoUpload() sends them
+    }
+    if (Uploader::nozzlesWaiting(db_) > 0) {
+        uploader_->uploadNozzles();
+    }
 }
 
 void MainWindow::downloadFinished(bool ok, const QString &message)
@@ -680,10 +699,11 @@ void MainWindow::refreshStatus()
     footer->setClockWarning(Clock::isOff(offset) ? tr("The clock differs from the server's by %1 s.").arg(offset < 0 ? -offset : offset) : QString());
 
     int online = 0;
-    for (int number = 1; number <= MachineConfig::NozzleCount; ++number) {
-        online += boardBus_->isOnline(number) ? 1 : 0;
+    const QList<MachineConfig::Nozzle> nozzles = machineConfig_->nozzles();
+    foreach (const MachineConfig::Nozzle &nozzle, nozzles) {
+        online += boardBus_->isOnline(nozzle.number) ? 1 : 0;
     }
-    footer->setBoards(boardBus_->isConnected(), online, MachineConfig::NozzleCount, boardLink_);
+    footer->setBoards(boardBus_->isConnected(), online, nozzles.size(), boardLink_);
     footer->setScanner(boardLink_ && SupplierScanner::isSupported(), supplierScanner_->isConnected());
     footer->setWaiting(Uploader::pendingTotal(db_));
 }

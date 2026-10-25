@@ -63,16 +63,6 @@
     </message>
     <message>
         <location filename="../src/dispensers/DispensersPage.cpp" line="56"/>
-        <source>Preset (kg)</source>
-        <translation>Preset (kg)</translation>
-    </message>
-    <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="57"/>
-        <source>Status</source>
-        <translation>Status</translation>
-    </message>
-    <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="56"/>
         <source>Mode</source>
         <translation>Mode</translation>
     </message>
@@ -87,9 +77,19 @@
         <translation>Density</translation>
     </message>
     <message>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="56"/>
+        <source>Preset (kg)</source>
+        <translation>Preset (kg)</translation>
+    </message>
+    <message>
         <location filename="../src/dispensers/DispensersPage.cpp" line="57"/>
         <source>Dispensed (kg)</source>
         <translation>Dispensed (kg)</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="57"/>
+        <source>Status</source>
+        <translation>Status</translation>
     </message>
     <message>
         <location filename="../src/dispensers/DispensersPage.cpp" line="92"/>
@@ -102,59 +102,92 @@
         <translation>The converter is not connected: the boards cannot be reached.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="103"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="104"/>
         <source>No converter</source>
         <translation>No converter</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="105"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="106"/>
+        <source>Not polled</source>
+        <translation>Not polled</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="108"/>
         <source>No answer</source>
         <translation>No answer</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="107"/>
-        <source>Reading the config...</source>
-        <translation>Reading the config...</translation>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="110"/>
+        <source>Config not set</source>
+        <translation>Config not set</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="111"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="114"/>
         <source>Selected</source>
         <translation>Selected</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="114"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="117"/>
         <source>Ready to start</source>
         <translation>Ready to start</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="117"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="120"/>
         <source>Dispensing</source>
         <translation>Dispensing</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="120"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="123"/>
         <source>Finished</source>
         <translation>Finished</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="123"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="126"/>
         <source>Fault</source>
         <translation>Fault</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="126"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="129"/>
         <source>Free</source>
         <translation>Free</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="143"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="146"/>
         <source>Manual</source>
         <translation>Manual</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/DispensersPage.cpp" line="143"/>
+        <location filename="../src/dispensers/DispensersPage.cpp" line="146"/>
         <source>Auto</source>
         <translation>Auto</translation>
+    </message>
+</context>
+<context>
+    <name>NozzleConfigSync</name>
+    <message>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="174"/>
+        <source>The board holds no config yet. Press Update to send one.</source>
+        <translation>The board holds no config yet. Press Update to send one.</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="176"/>
+        <source>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</source>
+        <translation>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="193"/>
+        <source>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</source>
+        <translation>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="194"/>
+        <source>manual</source>
+        <translation>manual</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="194"/>
+        <source>auto</source>
+        <translation>auto</translation>
     </message>
 </context>
 <context>

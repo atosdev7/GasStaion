@@ -285,4 +285,62 @@ class FuelInboundTest extends TestCase
         // and the ticket inbound has no From any more
         $this->get('/ticket-inbound/create')->assertOk()->assertDontSee('f_from_name');
     }
-}
+
+    public function testTheInboundTableFiltersByDateFromCostAndNote()
+    {
+        $this->as('manager');
+        $this->inbound($this->tankD, 6.5, ['inbound_date' => '2026-10-01', 'from_name' => 'Acme Oil', 'note' => 'first tanker']);
+        $this->inbound($this->tankD, 6.75, ['inbound_date' => '2026-10-02', 'from_name' => 'Beta Fuels', 'note' => 'second tanker, late']);
+        $this->inbound($this->tankG, 7, ['inbound_date' => '2026-10-02', 'from_name' => 'ACME OIL', 'note' => null]);
+        $costs = function ($query) {
+            return $this->get('/inbound' . $query)->assertOk()->viewData('rows')->map(function ($r) {
+                return round((float) $r->cost, 2);
+            })->all();
+        };
+
+        $this->assertSame([7.0, 6.75, 6.5], array_map('floatval', $costs('')));                       // everything, the newest day first, the last made first within a day
+
+        $this->assertSame([6.5], $costs('?inbound_date=2026-10-01'));                                  // the day
+        $this->assertSame([7.0, 6.75], $costs('?inbound_date=2026-10-02'));
+        $this->assertSame([7.0, 6.5], $costs('?from_name=acme'));                                      // a part of the from, any case
+        $this->assertSame([6.75], $costs('?note=late'));                                               // a part of the note
+        $this->assertSame([6.75], $costs('?cost=6.75'));                                               // the cost per kg
+        $this->assertSame([6.5], $costs('?cost=6.5'));
+        $this->assertSame([], $costs('?cost=1'));
+        $this->assertSame([6.5], $costs('?from_name=acme&inbound_date=2026-10-01&cost=6.5&note=first')); // together
+        $this->assertSame([], $costs('?from_name=acme&note=late'));
+
+        // the % and _ of a search are plain characters
+        $this->assertSame([], $costs('?note=' . urlencode('%')));
+        $this->get('/inbound?inbound_date=nope')->assertSessionHasErrors('inbound_date');
+        $this->get('/inbound?cost=abc')->assertSessionHasErrors('cost');
+
+        // the filters are in the head of the table and keep what was typed
+        $html = $this->get('/inbound?from_name=acme&cost=6.5&inbound_date=2026-10-01&note=first')->assertOk()->getContent();
+        $this->assertStringContainsString('name="inbound_date" form="inbound-filters" type="date" value="2026-10-01"', $html);
+        $this->assertStringContainsString('name="from_name" form="inbound-filters" type="text" maxlength="100" placeholder="Search" value="acme"', $html);
+        $this->assertStringContainsString('name="cost" form="inbound-filters" type="number"', $html);
+        $this->assertStringContainsString('value="6.5"', $html);
+        $this->assertStringContainsString('name="note" form="inbound-filters" type="text" maxlength="255" placeholder="Search" value="first"', $html);
+        $this->assertStringContainsString('id="inbound-filters"', $html);
+        $this->get('/inbound?note=nothing')->assertOk()->assertSee('No data');
+    }
+
+    public function testTheInboundTableIsPagedByFiftyAndKeepsTheFilters()
+    {
+        $this->as('manager');
+        for ($i = 1; $i <= 52; $i++) {
+            FuelInbound::forceCreate([
+                'tank_id' => $this->tankD->id, 'fuel_type' => $this->diesel, 'amount_kg' => 100, 'cost' => 6, 'is_default' => false,
+                'inbound_date' => '2026-09-' . str_pad((string) (($i % 28) + 1), 2, '0', STR_PAD_LEFT), 'from_name' => 'Acme', 'user_id' => 1,
+            ]);
+        }
+
+        $first = $this->get('/inbound?from_name=acme')->assertOk();
+        $this->assertCount(50, $first->viewData('rows'));
+        $this->assertSame(52, $first->viewData('rows')->total());
+        $this->assertStringContainsString('from_name=acme&amp;page=2', $first->getContent());          // the filter stays in the links
+        $this->assertCount(2, $this->get('/inbound?from_name=acme&page=2')->viewData('rows'));
+        $this->assertCount(0, $this->get('/inbound?from_name=nobody')->viewData('rows'));
+        $this->assertSame(52, $this->get('/inbound')->viewData('rows')->total());
+    }}

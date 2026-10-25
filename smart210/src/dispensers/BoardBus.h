@@ -33,6 +33,17 @@ public:
     void addBoard(int address);
     bool hasBoard(int address) const;
 
+    // A board that is switched off is not asked at all (no POLL, no command), counts as offline and answers nothing: the nozzles are added by hand on
+    // Machine Config, and only those are polled. A board is on when it is added.
+    void setBoardEnabled(int address, bool enabled);
+
+    // A board that is not polled (a nozzle in manual mode) gets no POLL, is never counted as online or offline and has no status; a command that is
+    // queued for it (reading or setting its config) is still sent and answered. A board is polled when it is added.
+    void setBoardPolled(int address, bool polled);
+    bool isPolled(int address) const;
+    // Whether a command can be queued for the board now: the link is up and the board is on, and it is online or (not polled) simply there.
+    bool canTalk(int address) const;
+
     void setCycleMs(int ms) { cycleMs_ = ms; }                // least time for one round over the boards
     void setAnswerTimeoutMs(int ms) { answerTimeoutMs_ = ms; } // how long to wait for one answer
     void setMissLimit(int rounds) { missLimit_ = rounds; }
@@ -74,11 +85,13 @@ private slots:
 
 private:
     struct Board {
-        Board() : address(0), seq(0), missed(0), online(false), hasPending(false), pendingCommand(0), lastTry(0) {}
+        Board() : address(0), seq(0), missed(0), online(false), enabled(true), polled(true), hasPending(false), pendingCommand(0), lastTry(0) {}
         int address;
         int seq;
         int missed;
         bool online;
+        bool enabled;
+        bool polled;
         bool hasPending;
         int pendingCommand;
         QByteArray pendingData;

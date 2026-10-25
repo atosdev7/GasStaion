@@ -18,6 +18,7 @@ return [
         'items' => [
             ['label' => 'inbounds',  'route' => 'inbound.index',  'permission' => 'inbound.view'],
             ['label' => 'outbounds', 'route' => 'outbound.index', 'permission' => 'outbound.view'],
+            ['label' => 'tank_stock', 'route' => 'tank-stock.index', 'permission' => 'outbound.view'],
         ],
     ],
     [
