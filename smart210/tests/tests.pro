@@ -85,6 +85,7 @@ SOURCES += \
     ../src/core/Translations.cpp \
     ../src/sync/AutoUpload.cpp \
     ../src/input/HangulInput.cpp \
+    ../src/input/EnterChain.cpp \
     ../src/review/UploadSummary.cpp \
     ../src/sync/Uploader.cpp
 
@@ -167,6 +168,7 @@ HEADERS += \
     ../src/review/UploadSummary.h \
     ../src/input/HangulComposer.h \
     ../src/input/HangulInput.h \
+    ../src/input/EnterChain.h \
     ../src/input/HangulKeyMap.h \
     ../src/sync/Uploader.h \
     ../src/sync/AutoUpload.h

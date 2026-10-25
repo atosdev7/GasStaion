@@ -41,7 +41,7 @@
         @if ($deleted)
             <div class="card-body pb-0 text-muted">{{ __('sale_delete.deleted_note') }}</div>
         @endif
-        @if ($errors->has('sale_date') || $errors->has('customer'))
+        @if ($errors->has('sale_date') || $errors->has('customer') || $errors->has('fuel_type') || $errors->has('usage'))
             <div class="card-body pb-0 text-danger">{{ $errors->first() }}</div>
         @endif
         {{-- every filter sits in the head of its own column; the inputs belong to this form by their form attribute --}}
@@ -79,7 +79,26 @@
                             @endforeach
                         </select>
                     </th>
-                    <th colspan="{{ $deleted ? 8 : 7 }}"></th>
+                    <th>
+                        <select name="fuel_type" form="sale-filters" class="form-control form-control-sm" style="min-width: 130px" onchange="document.getElementById('sale-filters').submit()">
+                            <option value="">{{ __('sales.all_fuels') }}</option>
+                            @foreach ($fuels as $key => $name)
+                                <option value="{{ $key }}" {{ ($filters['fuel_type'] ?? '') === (string) $key ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
+                        </select>
+                    </th>
+                    <th colspan="5"></th>
+                    <th>
+                        <select name="usage" form="sale-filters" class="form-control form-control-sm" style="min-width: 130px" onchange="document.getElementById('sale-filters').submit()">
+                            <option value="">{{ __('sales.all_usages') }}</option>
+                            @foreach (\App\Http\Controllers\Sales\SaleController::USAGES as $usage)
+                                <option value="{{ $usage }}" {{ ($filters['usage'] ?? '') === $usage ? 'selected' : '' }}>{{ __('sales.usage_' . $usage) }}</option>
+                            @endforeach
+                        </select>
+                    </th>
+                    @if ($deleted)
+                        <th></th>
+                    @endif
                     <th class="text-right">
                         <button type="submit" form="sale-filters" class="btn btn-sm btn-primary">{{ __('sales.show') }}</button>
                         <a href="{{ route($listRoute, $deleted ? ['deleted' => 1] : []) }}" class="btn btn-sm btn-default">{{ __('sales.clear_filters') }}</a>

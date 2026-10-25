@@ -2,6 +2,7 @@
 
 #include "BoardBus.h"
 #include "Decimal.h"
+#include "EnterChain.h"
 #include "MachineConfig.h"
 #include "NozzleDialog.h"
 #include "PrintService.h"
@@ -65,6 +66,19 @@ SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *prin
     status_ = ui_->saleStatus;
     printAgain_ = ui_->printAgainButton;
 
+    // Enter goes through the fields in the order of the form
+    chain_ = new EnterChain(this);
+    chain_->add(customer_);
+    chain_->add(fuel_);
+    chain_->add(price_);
+    chain_->add(usage_);
+    chain_->add(kg_);
+    chain_->add(amount_);
+    chain_->add(result_);
+    chain_->add(receipt_);
+    chain_->add(comment_);
+    chain_->add(ui_->saveSaleButton);
+
     connect(usage_, SIGNAL(currentIndexChanged(int)), this, SLOT(usageChanged()));
     connect(fuel_, SIGNAL(currentIndexChanged(int)), this, SLOT(fuelChanged()));
     connect(price_, SIGNAL(textEdited(QString)), this, SLOT(priceEdited()));
@@ -125,6 +139,7 @@ void SpotSalePage::reload()
     printAgain_->setEnabled(false);
     usageChanged();
     fuelChanged();
+    chain_->focusWidget(kg_);
 }
 
 void SpotSalePage::clearEntry()
@@ -136,7 +151,8 @@ void SpotSalePage::clearEntry()
     amountTypedLast_ = false;
 }
 
-// Only a sale has an amount; own use goes to the "self" customer.
+// Only a sale has an amount. Own use and other use are always the customer "Individual" (the one the download marks), which cannot be changed; a
+// sale starts with it too (the buyer who pays cash and needs no name: what is known goes in the comment), and a ticket loan needs a customer to be chosen.
 void SpotSalePage::usageChanged()
 {
     const bool counts = (usage() == "sale");
@@ -146,17 +162,21 @@ void SpotSalePage::usageChanged()
         amountTypedLast_ = false;
     }
 
-    if (usage() == "self") {
-        for (int i = 0; i < customer_->count(); ++i) {
-            if (customer_->itemData(i, Qt::UserRole + 1).toInt() == 1) {
-                customer_->setCurrentIndex(i);
-            }
+    const int individual = customer_->findData(1, Qt::UserRole + 1);
+    if (usage() == "self" || usage() == "other") {
+        if (individual >= 0) {
+            customer_->setCurrentIndex(individual);
         }
         customer_->setEnabled(false);
     } else {
+        const bool wasFixed = !customer_->isEnabled();
         customer_->setEnabled(true);
-        if (customer_->itemData(customer_->currentIndex(), Qt::UserRole + 1).toInt() == 1) {
-            customer_->setCurrentIndex(0); // coming back from "self use": choose again
+        if (usage() == "ticket_loan") {
+            if (customer_->currentIndex() == individual) {
+                customer_->setCurrentIndex(0); // a loan is to a customer who is chosen
+            }
+        } else if ((wasFixed || customer_->currentIndex() == 0) && individual >= 0) {
+            customer_->setCurrentIndex(individual);
         }
     }
 }
@@ -242,6 +262,7 @@ void SpotSalePage::save()
     printAgain_->setEnabled(true);
     showStatus(savedMessage_, true);
     clearEntry(); // the next sale of the same kind starts with an empty weight; the last one stays on the screen
+    chain_->focusWidget(kg_);
     emit saved();
     if (result_->currentIndex() == ResultDirect) {
         setDirectly(input.fuelType, result.kgX100, result.barcode);

@@ -8,6 +8,7 @@
 
 class QButtonGroup;
 class BoardBus;
+class EnterChain;
 class MachineConfig;
 class QCheckBox;
 class QComboBox;
@@ -33,6 +34,10 @@ class SpotSalePage;
 // "Set directly" prints nothing: a question asks for the nozzle (of the sale's fuel type, see NozzleDialog), the nozzle is chosen on its board
 // and the ticket of the sale goes to its queue, so the weight is the preset of the board (the dispenser shows it) and the supplier starts the
 // fill by taking the gun up, exactly as when the supplier scans the ticket (SupplySession::add). A sale that could not be sent keeps its ticket, which Print again prints.
+//
+// The screen is used with the keyboard alone (EnterChain): the cursor starts at the weight, Enter moves through the fields in the order of the form
+// (the ones that are switched off are jumped over) and Enter or Space on Save sale saves; after a sale the cursor is at the weight again. The customer
+// starts as "Individual"; own use and other use are always Individual.
 class SpotSalePage : public QWidget
 {
     Q_OBJECT
@@ -85,6 +90,7 @@ private:
     QCheckBox *receipt_;
     QLabel *status_;
     QPushButton *printAgain_;
+    EnterChain *chain_;    // Enter moves on to the next field; Enter on Save sale saves
     QString lastSaleId_;   // the sale whose ticket Print again prints
     QString savedMessage_;
     bool printing_;

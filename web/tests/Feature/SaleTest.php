@@ -595,6 +595,51 @@ class SaleTest extends TestCase
         $this->assertSame([], $names('/spot-sales?sale_date=' . today()->toDateString()));
     }
 
+    public function testTheSalesTableCanBeFilteredByFuelTypeAndUsage()
+    {
+        $this->publishTickets(10);
+        $this->publishTickets(10, 0, 'A');
+        $this->as('manager');
+
+        $this->sell(1);                                                                // diesel, sale
+        $this->sell(1, ['usage' => 'self', 'paid_amount' => null]);                    // diesel, own use
+        $this->sell(1, ['usage' => 'other', 'paid_amount' => null], 0, 'A');           // gasoline, other use
+        $this->sell(1, [], 0, 'A');                                                    // gasoline, sale
+
+        $rows = function ($url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            preg_match_all('/<tr>\s*<td>\d{4}-\d\d-\d\d<\/td>\s*<td>[^<]*<\/td>\s*<td>([^<]*)<\/td>.*?<td>\s*(Sale|Self use|Other \(given away\)|Ticket loan)\s*<\/td>/s', $html, $m);
+
+            return $this->sorted(array_map(function ($fuel, $usage) { return $fuel . '/' . $usage; }, $m[1], $m[2]));
+        };
+
+        $this->assertCount(4, $rows('/ticket-sales'));
+        $this->assertSame(['Diesel/Sale', 'Diesel/Self use'], $rows('/ticket-sales?fuel_type=D'));
+        $this->assertSame(['Gasoline/Other (given away)', 'Gasoline/Sale'], $rows('/ticket-sales?fuel_type=A'));
+        $this->assertSame(['Diesel/Sale', 'Gasoline/Sale'], $rows('/ticket-sales?usage=sale'));
+        $this->assertSame(['Gasoline/Other (given away)'], $rows('/ticket-sales?usage=other'));
+        $this->assertSame(['Diesel/Self use'], $rows('/ticket-sales?fuel_type=D&usage=self'));
+        $this->assertSame([], $rows('/ticket-sales?fuel_type=D&usage=other'));
+        $this->assertSame([], $rows('/ticket-sales?usage=ticket_loan'));
+
+        // the filters are in the head of the fuel type and usage columns, and the chosen ones stay chosen
+        $html = $this->get('/ticket-sales?fuel_type=A&usage=other')->assertOk()->getContent();
+        $this->assertRegExp('/<select name="fuel_type" form="sale-filters"[^>]*>\s*<option value="">All fuel types<\/option>.*?<option value="A" selected>/s', $html);
+        $this->assertRegExp('/<select name="usage" form="sale-filters"[^>]*>\s*<option value="">All usages<\/option>.*?<option value="other" selected>Other \(given away\)<\/option>/s', $html);
+
+        // a fuel type or usage that does not exist is refused
+        $this->get('/ticket-sales?fuel_type=X')->assertSessionHasErrors('fuel_type');
+        $this->get('/ticket-sales?usage=free')->assertSessionHasErrors('usage');
+
+        // the spot list and the deleted list have them too
+        $this->spotSell(1, [], 'A');
+        $this->assertSame(['Gasoline/Sale'], $rows('/spot-sales?fuel_type=A'));
+        $this->assertSame([], $rows('/spot-sales?fuel_type=D'));
+        $deleted = $this->get('/ticket-sales?deleted=1&fuel_type=D')->assertOk()->getContent();
+        $this->assertStringContainsString('name="deleted" value="1"', $deleted);
+        $this->assertStringContainsString('<select name="usage" form="sale-filters"', $deleted);
+    }
+
     public function testTheCustomerFilterIsATypedBoxWithSuggestionsAndTheDeletedListHasItsOwnColumn()
     {
         $this->publishTickets(5);

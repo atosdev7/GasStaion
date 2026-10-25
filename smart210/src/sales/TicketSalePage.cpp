@@ -2,6 +2,7 @@
 
 #include "Barcode.h"
 #include "Decimal.h"
+#include "EnterChain.h"
 #include "Session.h"
 #include "SpotSale.h"
 #include "ui_TicketSalePage.h"
@@ -77,13 +78,25 @@ TicketSalePage::TicketSalePage(QSqlDatabase db, Session *session, QWidget *paren
     comment_ = ui_->tsCommentField;
     status_ = ui_->tsStatus;
 
+    // Enter goes through the fields in the order of the form; the count keeps its own Enter (it adds the item)
+    chain_ = new EnterChain(this);
+    chain_->add(customer_);
+    chain_->add(fuel_);
+    chain_->add(price_);
+    chain_->add(usage_);
+    chain_->add(spec_);
+    chain_->add(start_);
+    chain_->add(count_, true);
+    chain_->add(receipt_);
+    chain_->add(comment_);
+    chain_->add(ui_->saveTicketSaleButton);
+
     connect(fuel_, SIGNAL(activated(int)), this, SLOT(fuelChanged()));
     connect(spec_, SIGNAL(activated(int)), this, SLOT(specChanged()));
     connect(start_, SIGNAL(textEdited(QString)), this, SLOT(showEnd()));
     connect(count_, SIGNAL(textEdited(QString)), this, SLOT(showEnd()));
     connect(ui_->tsCheckButton, SIGNAL(clicked()), this, SLOT(check()));
     connect(ui_->tsAddButton, SIGNAL(clicked()), this, SLOT(addItem()));
-    connect(start_, SIGNAL(returnPressed()), this, SLOT(addItem()));
     connect(count_, SIGNAL(returnPressed()), this, SLOT(addItem()));
     connect(ui_->tsClearButton, SIGNAL(clicked()), this, SLOT(clearItems()));
     connect(items_, SIGNAL(cellDoubleClicked(int,int)), this, SLOT(itemDoubleClicked(int)));
@@ -147,6 +160,7 @@ void TicketSalePage::reload()
     count_->setText("1");
     fuelChanged();
     usageChanged();
+    chain_->focusWidget(customer_);
 }
 
 // A new fuel type: its price, and the items start again.
@@ -279,10 +293,15 @@ void TicketSalePage::addItem()
     count_->setText("1");
     status_->clear();
     showItems();
+    chain_->focusWidget(spec_);            // the next item; one more Enter here, with nothing typed, goes on to the receipt
+    chain_->jumpFrom(spec_, receipt_);
 }
 
 void TicketSalePage::showItems()
 {
+    if (itemList_.isEmpty()) {
+        chain_->jumpFrom(spec_, 0);
+    }
     items_->setRowCount(0);
     kgX100_ = 0;
     tickets_ = 0;
@@ -352,14 +371,13 @@ void TicketSalePage::clearItems()
     showItems();
 }
 
-// Own use goes to the "self" customer, and only a sale has an amount.
+// Own use and other use are always the customer "Individual" (the one the download marks), which cannot be changed.
 void TicketSalePage::usageChanged()
 {
-    if (usage() == "self") {
-        for (int i = 0; i < customer_->count(); ++i) {
-            if (customer_->itemData(i, Qt::UserRole + 1).toInt() == 1) {
-                customer_->setCurrentIndex(i);
-            }
+    if (usage() == "self" || usage() == "other") {
+        const int individual = customer_->findData(1, Qt::UserRole + 1);
+        if (individual >= 0) {
+            customer_->setCurrentIndex(individual);
         }
         customer_->setEnabled(false);
     } else {
@@ -438,5 +456,6 @@ void TicketSalePage::save()
     fillSpecs();       // the stock has changed
     showItems();
     showStatus(message, true);
+    chain_->focusWidget(customer_);
     emit saved();
 }

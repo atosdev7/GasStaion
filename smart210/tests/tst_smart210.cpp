@@ -337,6 +337,9 @@ private slots:
     void aSpotSaleCanBeUploadedAsItIs();
     void theSpotSaleScreenCalculatesBothWaysAndSaves();
     void ownUseGoesToTheSelfCustomerAndHasNoAmount();
+    void otherUseIsIndividualTooAndALoanNeedsACustomerWhoIsChosen();
+    void theSpotSaleIsFilledWithTheKeyboardAlone();
+    void theTicketSaleIsFilledWithTheKeyboardAlone();
 
     void aScannedTicketIsCheckedAtOnce();
     void aTicketSaleSellsTheTicketsAndWritesTheSale();
@@ -1299,6 +1302,16 @@ void Smart210Test::usersAndCustomersAreStoredAndUpdated()
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 1);
     QVERIFY(query.value(1).isNull());
+
+    // the web app names the flag is_default (and still sends is_self, the same value): the new name counts when it is there
+    customers = store.applyPage("customers", rowsOf(
+        "[{'id':4,'name':'Individual','phone':null,'is_default':true,'is_self':false,'deleted':false},{'id':5,'name':'Other','phone':null,'is_default':false,'is_self':true,'deleted':false}]"));
+    QCOMPARE(customers.stored, 2);
+    QVERIFY(query.exec("SELECT is_self FROM customers WHERE id IN (4, 5) ORDER BY id"));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 1);
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 0);
 }
 
 void Smart210Test::ticketsAreStoredWithIntegerKeysAndAmounts()
@@ -3987,7 +4000,9 @@ void Smart210Test::theSpotSaleScreenCalculatesBothWaysAndSaves()
     QTest::keyClicks(price, "8");
     QCOMPARE(kg->text(), QString("12.50"));            // the price changed, the amount typed last still counts
 
-    // no customer chosen yet
+    // the customer starts as Individual (the one the download marks); with none chosen the sale is refused
+    QCOMPARE(customer->currentText(), QString("Self"));
+    customer->setCurrentIndex(0);
     window.findChild<QPushButton *>("saveSaleButton")->click();
     QVERIFY(status->text().contains("customer"));
     QCOMPARE(countRows("sales"), 0);
@@ -4045,12 +4060,194 @@ void Smart210Test::ownUseGoesToTheSelfCustomerAndHasNoAmount()
     QCOMPARE(query.value(2).toLongLong(), qlonglong(0));
     QCOMPARE(query.value(3).toLongLong(), qlonglong(500));
 
-    window.findChild<QComboBox *>("usageCombo")->setCurrentIndex(0); // back to a sale: the customer must be chosen again
+    window.findChild<QComboBox *>("usageCombo")->setCurrentIndex(0); // back to a sale: the customer is free again, and starts as Individual
     QVERIFY(customer->isEnabled());
-    QCOMPARE(customer->currentIndex(), 0);
+    QCOMPARE(customer->currentText(), QString("Self"));
     QVERIFY(amount->isEnabled());
 }
 
+void Smart210Test::otherUseIsIndividualTooAndALoanNeedsACustomerWhoIsChosen()
+{
+    setUpSellingTerminal();
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
+    window.showPage("spot");
+    QComboBox *customer = window.findChild<QComboBox *>("customerCombo");
+    QComboBox *usage = window.findChild<QComboBox *>("usageCombo");
+
+    QCOMPARE(customer->currentText(), QString("Self"));                // a sale starts with Individual (the customer the download marks)
+    usage->setCurrentIndex(2);                                          // other use: Individual, and it cannot be changed
+    QCOMPARE(customer->currentText(), QString("Self"));
+    QVERIFY(!customer->isEnabled());
+
+    usage->setCurrentIndex(3);                                          // a ticket loan is to a customer who is chosen
+    QVERIFY(customer->isEnabled());
+    QCOMPARE(customer->currentIndex(), 0);
+    customer->setCurrentIndex(customer->findText("ACME"));
+    usage->setCurrentIndex(0);
+    QCOMPARE(customer->currentText(), QString("ACME"));                // a customer who was chosen stays for a sale
+    usage->setCurrentIndex(1);
+    QCOMPARE(customer->currentText(), QString("Self"));
+    usage->setCurrentIndex(3);
+    QCOMPARE(customer->currentIndex(), 0);
+}
+
+static void typeInto(QLineEdit *field, const QString &text); // (below, with the ticket sale tests)
+
+// Enter in the field of a form moves on to the next one
+static void enterIn(QWidget *widget)
+{
+    QTest::keyClick(widget, Qt::Key_Return);
+}
+
+void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
+{
+    setUpSellingTerminal();
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
+    window.showPage("spot");
+    SpotSalePage *page = window.findChild<SpotSalePage *>();
+    QComboBox *customer = window.findChild<QComboBox *>("customerCombo");
+    QComboBox *fuel = window.findChild<QComboBox *>("fuelCombo");
+    QLineEdit *price = window.findChild<QLineEdit *>("priceField");
+    QComboBox *usage = window.findChild<QComboBox *>("usageCombo");
+    QLineEdit *kg = window.findChild<QLineEdit *>("kgField");
+    QLineEdit *amount = window.findChild<QLineEdit *>("amountField");
+    QComboBox *result = window.findChild<QComboBox *>("resultCombo");
+    QCheckBox *receipt = window.findChild<QCheckBox *>("receiptCheck");
+    QLineEdit *comment = window.findChild<QLineEdit *>("commentField");
+    QPushButton *save = window.findChild<QPushButton *>("saveSaleButton");
+    QLabel *status = window.findChild<QLabel *>("saleStatus");
+
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(kg));          // the cursor starts at the weight
+    QCOMPARE(window.findChild<QPushButton *>("navSales")->focusPolicy(), Qt::NoFocus); // the sidebar is not in the way
+
+    // Enter goes through the fields in the order of the form, from the first one
+    QWidget *order[] = {customer, fuel, price, usage, kg, amount, result, receipt, comment, save};
+    customer->setFocus();
+    for (unsigned i = 0; i + 1 < sizeof(order) / sizeof(order[0]); ++i) {
+        QCOMPARE(page->focusWidget(), order[i]);
+        enterIn(order[i]);
+    }
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(save));
+
+    // a sale: the weight, then Enter on every field to the Save button, then Enter on it
+    kg->setFocus();
+    QTest::keyClicks(kg, "10.5");
+    QCOMPARE(amount->text(), QString("78.75"));
+    enterIn(kg);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(amount));
+    enterIn(amount);
+    enterIn(result);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
+    QTest::keyClick(receipt, Qt::Key_Space);                             // Space ticks the box, Enter only moves on
+    QVERIFY(receipt->isChecked());
+    enterIn(receipt);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(comment));
+    QTest::keyClicks(comment, "plate 12");
+    enterIn(comment);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(save));
+    QCOMPARE(countRows("sales"), 0);
+    enterIn(save);
+    QVERIFY2(status->text().startsWith("Saved: 10.50 kg, amount 78.75"), qPrintable(status->text()));
+    QCOMPARE(countRows("sales"), 1);
+    QCOMPARE(one("SELECT comment FROM sales").toString(), QString("plate 12"));
+    QCOMPARE(one("SELECT customer_id FROM sales").toInt(), 1);           // Individual
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(kg));           // ready for the next sale
+    QVERIFY(kg->text().isEmpty());
+
+    // Space on the button saves too; own use has no amount: it is jumped over
+    usage->setCurrentIndex(1);
+    kg->setFocus();
+    QTest::keyClicks(kg, "5");
+    enterIn(kg);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(result));
+    save->setFocus();
+    QTest::keyClick(save, Qt::Key_Space);
+    QCOMPARE(countRows("sales"), 2);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(kg));
+
+    // a sale that is refused keeps the cursor on the button
+    kg->clear();
+    save->setFocus();
+    enterIn(save);
+    QCOMPARE(countRows("sales"), 2);
+    QVERIFY(status->text().contains("weight"));
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(save));
+}
+
+void Smart210Test::theTicketSaleIsFilledWithTheKeyboardAlone()
+{
+    setUpSellingTerminal();
+    addStockTickets();
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
+    window.showPage("ticket");
+    TicketSalePage *page = window.findChild<TicketSalePage *>();
+    QComboBox *customer = window.findChild<QComboBox *>("tsCustomerCombo");
+    QComboBox *fuel = window.findChild<QComboBox *>("tsFuelCombo");
+    QLineEdit *price = window.findChild<QLineEdit *>("tsPriceField");
+    QComboBox *usage = window.findChild<QComboBox *>("tsUsageCombo");
+    QComboBox *spec = window.findChild<QComboBox *>("tsSpecCombo");
+    QLineEdit *start = window.findChild<QLineEdit *>("tsStartField");
+    QLineEdit *count = window.findChild<QLineEdit *>("tsCountField");
+    QCheckBox *receipt = window.findChild<QCheckBox *>("tsReceiptCheck");
+    QLineEdit *comment = window.findChild<QLineEdit *>("tsCommentField");
+    QPushButton *save = window.findChild<QPushButton *>("saveTicketSaleButton");
+    QTableWidget *items = window.findChild<QTableWidget *>("tsItemsTable");
+
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(customer));    // the cursor starts at the customer
+    customer->setCurrentIndex(customer->findText("ACME"));
+
+    QWidget *order[] = {customer, fuel, price, usage, spec, start, count};
+    for (unsigned i = 0; i + 1 < sizeof(order) / sizeof(order[0]); ++i) {
+        QCOMPARE(page->focusWidget(), order[i]);
+        enterIn(order[i]);
+    }
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(count));
+
+    // Enter in the count adds the item and the cursor goes back to the spec for the next one
+    typeInto(count, "2");
+    enterIn(count);
+    QCOMPARE(items->rowCount(), 1);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(spec));
+
+    // an arrow key in the spec is a new item: Enter goes on to the start serial as usual
+    QTest::keyClick(spec, Qt::Key_Down);
+    enterIn(spec);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(start));
+    enterIn(start);
+    enterIn(count);
+    QCOMPARE(items->rowCount(), 2);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(spec));
+
+    // one more Enter at the spec, nothing typed: no more items, on to the receipt and the comment
+    enterIn(spec);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
+    enterIn(receipt);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(comment));
+    QTest::keyClicks(comment, "morning");
+    enterIn(comment);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(save));
+    QCOMPARE(countRows("sales"), 0);
+    enterIn(save);
+    QCOMPARE(countRows("sales"), 1);
+    QCOMPARE(one("SELECT comment FROM sales").toString(), QString("morning"));
+    QCOMPARE(items->rowCount(), 0);
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(customer));    // ready for the next customer
+}
 // ---- ticket sale ----
 
 // Tickets of every kind in the local database: three 5 kg and one 10 kg Diesel in stock, a Gasoline one, and one sold,

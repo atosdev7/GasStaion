@@ -281,7 +281,7 @@ bool SyncStore::storeCustomer(const QJsonObject &row, QString *error)
     query.addBindValue(row.value("id").toInt());
     query.addBindValue(row.value("name").toString());
     query.addBindValue(textOrNull(row.value("phone")));
-    query.addBindValue(row.value("is_self").toBool() ? 1 : 0);
+    query.addBindValue((row.contains("is_default") ? row.value("is_default") : row.value("is_self")).toBool() ? 1 : 0); // (kept in the column is_self)
     query.addBindValue(row.value("deleted").toBool() ? 1 : 0);
 
     return run(query, error);

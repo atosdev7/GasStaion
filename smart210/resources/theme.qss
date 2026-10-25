@@ -23,6 +23,8 @@ QPushButton { font-size: 24px; min-height: 36px; padding: 4px 18px; border: 1px 
 QPushButton:hover { background: #f1f5f9; }
 QPushButton:pressed { background: #e2e8f0; }
 QPushButton:disabled { color: #9ca3af; background: #f3f4f6; border-color: #e5e7eb; }
+QPushButton:focus { border: 2px solid #1d4ed8; }
+QCheckBox:focus { background: #dbeafe; border-radius: 6px; }
 
 QPushButton[state="danger"], QPushButton[state="danger"]:hover { background: #b42318; color: #ffffff; }
 QTabBar { font-size: 20px; }

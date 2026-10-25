@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QButtonGroup;
+class EnterChain;
 class QEvent;
 class QCheckBox;
 class QComboBox;
@@ -25,6 +26,10 @@ class TicketSalePage;
 // to sell as items (an "add item" area at the left: the spec, the start serial that is filled in with the first one in stock, the count and the
 // end serial that follows from them, with a Check button; the table of the items at the right with the first and last serial of each), then the
 // total, the receipt, the use and the comment. An item without a start serial takes the lowest serials in stock. See TicketSale.
+//
+// The screen is used with the keyboard alone (EnterChain): the cursor starts at the customer, Enter moves through the fields in the order of the form,
+// Enter in the count adds the item and the cursor goes back to the spec for the next one; one more Enter there (nothing typed) is "no more items"
+// and goes on to the receipt; Enter or Space on Save sale saves, and the cursor is at the customer again.
 class TicketSalePage : public QWidget
 {
     Q_OBJECT
@@ -86,6 +91,7 @@ private:
     QLineEdit *comment_;
     QLabel *totals_;
     QLabel *status_;
+    EnterChain *chain_;                  // Enter moves on to the next field; Enter on Save sale saves
     QList<TicketSale::Item> itemList_;
     qlonglong kgX100_;
     int tickets_;

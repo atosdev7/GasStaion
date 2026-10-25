@@ -59,6 +59,8 @@ class SaleController extends Controller
         $filters = $request->validate([
             'sale_date' => 'nullable|date_format:Y-m-d',
             'customer' => 'nullable|integer',
+            'fuel_type' => ['nullable', Rule::in(array_keys(config('fuel_types')))],
+            'usage' => ['nullable', Rule::in(self::USAGES)],
         ]);
 
         $query = $deleted
@@ -70,6 +72,12 @@ class SaleController extends Controller
         }
         if (!empty($filters['customer'])) {
             $query->where('customer_id', $filters['customer']);
+        }
+        if (!empty($filters['fuel_type'])) {
+            $query->where('fuel_type', $filters['fuel_type']);
+        }
+        if (!empty($filters['usage'])) {
+            $query->where('usage', $filters['usage']);
         }
         $sales = $query->paginate(50)->appends($request->query());
 
