@@ -254,9 +254,9 @@ class SupplementTest extends TestCase
         $remainder = Remainder::first();
         $this->assertNull($remainder->complete_date);
 
-        // the remainder ticket is supplied itself: its remainder is complete on the day it was used
+        // the remainder ticket is supplied itself: its remainder is complete on the day of that supply (not the day it was entered)
         $this->supply($remainder->ticket_barcode, $nozzle, 1.1, ['supplied_at' => '2026-09-25 09:00:00'])->assertRedirect('/supplements');
-        $this->assertSame(today()->toDateString(), substr((string) $remainder->fresh()->complete_date, 0, 10));
+        $this->assertSame('2026-09-25', substr((string) $remainder->fresh()->complete_date, 0, 10));
 
         // a ticket that goes back to sold takes the completion away again
         Ticket::find($remainder->ticket_barcode)->forceFill(['status' => config('ticket_statuses.sale')])->save();
@@ -346,9 +346,9 @@ class SupplementTest extends TestCase
         $html = $this->as('manager')->get('/remainders')->assertOk()->getContent();
         $head = substr($html, strpos($html, '<thead>'), strpos($html, '<tr class="filters">') - strpos($html, '<thead>'));
         preg_match_all('/<th[^>]*>\s*([^<]*?)\s*<\/th>/', $head, $m);
-        $this->assertSame(['Remainder date', 'Barcode', 'Fuel type', 'Weight (kg)', 'From supply', 'Complete date', 'Comment', 'Status'], array_map('html_entity_decode', $m[1]));
+        $this->assertSame(['Remainder date', 'Barcode', 'Fuel type', 'Weight (kg)', 'From supply', 'Complete date', 'Comment', 'Status', 'Actions'], array_map('html_entity_decode', $m[1]));
         $this->assertStringContainsString($used->ticket_barcode, $html);
-        $this->assertStringContainsString(today()->toDateString(), $html);   // the complete date of the used one
+        $this->assertStringContainsString('2026-09-25', $html);   // the complete date of the used one: the day of the supply that used it
         $this->assertSame(2, substr_count($html, 'badge-info'));            // a state of each remainder ticket
         $this->assertStringContainsString('<td>-</td>', $html);               // the other is not complete
 
@@ -839,5 +839,77 @@ class SupplementTest extends TestCase
         $this->assertSame('kept', $remainder->fresh()->comment);
         $this->as('accountant')->put('/remainders/' . $remainder->id . '/comment', ['comment' => 'by the accountant'])->assertSessionHas('status');
         $this->assertSame('by the accountant', $remainder->fresh()->comment);
+    }
+
+    public function testARemainderTicketIsUsedOnTheDayOfTheSupplyAndDeletingThatSupplyMakesItWaitingAgain()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $first = $this->soldTicket(1, 0);                                         // 5 kg
+        $this->supply($first->barcode, $nozzle, 3)->assertSessionHasNoErrors();   // 3 kg out: a remainder of 2 kg
+        $remainder = Remainder::first();
+        $this->assertNull($remainder->fresh()->complete_date);
+
+        // a supply entered later for an earlier day: the ticket is used on that day, not on the day it was entered
+        $this->supply($remainder->ticket_barcode, $nozzle, 2, ['supplied_at' => '2026-09-21 08:30:00'])->assertSessionHasNoErrors();
+        $second = Supplement::where('supply_date', '2026-09-21')->first();
+        $this->assertSame('2026-09-21', substr((string) Ticket::find($remainder->ticket_barcode)->supply_date, 0, 10));
+        $this->assertSame('2026-09-21', substr((string) $remainder->fresh()->complete_date, 0, 10));
+
+        // the supply is deleted: the ticket is waiting again, and so is its remainder
+        $this->delete('/supplements/' . $second->id)->assertSessionHasNoErrors()->assertSessionHas('status');
+        $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($remainder->ticket_barcode)->status);
+        $this->assertNull(Ticket::find($remainder->ticket_barcode)->supplement_id);
+        $this->assertNull($remainder->fresh()->complete_date);
+    }
+
+    public function testTheTimeOfASupplyCannotBeInTheFuture()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $ticket = $this->soldTicket(1, 0);
+        $tomorrow = now()->addDay()->format('Y-m-d H:i:s');
+
+        $this->supply($ticket->barcode, $nozzle, 5, ['supplied_at' => $tomorrow])->assertSessionHasErrors('supplied_at');
+        $this->assertSame(0, Supplement::count());
+        $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($ticket->barcode)->status);        // nothing was used
+
+        // the admin cannot move a supply into the future either
+        $this->supply($ticket->barcode, $nozzle, 5)->assertSessionHasNoErrors();
+        $supplement = Supplement::first();
+        $this->put('/supplements/' . $supplement->id, ['nozzle_id' => $nozzle->id, 'supplied_at' => $tomorrow, 'mode' => 'auto', 'out_amount_lt' => 5])->assertSessionHasErrors('supplied_at');
+        $this->assertSame('2026-09-20', $supplement->fresh()->supply_day);
+        $this->put('/supplements/' . $supplement->id, ['nozzle_id' => $nozzle->id, 'supplied_at' => '2026-09-19 10:00:00', 'mode' => 'auto', 'out_amount_lt' => 5])->assertSessionHasNoErrors();
+        $this->assertSame('2026-09-19', $supplement->fresh()->supply_day);
+    }
+
+    public function testTheRemaindersHaveAnActionsFieldWithTheSupplyTheTicketAndTheComment()
+    {
+        $this->density(0.89);
+        $nozzle = $this->nozzle('D');
+        $this->supply($this->soldTicket(1, 0)->barcode, $nozzle, 4.49);
+        $made = Remainder::first();
+        $opening = Remainder::forceCreate([
+            'supplement_id' => null, 'ticket_barcode' => '0000025500000001', 'fuel_type' => 'D', 'amount_kg' => 3, 'remainder_date' => '2026-09-22', 'created_at' => '2026-09-22 10:00:00', 'comment' => 'from before',
+        ]);
+
+        // the manager: the supply (a popup), the ticket and the comment
+        $html = $this->as('manager')->get('/remainders')->assertOk()->getContent();
+        $this->assertStringContainsString('remainder-actions', $html);
+        $this->assertStringContainsString('class="dropdown-item supplement-detail"', $html);
+        $this->assertStringContainsString(route('supplements.show', $made->supplement_id), $html);
+        $this->assertSame(1, substr_count($html, 'dropdown-item supplement-detail'));                   // the opening remainder has no supply
+        $this->assertStringContainsString('/tickets/lookup?barcode=' . $made->ticket_barcode, $html);
+        $this->assertStringContainsString('data-action="' . route('remainders.comment', $opening->id) . '"', $html);
+        $this->assertStringContainsString('data-comment="from before"', $html);
+        $this->assertStringContainsString('id="remainder-comment-modal"', $html);
+        $this->assertStringNotContainsString('name="comment" type="text" maxlength="255" value="from before"', $html);   // no input in the rows any more
+
+        // the cashier looks: the supply only (no ticket lookup, no comment)
+        $html = $this->as('cashier')->get('/remainders')->assertOk()->getContent();
+        $this->assertStringContainsString('dropdown-item supplement-detail', $html);
+        $this->assertStringNotContainsString('class="dropdown-item remainder-comment"', $html);
+        $this->assertStringNotContainsString('id="remainder-comment-modal"', $html);
+        $this->assertStringNotContainsString('/tickets/lookup?barcode=', $html);
     }
 }

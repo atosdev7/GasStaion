@@ -41,9 +41,12 @@ class SupplementDeletion
                 throw ValidationException::withMessages(['supplement' => __('supplements.blocked_' . $reason)]);
             }
 
-            Ticket::where('supplement_id', $supplement->id)->update([
-                'status' => config('ticket_statuses.sale'), 'supplement_id' => null, 'supply_date' => null, 'synced' => false,
-            ]);
+            // one by one, not in one query: a remainder ticket that goes back to "sold" takes the day it was used away from its remainder (Ticket::boot)
+            Ticket::where('supplement_id', $supplement->id)->get()->each(function ($ticket) {
+                $ticket->forceFill([
+                    'status' => config('ticket_statuses.sale'), 'supplement_id' => null, 'supply_date' => null, 'synced' => false,
+                ])->save();
+            });
 
             Remainder::where('supplement_id', $supplement->id)->get()->each(function ($remainder) {
                 Ticket::where('barcode', $remainder->ticket_barcode)->update(['status' => config('ticket_statuses.restrict'), 'synced' => false]);

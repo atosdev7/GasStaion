@@ -102,10 +102,10 @@ class SupplementController extends Controller
             'ticket_barcodes.*' => ['string', 'size:16', 'distinct'],
             'nozzle_id' => ['required', Rule::exists('nozzles', 'id')->whereNull('deleted_at')],
             'out_amount_lt' => ['required', 'numeric', 'min:0.01', 'max:999999'],
-            'supplied_at' => ['required', 'date'],
+            'supplied_at' => ['required', 'date', 'before_or_equal:now'], // a supply has happened already
             'density' => 'nullable|numeric|min:0.0001|max:9999.9999', // kg per litre; the density of the fuel type when it is not sent
             'mode' => ['nullable', Rule::in(Supplement::MODES)], // auto when it is not sent
-        ]);
+        ], ['supplied_at.before_or_equal' => __('supplements.supplied_in_future')]);
 
         $result = DB::transaction(function () use ($data) {
             // Only tickets the customer actually holds (sold, not blank stock, not already used or restricted) can be
@@ -166,7 +166,7 @@ class SupplementController extends Controller
             foreach ($tickets as $ticket) {
                 $ticket->forceFill([
                     'status' => config('ticket_statuses.supply'),
-                    'supply_date' => now(),
+                    'supply_date' => $suppliedAt, // the moment of the supply, not of the entry: a remainder ticket used up here completes its remainder on that day
                     'supplement_id' => $supplement->id,
                 ])->save();
             }
@@ -223,12 +223,12 @@ class SupplementController extends Controller
         if ($full) {
             $rules += [
                 'nozzle_id' => ['required', Rule::exists('nozzles', 'id')->whereNull('deleted_at')],
-                'supplied_at' => ['required', 'date'],
+                'supplied_at' => ['required', 'date', 'before_or_equal:now'],
                 'mode' => ['required', Rule::in(Supplement::MODES)],
                 'out_amount_lt' => ['required', 'numeric', 'min:0.01', 'max:999999'],
             ];
         }
-        $data = $request->validate($rules);
+        $data = $request->validate($rules, ['supplied_at.before_or_equal' => __('supplements.supplied_in_future')]);
 
         $before = $supplement->supplied_at . ' ' . $supplement->mode . ' ' . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id
             . ' / ' . $supplement->comment;
