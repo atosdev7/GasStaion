@@ -473,6 +473,38 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="manualSupplyOptionsBox">
+         <property name="title"><string>Manual supply</string></property>
+         <layout class="QHBoxLayout" name="manualSupplyOptionsLayout" stretch="1,0,0">
+          <property name="leftMargin"><number>9</number></property>
+          <property name="topMargin"><number>9</number></property>
+          <property name="rightMargin"><number>9</number></property>
+          <property name="bottomMargin"><number>9</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QLabel" name="manualSupplyDaysLabel">
+            <property name="text"><string>Days back the time of a manual supply may be (0: today only)</string></property>
+            <property name="wordWrap"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="manualSupplyDaysSpin">
+            <property name="minimum"><number>0</number></property>
+            <property name="maximum"><number>365</number></property>
+            <property name="value"><number>3</number></property>
+            <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveManualSupplyOptionsButton">
+            <property name="text"><string>Save</string></property>
+            <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <spacer name="spacerOptions">
          <property name="orientation"><enum>Qt::Vertical</enum></property>
          <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>

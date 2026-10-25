@@ -216,11 +216,11 @@ $noz2 = one("SELECT id FROM nozzles WHERE number = 2");
 $barcodes = function ($customer, $back, $spec, $n) {
     return implode(' ', array_slice(array_column(rows("SELECT t.barcode FROM tickets t JOIN sales s ON s.id = t.sale_id WHERE s.customer_id = ? AND s.sale_date = ? AND s.sale_type = 'ticket' AND t.spec = ? AND t.status = 1 AND s.deleted_at IS NULL ORDER BY t.serial", [$customer, day($back), $spec]), 'barcode'), 0, $n));
 };
-act(day(3) . ' ACME fills 7.50 kg of its two 5 kg tickets (a remainder ticket of 2.50 kg is made)', $assistant, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($acme, 4, 0, 2), 'nozzle_id' => $noz2, 'out_amount_lt' => '9.04', 'supplied_at' => day(3) . ' 10:15:00', 'mode' => 'manual'], '/supplements');
-act(day(2) . ' Beta fills a 10 kg ticket, exactly', $assistant, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($beta, 4, 1, 1), 'nozzle_id' => $noz2, 'out_amount_lt' => '12.05', 'supplied_at' => day(2) . ' 14:40:00', 'mode' => 'manual'], '/supplements');
+act(day(3) . ' ACME fills 7.50 kg of its two 5 kg tickets (a remainder ticket of 2.50 kg is made)', $admin, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($acme, 4, 0, 2), 'nozzle_id' => $noz2, 'out_amount_lt' => '9.04', 'supplied_at' => day(3) . ' 10:15:00', 'mode' => 'manual'], '/supplements');
+act(day(2) . ' Beta fills a 10 kg ticket, exactly', $admin, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($beta, 4, 1, 1), 'nozzle_id' => $noz2, 'out_amount_lt' => '12.05', 'supplied_at' => day(2) . ' 14:40:00', 'mode' => 'manual'], '/supplements');
 $remainder = one("SELECT ticket_barcode FROM remainders ORDER BY created_at LIMIT 1");
-act(day(1) . ' ACME uses the remainder ticket of 2.50 kg', $assistant, 'POST', '/supplements', ['ticket_barcodes' => $remainder, 'nozzle_id' => $noz2, 'out_amount_lt' => '3.01', 'supplied_at' => day(1) . ' 09:20:00', 'mode' => 'manual'], '/supplements');
-act(day(1) . ' Cedar fills Gasoline with a 5 kg ticket (4.59 kg: a remainder is made)', $assistant, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($cedar, 4, 0, 1), 'nozzle_id' => $noz1, 'out_amount_lt' => '6.20', 'supplied_at' => day(1) . ' 16:05:00', 'mode' => 'manual'], '/supplements');
+act(day(1) . ' ACME uses the remainder ticket of 2.50 kg', $admin, 'POST', '/supplements', ['ticket_barcodes' => $remainder, 'nozzle_id' => $noz2, 'out_amount_lt' => '3.01', 'supplied_at' => day(1) . ' 09:20:00', 'mode' => 'manual'], '/supplements');
+act(day(1) . ' Cedar fills Gasoline with a 5 kg ticket (4.59 kg: a remainder is made)', $admin, 'POST', '/supplements', ['ticket_barcodes' => $barcodes($cedar, 4, 0, 1), 'nozzle_id' => $noz1, 'out_amount_lt' => '6.20', 'supplied_at' => day(1) . ' 16:05:00', 'mode' => 'manual'], '/supplements');
 
 section('a customer brings a ticket back (a return) and a ticket loan is settled', 'returns');
 $returnSale = one("SELECT id FROM sales WHERE customer_id = ? AND sale_date = ? AND sale_type = 'ticket' AND `usage` = 'sale' AND reverses_sale_id IS NULL ORDER BY created_at LIMIT 1", [$acme, day(3)]);

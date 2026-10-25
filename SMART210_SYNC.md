@@ -10,6 +10,7 @@ Each entry: the date, the web change (with the `WORK_PLAN.md` row), what the Sma
 
 | Date | Web change | What the Smart210 has to do | Status |
 | --- | --- | --- | --- |
+| 2026-10-25 | Supply review (9.4cx): the manager takes the confirmation of a supply back, then the cashier corrects it on the Smart210 and uploads again; a refused change of a confirmed record now says so in the reason. | Nothing: Review already lets the cashier change the comment and the date of a supply and uploads it again. | none |
 | 2026-10-25 | The built-in customer "Self" is now "Individual" and its flag is `is_default` instead of `is_self` in the customers download (9.4cr). Own use, other use and the buyers who pay cash and need no name are all this customer. | `SyncStore` reads `is_default` (else the old `is_self`) into the local column `is_self`; the spot sale starts with Individual, own use and other use are fixed to it, a ticket loan needs a chosen customer (9.4cs). The web app still sends `is_self` too, until the terminals are all updated. | done |
 | 2026-10-25 | A sale cannot be dated more than `sales.backdate_days` days back on the web (9.4cr); a sale deleted on the web has no time limit. | Nothing: the terminal sells today. | none |
 

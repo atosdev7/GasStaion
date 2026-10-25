@@ -52,7 +52,7 @@ class SupplementTest extends TestCase
 
     private function supply($barcodes, $nozzle, $liters, $extra = [])
     {
-        return $this->as('manager')->post('/supplements', $extra + [
+        return $this->as('admin')->post('/supplements', $extra + [
             'ticket_barcodes' => is_array($barcodes) ? implode("\n", $barcodes) : $barcodes,
             'nozzle_id' => $nozzle->id,
             'out_amount_lt' => $liters,
@@ -176,7 +176,8 @@ class SupplementTest extends TestCase
         $this->assertStringContainsString('Tickets used (1)', $popup->getContent());
         $this->get('/supplements/' . $supplement->id)->assertOk()->assertSee('<html', false)->assertSee('Back to the list');
         $this->get('/supplements/11111111-1111-1111-1111-111111111111')->assertNotFound();
-        $this->as('cashier')->get('/supplements/' . $supplement->id)->assertForbidden();
+        $this->as('cashier')->get('/supplements/' . $supplement->id)->assertOk();   // the cashier looks
+        $this->as('assistant')->get('/supplements/' . $supplement->id)->assertForbidden();
     }
 
     public function testASupplementKeepsTheDensityItWasConvertedWith()
@@ -209,7 +210,7 @@ class SupplementTest extends TestCase
         $this->density(0.89);
         $nozzle = $this->nozzle('D');
 
-        $form = $this->as('manager')->get('/supplements/create')->assertOk();
+        $form = $this->as('admin')->get('/supplements/create')->assertOk();
         $this->assertStringContainsString('id="f_density" name="density"', $form->getContent());
         $this->assertEquals(0.89, $form->viewData('densities')[$nozzle->id]);          // the density of its fuel type, for the form to fill in
         $this->assertStringContainsString("densities[nozzle.val()]", $form->getContent());
@@ -228,7 +229,7 @@ class SupplementTest extends TestCase
         $this->assertNotContains('manual_reading', $columns);
 
         // and the form follows it: when, nozzle, mode, the tickets (the preset), the density, the litres
-        $form = $this->as('manager')->get('/supplements/create')->assertOk()->getContent();
+        $form = $this->as('admin')->get('/supplements/create')->assertOk()->getContent();
         $positions = array_map(function ($id) use ($form) { return strpos($form, 'id="' . $id . '"'); },
             ['f_supplied_at', 'f_nozzle_id', 'f_mode', 'f_ticket_barcodes', 'f_density', 'f_out_amount_lt']);
         $sorted = $positions;
@@ -239,7 +240,7 @@ class SupplementTest extends TestCase
 
     public function testTheFormTakesTheOutAmountInLitresUnderItsNewName()
     {
-        $form = $this->as('manager')->get('/supplements/create')->assertOk()->getContent();
+        $form = $this->as('admin')->get('/supplements/create')->assertOk()->getContent();
         $this->assertStringContainsString('id="f_out_amount_lt" name="out_amount_lt"', $form);
         $this->assertStringContainsString('Out amount (L)', $form);
         $this->assertStringNotContainsString('liters_dispensed', $form);
@@ -275,7 +276,7 @@ class SupplementTest extends TestCase
         $full = $make(5, 5);       // nothing left
 
         // the form offers only the supplies that can still give one
-        $form = $this->as('manager')->get('/remainders/create')->assertOk();
+        $form = $this->as('admin')->get('/remainders/create')->assertOk();
         $this->assertSame([$short->id], $form->viewData('supplies')->pluck('id')->all());
         $this->assertStringContainsString('data-room="2"', $form->getContent());
         $this->assertStringContainsString('Left: 2.00 kg', $form->getContent());
@@ -312,7 +313,7 @@ class SupplementTest extends TestCase
             'preset_kg' => 5, 'supplied_at' => '2026-09-20 08:30:00', 'supply_date' => '2026-09-20',
         ]);
 
-        $this->as('manager');
+        $this->as('admin');
         $this->post('/remainders', ['supplement_id' => $supply->id, 'amount_kg' => '2.01'])->assertSessionHasErrors('amount_kg');                  // more than was not dispensed
         $this->post('/remainders', ['supplement_id' => $supply->id, 'amount_kg' => '0'])->assertSessionHasErrors('amount_kg');
         $this->post('/remainders', ['supplement_id' => $supply->id, 'amount_kg' => '1', 'remainder_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('remainder_date');
@@ -329,7 +330,8 @@ class SupplementTest extends TestCase
         $this->post('/remainders', ['supplement_id' => $supply->id, 'amount_kg' => '1'])->assertForbidden();
 
         // the button is on the list for people who may add
-        $this->as('manager')->get('/remainders')->assertSee(route('remainders.create'));
+        $this->as('admin')->get('/remainders')->assertSee(route('remainders.create'));
+        $this->as('manager')->get('/remainders')->assertDontSee(route('remainders.create'));
     }
 
     public function testTheRemaindersListShowsTheRemaindersWithTheirDatesAndFilters()
@@ -361,7 +363,8 @@ class SupplementTest extends TestCase
         $this->assertSame(0, $count('?fuel_type=A'));
         $this->get('/remainders?date=21/09/2026')->assertSessionHasErrors('date');
 
-        $this->as('cashier')->get('/remainders')->assertForbidden();
+        $this->as('cashier')->get('/remainders')->assertOk();
+        $this->as('assistant')->get('/remainders')->assertForbidden();
     }
 
     public function testTheFormHasAModeAndTheListsShowIt()
@@ -371,7 +374,7 @@ class SupplementTest extends TestCase
         $this->supply($this->soldTicket(1, 0)->barcode, $nozzle, 5.62, ['mode' => 'manual']);
         $this->supply($this->soldTicket(2, 0)->barcode, $nozzle, 5.62);
 
-        $form = $this->as('manager')->get('/supplements/create')->assertOk()->getContent();
+        $form = $this->as('admin')->get('/supplements/create')->assertOk()->getContent();
         $this->assertRegExp('/<select id="f_mode" name="mode"[^>]*>\s*<option value="auto" selected>Auto<\/option>\s*<option value="manual" >Manual<\/option>/', $form);
 
         $list = $this->get('/supplements')->assertOk()->getContent();
@@ -603,14 +606,203 @@ class SupplementTest extends TestCase
 
     public function testPermissions()
     {
-        $this->as('manager')->get('/supplements')->assertOk();
-        $this->as('accountant')->get('/supplements')->assertOk();
-        $this->as('assistant')->get('/supplements')->assertOk();
-        $this->as('cashier')->get('/supplements')->assertForbidden();
+        // the manager, the accountant and the cashier look at the supplies and the remainders; the assistant has no supply on the web
+        foreach (['admin', 'manager', 'accountant', 'cashier'] as $role) {
+            $this->as($role)->get('/supplements')->assertOk();
+            $this->as($role)->get('/remainders')->assertOk();
+        }
+        $this->as('assistant')->get('/supplements')->assertForbidden();
+        $this->as('assistant')->get('/remainders')->assertForbidden();
 
-        $this->as('manager')->get('/supplements/create')->assertOk();
-        $this->as('cashier')->get('/supplements/create')->assertForbidden();
-        $this->post('/supplements', [])->assertForbidden();
+        // only the admin makes a supply or a remainder here
+        $this->as('admin')->get('/supplements/create')->assertOk();
+        foreach (['manager', 'accountant', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->get('/supplements/create')->assertForbidden();
+            $this->post('/supplements', [])->assertForbidden();
+            $this->get('/remainders/create')->assertForbidden();
+            $this->post('/remainders', [])->assertForbidden();
+        }
+    }
+
+    private function madeSupply($litres = 4.49, $tickets = 1, $density = 0.89)
+    {
+        $this->density($density);
+        $nozzle = $this->nozzle('D');
+        $barcodes = [];
+        for ($i = 1; $i <= $tickets; ++$i) {
+            $barcodes[] = $this->soldTicket($i, 0)->barcode;
+        }
+        $this->supply($barcodes, $nozzle, $litres);
+
+        return Supplement::first();
+    }
+
+    public function testTheManagerAndTheAccountantOnlyWriteTheCommentOfASupply()
+    {
+        $supplement = $this->madeSupply();
+        $nozzleBefore = $supplement->nozzle_id;
+
+        foreach (['manager', 'accountant'] as $role) {
+            $page = $this->as($role)->get('/supplements/' . $supplement->id . '/edit')->assertOk();
+            $this->assertStringContainsString('name="comment"', $page->getContent());
+            $this->assertStringNotContainsString('name="out_amount_lt"', $page->getContent());   // nothing else can be changed
+            $this->put('/supplements/' . $supplement->id, [
+                'comment' => '  hose was changed  ', 'out_amount_lt' => 1, 'mode' => 'manual', 'nozzle_id' => 99, 'supplied_at' => '2020-01-01 00:00:00',
+            ])->assertRedirect('/supplements')->assertSessionHas('status');
+            $fresh = $supplement->fresh();
+            $this->assertSame('hose was changed', $fresh->comment);
+            $this->assertEquals(4.49, $fresh->out_amount_lt);                       // only the comment changed
+            $this->assertSame('auto', $fresh->mode);
+            $this->assertSame($nozzleBefore, $fresh->nozzle_id);
+            $this->assertSame('2026-09-20', $fresh->supply_day);
+            $this->put('/supplements/' . $supplement->id, ['comment' => ''])->assertSessionHas('status');
+            $this->assertNull($supplement->fresh()->comment);                        // empty: no comment
+        }
+        $this->put('/supplements/' . $supplement->id, ['comment' => str_repeat('x', 256)])->assertSessionHasErrors('comment');
+
+        // the list offers the edit, and nobody else gets it
+        $this->get('/supplements')->assertSee(route('supplements.edit', $supplement->id))->assertDontSee('value="DELETE"', false);
+        foreach (['cashier', 'assistant'] as $role) {
+            $this->as($role)->get('/supplements/' . $supplement->id . '/edit')->assertForbidden();
+            $this->put('/supplements/' . $supplement->id, ['comment' => 'no'])->assertForbidden();
+            $this->delete('/supplements/' . $supplement->id)->assertForbidden();
+        }
+        foreach (['manager', 'accountant'] as $role) {
+            $this->as($role)->delete('/supplements/' . $supplement->id)->assertForbidden();   // deleting is the admin's
+        }
+        $this->assertNotNull(Supplement::find($supplement->id));
+        $this->as('cashier')->get('/supplements')->assertDontSee(route('supplements.edit', $supplement->id));
+    }
+
+    public function testAConfirmedSupplyIsLockedUntilItsConfirmationIsTakenBack()
+    {
+        $supplement = $this->madeSupply();
+        $supplement->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+
+        $this->as('accountant')->get('/supplements/' . $supplement->id . '/edit')->assertRedirect('/supplements');
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'late'])->assertSessionHasErrors('supplement');
+        $this->assertNull($supplement->fresh()->comment);
+        $this->get('/supplements')->assertDontSee(route('supplements.edit', $supplement->id));
+        $this->as('admin')->put('/supplements/' . $supplement->id, ['comment' => 'late', 'nozzle_id' => $supplement->nozzle_id, 'supplied_at' => '2026-09-20 08:30:00', 'mode' => 'auto', 'out_amount_lt' => 4.49])
+            ->assertSessionHasErrors('supplement');
+        $this->delete('/supplements/' . $supplement->id)->assertSessionHasErrors('supplement');
+        $this->assertNotNull(Supplement::find($supplement->id));
+
+        // the accountant cannot take the confirmation back, the manager can; then it can be changed again
+        $this->as('accountant')->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
+        $this->as('manager')->post('/supplements/' . $supplement->id . '/unconfirm')->assertSessionHas('status');
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'now'])->assertSessionHas('status');
+        $this->assertSame('now', $supplement->fresh()->comment);
+    }
+
+    public function testTheAdminChangesASupplyAndTheFuelItTookFollows()
+    {
+        $supplement = $this->madeSupply(5, 1, 1);        // 5 kg of tickets, 5 L at density 1: 5 kg out, no remainder
+        $other = Nozzle::forceCreate(['device_id' => $supplement->device_id, 'number' => 2, 'tank_id' => $supplement->nozzle->tank_id, 'fuel_type' => 'D']);
+        $outbound = function () { return (float) \App\Models\Fuel\FuelOutbound::sum('amount_kg'); };
+        $this->assertEquals(5, $outbound());
+
+        $page = $this->as('admin')->get('/supplements/' . $supplement->id . '/edit')->assertOk()->getContent();
+        $this->assertStringContainsString('name="out_amount_lt"', $page);
+        $this->assertStringNotContainsString('readonly', $page);
+
+        // more than the tickets cover, a nozzle of another fuel type, a bad time: nothing changes
+        $form = ['nozzle_id' => $other->id, 'supplied_at' => '2026-09-21 10:15:00', 'mode' => 'manual', 'out_amount_lt' => 5];
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 9] + $form)->assertSessionHasErrors('out_amount_lt');   // more than the 5 kg of the tickets
+        $gasoline = Nozzle::forceCreate(['device_id' => $supplement->device_id, 'number' => 3, 'tank_id' => $supplement->nozzle->tank_id, 'fuel_type' => 'A']);
+        $this->put('/supplements/' . $supplement->id, ['nozzle_id' => $gasoline->id] + $form)->assertSessionHasErrors('nozzle_id');
+        $this->put('/supplements/' . $supplement->id, ['supplied_at' => 'not a time'] + $form)->assertSessionHasErrors('supplied_at');
+        $this->assertSame($supplement->nozzle_id, $supplement->fresh()->nozzle_id);
+        $this->assertEquals(5, $supplement->fresh()->out_amount_lt);
+
+        // the nozzle, the time and the mode change with the same litres
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'typed wrong'] + $form)->assertRedirect('/supplements')->assertSessionHas('status');
+        $fresh = $supplement->fresh();
+        $this->assertSame($other->id, $fresh->nozzle_id);
+        $this->assertSame('manual', $fresh->mode);
+        $this->assertSame('2026-09-21', $fresh->supply_day);
+        $this->assertNull($fresh->remainder);
+        $this->assertEquals(5, $outbound());
+
+        // fewer litres: the weight follows (the density of the supply), the fuel that stays in the tank is counted again, and the tickets that
+        // were not used up come back as a remainder ticket, not lost
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 4] + $form)->assertSessionHas('status');
+        $fresh = $supplement->fresh();
+        $this->assertEquals(4, $fresh->out_amount_lt);
+        $this->assertEquals(4, $fresh->out_amount_kg);
+        $this->assertEquals(4, $outbound());
+        $this->assertNotNull($fresh->remainder);
+        $this->assertEquals(1, $fresh->remainder->amount_kg);
+        $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($fresh->remainder->ticket_barcode)->status);
+        $this->assertStringContainsString('Remainder ticket', session('status'));
+
+        // the litres are fixed from now on: the remainder ticket was made from them
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 2] + $form)->assertSessionHas('status');
+        $this->assertEquals(4, $supplement->fresh()->out_amount_lt);
+        $this->assertSame(1, Remainder::count());
+    }
+    public function testASupplyThatMadeARemainderKeepsItsLitres()
+    {
+        $supplement = $this->madeSupply(3, 1);        // 5 kg of tickets, 2.67 kg out: a remainder ticket
+        $this->assertNotNull($supplement->remainder);
+
+        $page = $this->as('admin')->get('/supplements/' . $supplement->id . '/edit')->assertOk()->getContent();
+        $this->assertStringContainsString('readonly', $page);
+        $this->put('/supplements/' . $supplement->id, [
+            'comment' => 'kept', 'nozzle_id' => $supplement->nozzle_id, 'supplied_at' => '2026-09-20 08:30:00', 'mode' => 'auto', 'out_amount_lt' => 1,
+        ])->assertSessionHas('status');
+        $fresh = $supplement->fresh();
+        $this->assertEquals(3, $fresh->out_amount_lt);                               // not changed: the remainder ticket was made from it
+        $this->assertSame('kept', $fresh->comment);
+    }
+
+    public function testTheAdminDeletesASupplyAndItsTicketsAreSoldAgain()
+    {
+        $supplement = $this->madeSupply(3, 2);        // two 5 kg tickets, 2.67 kg out: a remainder of 7.33 kg
+        $ticketBarcodes = Ticket::where('supplement_id', $supplement->id)->pluck('barcode')->all();
+        $remainder = $supplement->remainder;
+        $this->assertCount(2, $ticketBarcodes);
+        $this->assertNotNull($remainder);
+        $this->assertGreaterThan(0, \App\Models\Fuel\FuelOutbound::count());
+
+        $this->as('admin')->get('/supplements')->assertSee('value="DELETE"', false);
+        $this->delete('/supplements/' . $supplement->id)->assertRedirect('/supplements')->assertSessionHas('status');
+
+        $this->assertNull(Supplement::find($supplement->id));
+        $this->assertNotNull(Supplement::withTrashed()->find($supplement->id));      // kept for review
+        foreach ($ticketBarcodes as $barcode) {
+            $ticket = Ticket::find($barcode);
+            $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->status);   // sold again, ready for another supply
+            $this->assertNull($ticket->supplement_id);
+            $this->assertFalse((bool) $ticket->synced);                                  // the Smart210 gets them with its next download
+        }
+        $this->assertSame(config('ticket_statuses.restrict'), (int) Ticket::find($remainder->ticket_barcode)->status);   // the paper ticket can never be used
+        $this->assertSame(0, Remainder::count());
+        $this->assertEquals(0, \App\Models\Fuel\FuelOutbound::sum('amount_kg'));          // the fuel is not counted as gone any more
+        $this->get('/supplements')->assertDontSee('value="DELETE"', false);
+    }
+
+    public function testASupplyWhoseRemainderTicketWasUsedCannotBeDeleted()
+    {
+        $supplement = $this->madeSupply(3, 1);
+        Ticket::where('barcode', $supplement->remainder->ticket_barcode)->update(['status' => config('ticket_statuses.supply')]);
+
+        $this->as('admin')->delete('/supplements/' . $supplement->id)->assertSessionHasErrors('supplement');
+        $this->assertStringContainsString('remainder ticket was already used', session('errors')->first('supplement'));
+        $this->assertNotNull(Supplement::find($supplement->id));
+        $this->assertSame(1, Ticket::where('supplement_id', $supplement->id)->where('status', config('ticket_statuses.supply'))->count());
+        $this->assertSame(1, Remainder::count());
+    }
+
+    public function testTheCashierSeesTheRemainderBarcodeButHasNoLookupLinkToIt()
+    {
+        $supplement = $this->madeSupply(3, 1);
+        $barcode = $supplement->remainder->ticket_barcode;
+
+        foreach (['/supplements', '/remainders'] as $path) {
+            $this->as('cashier')->get($path)->assertOk()->assertSee($barcode)->assertDontSee('/tickets/lookup?barcode=' . $barcode, false);
+            $this->as('manager')->get($path)->assertOk()->assertSee('/tickets/lookup?barcode=' . $barcode, false);
+        }
     }
 
     public function testTheCommentOfARemainderIsWrittenChangedAndTakenAwayAfterwards()
@@ -635,15 +827,17 @@ class SupplementTest extends TestCase
         $this->as('manager')->put('/remainders/00000000-0000-0000-0000-000000000000/comment', ['comment' => 'x'])->assertNotFound();
     }
 
-    public function testOnlyThoseWhoManageSuppliesChangeTheCommentOfARemainder()
+    public function testOnlyTheManagerTheAccountantAndTheAdminChangeTheCommentOfARemainder()
     {
         $remainder = Remainder::forceCreate([
             'supplement_id' => null, 'ticket_barcode' => '0000025500000002', 'fuel_type' => 'D', 'amount_kg' => 3, 'comment' => 'kept', 'created_at' => '2026-09-22 10:00:00',
         ]);
 
-        $this->as('cashier')->put('/remainders/' . $remainder->id . '/comment', ['comment' => 'changed'])->assertForbidden();
+        foreach (['cashier', 'assistant'] as $role) {
+            $this->as($role)->put('/remainders/' . $remainder->id . '/comment', ['comment' => 'changed'])->assertForbidden();
+        }
         $this->assertSame('kept', $remainder->fresh()->comment);
-        $this->as('assistant')->put('/remainders/' . $remainder->id . '/comment', ['comment' => 'by the assistant'])->assertSessionHas('status');
-        $this->assertSame('by the assistant', $remainder->fresh()->comment);
+        $this->as('accountant')->put('/remainders/' . $remainder->id . '/comment', ['comment' => 'by the accountant'])->assertSessionHas('status');
+        $this->assertSame('by the accountant', $remainder->fresh()->comment);
     }
 }

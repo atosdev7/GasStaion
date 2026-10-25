@@ -155,8 +155,10 @@ class SaleEditTest extends TestCase
     {
         $supplement = $this->supplement('2026-10-01', $this->confirmed());
 
-        $this->as('accountant')->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
-        $this->as('assistant')->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
+        foreach (['accountant', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
+        }
+        $this->assertNotNull($supplement->fresh()->confirmed_at);
         $this->as('manager')->post('/supplements/' . $supplement->id . '/unconfirm')->assertRedirect();
         $this->assertNull($supplement->fresh()->confirmed_at);
         $this->post('/supplements/' . $supplement->id . '/unconfirm')->assertSessionHasErrors('record');

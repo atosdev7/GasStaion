@@ -35,7 +35,8 @@ return [
             'reports.view',
             'dashboard.view',
             'audit.view',
-            'supplements.manage',
+            'supplements.view',
+            'supplements.comment', // looks at the supplies and writes the comment of one (the supplies are made on the Smart210; only the admin creates, changes and deletes them here)
             'loans.view',
             'cards.manage',        // unlock, block / unblock a lost card, reset a PIN
             'cards.topup',         // top up an existing card on the web
@@ -66,7 +67,8 @@ return [
             'sales.return',
             'reports.view',
             'dashboard.view',
-            'supplements.manage',
+            'supplements.view',
+            'supplements.comment',
             'loans.manage',
             'cards.manage',
         ],
@@ -75,7 +77,6 @@ return [
             'customers.view',
             'ticket_stock.manage',
             'ticket_sales.manage',
-            'supplements.manage',
             'tickets.lookup',
             'sync.manage',
             'sales.delete',
@@ -90,6 +91,7 @@ return [
             'ticket_sales.view',
             'spot_sales.view',
             'card_sales.view',
+            'supplements.view',    // looks at the supplies and remainders; changes nothing here (it all happens on the Smart210)
         ],
     ],
 

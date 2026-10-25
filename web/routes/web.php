@@ -131,10 +131,16 @@ Route::middleware(SetLocale::class)->group(function () {
 
         Route::get('supplements', 'Supplements\SupplementController@index')->name('supplements.index')->middleware('can:supplements.view');
         Route::get('remainders', 'Supplements\RemainderController@index')->name('remainders.index')->middleware('can:supplements.view');
+        // the comment: the manager and the accountant (and the admin); everything else of a supply or a remainder: the admin only
+        Route::middleware('can:supplements.comment')->group(function () {
+            Route::put('remainders/{id}/comment', 'Supplements\RemainderController@updateComment')->name('remainders.comment')->where('id', '[0-9a-fA-F-]{36}');
+            Route::get('supplements/{id}/edit', 'Supplements\SupplementController@edit')->name('supplements.edit')->where('id', '[0-9a-fA-F-]{36}');
+            Route::put('supplements/{id}', 'Supplements\SupplementController@update')->name('supplements.update')->where('id', '[0-9a-fA-F-]{36}');
+        });
         Route::middleware('can:supplements.manage')->group(function () {
             Route::get('remainders/create', 'Supplements\RemainderController@create')->name('remainders.create');
             Route::post('remainders', 'Supplements\RemainderController@store')->name('remainders.store');
-            Route::put('remainders/{id}/comment', 'Supplements\RemainderController@updateComment')->name('remainders.comment')->where('id', '[0-9a-fA-F-]{36}');
+            Route::delete('supplements/{id}', 'Supplements\SupplementController@destroy')->name('supplements.destroy')->where('id', '[0-9a-fA-F-]{36}');
         });
         Route::get('supplements/{id}', 'Supplements\SupplementController@show')->name('supplements.show')->middleware('can:supplements.view')->where('id', '[0-9a-fA-F-]{36}');
         Route::middleware('can:supplements.manage')->group(function () {

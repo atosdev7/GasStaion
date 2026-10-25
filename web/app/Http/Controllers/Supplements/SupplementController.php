@@ -11,6 +11,7 @@ use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
 use App\Support\Supplements\RemainderMaker;
+use App\Support\Supplements\SupplementDeletion;
 use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -186,6 +187,103 @@ class SupplementController extends Controller
                 'kg' => $kg, 'barcode' => $remainder->ticket_barcode, 'left' => number_format($remainder->amount_kg, 2, '.', ''),
             ])
             : __('supplements.supplied', ['kg' => $kg]));
+    }
+
+    // The comment of a supply (the manager, the accountant and the admin); the admin also changes the nozzle (of the same fuel type), the time, the mode and
+    // the litres (not when the supply made a remainder ticket or was paid with a card: it is deleted and made again). A confirmed supply is locked until
+    // a manager takes its confirmation back.
+    public function edit($id)
+    {
+        $supplement = Supplement::with('remainder')->findOrFail($id);
+        if ($supplement->confirmed_at) {
+            return redirect()->route('supplements.index')->withErrors(['supplement' => __('supplements.blocked_confirmed')]);
+        }
+
+        $labels = Nozzle::labels();
+        $sameFuel = Nozzle::where('fuel_type', $supplement->fuel_type)->pluck('id')->all();
+
+        return view('supplement.edit', [
+            'supplement' => $supplement,
+            'full' => auth()->user()->can('supplements.manage'),
+            'nozzleOptions' => collect($labels)->only($sameFuel),
+            'litresFixed' => $supplement->remainder !== null || $supplement->card_id !== null,
+            'fuels' => config('fuel_types'),
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $supplement = Supplement::with('remainder')->findOrFail($id);
+        if ($supplement->confirmed_at) {
+            return redirect()->route('supplements.index')->withErrors(['supplement' => __('supplements.blocked_confirmed')]);
+        }
+
+        $full = $request->user()->can('supplements.manage');
+        $rules = ['comment' => 'nullable|string|max:255'];
+        if ($full) {
+            $rules += [
+                'nozzle_id' => ['required', Rule::exists('nozzles', 'id')->whereNull('deleted_at')],
+                'supplied_at' => ['required', 'date'],
+                'mode' => ['required', Rule::in(Supplement::MODES)],
+                'out_amount_lt' => ['required', 'numeric', 'min:0.01', 'max:999999'],
+            ];
+        }
+        $data = $request->validate($rules);
+
+        $before = $supplement->supplied_at . ' ' . $supplement->mode . ' ' . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id
+            . ' / ' . $supplement->comment;
+        $changes = ['comment' => isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null];
+
+        if ($full) {
+            $nozzle = Nozzle::findOrFail($data['nozzle_id']);
+            if ($nozzle->fuel_type !== $supplement->fuel_type) {
+                throw ValidationException::withMessages(['nozzle_id' => __('supplements.nozzle_fuel_type_mismatch')]);
+            }
+            $suppliedAt = Carbon::parse($data['supplied_at']);
+            $changes += [
+                'nozzle_id' => $nozzle->id, 'device_id' => $nozzle->device_id, 'mode' => $data['mode'], 'supplied_at' => $suppliedAt,
+                'supply_date' => $suppliedAt->toDateString(),
+            ];
+
+            $litresFixed = $supplement->remainder !== null || $supplement->card_id !== null;
+            if (!$litresFixed && round((float) $data['out_amount_lt'], 2) !== round((float) $supplement->out_amount_lt, 2)) {
+                $density = $supplement->density ?: optional(FuelType::find($supplement->fuel_type))->density;
+                if (!$density) {
+                    throw ValidationException::withMessages(['out_amount_lt' => __('supplements.density_not_configured')]);
+                }
+                $kg = round($data['out_amount_lt'] * $density, 2);
+                if ($kg > $supplement->preset_kg) {
+                    throw ValidationException::withMessages(['out_amount_lt' => __('supplements.supplied_more_than_tickets', ['preset' => number_format($supplement->preset_kg, 2)])]);
+                }
+                $changes += ['out_amount_lt' => $data['out_amount_lt'], 'out_amount_kg' => $kg];
+            }
+        }
+
+        // Less fuel than the tickets cover is never lost: what is left comes back as a remainder ticket, as when the supply was made.
+        $remainder = null;
+        DB::transaction(function () use ($supplement, $changes, &$remainder) {
+            $supplement->forceFill($changes)->save();
+            $left = round($supplement->preset_kg - $supplement->out_amount_kg, 2);
+            if (isset($changes['out_amount_kg']) && $left > 0 && !$supplement->remainder) {
+                $remainder = RemainderMaker::make($supplement, $left, $supplement->supplied_at, $supplement->supply_date);
+            }
+        });
+        Audit::log($full ? 'supplement_edit' : 'supplement_comment', '#' . $supplement->id . ': ' . $before . ' -> ' . $supplement->supplied_at . ' ' . $supplement->mode . ' '
+            . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id . ' / ' . $supplement->comment);
+
+        return redirect()->route('supplements.index')->with('status', $remainder
+            ? __('supplements.saved_with_remainder', ['barcode' => $remainder->ticket_barcode, 'left' => number_format($remainder->amount_kg, 2, '.', '')])
+            : __('supplements.saved'));
+    }
+
+    // The admin deletes a supply made wrong (see SupplementDeletion).
+    public function destroy($id)
+    {
+        $supplement = SupplementDeletion::delete($id);
+
+        Audit::log('supplement_delete', '#' . $supplement->id . ' ' . $supplement->mode . ' ' . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg of ' . $supplement->preset_kg . 'kg');
+
+        return redirect()->route('supplements.index')->with('status', __('supplements.deleted'));
     }
 
     // The tickets were paid for in full, so what was not dispensed becomes a new ticket for the customer: already sold,

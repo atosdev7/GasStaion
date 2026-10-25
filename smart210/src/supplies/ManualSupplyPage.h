@@ -44,7 +44,6 @@ private slots:
     void removeSelected();
     void kgEdited();
     void remainderEdited();
-    void litersEdited();
     void save();
 
 private:

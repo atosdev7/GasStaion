@@ -52,7 +52,7 @@ class LayoutTest extends TestCase
             ->assertDontSee(__('menu.group_admin'))
             ->assertDontSee(__('menu.group_reports'))
             ->assertDontSee(__('menu.ticket_loans'))
-            ->assertDontSee(__('menu.group_supplements'))
+            ->assertSee(__('menu.group_supplements'))      // the cashier looks at the supplies and the remainders
             ->assertDontSee(__('menu.group_init'))
             ->assertDontSee(__('menu.group_fuel'))
             ->assertDontSee(__('menu.users'))

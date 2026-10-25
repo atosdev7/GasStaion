@@ -63,6 +63,7 @@ private slots:
     void uploadModePicked();
     void saveUploadMode();
     void saveReviewOptions();
+    void saveManualSupplyOptions();
     void serverConfigured();
     void savePrinter();
     void checkPrinter();
@@ -118,6 +119,7 @@ private:
     int armedReset_;        // 0: none, 1: Clean Data, 2: Clear Config; the first press arms, the second one (within seconds) does it
     QTimer *resetTimer_;
     bool showNoReceiptBefore_;
+    int manualSupplyDaysBefore_;
     QListWidget *log_;
     QLabel *status_;
     QString serverBefore_;

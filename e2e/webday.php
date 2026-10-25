@@ -158,9 +158,13 @@ ok(Ticket::where('barcode', $wrongTicket)->value('status') == config('ticket_sta
 note('restricted', $wrongTicket);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-section('the customer comes with the second ticket: a supply typed in on the web');
+section('the customer comes with the second ticket: a supply typed in on the web (only the admin does that: the supplies are made on the Smart210)');
 $used = $creditTickets[1];
-$r = $assistant->send('POST', '/supplements', [
+$admin = isset($admin) ? $admin : new Web($base);
+if (!isset($adminIn)) {
+    $adminIn = $admin->login('wadm');
+}
+$r = $admin->send('POST', '/supplements', [
     'ticket_barcodes' => $used, 'nozzle_id' => $nozzle->id, 'out_amount_lt' => '5.99', 'supplied_at' => date('Y-m-d H:i:s'), 'mode' => 'manual',
 ]);
 ok($r['status'] === 302, 'the supply is saved');

@@ -522,7 +522,7 @@ class Push
         $storedDate = $model->{$dateColumn} ? substr((string) $model->{$dateColumn}, 0, 10) : '';
 
         if ($comment !== $storedComment || $date !== $storedDate) {
-            throw new RejectedRow('confirmed by the accountant: ask the accountant to change the comment or the date on the web');
+            throw new RejectedRow('confirmed by the accountant: ask the manager to take the confirmation back, then change it and upload again');
         }
     }
 

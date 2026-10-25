@@ -164,6 +164,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(uploadMode_, SIGNAL(activated(int)), this, SLOT(uploadModePicked()));
     connect(ui_->saveUploadModeButton, SIGNAL(clicked()), this, SLOT(saveUploadMode()));
     connect(ui_->saveReviewOptionsButton, SIGNAL(clicked()), this, SLOT(saveReviewOptions()));
+    connect(ui_->saveManualSupplyOptionsButton, SIGNAL(clicked()), this, SLOT(saveManualSupplyOptions()));
     connect(ui_->addNozzleButton, SIGNAL(clicked()), this, SLOT(addNozzlePressed()));
     connect(ui_->addNozzleFuel, SIGNAL(activated(int)), this, SLOT(addFuelPicked()));
     connect(ui_->cleanDataButton, SIGNAL(clicked()), this, SLOT(cleanDataPressed()));
@@ -218,6 +219,9 @@ void MachineConfigPage::reload()
 
     showNoReceiptBefore_ = settings_->boolValue(SettingKey::ShowSalesWithoutReceipt, true);
     ui_->showNoReceiptCheck->setChecked(showNoReceiptBefore_);
+
+    manualSupplyDaysBefore_ = settings_->intValue(SettingKey::ManualSupplyDays, 3);
+    ui_->manualSupplyDaysSpin->setValue(manualSupplyDaysBefore_);
 
     cardPort_->setText(settings_->value(SettingKey::CardReaderPort, CardReader::defaultPort()));
     cardBaud_->setCurrentIndex(qMax(0, cardBaud_->findData(settings_->intValue(SettingKey::CardReaderBaud, CardReader::DefaultBaud))));
@@ -602,6 +606,23 @@ void MachineConfigPage::saveReviewOptions()
     if (show != showNoReceiptBefore_) {
         config_->logChange("show sales without receipt", showNoReceiptBefore_ ? "yes" : "no", show ? "yes" : "no", session_->userId());
         showNoReceiptBefore_ = show;
+        fillLog();
+    }
+    showStatus(tr("Saved."), true);
+}
+
+// How far back the cashier may date a supply typed in by hand (the Manual input tab).
+void MachineConfigPage::saveManualSupplyOptions()
+{
+    const int days = ui_->manualSupplyDaysSpin->value();
+    if (!settings_->setInt(SettingKey::ManualSupplyDays, days)) {
+        showStatus(tr("The values could not be saved."), false);
+
+        return;
+    }
+    if (days != manualSupplyDaysBefore_) {
+        config_->logChange("manual supply days", QString::number(manualSupplyDaysBefore_), QString::number(days), session_->userId());
+        manualSupplyDaysBefore_ = days;
         fillLog();
     }
     showStatus(tr("Saved."), true);

@@ -7,6 +7,7 @@
 #include "SupplyQueue.h"
 #include "SupplyRecord.h"
 #include "SupplySession.h"
+#include "Settings.h"
 #include "ui_ManualSupplyPage.h"
 #include "Theme.h"
 
@@ -43,8 +44,9 @@ ManualSupplyPage::ManualSupplyPage(QSqlDatabase db, MachineConfig *config, Suppl
     kg_->setValidator(decimal);
     remainder_ = ui_->msRemainderField;
     remainder_->setValidator(decimal);
-    liters_ = ui_->msLitersField;
-    liters_->setValidator(decimal);
+    liters_ = ui_->msLitersField;   // worked out from the kg and the density: it is never typed
+    liters_->setReadOnly(true);
+    liters_->setFocusPolicy(Qt::NoFocus);
     code_ = ui_->msBarcode;
     summary_ = ui_->msSummary;
     status_ = ui_->msStatus;
@@ -65,7 +67,6 @@ ManualSupplyPage::ManualSupplyPage(QSqlDatabase db, MachineConfig *config, Suppl
     connect(nozzle_, SIGNAL(currentIndexChanged(int)), this, SLOT(nozzleChanged()));
     connect(kg_, SIGNAL(textEdited(QString)), this, SLOT(kgEdited()));
     connect(remainder_, SIGNAL(textEdited(QString)), this, SLOT(remainderEdited()));
-    connect(liters_, SIGNAL(textEdited(QString)), this, SLOT(litersEdited()));
     connect(code_, SIGNAL(returnPressed()), this, SLOT(addTicket()));
     connect(ui_->msAddButton, SIGNAL(clicked()), this, SLOT(addTicket()));
     connect(ui_->msRemoveButton, SIGNAL(clicked()), this, SLOT(removeSelected()));
@@ -122,7 +123,10 @@ void ManualSupplyPage::reload()
 void ManualSupplyPage::clearForm()
 {
     comment_->clear();
-    time_->setDateTime(QDateTime::currentDateTime());
+    // the time may be as far back as Machine Config says (the chosen day starts at midnight)
+    const QDateTime now = QDateTime::currentDateTime();
+    time_->setMinimumDateTime(QDateTime(now.date().addDays(-Settings(db_).intValue(SettingKey::ManualSupplyDays, 3)), QTime(0, 0, 0)));
+    time_->setDateTime(now);
     kg_->clear();
     remainder_->clear();
     liters_->clear();
@@ -193,12 +197,6 @@ void ManualSupplyPage::remainderEdited()
         kg_->clear();
     }
     calculateLiters();
-    showSummary();
-}
-
-void ManualSupplyPage::litersEdited()
-{
-    status_->clear();
     showSummary();
 }
 
@@ -277,9 +275,12 @@ void ManualSupplyPage::showSummary()
     if (nozzle_->count() == 0) {
         Theme::setState(summary_, "");
         summary_->setText(tr("No nozzle works in manual mode."));
+    } else if (density() <= 0) {
+        Theme::setState(summary_, "warning");
+        summary_->setText(tr("The density of this nozzle is not known yet, so the litres cannot be worked out: read its config first."));
     } else if (!typed) {
         Theme::setState(summary_, "");
-        summary_->setText(barcodes_.isEmpty() ? tr("Type the ticket barcodes, one after the other.") : tr("Type the kg and the litres that were dispensed."));
+        summary_->setText(barcodes_.isEmpty() ? tr("Type the ticket barcodes, one after the other.") : tr("Type the kg that were dispensed."));
     } else {
         const qlonglong rest = total - dispensed;
         matches = !barcodes_.isEmpty() && rest >= 0;

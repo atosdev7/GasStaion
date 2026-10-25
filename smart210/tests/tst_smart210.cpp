@@ -21,6 +21,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTabWidget>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -307,6 +308,8 @@ private slots:
     void aResultIsRecordedOnce();
     void aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOwn();
     void theManualInputPageKeepsTheKgAndTheRemainderTogether();
+    void theLitresOfAManualSupplyAreWorkedOutAndItsTimeIsLimited();
+    void theDaysBackOfAManualSupplyAreSetOnMachineConfig();
     void scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
@@ -8721,6 +8724,7 @@ void Smart210Test::setUpSupplying()
     setUpSelling();
     QSqlDatabase db = QSqlDatabase::database(connection_);
     Settings(db).setValue("reserved_code_remainder", "25");
+    Settings(db).setInt(SettingKey::ManualSupplyDays, 100000);   // (the tests type in supplies of fixed days; the limit has its own test)
     addUser(7, "Cash One", "secret1");
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000042, 'D', 0, 2000, 1, 1)");
@@ -9072,6 +9076,86 @@ void Smart210Test::theManualInputPageKeepsTheKgAndTheRemainderTogether()
     QCOMPARE(one("SELECT amount_kg FROM remainders").toInt(), 300);
     QCOMPARE(printed.size(), 1);
 }
+void Smart210Test::theLitresOfAManualSupplyAreWorkedOutAndItsTimeIsLimited()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    Settings(db).setInt(SettingKey::ManualSupplyDays, 3);
+    ManualSupplyPage page(db, &bench.config, &bench.supply);
+    page.reload();
+    QLineEdit *code = page.findChild<QLineEdit *>("msBarcode");
+    QLineEdit *kg = page.findChild<QLineEdit *>("msKgField");
+    QLineEdit *liters = page.findChild<QLineEdit *>("msLitersField");
+    QDateTimeEdit *time = page.findChild<QDateTimeEdit *>("msTimeEdit");
+
+    // the litres are never typed: the field is read only and out of the way of the cursor, and it follows the kg and the density (0.83)
+    QVERIFY(liters->isReadOnly());
+    QCOMPARE(liters->focusPolicy(), Qt::NoFocus);
+    code->setText(Barcode::fromKey(3000000041));
+    QTest::keyClick(code, Qt::Key_Return);
+    QCOMPARE(liters->text(), QString("18.07"));                         // 15.00 kg / 0.83
+    kg->clear();
+    QTest::keyClicks(kg, "10");
+    QCOMPARE(liters->text(), QString("12.05"));
+    QTest::keyClicks(liters, "99");                                     // typing in it changes nothing
+    QCOMPARE(liters->text(), QString("12.05"));
+
+    // the time cannot be earlier than the setting says: the editor stops at the start of the day 3 days back
+    const QDateTime now = QDateTime::currentDateTime();
+    QCOMPARE(time->minimumDateTime(), QDateTime(now.date().addDays(-3), QTime(0, 0, 0)));
+
+    // and the supply itself is refused (a record typed in cannot be made older than that, or come from the future)
+    QList<qlonglong> tickets;
+    tickets << 3000000041;
+    QString why;
+    QVERIFY(!bench.supply.recordManual(3, 1000, 1205, tickets, now.addDays(-4), &why));
+    QVERIFY2(why.contains("3 days back"), qPrintable(why));
+    QVERIFY(!bench.supply.recordManual(3, 1000, 1205, tickets, now.addSecs(3600), &why));
+    QVERIFY2(why.contains("future"), qPrintable(why));
+    QCOMPARE(countRows("supplements"), 0);
+    QVERIFY2(bench.supply.recordManual(3, 1000, 1205, tickets, QDateTime(now.date().addDays(-3), QTime(0, 5, 0)), &why), qPrintable(why));   // the limit itself is fine
+    QCOMPARE(countRows("supplements"), 1);
+
+    // 0: today only
+    Settings(db).setInt(SettingKey::ManualSupplyDays, 0);
+    tickets.clear();
+    tickets << 3000000042;
+    QVERIFY(!bench.supply.recordManual(3, 1000, 1205, tickets, now.addDays(-1), &why));
+    QVERIFY2(why.contains("must be today"), qPrintable(why));
+    QVERIFY2(bench.supply.recordManual(3, 1000, 1205, tickets, now, &why), qPrintable(why));
+}
+
+void Smart210Test::theDaysBackOfAManualSupplyAreSetOnMachineConfig()
+{
+    setUpSellingTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+
+    QSpinBox *days = window.findChild<QSpinBox *>("manualSupplyDaysSpin");
+    QVERIFY(days != 0);
+    QCOMPARE(days->value(), 3);                                          // three days unless the admin says otherwise
+    days->setValue(7);
+    QCOMPARE(Settings(db).value(SettingKey::ManualSupplyDays), QString()); // not saved before Save
+    window.findChild<QPushButton *>("saveManualSupplyOptionsButton")->click();
+    QCOMPARE(Settings(db).intValue(SettingKey::ManualSupplyDays, -1), 7);
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("-> 7"));
+
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.findChild<QSpinBox *>("manualSupplyDaysSpin")->value(), 7);   // shown again when the page is reopened
+}
 void Smart210Test::scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded()
 {
     setUpSupplying();
@@ -9421,6 +9505,7 @@ void Smart210Test::theManualInputScreenRecordsASupplyWithItsTickets()
 {
     setUpLoggedInTerminalWithAPin();
     setUpSelling();
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::ManualSupplyDays, 100000);   // (this test types in a supply of a fixed day)
     run("UPDATE nozzles SET mode = 1, density = 8300 WHERE number = 2");     // nozzle 2 works in manual mode
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000043, 'D', 0, 500, 1, 1)");

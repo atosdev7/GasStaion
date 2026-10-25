@@ -353,6 +353,30 @@ class PushApiTest extends TestCase
         $this->assertNull(Supplement::find($supplement['id'])->comment);
     }
 
+    public function testASupplyWhoseConfirmationWasTakenBackTakesTheCorrectionOfTheCashier()
+    {
+        $row = $this->supplement(['comment' => 'first']);
+        $this->push('supplements', [$row]);
+        Supplement::whereKey($row['id'])->update(['confirmed_at' => now(), 'confirmed_by' => 1]);
+        $corrected = array_merge($row, ['comment' => 'wrong nozzle written', 'supply_date' => '2026-10-05', 'out_amount_lt' => '11.00', 'out_amount_kg' => '9.00']);
+
+        // confirmed: refused, and the reason says how it goes on
+        $refused = $this->push('supplements', [$corrected]);
+        $this->assertSame([], $refused['saved']);
+        $this->assertStringContainsString('take the confirmation back', $refused['rejected'][0]['error']);
+        $this->assertSame('first', Supplement::find($row['id'])->comment);
+
+        // the manager or the accountant took the confirmation back on the web: the corrected record is taken
+        Supplement::whereKey($row['id'])->update(['confirmed_at' => null, 'confirmed_by' => null]);
+        $taken = $this->push('supplements', [$corrected]);
+        $this->assertSame([$row['id']], $taken['saved']);
+        $stored = Supplement::find($row['id']);
+        $this->assertSame('wrong nozzle written', $stored->comment);
+        $this->assertSame('2026-10-05', substr((string) $stored->supply_date, 0, 10));
+        $this->assertEquals(11, $stored->out_amount_lt);
+        $this->assertEquals(9, $stored->out_amount_kg);
+    }
+
     public function testSupplementsLoansAndSettlementsKeepTheirComment()
     {
         $supplement = $this->supplement(['comment' => 'manual fill']);

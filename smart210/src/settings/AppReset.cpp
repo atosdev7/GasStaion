@@ -58,7 +58,7 @@ bool AppReset::clearConfig(QSqlDatabase db, QString *why)
     // an older terminal kept these in its database, and reads them from there until they are saved once; the device id is what says that a server was set
     QStringList keys;
     keys << SettingKey::ServerHost << SettingKey::ServerPort << SettingKey::DeviceId << SettingKey::DeviceName << SettingKey::UploadMode
-         << SettingKey::ShowSalesWithoutReceipt << SettingKey::PrinterHost << SettingKey::PrinterPort << SettingKey::ConverterPort
+         << SettingKey::ShowSalesWithoutReceipt << SettingKey::ManualSupplyDays << SettingKey::PrinterHost << SettingKey::PrinterPort << SettingKey::ConverterPort
          << SettingKey::CardReaderPort << SettingKey::CardReaderBaud << SettingKey::CardReaderFormat << SettingKey::CardReaderLength
          << SettingKey::CardReaderEncoding << SettingKey::CardReaderPrefix;
     Settings settings(db);

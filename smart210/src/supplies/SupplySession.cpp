@@ -5,6 +5,7 @@
 #include "Decimal.h"
 #include "MachineConfig.h"
 #include "Session.h"
+#include "Settings.h"
 #include "SupplyQueue.h"
 #include "SupplySelection.h"
 #include "TicketNumbers.h"
@@ -178,10 +179,17 @@ bool SupplySession::recordManual(int nozzle, qlonglong dispensedX100, qlonglong 
     const MachineConfig::Nozzle info = config_->nozzle(nozzle);
     const int state = bus_->isOnline(nozzle) ? bus_->lastStatus(nozzle).state : int(StateIdle);
 
+    const QDateTime now = QDateTime::currentDateTime();
+    const int days = Settings(db_).intValue(SettingKey::ManualSupplyDays, 3);
+
     if (nozzle < 1 || nozzle > MachineConfig::NozzleCount || !info.seen()) {
         reason = tr("Choose a nozzle first.");
     } else if (dispensedX100 <= 0 || litersX100 <= 0) {
         reason = tr("Enter the weight and the litres that were dispensed.");
+    } else if (when > now.addSecs(60)) {
+        reason = tr("The time is in the future.");
+    } else if (when < QDateTime(now.date().addDays(-days), QTime(0, 0, 0))) {
+        reason = days > 0 ? tr("The time cannot be more than %1 days back (Machine Config, Options).").arg(days) : tr("The time must be today (Machine Config, Options).");
     } else if (state == StateDispensing || state == StateResult) {
         reason = tr("Nozzle %1 has a fill running or a result waiting: the app reads it by itself.").arg(nozzle);
     } else if (isLocked(nozzle) && SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::session(db_, nozzle).presetX100) {

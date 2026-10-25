@@ -102,7 +102,7 @@ class TicketRestrictTest extends TestCase
         $tank = Tank::forceCreate(['name' => 'Tank 1', 'fuel_type' => 'D']);
         $nozzle = Nozzle::forceCreate(['device_id' => $device->id, 'number' => 1, 'tank_id' => $tank->id, 'fuel_type' => 'D']);
 
-        $this->as('manager')->post('/supplements', [
+        $this->as('admin')->post('/supplements', [
             'ticket_barcodes' => self::BARCODE, 'nozzle_id' => $nozzle->id,
             'out_amount_lt' => 5, 'supplied_at' => now()->format('Y-m-d H:i:s'),
         ])->assertSessionHasErrors('ticket_barcodes');

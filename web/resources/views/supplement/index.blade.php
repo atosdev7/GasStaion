@@ -126,7 +126,11 @@
                         <td class="text-right">{{ number_format($supplement->out_amount_kg, 2) }} {{ __('supplements.kg') }} / {{ number_format($supplement->out_amount_lt, 2) }} {{ __('supplements.liter') }}</td>
                         <td>
                             @if ($supplement->remainder)
-                                <a href="{{ route('tickets.lookup', ['barcode' => $supplement->remainder->ticket_barcode]) }}">{{ $supplement->remainder->ticket_barcode }}</a>
+                                @can('tickets.lookup')
+                                    <a href="{{ route('tickets.lookup', ['barcode' => $supplement->remainder->ticket_barcode]) }}">{{ $supplement->remainder->ticket_barcode }}</a>
+                                @else
+                                    {{ $supplement->remainder->ticket_barcode }}
+                                @endcan
                                 ({{ number_format($supplement->remainder->amount_kg, 2) }} {{ __('supplements.kg') }})
                             @endif
                         </td>
@@ -136,6 +140,17 @@
                                 <button type="button" class="btn btn-xs btn-outline-secondary dropdown-toggle" data-toggle="dropdown" data-display="static" aria-haspopup="true" aria-expanded="false">{{ __('supplements.actions') }}</button>
                                 <div class="dropdown-menu dropdown-menu-right">
                                     <a href="{{ route('supplements.show', $supplement->id) }}" class="dropdown-item supplement-detail"><i class="fas fa-eye fa-fw"></i> {{ __('supplements.sale_view') }}</a>
+                                    @can('supplements.comment')
+                                        @if (!$supplement->confirmed_at)
+                                            <a href="{{ route('supplements.edit', $supplement->id) }}" class="dropdown-item"><i class="fas fa-pen fa-fw"></i> {{ __('supplements.edit') }}</a>
+                                        @endif
+                                    @endcan
+                                    @can('supplements.manage')
+                                        <form method="POST" action="{{ route('supplements.destroy', $supplement->id) }}" onsubmit="return confirm(@json(__('supplements.delete_confirm')))">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="dropdown-item text-danger"><i class="fas fa-trash fa-fw"></i> {{ __('supplements.delete') }}</button>
+                                        </form>
+                                    @endcan
                                 </div>
                             </div>
                         </td>

@@ -36,6 +36,18 @@ Files: `app/Http/Controllers/SupplementController.php`, `resources/views/supplem
 | `supplements.out_amount` | Out amount (kg / L) |
 | `supplements.out_amount_lt` | Out amount (L) |
 | `supplements.preset_kg` | Tickets total (kg) |
+| `supplements.edit` | Edit |
+| `supplements.delete` | Delete |
+| `supplements.delete_confirm` | Delete this supply? Its tickets are sold again and its remainder ticket, if it made one, can no longer be used. |
+| `supplements.deleted` | The supply was deleted: its tickets are sold again. |
+| `supplements.saved` | Saved. |
+| `supplements.saved_with_remainder` | Saved. Remainder ticket :barcode for :left kg was created. |
+| `supplements.edit_title` | Supply |
+| `supplements.edit_hint_comment` | You can write the comment. The supply is made on the Smart210; when it is wrong, the cashier corrects it there after the confirmation was taken back. |
+| `supplements.edit_hint_full` | The admin changes the nozzle (of the same fuel type), the time, the mode, the litres and the comment. A supply that made a remainder ticket or was paid with a card keeps its litres: delete it and make it again. |
+| `supplements.blocked_confirmed` | This supply is confirmed. A manager takes the confirmation back first. |
+| `supplements.blocked_remainder_used` | Its remainder ticket was already used, so the supply cannot be deleted. |
+| `supplements.litres_fixed` | The litres cannot be changed: the supply has a remainder ticket or was paid with a card. |
 | `supplements.record_supplement` | Record supplement |
 | `supplements.remainder` | Remainder |
 | `supplements.sale_confirmed` | Confirmed |

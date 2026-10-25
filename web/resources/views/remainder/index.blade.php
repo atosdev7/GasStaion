@@ -67,7 +67,7 @@
                     @php($supply = $supplements->get($r->supplement_id))
                     <tr>
                         <td>{{ $r->remainder_date ? substr((string) $r->remainder_date, 0, 10) : substr((string) $r->created_at, 0, 10) }}</td>
-                        <td><a href="{{ route('tickets.lookup', ['barcode' => $r->ticket_barcode]) }}">{{ $r->ticket_barcode }}</a></td>
+                        <td>@can('tickets.lookup')<a href="{{ route('tickets.lookup', ['barcode' => $r->ticket_barcode]) }}">{{ $r->ticket_barcode }}</a>@else{{ $r->ticket_barcode }}@endcan</td>
                         <td>{{ $fuels[$r->fuel_type] ?? $r->fuel_type }}</td>
                         <td class="text-right">{{ number_format($r->amount_kg, 2) }}</td>
                         <td>
@@ -82,7 +82,7 @@
                         </td>
                         <td>{{ $r->complete_date ? substr((string) $r->complete_date, 0, 10) : '-' }}</td>
                         <td>
-                            @can('supplements.manage')
+                            @can('supplements.comment')
                                 <form method="POST" action="{{ route('remainders.comment', $r->id) }}" class="form-inline flex-nowrap">
                                     @csrf @method('PUT')
                                     <input name="comment" type="text" maxlength="255" value="{{ $r->comment }}" class="form-control form-control-sm" style="min-width: 220px" aria-label="{{ __('supplements.comment') }}">

@@ -15,6 +15,7 @@ extern const char *const DeviceName;
 extern const char *const UploadMode;    // "manual", "close" (at the close of the day) or "continuous" (see AutoUpload), Machine Config
 extern const char *const NozzlesNotOnBoard; // the numbers ("1,3") of the nozzles whose saved config the board has not confirmed yet (Update that failed or was not sent)
 extern const char *const ShowSalesWithoutReceipt; // "1" (default) or "0": the Review screen lists the sales without a receipt or leaves them out, Machine Config
+extern const char *const ManualSupplyDays; // how many days back the time of a manual supply may be (default 3, 0 = today only), Machine Config
 extern const char *const PurgeDays;    // how long synced records stay on the device
 extern const char *const PinSalt;      // the Machine Config PIN, as the web app keeps it (salt and hash)
 extern const char *const PinHash;
