@@ -15,7 +15,7 @@
                     <label for="f_loan_id">{{ __('debts.apply_to_loan') }}</label>
                     <select id="f_loan_id" name="loan_id" class="form-control js-select2 @error('loan_id') is-invalid @enderror">
                         @foreach ($openLoans as $loan)
-                            <option value="{{ $loan->id }}" {{ old('loan_id') === $loan->id ? 'selected' : '' }}>
+                            <option value="{{ $loan->id }}" {{ old('loan_id', $preset) === $loan->id ? 'selected' : '' }}>
                                 {{ $customers[$loan->customer_id] ?? $loan->customer_id }} —
                                 {{ $fuels[$loan->fuel_type] ?? $loan->fuel_type }} —
                                 {{ __('debts.balance') }}: {{ number_format($loan->balance_kg, 2) }} kg

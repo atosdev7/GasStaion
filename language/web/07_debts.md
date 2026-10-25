@@ -82,6 +82,21 @@ Files: `app/Http/Controllers/LoanController.php`, `resources/views/loan/*`
 | `debts.total_balance` | Total balance |
 | `debts.total_loaned` | Total loaned |
 | `debts.total_settled` | Total settled |
+| `debts.loan_details` | Ticket loan |
+| `debts.loan_made` | Loan made |
+| `debts.loan_not_found` | The loan was not found. |
+| `debts.no_settlements_yet` | No ticket was surrendered against this loan yet. |
+| `debts.reverse_settlement_title` | Reverse settlement |
+| `debts.settled_at_time` | Surrendered at |
+| `debts.settled_loan_over` | The ticket was worth more than the loan still owed, so the loan now shows a credit of :credit kg. |
+| `debts.settlement_confirmed` | Confirmed |
+| `debts.settlement_confirmed_locked` | This settlement is confirmed and cannot be reversed. A manager can take the confirmation back. |
+| `debts.settlement_confirmed_no_reverse` | This settlement is confirmed and cannot be reversed. A manager can take the confirmation back. |
+| `debts.settlement_details` | Settlement |
+| `debts.settlement_of` | Loan |
+| `debts.surrendered_tickets` | Tickets surrendered |
+| `debts.tab_loans` | Loans |
+| `debts.tab_settlements` | Tickets surrendered |
 | `menu.ticket_loans` | Ticket Loans |
 
 ## Debt summary

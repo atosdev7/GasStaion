@@ -16,4 +16,10 @@ class TicketLoan extends Model
     protected $casts = [
         'synced' => 'boolean',
     ];
+
+    // The sale that made the loan (an opening loan has none); a deleted sale is still shown.
+    public function sale()
+    {
+        return $this->belongsTo(\App\Models\Sales\Sale::class)->withTrashed();
+    }
 }

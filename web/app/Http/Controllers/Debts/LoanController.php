@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Debts;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin\User;
 use App\Models\Sales\Customer;
+use App\Support\Sales\SaleAccess;
 use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Models\Debts\TicketLoanSettlement;
@@ -26,6 +28,17 @@ class LoanController extends Controller
             'customer' => 'nullable|integer',
             'fuel_type' => 'nullable|string|max:4',
             'status' => 'nullable|in:open,settled',
+        ]);
+    }
+
+    // The filters of the settlements tab, in the heads of its columns: the day it was surrendered, the customer, the fuel type and a part of the barcode.
+    private function settlementFilters(Request $request)
+    {
+        return $request->validate([
+            'settled_on' => 'nullable|date_format:Y-m-d',
+            'set_customer' => 'nullable|integer',
+            'set_fuel' => 'nullable|string|max:4',
+            'barcode' => 'nullable|string|max:16',
         ]);
     }
 
@@ -56,14 +69,15 @@ class LoanController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $this->filters($request);
+        $filters = $this->filters($request) + $this->settlementFilters($request);
         $loans = $this->filteredLoans($filters);
 
         // the totals are those of the loans the filters leave; the list is paged by 50
         $page = LengthAwarePaginator::resolveCurrentPage();
-        $paged = new LengthAwarePaginator($loans->forPage($page, 50)->values(), $loans->count(), 50, $page, ['path' => $request->url(), 'query' => $request->query()]);
+        $paged = new LengthAwarePaginator($loans->forPage($page, 50)->values(), $loans->count(), 50, $page, ['path' => $request->url(), 'query' => ['tab' => 'loans'] + $request->query()]);
 
         return view('loan.index', [
+            'tab' => in_array($request->query('tab'), ['loans', 'settlements'], true) ? $request->query('tab') : 'loans',
             'loans' => $paged,
             'filters' => $filters,
             'customers' => Customer::withTrashed()->orderBy('name')->pluck('name', 'id'),
@@ -71,27 +85,82 @@ class LoanController extends Controller
             // the tickets surrendered, newest first (a reversal is a line of its own, with the negative kg)
             'settlements' => TicketLoanSettlement::with(['loan' => function ($q) {
                 $q->withTrashed();
-            }])->when(!empty($filters['customer']), function ($q) use ($filters) {
-                $q->whereIn('loan_id', TicketLoan::withTrashed()->where('customer_id', (int) $filters['customer'])->select('id'));
-            })->orderByDesc('settled_at')->orderByDesc('id')->paginate(25, ['*'], 'settlements_page')->appends($request->query()),
-            'reversedSettlements' => TicketLoanSettlement::whereNotNull('reverses_settlement_id')->pluck('reverses_settlement_id')->flip(),
+            }])->when(!empty($filters['settled_on']), function ($q) use ($filters) {
+                $q->where(function ($q) use ($filters) {
+                    $q->where('date', $filters['settled_on'])->orWhere(function ($q) use ($filters) {
+                        $q->whereNull('date')->whereDate('settled_at', $filters['settled_on']);
+                    });
+                });
+            })->when(!empty($filters['set_customer']), function ($q) use ($filters) {
+                $q->whereIn('loan_id', TicketLoan::withTrashed()->where('customer_id', (int) $filters['set_customer'])->select('id'));
+            })->when(!empty($filters['set_fuel']), function ($q) use ($filters) {
+                $q->whereIn('loan_id', TicketLoan::withTrashed()->where('fuel_type', $filters['set_fuel'])->select('id'));
+            })->when(isset($filters['barcode']) && $filters['barcode'] !== '', function ($q) use ($filters) {
+                $q->where('ticket_barcode', 'like', '%' . addcslashes($filters['barcode'], '%_\\') . '%');
+            })->orderByDesc('settled_at')->orderByDesc('id')->paginate(25, ['*'], 'settlements_page')->appends(['tab' => 'settlements'] + $request->query()),
+            'reversedSettlements' => TicketLoanSettlement::whereNotNull('reverses_settlement_id')->pluck('id', 'reverses_settlement_id'),
+            'users' => User::withTrashed()->pluck('name', 'id'),
             'totalLoaned' => $loans->sum('amount_kg'),
             'totalSettled' => $loans->sum('settled_amount_kg'),
             'totalBalance' => $loans->sum('balance_kg'),
         ]);
     }
 
-    public function create()
+    // The form of a settlement. With ?loan_id (the Settle action of the loans list) that loan is the one chosen.
+    public function create(Request $request)
     {
         $openLoans = $this->loansWithBalances()->filter(function ($loan) {
             return $loan->balance_kg > 0.01;
         });
 
         return view('loan.create', [
+            'preset' => $openLoans->contains('id', $request->query('loan_id')) ? $request->query('loan_id') : null,
             'openLoans' => $openLoans,
             'customers' => Customer::pluck('name', 'id'),
             'fuels' => config('fuel_types'),
         ]);
+    }
+
+    // One loan: what it is, the sale it came from and the tickets surrendered against it (a reversal is a line of its own). A page, or only the detail (for the popup
+    // of the list) when asked with modal=1.
+    public function show(Request $request, $id)
+    {
+        $loan = TicketLoan::with('sale')->findOrFail($id);
+        $settlements = TicketLoanSettlement::where('loan_id', $loan->id)->orderBy('settled_at')->orderBy('id')->get();
+        $settled = round((float) $settlements->sum('amount_kg'), 2);
+
+        $data = [
+            'loan' => $loan,
+            'customer' => optional(Customer::withTrashed()->find($loan->customer_id))->name,
+            'fuels' => config('fuel_types'),
+            'settlements' => $settlements,
+            'reversed' => TicketLoanSettlement::whereNotNull('reverses_settlement_id')->pluck('id', 'reverses_settlement_id'),
+            'users' => User::withTrashed()->pluck('name', 'id'),
+            'settled' => $settled,
+            'balance' => round($loan->amount_kg - $settled, 2),
+            'saleLink' => $loan->sale && $request->user()->can('ticket_sales.view') && SaleAccess::canSee($request->user(), $loan->sale),
+        ];
+
+        return view($request->query('modal') ? 'loan._detail' : 'loan.show', $data);
+    }
+
+    // One settlement, read only: its fields, its loan and the settlement it reverses or that reversed it. A page, or only the detail (for the popup) with modal=1.
+    public function showSettlement(Request $request, $id)
+    {
+        $settlement = TicketLoanSettlement::with(['loan' => function ($q) {
+            $q->withTrashed();
+        }])->findOrFail($id);
+        $reversal = TicketLoanSettlement::where('reverses_settlement_id', $settlement->id)->first();
+
+        $data = [
+            'settlement' => $settlement,
+            'customer' => $settlement->loan ? optional(Customer::withTrashed()->find($settlement->loan->customer_id))->name : '',
+            'fuels' => config('fuel_types'),
+            'users' => User::withTrashed()->pluck('name', 'id'),
+            'reversedBy' => $reversal ? $reversal->id : null,
+        ];
+
+        return view($request->query('modal') ? 'loan._settlement' : 'loan.settlement', $data);
     }
 
     public function store(Request $request)
@@ -148,22 +217,35 @@ class LoanController extends Controller
         Audit::log('ticket_loan_settlement', '#' . $settlement->id . ' loan ' . $settlement->loan_id
             . ' ticket ' . $settlement->ticket_barcode . ' ' . $settlement->amount_kg . 'kg');
 
-        return redirect()->route('loans.index')->with('status', __('debts.settled_loan', [
+        // A ticket worth more than what the loan still owed is kept (the customer may bring a bigger ticket) and says so: the loan then shows a credit.
+        $response = redirect()->route('loans.index', ['tab' => 'settlements'])->with('status', __('debts.settled_loan', [
             'kg' => $settlement->amount_kg,
         ]));
+        $loan = TicketLoan::find($settlement->loan_id);
+        $balance = round($loan->amount_kg - $loan->settled_amount_kg, 2);
+        if ($balance < 0) {
+            $response->with('warning', __('debts.settled_loan_over', ['credit' => number_format(-$balance, 2)]));
+        }
+
+        return $response;
     }
 
     // Undoes a wrong settlement by a counter entry: the negative kg for the same loan and ticket, dated today. The ticket goes back to the customer
     // (sold again, as it was before it was surrendered), unless it was used since.
-    public function reverse($id)
+    public function reverse(Request $request, $id)
     {
-        $reversal = DB::transaction(function () use ($id) {
+        $data = $request->validate(['note' => 'nullable|string|max:200']);
+
+        $reversal = DB::transaction(function () use ($id, $data) {
             $settlement = TicketLoanSettlement::lockForUpdate()->findOrFail($id);
             if ($settlement->isReversal()) {
                 throw ValidationException::withMessages(['settlement' => __('debts.settlement_is_reversal')]);
             }
             if ($settlement->isReversed()) {
                 throw ValidationException::withMessages(['settlement' => __('debts.settlement_already_reversed')]);
+            }
+            if ($settlement->isConfirmed()) {
+                throw ValidationException::withMessages(['settlement' => __('debts.settlement_confirmed_no_reverse')]);
             }
 
             $loan = TicketLoan::withTrashed()->lockForUpdate()->findOrFail($settlement->loan_id);
@@ -178,7 +260,7 @@ class LoanController extends Controller
 
             $reversal = TicketLoanSettlement::forceCreate([
                 'loan_id' => $loan->id, 'ticket_barcode' => $settlement->ticket_barcode, 'amount_kg' => 0 - $settlement->amount_kg,
-                'settled_at' => now(), 'date' => today()->toDateString(), 'comment' => 'Reversal of ' . $settlement->id,
+                'settled_at' => now(), 'date' => today()->toDateString(), 'comment' => trim('Reversal ' . ($data['note'] ?? '')),
                 'user_id' => auth()->id(), 'reverses_settlement_id' => $settlement->id,
             ]);
 
@@ -191,7 +273,7 @@ class LoanController extends Controller
         Audit::log('ticket_loan_settlement_reversal', '#' . $reversal->id . ' reverses ' . $reversal->reverses_settlement_id . ' loan ' . $reversal->loan_id
             . ' ticket ' . $reversal->ticket_barcode . ' ' . $reversal->amount_kg . 'kg');
 
-        return redirect()->route('loans.index')->with('status', __('debts.settlement_reversed'));
+        return redirect()->route('loans.index', ['tab' => 'settlements'])->with('status', __('debts.settlement_reversed'));
     }
 
     private function loansWithBalances()

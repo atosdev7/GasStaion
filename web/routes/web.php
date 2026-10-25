@@ -206,6 +206,8 @@ Route::middleware(SetLocale::class)->group(function () {
         Route::post('sync/errors/{id}/resolve', 'Admin\SyncController@resolve')->name('sync.resolve')->middleware('can:sync.manage');
 
         Route::get('loans', 'Debts\LoanController@index')->name('loans.index')->middleware('can:loans.view');
+        Route::get('loans/settlements/{id}', 'Debts\LoanController@showSettlement')->name('loans.settlements.show')->middleware('can:loans.view')->where('id', '[0-9a-fA-F-]{36}');
+        Route::get('loans/{id}', 'Debts\LoanController@show')->name('loans.show')->middleware('can:loans.view')->where('id', '[0-9a-fA-F-]{36}');
         Route::middleware('can:loans.manage')->group(function () {
             Route::get('loans/create', 'Debts\LoanController@create')->name('loans.create');
             Route::post('loans', 'Debts\LoanController@store')->name('loans.store');
