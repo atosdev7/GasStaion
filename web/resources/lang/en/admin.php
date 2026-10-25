@@ -3,6 +3,7 @@
 return [
     // Users, devices, fuel types, tanks, nozzles
     'nozzles_read_only' => 'The nozzles are managed on the Smart210 (Machine Config) and appear here when it reports them. They cannot be added, changed or removed here.',
+    'tank_fuel_locked' => 'The fuel type cannot be changed while nozzle(s) :nozzles draw from this tank. Only its name and capacity can change.',
     'tank_has_nozzles' => 'The tank :tank cannot be deleted: nozzle(s) :nozzles draw from it. Remove them on the Smart210 first.',
     'density_hint' => 'Weight per litre, e.g. for converting between an LPG ticket\'s kg and a litre-based tank/report. Leave blank if not needed.',
     'password_hint' => 'Leave blank to keep the current password. It is also the Smart210 login password.',

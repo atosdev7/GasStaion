@@ -91,7 +91,7 @@
     </message>
     <message>
         <location filename="../src/settings/MachineConfigPage.ui" line="230"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="751"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="762"/>
         <source>Add a nozzle</source>
         <translation>Add a nozzle</translation>
     </message>
@@ -234,7 +234,7 @@
     </message>
     <message>
         <location filename="../src/settings/MachineConfigPage.ui" line="521"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="833"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="844"/>
         <source>Clean Data</source>
         <translation>Clean Data</translation>
     </message>
@@ -245,7 +245,7 @@
     </message>
     <message>
         <location filename="../src/settings/MachineConfigPage.ui" line="539"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="834"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="845"/>
         <source>Clear Config</source>
         <translation>Clear Config</translation>
     </message>
@@ -261,14 +261,14 @@
     </message>
     <message>
         <location filename="../src/settings/MachineConfigPage.cpp" line="117"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="282"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="293"/>
         <source>Auto</source>
         <translation>Auto</translation>
     </message>
     <message>
         <location filename="../src/settings/MachineConfigPage.cpp" line="118"/>
         <location filename="../src/settings/MachineConfigPage.cpp" line="160"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="282"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="293"/>
         <source>Manual</source>
         <translation>Manual</translation>
     </message>
@@ -303,275 +303,280 @@
         <translation>Continuous</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="258"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="254"/>
+        <source>Nozzle(s) %1 have no tank: a nozzle must be connected to a tank. Remove it and add it again with its tank.</source>
+        <translation>Nozzle(s) %1 have no tank: a nozzle must be connected to a tank. Remove it and add it again with its tank.</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="269"/>
         <source>No converter</source>
         <translation>No converter</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="260"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="271"/>
         <source>Board differs</source>
         <translation>Board differs</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="262"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="273"/>
         <source>Not polled</source>
         <translation>Not polled</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="264"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="275"/>
         <source>No answer</source>
         <translation>No answer</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="266"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="277"/>
         <source>Not set</source>
         <translation>Not set</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="268"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="279"/>
         <source>Online</source>
         <translation>Online</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="276"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="287"/>
         <source>Web refused</source>
         <translation>Web refused</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="285"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="296"/>
         <source>(no tank)</source>
         <translation>(no tank)</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="291"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="302"/>
         <source>The web app refused this nozzle: %1</source>
         <translation>The web app refused this nozzle: %1</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="295"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="306"/>
         <source>Remove</source>
         <translation>Remove</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="319"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="330"/>
         <source>Pick a nozzle in the table to change its config.</source>
         <translation>Pick a nozzle in the table to change its config.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="327"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="338"/>
         <source>Nozzle %1</source>
         <translation>Nozzle %1</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="375"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="418"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="386"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="429"/>
         <source>Pick a nozzle in the table first.</source>
         <translation>Pick a nozzle in the table first.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="380"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="391"/>
         <source>There is no connection to the boards.</source>
         <translation>There is no connection to the boards.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="385"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="396"/>
         <source>The board of nozzle %1 does not answer.</source>
         <translation>The board of nozzle %1 does not answer.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="390"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="401"/>
         <source>The board of nozzle %1 is busy. Try again.</source>
         <translation>The board of nozzle %1 is busy. Try again.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="394"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="405"/>
         <source>Reading the board of nozzle %1...</source>
         <translation>Reading the board of nozzle %1...</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="404"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="415"/>
         <source>The config of nozzle %1 was read from its board and saved.</source>
         <translation>The config of nozzle %1 was read from its board and saved.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="411"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="422"/>
         <source>Nozzle %1: %2</source>
         <translation>Nozzle %1: %2</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="423"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="434"/>
         <source>Pick a fuel type. The fuel types come from the web app with the config download.</source>
         <translation>Pick a fuel type. The fuel types come from the web app with the config download.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="430"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="441"/>
         <source>Enter the density in kg per litre, from 0.1000 to 2.0000.</source>
         <translation>Enter the density in kg per litre, from 0.1000 to 2.0000.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="436"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="447"/>
         <source>Enter the pulses per litre as a number above 0, for example 1200 or 1234.5.</source>
         <translation>Enter the pulses per litre as a number above 0, for example 1200 or 1234.5.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="449"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="454"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="460"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="465"/>
         <source>Update the nozzle</source>
         <translation>Update the nozzle</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="454"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="465"/>
         <source>Nozzle %1 must be connected to a tank that holds fuel type %2, and none can be taken for it. Remove the nozzle and add it again with its tank.</source>
         <translation>Nozzle %1 must be connected to a tank that holds fuel type %2, and none can be taken for it. Remove the nozzle and add it again with its tank.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="463"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="474"/>
         <source>The config could not be saved.</source>
         <translation>The config could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="475"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="486"/>
         <source>Saved. There is no connection to the boards, so nozzle %1 was not updated: press Update again later.</source>
         <translation>Saved. There is no connection to the boards, so nozzle %1 was not updated: press Update again later.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="481"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="492"/>
         <source>Saved. The board of nozzle %1 does not answer, so it was not updated: press Update again when it answers.</source>
         <translation>Saved. The board of nozzle %1 does not answer, so it was not updated: press Update again when it answers.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="487"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="498"/>
         <source>Saved. The board of nozzle %1 is busy: press Update again to send it.</source>
         <translation>Saved. The board of nozzle %1 is busy: press Update again to send it.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="492"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="503"/>
         <source>Saved. Sent to the board of nozzle %1. Waiting for it to confirm...</source>
         <translation>Saved. Sent to the board of nozzle %1. Waiting for it to confirm...</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="498"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="509"/>
         <source>Nozzle %1: the board holds the config as saved. Verified.</source>
         <translation>Nozzle %1: the board holds the config as saved. Verified.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="504"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="515"/>
         <source>Nozzle %1: saved here, but the board was not updated: %2</source>
         <translation>Nozzle %1: saved here, but the board was not updated: %2</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="521"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="532"/>
         <source>Enter how many characters the id has (1 to 64).</source>
         <translation>Enter how many characters the id has (1 to 64).</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="532"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="570"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="587"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="608"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="642"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="543"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="581"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="598"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="619"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="653"/>
         <source>The values could not be saved.</source>
         <translation>The values could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="545"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="579"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="596"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="624"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="659"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="556"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="590"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="607"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="635"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="670"/>
         <source>Saved.</source>
         <translation>Saved.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="555"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="566"/>
         <source>The records of the business days that are over (9 AM to 9 AM) go up by themselves. Today&apos;s records stay here, so that they can still be fixed or deleted, until Upload data is pressed.</source>
         <translation>The records of the business days that are over (9 AM to 9 AM) go up by themselves. Today&apos;s records stay here, so that they can still be fixed or deleted, until Upload data is pressed.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="558"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="569"/>
         <source>Every record goes up by itself %1 minutes after it was made (time to delete a mistaken sale). A record that was uploaded cannot be changed on the terminal any more.</source>
         <translation>Every record goes up by itself %1 minutes after it was made (time to delete a mistaken sale). A record that was uploaded cannot be changed on the terminal any more.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="561"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="572"/>
         <source>Records go up only when the cashier presses Upload data on the Review screen.</source>
         <translation>Records go up only when the cashier presses Upload data on the Review screen.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="563"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="574"/>
         <source>The terminal downloads from the server every minute.</source>
         <translation>The terminal downloads from the server every minute.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="603"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="634"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="614"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="645"/>
         <source>Enter a port from 1 to 65535.</source>
         <translation>Enter a port from 1 to 65535.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="619"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="630"/>
         <source>Saved, but this terminal cannot listen on that port: %1</source>
         <translation>Saved, but this terminal cannot listen on that port: %1</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="671"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="682"/>
         <source>Checking the printer...</source>
         <translation>Checking the printer...</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="764"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="775"/>
         <source>Nozzle %1 was added. Enter its config and press Update, or press Read to take it from its board.</source>
         <translation>Nozzle %1 was added. Enter its config and press Update, or press Read to take it from its board.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="779"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="783"/>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="791"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="790"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="794"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="802"/>
         <source>Remove the nozzle</source>
         <translation>Remove the nozzle</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="784"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="795"/>
         <source>Remove nozzle %1? It is not asked, shown or used any more.</source>
         <translation>Remove nozzle %1? It is not asked, shown or used any more.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="803"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="814"/>
         <source>Nozzle %1 was removed.</source>
         <translation>Nozzle %1 was removed.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="813"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="824"/>
         <source>%1 records wait for the upload: Clean Data is possible after they are uploaded (Review screen).</source>
         <translation>%1 records wait for the upload: Clean Data is possible after they are uploaded (Review screen).</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="814"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="825"/>
         <source>Nothing waits for the upload.</source>
         <translation>Nothing waits for the upload.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="823"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="834"/>
         <source>Press again to confirm</source>
         <translation>Press again to confirm</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="825"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="836"/>
         <source>Press Clean Data again to erase all the data of this terminal.</source>
         <translation>Press Clean Data again to erase all the data of this terminal.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="825"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="836"/>
         <source>Press Clear Config again to erase the machine settings.</source>
         <translation>Press Clear Config again to erase the machine settings.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="857"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="868"/>
         <source>The data was erased. The program starts again.</source>
         <translation>The data was erased. The program starts again.</translation>
     </message>
     <message>
-        <location filename="../src/settings/MachineConfigPage.cpp" line="878"/>
+        <location filename="../src/settings/MachineConfigPage.cpp" line="889"/>
         <source>The machine settings were erased. The program starts again.</source>
         <translation>The machine settings were erased. The program starts again.</translation>
     </message>

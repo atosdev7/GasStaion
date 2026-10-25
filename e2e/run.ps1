@@ -84,7 +84,13 @@ try {
     foreach ($scenario in $scenarios) {
         Write-Host "`n############ $scenario ############"
         Push-Location "$root\e2e"
-        & $php prepare.php
+        # (the scratch database is made again; a file lock of the XAMPP temp folder on D: sometimes stops it, then it is tried again)
+        foreach ($try in 1..6) {
+            & $php prepare.php
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "prepare.php failed (try $try of 6), again"
+            Start-Sleep -Seconds 3
+        }
         Pop-Location
         Remove-Item -Recurse -Force "$root\web\storage\app\e2e-backups" -ErrorAction SilentlyContinue
 

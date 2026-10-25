@@ -40,7 +40,15 @@ class TankController extends CrudController
     {
         return [
             'name' => ['required', 'string', 'max:100', Rule::unique('tanks', 'name')->ignore($tank->getKey())],
-            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            // a nozzle's fuel type is its tank's: while nozzles draw from the tank, only its name and capacity can change
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types'))), function ($attribute, $value, $fail) use ($tank) {
+                if ($tank->exists && $value !== $tank->fuel_type) {
+                    $numbers = Nozzle::where('tank_id', $tank->getKey())->orderBy('device_id')->orderBy('number')->pluck('number')->all();
+                    if ($numbers) {
+                        $fail(__('admin.tank_fuel_locked', ['nozzles' => implode(', ', $numbers)]));
+                    }
+                }
+            }],
             'capacity_kg' => 'nullable|numeric|min:0|max:99999999',
         ];
     }

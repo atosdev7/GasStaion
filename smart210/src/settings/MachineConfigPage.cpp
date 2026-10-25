@@ -242,6 +242,17 @@ void MachineConfigPage::reload()
     fillForm(0);
     fillTable();
     fillLog();
+
+    // a nozzle must be connected to a tank (a nozzle added before that rule may have none): the technician is told when the page opens
+    QStringList withoutTank;
+    foreach (const MachineConfig::Nozzle &nozzle, config_->nozzles()) {
+        if (nozzle.tankId <= 0) {
+            withoutTank << QString::number(nozzle.number);
+        }
+    }
+    if (!withoutTank.isEmpty()) {
+        showStatus(tr("Nozzle(s) %1 have no tank: a nozzle must be connected to a tank. Remove it and add it again with its tank.").arg(withoutTank.join(", ")), false);
+    }
 }
 
 // The nozzle table: one line per board, with its status and what it reported.

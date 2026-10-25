@@ -240,6 +240,7 @@ private slots:
     void aRefusedConfigChangeKeepsTheOldConfig();
     void aReadThatWouldLeaveTheNozzleWithoutATankIsRefused();
     void aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndAnAddNeedsATank();
+    void aNozzleWithoutATankIsReportedWhenMachineConfigOpens();
     void aConfigIsNotSentToABoardThatDoesNotAnswerOrWithBadValues();
     void whatABoardChangedByItselfIsPickedUpWhenItIsRead();
     void aBoardThatComesBackIsNotAskedForItsConfig();
@@ -6406,6 +6407,25 @@ void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndA
     window.findChild<QPushButton *>("addNozzleButton")->click();
     QVERIFY2(boxText_.contains("must be connected to a tank"), qPrintable(boxText_));
     QCOMPARE(table->rowCount(), 2);
+}
+
+void Smart210Test::aNozzleWithoutATankIsReportedWhenMachineConfigOpens()
+{
+    setUpLoggedInTerminalWithAPin();                                         // nozzles 1 and 2 have the tank T1
+    run("UPDATE nozzles SET tank_id = 0 WHERE number = 2");                  // one added before a tank was required
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+
+    QLabel *status = window.findChild<QLabel *>("machineStatus");
+    QVERIFY2(status->text().contains("Nozzle(s) 2 have no tank"), qPrintable(status->text()));
+    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(1, 6)->text(), QString("(no tank)"));
 }
 
 void Smart210Test::aBoardsConfigBecomesTheNozzlesConfig()

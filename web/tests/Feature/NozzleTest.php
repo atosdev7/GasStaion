@@ -89,6 +89,31 @@ class NozzleTest extends TestCase
         $this->as('cashier')->get('/nozzles')->assertForbidden();
     }
 
+    public function testTheFuelTypeOfATankWithNozzlesCannotChangeButItsNameAndCapacityCan()
+    {
+        Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 2, 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);
+
+        // the fuel type is refused, the nozzles are named, and nothing changed
+        $this->as('admin')->put('/tanks/' . $this->tank->id, ['name' => 'T1', 'fuel_type' => 'A', 'capacity_kg' => '1000'])->assertSessionHasErrors('fuel_type');
+        $this->assertStringContainsString('nozzle(s) 2', session('errors')->first('fuel_type'));
+        $this->assertSame('D', Tank::find($this->tank->id)->fuel_type);
+
+        // the name and the capacity change, with the same fuel type
+        $this->put('/tanks/' . $this->tank->id, ['name' => 'T1 main', 'fuel_type' => 'D', 'capacity_kg' => '2500'])->assertRedirect('/tanks');
+        $tank = Tank::find($this->tank->id);
+        $this->assertSame('T1 main', $tank->name);
+        $this->assertSame('D', $tank->fuel_type);
+        $this->assertEquals(2500, $tank->capacity_kg);
+
+        // a tank without nozzles still changes its fuel type; so does one whose nozzles were removed
+        $free = Tank::forceCreate(['name' => 'T2', 'fuel_type' => 'A']);
+        $this->put('/tanks/' . $free->id, ['name' => 'T2', 'fuel_type' => 'D', 'capacity_kg' => ''])->assertRedirect('/tanks');
+        $this->assertSame('D', Tank::find($free->id)->fuel_type);
+        Nozzle::query()->delete();
+        $this->put('/tanks/' . $this->tank->id, ['name' => 'T1 main', 'fuel_type' => 'A', 'capacity_kg' => '2500'])->assertRedirect('/tanks');
+        $this->assertSame('A', Tank::find($this->tank->id)->fuel_type);
+    }
+
     public function testATankThatANozzleDrawsFromCannotBeDeleted()
     {
         $free = Tank::forceCreate(['name' => 'T2', 'fuel_type' => 'A']);
