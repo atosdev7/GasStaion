@@ -362,7 +362,8 @@ void MainWindow::autoUpload()
         return;
     }
 
-    // the nozzles go up whatever the mode is: the web app should know the nozzles of the station (and the supplements need theirs there)
+    // the nozzles go up whatever the mode is: the web app should know the nozzles of the station (and the supplements need theirs there); the ones
+    // it refused are not counted, so they cannot hold the records back
     if (Uploader::nozzlesWaiting(db_) > 0) {
         uploader_->uploadNozzles();
 
@@ -383,8 +384,9 @@ void MainWindow::sendNozzles()
     if (!setup_->isConfigured() || !settings_->boolValue(SettingKey::InitialDone) || sync_->isRunning() || uploader_->isRunning()) {
         return; // the next beat of autoUpload() sends them
     }
+    Uploader::forgetNozzleRefusals(db_); // something changed on Machine Config: what the web app refused is tried once more
     if (Uploader::nozzlesWaiting(db_) > 0) {
-        uploader_->uploadNozzles();
+        uploader_->uploadNozzles(true);
     }
 }
 

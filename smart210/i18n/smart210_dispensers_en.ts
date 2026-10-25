@@ -165,27 +165,27 @@
 <context>
     <name>NozzleConfigSync</name>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="174"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="178"/>
         <source>The board holds no config yet. Press Update to send one.</source>
         <translation>The board holds no config yet. Press Update to send one.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="176"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="180"/>
         <source>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</source>
         <translation>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="193"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="197"/>
         <source>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</source>
         <translation>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="194"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="198"/>
         <source>manual</source>
         <translation>manual</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="194"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="198"/>
         <source>auto</source>
         <translation>auto</translation>
     </message>

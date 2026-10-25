@@ -132,8 +132,13 @@ act('Smart210 device POS1 (127.0.0.1)', $admin, 'POST', '/devices', ['name' => '
 $device = one("SELECT id FROM devices WHERE name = 'POS1'");
 $t1 = one("SELECT id FROM tanks WHERE name = 'T1 Gasoline'");
 $t2 = one("SELECT id FROM tanks WHERE name = 'T2 Diesel'");
-act('nozzle 1 (Gasoline, T1)', $admin, 'POST', '/nozzles', ['device_id' => $device, 'number' => '1', 'fuel_type' => 'A', 'tank_id' => $t1, 'board_address' => '1'], '/nozzles');
-act('nozzle 2 (Diesel, T2)', $admin, 'POST', '/nozzles', ['device_id' => $device, 'number' => '2', 'fuel_type' => 'D', 'tank_id' => $t2, 'board_address' => '2'], '/nozzles');
+// the nozzles are managed on the Smart210 (the web app only lists them): they are made here as its push makes them
+foreach (stage($currentStage) ? [[1, 'A', $t1], [2, 'D', $t2]] : [] as $nozzle) {
+    $pdo->prepare('INSERT INTO nozzles (device_id, number, tank_id, fuel_type, board_address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())')
+        ->execute([$device, $nozzle[0], $nozzle[2], $nozzle[1], $nozzle[0]]);
+    $done++;
+    echo "  ok    nozzle {$nozzle[0]} ({$nozzle[1]}) made as the Smart210 reports it\n";
+}
 foreach ([['ACME Trading', '555-0101'], ['Beta Ltd', '555-0102'], ['Cedar Logistics', '555-0103'], ['Delta Taxi', '555-0104']] as $c) {
     act("customer {$c[0]}", $admin, 'POST', '/customers', ['name' => $c[0], 'phone' => $c[1]], '/customers');
 }

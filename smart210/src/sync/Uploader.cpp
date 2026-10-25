@@ -111,6 +111,12 @@ QString notRefused(const QString &table)
     return QString("NOT EXISTS (SELECT 1 FROM upload_errors e WHERE e.table_name = '%1' AND e.row_key = %2)").arg(table).arg(key);
 }
 
+// A nozzle the web app refused (upload_errors, keyed by its number) waits until something changes on Machine Config.
+QString notRefusedNozzle()
+{
+    return "NOT EXISTS (SELECT 1 FROM upload_errors e WHERE e.table_name = 'nozzles' AND e.row_key = CAST(nozzles.number AS TEXT))";
+}
+
 // Which rows wait for an upload (of a date, when one is given; anything but a real date means all; and only those made before a moment, when
 // one is given). Nozzles and cards have no date and always go.
 QString whereOf(const QString &table, const QString &date = QString(), const QString &before = QString())
@@ -328,7 +334,7 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
 }
 
 Uploader::Uploader(QSqlDatabase db, QObject *parent)
-    : QObject(parent), db_(db), client_(this), started_(false), nozzlesOnly_(false), tableIndex_(0), saved_(0), rejected_(0)
+    : QObject(parent), db_(db), client_(this), started_(false), nozzlesOnly_(false), retryRefused_(false), tableIndex_(0), saved_(0), rejected_(0)
 {
 }
 
@@ -357,7 +363,30 @@ QString Uploader::waitingCondition(const QString &table, const QString &date, co
 
 int Uploader::nozzlesWaiting(QSqlDatabase db)
 {
-    return pending(db).value("nozzles");
+    QSqlQuery query(db);
+    if (query.exec("SELECT COUNT(*) FROM nozzles WHERE " + waiting("nozzles") + " AND " + notRefusedNozzle()) && query.next()) {
+        return query.value(0).toInt();
+    }
+
+    return 0;
+}
+
+QString Uploader::nozzleRefusal(QSqlDatabase db, int number)
+{
+    QSqlQuery query(db);
+    query.prepare("SELECT message FROM upload_errors WHERE table_name = 'nozzles' AND row_key = ?");
+    query.addBindValue(QString::number(number));
+    if (query.exec() && query.next()) {
+        return query.value(0).toString();
+    }
+
+    return QString();
+}
+
+void Uploader::forgetNozzleRefusals(QSqlDatabase db)
+{
+    QSqlQuery query(db);
+    query.exec("DELETE FROM upload_errors WHERE table_name = 'nozzles'");
 }
 
 // What the cashier sees as waiting: records. The nozzles are not records (they go up with the next upload, so that the supplements have
@@ -380,8 +409,11 @@ void Uploader::upload(const QString &date, const QString &before)
     begin(date, before, false);
 }
 
-void Uploader::uploadNozzles()
+void Uploader::uploadNozzles(bool retryRefused)
 {
+    if (!started_) {
+        retryRefused_ = retryRefused;
+    }
     begin(QString(), QString(), true);
 }
 
@@ -430,6 +462,9 @@ void Uploader::sendNext()
         const QStringList refused = refused_.value(table);
 
         QString sql = selectOf(table) + " WHERE " + whereOf(table, date_, before_);
+        if (table == "nozzles" && nozzlesOnly_ && !retryRefused_) {
+            sql += " AND " + notRefusedNozzle();
+        }
         if (!refused.isEmpty()) {
             QStringList marks;
             for (int i = 0; i < refused.size(); ++i) {

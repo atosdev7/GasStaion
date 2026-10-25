@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
+use App\Models\Fuel\Nozzle;
 use App\Models\Fuel\Tank;
 use Illuminate\Validation\Rule;
 
@@ -21,6 +22,18 @@ class TankController extends CrudController
             'fuel_type' => ['type' => 'select', 'options' => config('fuel_types')],
             'capacity_kg' => ['type' => 'number', 'step' => '0.01'],
         ];
+    }
+
+    // A tank that a nozzle draws from cannot be deleted (the nozzle's fuel type is the tank's): the nozzles have to be removed on the Smart210 first.
+    public function destroy($id)
+    {
+        $tank = Tank::findOrFail($id);
+        $numbers = Nozzle::where('tank_id', $tank->id)->orderBy('device_id')->orderBy('number')->pluck('number')->all();
+        if ($numbers) {
+            return redirect()->route('tanks.index')->with('error', __('admin.tank_has_nozzles', ['tank' => $tank->name, 'nozzles' => implode(', ', $numbers)]));
+        }
+
+        return parent::destroy($id);
     }
 
     protected function rules($tank)

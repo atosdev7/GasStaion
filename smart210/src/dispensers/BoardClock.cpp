@@ -48,6 +48,7 @@ void BoardClock::tick()
 {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
 
+    // (a nozzle in manual mode is not polled, so its board is never online here and its clock is not set: nothing of it is used)
     for (int address = 1; address <= MachineConfig::NozzleCount; ++address) {
         if (!bus_->hasBoard(address) || !bus_->isOnline(address) || pending_.value(address, false) || unsupported_.value(address, false)) {
             continue;

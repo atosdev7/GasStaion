@@ -273,13 +273,6 @@
          </layout>
         </widget>
        </item>
-       <item>
-        <widget class="QLabel" name="addNozzleHint">
-         <property name="text"><string>Only the nozzles added here are asked, shown and used: the number is the address of the board. The config of a nozzle is kept here: Update saves it here and puts it on the board, Read takes it from the board. Remove a nozzle with the button in its row.</string></property>
-         <property name="wordWrap"><bool>true</bool></property>
-         <property name="sub" stdset="0"><bool>true</bool></property>
-        </widget>
-       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="machinePrinterTab">

@@ -35,7 +35,9 @@ public:
 
     // Sends only the nozzles that wait (added, removed or changed on Machine Config), whatever the upload mode is: the web app should know the
     // nozzles of the station without waiting for the cashier to upload the records. nozzlesUploaded() follows instead of uploadFinished().
-    void uploadNozzles();
+    // A nozzle the web app refused is left alone (it would be refused again every minute) unless retryRefused: it is tried again when something is
+    // changed on Machine Config, and by Upload data.
+    void uploadNozzles(bool retryRefused = false);
 
     int savedCount() const { return saved_; }
     int rejectedCount() const { return rejected_; }
@@ -43,7 +45,9 @@ public:
     // The tables in upload order, and how many rows of each wait for an upload.
     static QStringList tables();
     static QMap<QString, int> pending(QSqlDatabase db, const QString &date = QString(), const QString &before = QString());
-    static int nozzlesWaiting(QSqlDatabase db); // the nozzles that wait for their upload (they are not records, see pendingTotal)
+    static int nozzlesWaiting(QSqlDatabase db); // the nozzles that wait for their upload and were not refused (they are not records, see pendingTotal)
+    static QString nozzleRefusal(QSqlDatabase db, int number); // why the web app refused the nozzle (empty: not refused)
+    static void forgetNozzleRefusals(QSqlDatabase db);         // every refused nozzle is tried again by the next uploadNozzles()
     static int pendingTotal(QSqlDatabase db, const QString &date = QString(), const QString &before = QString());
 
     // The SQL condition of the rows of a table that wait for an upload (what pending() counts and an upload sends).
@@ -62,6 +66,7 @@ private slots:
 
 private:
     void begin(const QString &date, const QString &before, bool nozzlesOnly);
+
     void sendNext();
     void finish(bool ok, const QString &message);
 
@@ -69,6 +74,7 @@ private:
     ApiClient client_;
     bool started_;
     bool nozzlesOnly_; // this run sends the nozzles only
+    bool retryRefused_; // ... and also the ones the web app refused
     QString date_;    // the date this upload is limited to (empty: all)
     QString before_;  // the moment this upload is limited to: only records made before it (empty: all)
     QString running_; // the table of the batch in flight

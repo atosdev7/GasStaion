@@ -52,6 +52,12 @@ abstract class CrudController extends Controller
         return $data;
     }
 
+    /** True for a resource that is only listed here (its rows are made elsewhere): no New, Edit, Delete, trash or restore. */
+    protected function readOnly()
+    {
+        return false;
+    }
+
     /** True for the (currently one) resource that still has an active/deactivate toggle: users. */
     protected function hasActiveToggle()
     {
@@ -175,6 +181,7 @@ abstract class CrudController extends Controller
             'perm' => $this->perm(),
             'fields' => $this->fields(),
             'langFile' => $this->langFile(),
+            'readOnly' => $this->readOnly(),
             'fieldLabel' => function ($name) {
                 return __($this->langFile() . '.' . $name);
             },

@@ -231,6 +231,7 @@ private slots:
     void theNozzleLineForTheLogIsInNoLanguage();
     void whatTheBoardsReportedSurvivesAConfigDownload();
     void nozzlesWithATankAreUploadedFirstAndMarkedUploaded();
+    void aNozzleTheWebAppRefusedIsNotSentAgainByItselfAndDoesNotHoldBackTheRecords();
     void nothingIsReadFromABoardUntilItIsAskedFor();
     void aBlankBoardIsNotSavedWhenItIsRead();
     void aConfigChangeIsSentVerifiedAndKept();
@@ -6606,6 +6607,42 @@ void Smart210Test::nozzlesWithATankAreUploadedFirstAndMarkedUploaded()
     QCOMPARE(rows.at(0).toObject().value("deleted").toBool(), false);
     QVERIFY(!rows.at(0).toObject().contains("fuel_type"));
     QCOMPARE(Uploader::pending(QSqlDatabase::database(connection_)).value("nozzles"), 0);
+}
+
+void Smart210Test::aNozzleTheWebAppRefusedIsNotSentAgainByItselfAndDoesNotHoldBackTheRecords()
+{
+    configureServer();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 2);
+    run("UPDATE nozzles SET tank_id = 1 WHERE number = 2");
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':[],'rejected':[{'key':'2','error':'unknown tank'}]}"));
+    Uploader uploader(db);
+    QSignalSpy sent(&uploader, SIGNAL(nozzlesUploaded(bool)));
+    QCOMPARE(Uploader::nozzlesWaiting(db), 1);
+
+    uploader.uploadNozzles();
+    QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 1, 10000);
+    QCOMPARE(server_->log(), QStringList() << "POST /api/push/nozzles");
+    QCOMPARE(Uploader::nozzleRefusal(db, 2), QString("unknown tank"));        // the reason is kept (Machine Config shows it)
+
+    // refused: it waits, but the automatic upload does not count it (it cannot hold the records back) and does not send it again
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 1);
+    QCOMPARE(Uploader::nozzlesWaiting(db), 0);
+    uploader.uploadNozzles();
+    QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 2, 10000);
+    QCOMPARE(server_->log().size(), 1);                                        // nothing went
+
+    // something was changed on Machine Config: it is tried once more, and a good answer ends it
+    Uploader::forgetNozzleRefusals(db);
+    QCOMPARE(Uploader::nozzlesWaiting(db), 1);
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':['2'],'rejected':[]}"));
+    uploader.uploadNozzles(true);
+    QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 3, 10000);
+    QCOMPARE(server_->log().size(), 2);
+    QCOMPARE(Uploader::nozzlesWaiting(db), 0);
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 0);
+    QCOMPARE(Uploader::nozzleRefusal(db, 2), QString());
 }
 
 // The boards of the tests: 1 to 3 answer, the others are not there.

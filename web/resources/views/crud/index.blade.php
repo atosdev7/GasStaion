@@ -4,22 +4,30 @@
 
 @section('actions')
     @can($perm . '.manage')
-        @if (!$trashed)
+        @if (!$trashed && !$readOnly)
             <a href="{{ route($route . '.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> {{ __($langFile . '.new') }}</a>
         @endif
-        <a href="{{ route($route . '.index', $trashed ? [] : ['trashed' => 1]) }}" class="btn btn-outline-secondary">
-            @if ($trashed)
-                <i class="fas fa-list"></i> {{ __($langFile . '.show_active') }}
-            @else
-                <i class="fas fa-trash"></i> {{ __($langFile . '.show_trash') }}
-            @endif
-        </a>
+        @if (!$readOnly)
+            <a href="{{ route($route . '.index', $trashed ? [] : ['trashed' => 1]) }}" class="btn btn-outline-secondary">
+                @if ($trashed)
+                    <i class="fas fa-list"></i> {{ __($langFile . '.show_active') }}
+                @else
+                    <i class="fas fa-trash"></i> {{ __($langFile . '.show_trash') }}
+                @endif
+            </a>
+        @endif
     @endcan
 @endsection
 
 @section('content')
     @if (session('status'))
         <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+    @if ($readOnly)
+        <div class="alert alert-info">{{ __($langFile . '.' . $route . '_read_only') }}</div>
     @endif
 
     <div class="card">
@@ -55,7 +63,9 @@
                         @endif
                         <td class="text-right">
                             @can($perm . '.manage')
-                                @if ($trashed)
+                                @if ($readOnly)
+                                    {{-- listed only --}}
+                                @elseif ($trashed)
                                     <form method="POST" action="{{ route($route . '.restore', $row->getKey()) }}" class="d-inline">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-outline-success">{{ __($langFile . '.restore') }}</button>

@@ -14,6 +14,7 @@
 #include "SetupFlow.h"
 #include "ui_MachineConfigPage.h"
 #include "Theme.h"
+#include "Uploader.h"
 
 #include <QComboBox>
 #include <QHeaderView>
@@ -105,7 +106,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     table_->setColumnHidden(ColPulses, true);
     table_->setFocusPolicy(Qt::NoFocus);
     table_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    table_->setMinimumHeight(6 * 36 + 46);
+    table_->setMinimumHeight(6 * 40 + 44); // six rows (the most there can be) and the header: nothing is cut off or runs over the Add group
 
     selected_ = ui_->selectedNozzle;
     // its text changes with the pick (a long hint, then "Nozzle 2"): it wraps and does not size the form column, or the table would change its width
@@ -270,6 +271,11 @@ void MachineConfigPage::fillTable()
             status = nozzles_->lastError(nozzle.number);
         }
 
+        const QString refusal = Uploader::nozzleRefusal(settings_->database(), nozzle.number);
+        if (!refusal.isEmpty() && nozzles_->isLinked()) {
+            status = tr("Web refused"); // the web app did not take the nozzle: the reason is its tooltip
+        }
+
         QStringList cells;
         cells << QString::number(nozzle.number) << status;
         // what the terminal holds for the nozzle (its own database), whether the board has it or not
@@ -281,6 +287,9 @@ void MachineConfigPage::fillTable()
             table_->setItem(i, column, new QTableWidgetItem(cells.at(column)));
         }
         table_->item(i, 0)->setData(Qt::UserRole, nozzle.number);
+        if (!refusal.isEmpty()) {
+            table_->item(i, ColStatus)->setToolTip(tr("The web app refused this nozzle: %1").arg(refusal));
+        }
 
         // the Remove button of the row: it knows the nozzle by its number, and a click asks before anything is removed
         QPushButton *remove = new QPushButton(tr("Remove"));
@@ -746,13 +755,13 @@ void MachineConfigPage::addNozzlePressed()
 
         return;
     }
-    nozzles_->syncBoards(); // its board is polled from now on (its config is not read: type it and press Send, or press Read)
+    nozzles_->syncBoards(); // its board is polled from now on (its config is not read: type it and press Update, or press Read)
     selectedNumber_ = number;
     fillTable();
     fillForm(number);
     fillAddForm();
     fillLog();
-    showStatus(tr("Nozzle %1 was added. Enter its config and press Send, or press Read to take it from its board.").arg(number), true);
+    showStatus(tr("Nozzle %1 was added. Enter its config and press Update, or press Read to take it from its board.").arg(number), true);
     emit nozzlesEdited();
 }
 

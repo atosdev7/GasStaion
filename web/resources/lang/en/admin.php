@@ -2,9 +2,8 @@
 
 return [
     // Users, devices, fuel types, tanks, nozzles
-    'board_address_hint' => 'The address of the nozzle\'s board on the RS-485 line; leave it empty when it is not known yet.',
-    'nozzle_number_taken' => 'This number is already used on this device (a nozzle that was deleted keeps its number: restore it instead).',
-    'nozzle_fuel_mismatch' => 'The tank holds a different fuel type than the nozzle.',
+    'nozzles_read_only' => 'The nozzles are managed on the Smart210 (Machine Config) and appear here when it reports them. They cannot be added, changed or removed here.',
+    'tank_has_nozzles' => 'The tank :tank cannot be deleted: nozzle(s) :nozzles draw from it. Remove them on the Smart210 first.',
     'density_hint' => 'Weight per litre, e.g. for converting between an LPG ticket\'s kg and a litre-based tank/report. Leave blank if not needed.',
     'password_hint' => 'Leave blank to keep the current password. It is also the Smart210 login password.',
     'pin_hint' => 'Machine Config PIN, 4 to 8 digits. Leave blank to keep it (new devices get the default PIN).',

@@ -189,7 +189,7 @@ Route::middleware(SetLocale::class)->group(function () {
         $crud('users', 'Admin\UserController', 'users');
         $crud('fuel', 'Admin\FuelTypeController', 'fuel');
         $crud('tanks', 'Admin\TankController', 'fuel');
-        $crud('nozzles', 'Admin\NozzleController', 'fuel');
+        Route::get('nozzles', 'Admin\NozzleController@index')->name('nozzles.index')->middleware('can:fuel.view'); // listed only: the Smart210 manages them
         $crud('customers', 'Sales\CustomerController', 'customers');
         $crud('devices', 'Admin\DeviceController', 'devices');
     });
