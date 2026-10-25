@@ -51,7 +51,7 @@ class LayoutTest extends TestCase
             ->assertDontSee(__('menu.payments'))
             ->assertDontSee(__('menu.group_admin'))
             ->assertDontSee(__('menu.group_reports'))
-            ->assertDontSee(__('menu.ticket_loans'))
+            ->assertSee(__('menu.ticket_loans'))            // the cashier looks at the ticket loans
             ->assertSee(__('menu.group_supplements'))      // the cashier looks at the supplies and the remainders
             ->assertDontSee(__('menu.group_init'))
             ->assertDontSee(__('menu.group_fuel'))
@@ -59,21 +59,19 @@ class LayoutTest extends TestCase
             ->assertDontSee(__('menu.backup'));
     }
 
-    public function testPaymentsAreTheirOwnMenuUnderSupplements()
+    public function testTheMainMenusAreInTheOrderOfTheWork()
     {
         $html = $this->login('accountant')->get('/')->assertOk()->getContent();
 
-        // Daily Confirmation and Debts Management are main menus of their own, in this order after Supplements; Debts Management holds Payments and
+        // Ticket Management, Cards Management, Sales Management, Supplements, Debts Management, Daily Confirmation (user, 2026-10-25); Debts Management holds Payments and
         // Ticket Loans (there is no Loan menu of its own); Payments and Daily Confirmation are not in Sales Management
-        $positions = [];
-        foreach (['group_sales', 'ticket_sales', 'spot_sales', 'customers', 'group_supplements', 'group_confirmations', 'group_debts', 'payments', 'ticket_loans'] as $key) {
-            $positions[$key] = strpos($html, '>' . __('menu.' . $key) . '<');
-            $this->assertNotFalse($positions[$key], $key);
+        // each name is looked for after the one before it (a name like Supplements is also an item of another menu)
+        $at = 0;
+        foreach (['group_tickets', 'group_cards', 'group_sales', 'ticket_sales', 'spot_sales', 'customers', 'group_supplements', 'group_debts', 'payments', 'ticket_loans', 'group_confirmations'] as $key) {
+            $pos = strpos($html, '>' . __('menu.' . $key) . '<', $at);
+            $this->assertNotFalse($pos, $key . ' comes after the one before it');
+            $at = $pos + 1;
         }
-        $order = array_keys($positions);
-        $sorted = $positions;
-        asort($sorted);
-        $this->assertSame($order, array_keys($sorted));
         $this->assertSame('Debts Management', __('menu.group_debts'));
     }
 

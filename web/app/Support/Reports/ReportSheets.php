@@ -596,7 +596,7 @@ class ReportSheets
             $rows[] = $total;
         }
         $sheets = [[
-            'title' => __('menu.payments'),
+            'title' => __('debts.tab_payments'),
             'headings' => [$top, $second],
             'rows' => $rows,
             'money' => $money,

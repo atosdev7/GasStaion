@@ -125,10 +125,16 @@ Route::middleware(SetLocale::class)->group(function () {
         });
 
         Route::get('payments', 'Debts\DebtController@index')->name('payments.index')->middleware('can:payments.view');
+        Route::get('payments/{id}', 'Debts\DebtController@showPayment')->name('payments.show')->middleware('can:payments.view')->where('id', '[0-9]+');
+        Route::get('debts/{id}', 'Debts\DebtController@show')->name('debts.show')->middleware('can:payments.view')->where('id', '[0-9a-fA-F-]{36}');
         Route::get('debt-summary', 'Debts\DebtSummaryController@index')->name('debt-summary.index')->middleware('can:payments.view');
+        Route::get('debt-aging', 'Debts\DebtAgingController@index')->name('debt-aging.index')->middleware('can:payments.view');
+        Route::get('debt-statement', 'Debts\DebtStatementController@show')->name('debt-statement.show')->middleware('can:payments.view');
         Route::get('debt-summary/export', 'Debts\DebtSummaryController@export')->name('debt-summary.export')->middleware('can:payments.view');
         Route::middleware('can:payments.manage')->group(function () {
             Route::get('payments/create', 'Debts\DebtController@create')->name('payments.create');
+            Route::get('payments/{id}/edit', 'Debts\DebtController@edit')->name('payments.edit')->where('id', '[0-9]+');
+            Route::put('payments/{id}', 'Debts\DebtController@update')->name('payments.update')->where('id', '[0-9]+');
             Route::post('payments', 'Debts\DebtController@store')->name('payments.store');
             Route::post('payments/{id}/reverse', 'Debts\DebtController@reverse')->name('payments.reverse')->where('id', '[0-9]+');
         });

@@ -77,6 +77,7 @@ return [
             'customers.view',
             'ticket_stock.manage',
             'ticket_sales.manage',
+            'payments.manage',     // records and reverses debt payments, like the accountant
             'tickets.lookup',
             'sync.manage',
             'sales.delete',
@@ -92,6 +93,7 @@ return [
             'spot_sales.view',
             'card_sales.view',
             'supplements.view',    // looks at the supplies and remainders; changes nothing here (it all happens on the Smart210)
+            'loans.view',          // looks at the ticket loans (not at the money debts); changes nothing
         ],
     ],
 

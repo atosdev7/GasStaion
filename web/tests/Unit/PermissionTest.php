@@ -54,12 +54,20 @@ class PermissionTest extends TestCase
         }
     }
 
-    public function testAssistantPublishesTicketsButNothingFinancial()
+    public function testAssistantPublishesTicketsAndRecordsPaymentsButSeesNoReportsOrLoans()
     {
         $u = $this->user('assistant');
         $this->assertTrue($u->hasPermission('ticket_stock.manage'));
-        $this->assertFalse($u->hasPermission('payments.view'));
+        $this->assertTrue($u->hasPermission('payments.manage'));   // records and reverses debt payments, like the accountant
+        $this->assertTrue($u->hasPermission('payments.view'));
         $this->assertFalse($u->hasPermission('reports.view'));
+        $this->assertFalse($u->hasPermission('loans.view'));
+        $this->assertFalse($u->hasPermission('supplements.view'));
+
+        $cashier = $this->user('cashier');
+        $this->assertTrue($cashier->hasPermission('loans.view'));     // looks at the ticket loans
+        $this->assertFalse($cashier->hasPermission('loans.manage'));
+        $this->assertFalse($cashier->hasPermission('payments.view'));
     }
 
     public function testCashierIsLookupOnly()

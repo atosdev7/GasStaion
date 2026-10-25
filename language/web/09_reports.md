@@ -168,7 +168,7 @@ Files: `resources/views/report/tickets.blade.php`
 | Key | en |
 |---|---|
 | `menu.card_summary` | Summary |
-| `menu.payments` | Payments |
+| `menu.payments` | Debt Payments |
 | `menu.remainders` | Remainders |
 | `menu.ticket_loans` | Ticket Loans |
 | `report.barcode` | Barcode |

@@ -31,6 +31,14 @@ return [
         ],
     ],
     [
+        'label' => 'group_cards', 'icon' => 'fa-id-card',
+        'items' => [
+            ['label' => 'cards',        'route' => 'cards.index',        'permission' => 'cards.view'],
+            ['label' => 'card_topups',  'route' => 'card-topups.index',  'permission' => 'cards.view'],
+            ['label' => 'card_summary', 'route' => 'card-summary.index', 'permission' => 'cards.view'],
+        ],
+    ],
+    [
         'label' => 'group_sales', 'icon' => 'fa-cash-register',
         'items' => [
             ['label' => 'ticket_sales', 'route' => 'ticket-sales.index', 'permission' => 'ticket_sales.view'],
@@ -47,6 +55,16 @@ return [
         ],
     ],
     [
+        'label' => 'group_debts', 'icon' => 'fa-file-invoice-dollar',
+        'items' => [
+            ['label' => 'payments', 'route' => 'payments.index', 'permission' => 'payments.view'],
+            ['label' => 'ticket_loans', 'route' => 'loans.index', 'permission' => 'loans.view'],
+            ['label' => 'debt_summary', 'route' => 'debt-summary.index', 'permission' => 'payments.view'],
+            ['label' => 'debt_aging', 'route' => 'debt-aging.index', 'permission' => 'payments.view'],
+            ['label' => 'debt_statement', 'route' => 'debt-statement.show', 'permission' => 'payments.view'],
+        ],
+    ],
+    [
         'label' => 'group_confirmations', 'icon' => 'fa-check-double',
         'items' => [
             ['label' => 'confirmation_overview',    'route' => 'confirmations.overview',    'permission' => 'confirmations.manage'],
@@ -59,21 +77,6 @@ return [
         ],
     ],
     [
-        'label' => 'group_debts', 'icon' => 'fa-file-invoice-dollar',
-        'items' => [
-            ['label' => 'payments', 'route' => 'payments.index', 'permission' => 'payments.view'],
-            ['label' => 'ticket_loans', 'route' => 'loans.index', 'permission' => 'loans.view'],
-            ['label' => 'debt_summary', 'route' => 'debt-summary.index', 'permission' => 'payments.view'],
-        ],
-    ],
-    [
-        'label' => 'group_cards', 'icon' => 'fa-id-card',
-        'items' => [
-            ['label' => 'cards',        'route' => 'cards.index',        'permission' => 'cards.view'],
-            ['label' => 'card_topups',  'route' => 'card-topups.index',  'permission' => 'cards.view'],
-            ['label' => 'card_summary', 'route' => 'card-summary.index', 'permission' => 'cards.view'],
-        ],
-    ],    [
         'label' => 'group_reports', 'icon' => 'fa-chart-bar',
         'items' => [
             ['label' => 'reports', 'route' => 'reports.index', 'permission' => 'reports.view'],

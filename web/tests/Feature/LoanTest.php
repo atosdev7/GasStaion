@@ -61,7 +61,9 @@ class LoanTest extends TestCase
         $this->as('manager')->get('/loans')->assertOk();
         $this->as('accountant')->get('/loans')->assertOk();
         $this->as('assistant')->get('/loans')->assertForbidden();
-        $this->as('cashier')->get('/loans')->assertForbidden();
+        $this->as('cashier')->get('/loans')->assertOk();         // the cashier looks at the ticket loans, and settles nothing
+        $this->get('/loans/create')->assertForbidden();
+        $this->post('/loans', [])->assertForbidden();
     }
 
     // ---- settling a loan ----

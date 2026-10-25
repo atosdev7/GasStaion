@@ -81,3 +81,9 @@ body, .content-wrapper, .main-sidebar, .main-header {
 .nav-sidebar.nav-child-indent .nav-treeview { padding-left: 1.5rem; }
 .nav-sidebar .nav-treeview > .nav-item > .nav-link { font-size: .95rem; }
 .nav-sidebar .nav-treeview > .nav-item > .nav-link .nav-icon { font-size: .8rem; }
+
+/* printing a statement: the menu and the buttons stay off the paper */
+@media print {
+    .main-sidebar, .main-header, .main-footer, .no-print { display: none !important; }
+    .content-wrapper { margin-left: 0 !important; }
+}

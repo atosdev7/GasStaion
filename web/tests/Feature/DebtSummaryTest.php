@@ -224,14 +224,14 @@ class DebtSummaryTest extends TestCase
     {
         $this->as('manager')->get('/debt-summary')->assertOk();
         $this->as('accountant')->get('/debt-summary')->assertOk();
-        $this->as('assistant')->get('/debt-summary')->assertForbidden();
+        $this->as('assistant')->get('/debt-summary')->assertOk();   // the assistant records payments too
         $this->as('cashier')->get('/debt-summary')->assertForbidden();
         $this->as('cashier')->get('/debt-summary/export')->assertForbidden();
 
-        // it is a submenu of Debts Management, after Payments and Ticket Loans
+        // it is a submenu of Debts Management, after Debt Payments and Ticket Loans
         $html = $this->as('accountant')->get('/')->assertOk()->getContent();
         $at = [];
-        foreach (['group_debts' => '>Debts Management<', 'payments' => '>Payments<', 'ticket_loans' => '>Ticket Loans<'] as $key => $needle) {
+        foreach (['group_debts' => '>Debts Management<', 'payments' => '>Debt Payments<', 'ticket_loans' => '>Ticket Loans<'] as $key => $needle) {
             $at[$key] = strpos($html, $needle);
             $this->assertNotFalse($at[$key], $key);
         }

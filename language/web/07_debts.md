@@ -46,7 +46,7 @@ Files: `app/Http/Controllers/DebtController.php`, `resources/views/debt/*`
 | `debts.total_settled` | Total settled |
 | `debts.unallocated_payments` | Unallocated payments |
 | `debts.unallocated_payments_hint` | Received but not yet matched to a specific debt. |
-| `menu.payments` | Payments |
+| `menu.payments` | Debt Payments |
 
 ## Ticket loans
 
@@ -107,7 +107,7 @@ Files: `app/Http/Controllers/DebtSummaryController.php`, `resources/views/debt_s
 | `debts.total` | Total |
 | `menu.debt_summary` | Summary |
 | `menu.group_debts` | Debts Management |
-| `menu.payments` | Payments |
+| `menu.payments` | Debt Payments |
 | `menu.ticket_loans` | Ticket Loans |
 
 ## Shared in this menu (controller messages, exports, dynamic keys)

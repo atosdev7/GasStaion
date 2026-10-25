@@ -12,7 +12,7 @@
                     <select id="f_customer_id" name="customer_id" class="form-control js-select2 @error('customer_id') is-invalid @enderror">
                         <option value=""></option>
                         @foreach ($customers as $id => $name)
-                            <option value="{{ $id }}" {{ (string) old('customer_id') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
+                            <option value="{{ $id }}" {{ (string) old('customer_id', $preset['customer_id'] ?? '') === (string) $id ? 'selected' : '' }}>{{ $name }}</option>
                         @endforeach
                     </select>
                     @error('customer_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
@@ -22,8 +22,8 @@
                     <select id="f_debt_id" name="debt_id" class="form-control js-select2 @error('debt_id') is-invalid @enderror" data-no-placeholder>
                         <option value="">{{ __('debts.general_payment_option') }}</option>
                         @foreach ($openDebts as $debt)
-                            <option value="{{ $debt->id }}" data-customer="{{ $debt->customer_id }}"
-                                    {{ old('debt_id') === $debt->id ? 'selected' : '' }}>
+                            <option value="{{ $debt->id }}" data-customer="{{ $debt->customer_id }}" data-method="{{ $debt->payment_method }}"
+                                    {{ old('debt_id', $preset['debt_id'] ?? '') === $debt->id ? 'selected' : '' }}>
                                 {{ $debt->display_date ? $debt->display_date : __('debts.opening_balance') }} — {{ __('debts.balance') }}: {{ number_format($debt->balance, 2) }}
                             </option>
                         @endforeach
@@ -33,14 +33,14 @@
                 </div>
                 <div class="form-group">
                     <label for="f_amount">{{ __('debts.amount') }}</label>
-                    <input id="f_amount" name="amount" type="number" step="0.01" min="0" value="{{ old('amount') }}" class="form-control @error('amount') is-invalid @enderror">
+                    <input id="f_amount" name="amount" type="number" step="0.01" min="0" value="{{ old('amount', $preset['amount'] ?? '') }}" class="form-control @error('amount') is-invalid @enderror">
                     @error('amount') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
                 <div class="form-group">
                     <label for="f_payment_method">{{ __('debts.payment_method') }}</label>
                     <select id="f_payment_method" name="payment_method" class="form-control @error('payment_method') is-invalid @enderror">
-                        <option value="cash" {{ old('payment_method', 'cash') === 'cash' ? 'selected' : '' }}>{{ __('debts.payment_cash') }}</option>
-                        <option value="bank" {{ old('payment_method') === 'bank' ? 'selected' : '' }}>{{ __('debts.payment_bank') }}</option>
+                        <option value="cash" {{ old('payment_method', $preset['payment_method'] ?? 'cash') === 'cash' ? 'selected' : '' }}>{{ __('debts.payment_cash') }}</option>
+                        <option value="bank" {{ old('payment_method', $preset['payment_method'] ?? 'cash') === 'bank' ? 'selected' : '' }}>{{ __('debts.payment_bank') }}</option>
                     </select>
                     @error('payment_method') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
@@ -86,6 +86,12 @@
         $(debt).val('').trigger('change.select2');
     });
     filterDebtsForCustomer();
+
+    // a debt chosen is paid the way it was made (the method can still be changed)
+    $(debt).on('change', function () {
+        var method = $(debt).find('option:selected').data('method');
+        if (method) { $('#f_payment_method').val(method); }
+    });
 })();
 </script>
 @endpush

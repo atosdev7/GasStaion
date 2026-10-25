@@ -33,6 +33,7 @@ return [
     // Spot sales
     'spot_sale_cash_hint' => 'Spot sales are always paid in cash.',
     'total_too_big' => 'The total :total is more than one sale can be (:max). Check the price and the weight.',
+    'customer_owes' => 'This customer still owes :debts debts (:money) and :loans ticket loans (:kg kg), so it is not deleted. Settle them first.',
     'all_fuels' => 'All fuel types',
     'all_usages' => 'All usages',
     'sale_date_too_old' => 'A sale cannot be dated more than :days days back. Ask the manager.',

@@ -23,7 +23,7 @@
     <div class="card card-outline card-primary card-outline-tabs">
         <div class="card-header p-0 border-bottom-0">
             <ul class="nav nav-tabs" role="tablist">
-                <li class="nav-item"><a class="nav-link active" id="tab-payments-link" data-toggle="pill" href="#tab-payments" role="tab">{{ __('menu.payments') }} ({{ count($payments) }})</a></li>
+                <li class="nav-item"><a class="nav-link active" id="tab-payments-link" data-toggle="pill" href="#tab-payments" role="tab">{{ __('debts.tab_payments') }} ({{ count($payments) }})</a></li>
                 @if ($loans !== null)
                     <li class="nav-item"><a class="nav-link" id="tab-loans-link" data-toggle="pill" href="#tab-loans" role="tab">{{ __('menu.ticket_loans') }} ({{ count($loans) }})</a></li>
                 @endif
