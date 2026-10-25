@@ -11,6 +11,7 @@ use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\Nozzle;
 use App\Models\Fuel\Tank;
+use App\Models\Sales\Customer;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
 use App\Models\Supplements\Remainder;
@@ -212,6 +213,11 @@ class Push
             $d['customer_id'] = null;
         } elseif (!empty($d['card_id'])) {
             throw new RejectedRow('only a card sale has a card');
+        }
+
+        // Own use and other use are always the customer "Individual", as on the web forms, whatever customer the terminal sent.
+        if (in_array($d['usage'], ['self', 'other'], true)) {
+            $d['customer_id'] = Customer::individual()->id;
         }
 
         $sale = self::find(Sale::class, $d['id']);

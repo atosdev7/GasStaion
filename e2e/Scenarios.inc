@@ -46,7 +46,7 @@ static int basicScenario(Terminal &t, const QString &factsFile)
     const SpotSale::Result sale = SpotSale::create(t.db(), spot("sale", acme, 1050), t.userId, now);
     check(sale.ok && sale.totalX100 == 7875, "a spot sale 10.50 kg x 7.50 = 78.75");
     check(SpotSale::create(t.db(), spot("self", self, 800), t.userId, now).ok, "own use 8.00 kg");
-    check(SpotSale::create(t.db(), spot("other", beta, 600), t.userId, now).ok, "other use 6.00 kg");
+    check(SpotSale::create(t.db(), spot("other", self, 600), t.userId, now).ok, "other use 6.00 kg");
     const SpotSale::Result loanSale = SpotSale::create(t.db(), spot("ticket_loan", acme, 2500), t.userId, now);
     check(loanSale.ok, "fuel on ticket loan 25.00 kg");
     const QString deviceLoan = t.one("SELECT id FROM ticket_loans WHERE sale_id = '" + loanSale.saleId + "'").toString();

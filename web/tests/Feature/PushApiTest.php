@@ -259,6 +259,23 @@ class PushApiTest extends TestCase
         $this->assertTrue($sale->synced);
     }
 
+    public function testOwnUseAndOtherUseFromTheTerminalAreTheIndividualCustomer()
+    {
+        $individual = Customer::where('is_default', true)->first();
+        $rows = [];
+        foreach (['self', 'other', 'sale'] as $usage) {
+            $free = $usage === 'sale' ? [] : ['price' => '0.00', 'total_amount' => '0.00', 'paid_amount' => '0.00'];
+            $rows[$usage] = $this->sale(['usage' => $usage] + $free); // (the terminal sent ACME for all three)
+        }
+
+        $result = $this->push('sales', array_values($rows));
+
+        $this->assertSame([], $result['rejected']);
+        $this->assertSame($individual->id, Sale::find($rows['self']['id'])->customer_id);
+        $this->assertSame($individual->id, Sale::find($rows['other']['id'])->customer_id);
+        $this->assertSame($this->customer->id, Sale::find($rows['sale']['id'])->customer_id);
+    }
+
     public function testPushingTheSameSaleAgainKeepsOneRowAndItsCost()
     {
         $row = $this->sale();
