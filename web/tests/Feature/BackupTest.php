@@ -598,4 +598,32 @@ class BackupTest extends TestCase
         $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
         $this->assertSame(1, Backup::count());
     }
-}
+
+    public function testNothingIsClearedWhileTheTicketStockOfThoseDaysIsNotConfirmed()
+    {
+        $this->sale('2026-09-10');
+        $inbound = \App\Models\Tickets\TicketInbound::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 10, 'inbound_date' => '2026-09-08', 'user_id' => 1]);
+        $batch = \App\Models\Tickets\TicketPublish::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => 1, 'end_serial' => 5, 'count' => 5, 'date' => '2026-09-12', 'user_id' => 1]);
+        \App\Models\Tickets\TicketInbound::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 4, 'inbound_date' => '2026-09-20', 'user_id' => 1]);   // after the date: no matter
+
+        $response = $this->as('admin')->post('/backup', ['up_to' => self::UP_TO]);
+
+        $response->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('2 ticket inbounds and publishes', session('errors')->first('up_to'));
+        $this->assertStringContainsString('2026-09-08', session('errors')->first('up_to'));
+        $this->assertSame(1, Sale::count());
+        $this->assertSame(0, Backup::count());
+
+        // one confirmed, one still waits
+        $inbound->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('1 ticket inbounds and publishes', session('errors')->first('up_to'));
+
+        // confirmed, the backup runs; the ticket stock is not cleared (its balance is computed from it)
+        $batch->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(1, Backup::count());
+        $this->assertSame(2, \App\Models\Tickets\TicketInbound::count());
+        $this->assertSame(1, \App\Models\Tickets\TicketPublish::count());
+    }}

@@ -29,6 +29,7 @@
                         <th>{{ __('confirm.fuel_type') }}</th>
                         <th class="text-right">{{ __('confirm.spec') }}</th>
                         <th class="text-right">{{ __('confirm.quantity') }}</th>
+                        <th class="text-right">{{ __('confirm.cost') }}</th>
                         <th>{{ __('confirm.note') }}</th>
                         <th class="text-right">{{ __('confirm.actions') }}</th>
                     </tr>
@@ -46,6 +47,7 @@
                             <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
                             <td class="text-right">{{ $specs[$row->spec] ?? $row->spec }} {{ __('confirm.kg') }}</td>
                             <td class="text-right">{{ $row->quantity }}</td>
+                            <td class="text-right">{{ $row->cost !== null ? number_format($row->cost, 4) : '' }}</td>
                             <td>{{ $row->note }}</td>
                             <td class="text-right">
                                 @if ($row->isConfirmed())
@@ -57,7 +59,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="text-muted">{{ __('confirm.nothing_here') }}</td></tr>
+                        <tr><td colspan="7" class="text-muted">{{ __('confirm.nothing_here') }}</td></tr>
                     @endforelse
                     </tbody>
                     @if ($inbounds->isNotEmpty())
@@ -65,7 +67,7 @@
                         <tr class="font-weight-bold">
                             <td colspan="3">{{ __('confirm.total') }}</td>
                             <td class="text-right">{{ $inbounds->sum('quantity') }}</td>
-                            <td colspan="2"></td>
+                            <td colspan="3"></td>
                         </tr>
                         </tfoot>
                     @endif

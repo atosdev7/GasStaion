@@ -10,6 +10,8 @@ use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Artisan;
@@ -24,7 +26,8 @@ use ZipArchive;
 // debt_payments, ticket_loans, ticket_loan_settlements — their balances are computed from those rows; the remainders (a remainder outlives its
 // supply: its supplement_id may then point at a supply that was cleared, and an opening remainder has none); and the sales and supplements of the cards
 // (the top-ups and the supplies made with a card, `card_id` set), because the balance of a card is computed from them.
-// A backup is refused while a sale or supplement it would clear has not been confirmed (the accountant could no longer review it), and while a
+// A backup is refused while a sale or supplement it would clear has not been confirmed (the accountant could no longer review it), nor the ticket
+// inbounds and publishes of those days (they are not cleared, but the day is not finished until they are confirmed), and while a
 // terminal has not uploaded since the end of that business day (it may still hold records of those days that the web does not know yet).
 // The net kg each tank loses from the cleared inbound/supplied rows is recorded on the backup row
 // (see TankLevels), so live tank stock doesn't change and initial_tank_balances stays the go-live value.
@@ -58,6 +61,15 @@ class BackupRun
             $blockers[] = __('admin.backup_blocked_unconfirmed', [
                 'sales' => $saleCount, 'supplements' => $supplementCount, 'date' => substr((string) min($oldest), 0, 10),
             ]);
+        }
+
+        // the blank ticket stock of those days is confirmed too (it stays in the tables, but the day is not finished until it is confirmed)
+        $inbounds = TicketInbound::where('inbound_date', '<=', $upTo)->whereNull('confirmed_at');
+        $publishes = TicketPublish::where('date', '<=', $upTo)->whereNull('confirmed_at');
+        $ticketCount = (clone $inbounds)->count() + (clone $publishes)->count();
+        if ($ticketCount) {
+            $oldest = array_filter([$inbounds->min('inbound_date'), $publishes->min('date')]);
+            $blockers[] = __('admin.backup_blocked_tickets', ['count' => $ticketCount, 'date' => substr((string) min($oldest), 0, 10)]);
         }
 
         $dayEnds = Carbon::parse($upTo)->addDay()->setTime((int) config('backup.business_day_start_hour'), 0, 0);

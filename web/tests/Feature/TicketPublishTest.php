@@ -446,4 +446,17 @@ class TicketPublishTest extends TestCase
     {
         return (int) auth()->id();
     }
+
+    public function testTheListLinksToTheDailyConfirmationOfTheDayForThoseWhoConfirm()
+    {
+        $this->as('assistant');
+        $this->receive(20);
+        $this->publish(1, 5);
+        $batch = $this->batch();
+        $link = route('confirmations.tickets', ['date' => substr((string) $batch->date, 0, 10)]);
+
+        $this->get('/ticket-publish')->assertOk()->assertDontSee($link);                  // the assistant cannot confirm: a plain badge
+        $this->as('accountant')->get('/ticket-publish')->assertOk()->assertSee($link);
+        $this->as('manager')->get('/ticket-publish')->assertOk()->assertSee($link);
+    }
 }

@@ -24,6 +24,12 @@
                     @error('quantity') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
                 <div class="form-group">
+                    <label for="f_cost">{{ __('tickets.cost') }}</label>
+                    <input id="f_cost" name="cost" type="number" step="0.0001" min="0" value="{{ old('cost', $inbound->cost) }}" class="form-control @error('cost') is-invalid @enderror">
+                    <small class="form-text text-muted">{{ __('tickets.cost_hint') }}</small>
+                    @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                </div>
+                <div class="form-group">
                     <label for="f_inbound_date">{{ __('tickets.inbound_date') }}</label>
                     <input id="f_inbound_date" name="inbound_date" type="date" value="{{ old('inbound_date', substr((string) $inbound->inbound_date, 0, 10)) }}" class="form-control @error('inbound_date') is-invalid @enderror">
                     @error('inbound_date') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror

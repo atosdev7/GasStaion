@@ -11,7 +11,8 @@ use Illuminate\Validation\Rule;
 
 // Blank ticket stock received: fuel type, spec (fixed cylinder weight), count. No serial numbers yet
 // (numbering happens on publish, see TicketPublishController). The count may be negative: blank tickets that were spoiled in printing are taken out of the
-// stock with a record of their own. The stock can never fall below what was published already. Confirmed with the daily confirmation: a confirmed record
+// stock with a record of their own. The stock can never fall below what was published already. The cost is what printing one ticket at the press cost
+// (optional, shown to everyone who manages the stock; it has nothing to do with the cost of the fuel). Confirmed with the daily confirmation: a confirmed record
 // can no longer be changed or deleted (a manager can take the confirmation back, see UnconfirmController).
 class TicketInboundController extends Controller
 {
@@ -60,6 +61,7 @@ class TicketInboundController extends Controller
             'spec' => ['required', Rule::in(array_keys(config('ticket_specs')))],
             'quantity' => 'required|integer|not_in:0|min:-' . self::MAX_QUANTITY . '|max:' . self::MAX_QUANTITY,
             'inbound_date' => 'required|date',
+            'cost' => 'nullable|numeric|min:0|max:999999', // the printing cost of one ticket
             'note' => 'nullable|string|max:255',
         ]);
 
@@ -69,7 +71,7 @@ class TicketInboundController extends Controller
         }
 
         $inbound = new TicketInbound;
-        $inbound->forceFill($data + ['user_id' => auth()->id()])->save();
+        $inbound->forceFill($data + ['cost' => $data['cost'] ?? null, 'user_id' => auth()->id()])->save();
 
         Audit::log('ticket_inbound', '#' . $inbound->id . ' fuel ' . $data['fuel_type']
             . ', ' . config('ticket_specs.' . $data['spec']) . 'kg x ' . $data['quantity']);
@@ -101,6 +103,7 @@ class TicketInboundController extends Controller
         $data = $request->validate([
             'quantity' => 'required|integer|not_in:0|min:-' . self::MAX_QUANTITY . '|max:' . self::MAX_QUANTITY,
             'inbound_date' => 'required|date',
+            'cost' => 'nullable|numeric|min:0|max:999999',
             'note' => 'nullable|string|max:255',
         ]);
 
@@ -109,8 +112,8 @@ class TicketInboundController extends Controller
         }
 
         $before = '#' . $inbound->id . ' ' . $inbound->inbound_date . ', ' . $inbound->quantity;
-        $inbound->forceFill($data)->save();
-        Audit::log('ticket_inbound_update', $before . ' -> ' . $data['inbound_date'] . ', ' . $data['quantity']);
+        $inbound->forceFill($data + ['cost' => $data['cost'] ?? null])->save();
+        Audit::log('ticket_inbound_update', $before . ' -> ' . $data['inbound_date'] . ', ' . $data['quantity'] . (isset($data['cost']) ? ', cost ' . $data['cost'] : ''));
 
         return redirect()->route('ticket-inbound.index')->with('status', __('tickets.saved'));
     }

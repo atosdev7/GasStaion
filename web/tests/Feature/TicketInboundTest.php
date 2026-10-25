@@ -313,4 +313,52 @@ class TicketInboundTest extends TestCase
         $this->assertSame('08', substr($barcodes[0], 5, 2));
         $this->assertSame(0, TicketStock::available('A', 3));
     }
+
+    // ---- the printing cost of the blank tickets ----
+
+    public function testTheInboundHasAnOptionalPrintingCostPerTicketThatEveryoneWhoManagesTheStockSees()
+    {
+        foreach (['assistant', 'accountant', 'manager', 'admin'] as $role) {
+            $html = $this->as($role)->get('/ticket-inbound/create')->assertOk()->getContent();
+            $this->assertStringContainsString('name="cost"', $html, $role);
+            $this->assertStringContainsString('not the cost of the fuel', $html, $role);
+        }
+
+        $this->as('assistant');
+        $this->post('/ticket-inbound', ['fuel_type' => $this->diesel, 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-09-20', 'cost' => '0.35'])->assertRedirect('/ticket-inbound');
+        $this->receive(50);                                                                   // the cost may stay empty
+        $this->receive(-8);
+        $withCost = \App\Models\Tickets\TicketInbound::where('quantity', 100)->first();
+        $this->assertEquals(0.35, $withCost->cost);
+        $this->assertNull(\App\Models\Tickets\TicketInbound::where('quantity', 50)->first()->cost);
+
+        $html = $this->get('/ticket-inbound')->assertOk()->getContent();
+        $this->assertStringContainsString('<td class="text-right">0.3500</td>', $html);       // the cost of a ticket
+        $this->assertStringContainsString('<td class="text-right">35.00</td>', $html);        // 100 x 0.35 for the record
+
+        // checked, and changed with the record
+        $this->post('/ticket-inbound', ['fuel_type' => $this->diesel, 'spec' => 0, 'quantity' => 1, 'inbound_date' => '2026-09-20', 'cost' => '-1'])->assertSessionHasErrors('cost');
+        $this->post('/ticket-inbound', ['fuel_type' => $this->diesel, 'spec' => 0, 'quantity' => 1, 'inbound_date' => '2026-09-20', 'cost' => 'abc'])->assertSessionHasErrors('cost');
+        $this->put('/ticket-inbound/' . $withCost->id, ['quantity' => 100, 'inbound_date' => '2026-09-20', 'cost' => '0.4'])->assertSessionHasNoErrors();
+        $this->assertEquals(0.4, $withCost->fresh()->cost);
+        $this->put('/ticket-inbound/' . $withCost->id, ['quantity' => 100, 'inbound_date' => '2026-09-20'])->assertSessionHasNoErrors();
+        $this->assertNull($withCost->fresh()->cost);                                          // cleared when the field is emptied
+        $this->get('/ticket-inbound/' . $withCost->id . '/edit')->assertOk()->assertSee('name="cost"', false);
+
+        // nothing to do with the cost of the fuel inbounds
+        $this->assertSame(0, \App\Models\Fuel\FuelInbound::count());
+    }
+
+    public function testTheListLinksToTheDailyConfirmationOfTheDayForThoseWhoConfirm()
+    {
+        $this->as('assistant');
+        $this->receive(10);
+        $row = $this->firstInbound();
+
+        $link = route('confirmations.tickets', ['date' => '2026-09-20']);
+        $this->get('/ticket-inbound')->assertOk()->assertDontSee($link);                  // the assistant cannot confirm: a plain badge
+        $this->as('accountant')->get('/ticket-inbound')->assertOk()->assertSee($link);
+        $this->as('manager')->get('/ticket-inbound')->assertOk()->assertSee($link);
+        $this->assertNotNull($row);
+    }
 }

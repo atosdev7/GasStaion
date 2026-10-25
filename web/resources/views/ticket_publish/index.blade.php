@@ -73,7 +73,7 @@
                         <td class="text-right">{{ $b->start_serial }}</td>
                         <td class="text-right">{{ $b->end_serial }}</td>
                         <td class="text-right">{{ $b->count }}</td>
-                        <td>@if ($b->isConfirmed())<span class="badge badge-success">{{ __('tickets.confirmed') }}</span>@else<span class="badge badge-secondary">{{ __('tickets.not_confirmed') }}</span>@endif</td>
+                        <td>@include('ticket_inbound._confirmation', ['row' => $b, 'date' => $b->date])</td>
                         <td class="text-right">
                             <a href="{{ route('ticket-publish.show', $b->id) }}" class="btn btn-sm btn-outline-secondary">{{ __('tickets.view_tickets') }}</a>
                         </td>

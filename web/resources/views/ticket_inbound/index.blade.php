@@ -28,6 +28,8 @@
                     <th>{{ __('tickets.fuel_type') }}</th>
                     <th class="text-right">{{ __('tickets.spec') }}</th>
                     <th class="text-right">{{ __('tickets.quantity') }}</th>
+                    <th class="text-right">{{ __('tickets.cost') }}</th>
+                    <th class="text-right">{{ __('tickets.cost_total') }}</th>
                     <th>{{ __('tickets.note') }}</th>
                     <th>{{ __('tickets.confirmation') }}</th>
                     @can('ticket_stock.manage')
@@ -52,7 +54,7 @@
                             @endforeach
                         </select>
                     </th>
-                    <th colspan="3">
+                    <th colspan="5">
                         @cannot('ticket_stock.manage')
                             <button type="submit" form="ticket-inbound-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
                             <a href="{{ route('ticket-inbound.index') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
@@ -73,8 +75,10 @@
                         <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
                         <td class="text-right">{{ config('ticket_specs.' . $row->spec) }} {{ __('tickets.kg') }}</td>
                         <td class="text-right">{{ $row->quantity }}</td>
+                        <td class="text-right">{{ $row->cost !== null ? number_format($row->cost, 4) : '' }}</td>
+                        <td class="text-right">{{ $row->cost !== null ? number_format($row->cost * $row->quantity, 2) : '' }}</td>
                         <td>{{ $row->note }}</td>
-                        <td>@if ($row->isConfirmed())<span class="badge badge-success">{{ __('tickets.confirmed') }}</span>@else<span class="badge badge-secondary">{{ __('tickets.not_confirmed') }}</span>@endif</td>
+                        <td>@include('ticket_inbound._confirmation', ['row' => $row, 'date' => $row->inbound_date])</td>
                         @can('ticket_stock.manage')
                             <td class="text-right">
                                 @if ($row->isConfirmed())
@@ -92,7 +96,7 @@
                         @endcan
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
+                    <tr><td colspan="9" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

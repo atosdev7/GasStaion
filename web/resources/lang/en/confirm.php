@@ -12,6 +12,7 @@ return [
     'ticket_inbounds' => 'Ticket inbounds',
     'ticket_publishes' => 'Ticket publishes',
     'quantity' => 'Quantity',
+    'cost' => 'Printing cost per ticket',
     'spec' => 'Spec',
     'serials' => 'Serial numbers',
     'code' => 'Code',
