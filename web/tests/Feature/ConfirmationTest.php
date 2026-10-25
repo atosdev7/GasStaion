@@ -719,8 +719,8 @@ class ConfirmationTest extends TestCase
         $this->supplement('2026-10-02');
 
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (2 / 0 / 0)')
-            ->assertSee('2026-10-02 (0 / 1 / 0)');
+            ->assertSee('2026-10-01 (2 / 0 / 0 / 0)')
+            ->assertSee('2026-10-02 (0 / 1 / 0 / 0)');
     }
 
     public function testConfirmingStampsOnlyTheCheckedRecords()
@@ -749,7 +749,7 @@ class ConfirmationTest extends TestCase
 
         $this->get('/confirmations?date=2026-10-01')->assertOk()
             ->assertDontSee('name="sales[]"', false)
-            ->assertSee(__('confirm.already', ['sales' => 1, 'supplements' => 0, 'tickets' => 0]));
+            ->assertSee(__('confirm.already', ['sales' => 1, 'supplements' => 0, 'tickets' => 0, 'money' => 0]));
     }
 
     public function testARecordOfAnotherDateOrAlreadyConfirmedIsNotTouched()
@@ -784,6 +784,124 @@ class ConfirmationTest extends TestCase
         $this->assertNull($sale->fresh()->confirmed_at);
     }
 
+    private function payment($date, $extra = [])
+    {
+        return \App\Models\Debts\DebtPayment::forceCreate($extra + [
+            'customer_id' => \App\Models\Sales\Customer::first()->id, 'debt_id' => null, 'amount' => 50, 'payment_method' => 'bank',
+            'paid_date' => $date, 'date' => $date, 'user_id' => 1,
+        ]);
+    }
+
+    private function fuelInbound($date, $extra = [])
+    {
+        $tank = \App\Models\Fuel\Tank::first() ?: \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
+
+        return \App\Models\Fuel\FuelInbound::forceCreate($extra + [
+            'tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 1000, 'cost' => 6.5, 'inbound_date' => $date, 'user_id' => 1, 'from_name' => 'Refinery',
+        ]);
+    }
+
+    public function testThePaymentsAndFuelPageListsAndConfirmsTheDebtPaymentsAndTheFuelInbounds()
+    {
+        \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
+        $payment = $this->payment('2026-10-01');
+        $reversal = $this->payment('2026-10-01', ['amount' => -50, 'reverses_payment_id' => $payment->id]);
+        $other = $this->payment('2026-10-02');
+        $inbound = $this->fuelInbound('2026-10-01');
+        $otherInbound = $this->fuelInbound('2026-10-03');
+
+        // the page of the date, in the menu of the daily confirmation
+        $this->as('accountant')->get('/')->assertOk()->assertSee('Payments and fuel');
+        $html = $this->get('/confirmations/payments?date=2026-10-01')->assertOk()->getContent();
+        $this->assertSame(2, substr_count($html, 'name="debt_payments[]"'));        // the payment and its reversal (a line of its own, negative)
+        $this->assertSame(1, substr_count($html, 'name="fuel_inbounds[]"'));
+        $this->assertStringContainsString('ACME', $html);
+        $this->assertStringContainsString('Refinery', $html);
+        $this->assertStringContainsString('-50.00', $html);
+        $this->assertStringNotContainsString('value="' . $other->id . '" class="check-debt-payments"', $html);   // another date
+
+        // confirming stamps the checked ones of the date only, and comes back to the page
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'debt_payments' => [$payment->id, $other->id], 'fuel_inbounds' => [$inbound->id, $otherInbound->id]])
+            ->assertRedirect(route('confirmations.payments', ['date' => '2026-10-01']))->assertSessionHas('status');
+        $this->assertStringContainsString('Confirmed 1 debt payments and 1 fuel inbounds for 2026-10-01', session('status'));
+        $this->assertNotNull($payment->fresh()->confirmed_at);
+        $this->assertNotNull($inbound->fresh()->confirmed_at);
+        $this->assertNull($reversal->fresh()->confirmed_at);                         // not checked
+        $this->assertNull($other->fresh()->confirmed_at);                            // another date: not touched
+        $this->assertNull($otherInbound->fresh()->confirmed_at);
+        $this->assertSame(auth()->id(), (int) $payment->fresh()->confirmed_by);
+
+        // confirmed ones have no check box and no taking back for the accountant
+        $html = $this->get('/confirmations/payments?date=2026-10-01')->getContent();
+        $this->assertSame(1, substr_count($html, 'name="debt_payments[]"'));
+        $this->assertSame(0, substr_count($html, 'name="fuel_inbounds[]"'));
+        $this->assertStringNotContainsString('/unconfirm', $html);
+        $this->post('/payments/' . $payment->id . '/unconfirm')->assertForbidden();
+        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+
+        // a manager takes the confirmations back
+        $html = $this->as('manager')->get('/confirmations/payments?date=2026-10-01')->getContent();
+        $this->assertStringContainsString('formaction="' . url('/payments/' . $payment->id . '/unconfirm') . '"', $html);
+        $this->post('/payments/' . $payment->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
+        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
+        $this->assertNull($payment->fresh()->confirmed_at);
+        $this->assertNull($inbound->fresh()->confirmed_at);
+        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertSessionHasErrors('record');   // not confirmed any more
+
+        // nothing checked is an error; the assistant and the cashier cannot open the page
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments'])->assertSessionHasErrors('payments');
+        foreach (['assistant', 'cashier'] as $role) {
+            $this->as($role)->get('/confirmations/payments')->assertForbidden();
+        }
+    }
+
+    public function testTheWaitingDatesCountTheDebtPaymentsAndTheFuelInboundsToo()
+    {
+        \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
+        $this->payment('2026-10-01');
+        $this->payment('2026-10-01');
+        $this->fuelInbound('2026-10-01');
+        $this->fuelInbound('2026-10-04', ['confirmed_at' => now(), 'confirmed_by' => 1]);     // confirmed: not waiting
+
+        $this->as('manager')->get('/confirmations')->assertOk()->assertSee('2026-10-01 (0 / 0 / 0 / 3)')->assertDontSee('2026-10-04 (');
+        $this->get('/confirmations?date=2026-10-04')->assertOk()->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 0, 'money' => 1]));
+    }
+
+    public function testAConfirmedFuelInboundCannotBeChangedOrDeletedUntilAManagerTakesTheConfirmationBack()
+    {
+        $inbound = $this->fuelInbound('2026-10-01', ['is_default' => false]);
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'fuel_inbounds' => [$inbound->id]]);
+        $this->assertNotNull($inbound->fresh()->confirmed_at);
+
+        $this->get('/inbound/' . $inbound->id . '/edit')->assertRedirect('/inbound')->assertSessionHasErrors('inbound');
+        $this->put('/inbound/' . $inbound->id, ['tank_id' => $inbound->tank_id, 'inbound_date' => '2026-10-01', 'amount_kg' => 5, 'cost' => 1])->assertSessionHasErrors('inbound');
+        $this->assertEquals(1000, $inbound->fresh()->amount_kg);
+        $this->delete('/inbound/' . $inbound->id)->assertSessionHasErrors('inbound');
+        $this->assertNotNull(\App\Models\Fuel\FuelInbound::find($inbound->id));
+        $this->get('/inbound')->assertOk()->assertDontSee(route('inbound.edit', $inbound->id));      // the list shows a lock instead
+
+        $this->as('manager')->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect();
+        $this->as('accountant')->get('/inbound/' . $inbound->id . '/edit')->assertOk();
+        $this->put('/inbound/' . $inbound->id, ['tank_id' => $inbound->tank_id, 'inbound_date' => '2026-10-01', 'amount_kg' => 1200, 'cost' => 6.5])->assertSessionHasNoErrors();
+        $this->assertEquals(1200, $inbound->fresh()->amount_kg);
+    }
+
+    public function testTheDayIsNotFullyConfirmedWhileADebtPaymentOrAFuelInboundWaits()
+    {
+        config(['backup.dump_on_confirmation' => true]);
+        Bus::fake();
+        \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
+        $sale = $this->sale('2026-10-01');
+        $payment = $this->payment('2026-10-01');
+        $inbound = $this->fuelInbound('2026-10-01');
+
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$sale->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'debt_payments' => [$payment->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);                    // the fuel inbound still waits
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'fuel_inbounds' => [$inbound->id]]);
+        Bus::assertDispatchedAfterResponse(RunBackupDump::class);
+    }
     public function testConfirmingAWholeDayQueuesTheBackupAfterTheResponse()
     {
         config(['backup.dump_on_confirmation' => true]);
@@ -877,8 +995,8 @@ class ConfirmationTest extends TestCase
         $this->inbound('2026-10-03');
 
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (1 / 0 / 3)')
-            ->assertSee('2026-10-03 (0 / 0 / 1)');
+            ->assertSee('2026-10-01 (1 / 0 / 3 / 0)')
+            ->assertSee('2026-10-03 (0 / 0 / 1 / 0)');
     }
 
     public function testConfirmingTheTicketStockStampsOnlyTheCheckedRecordsOfTheDate()
@@ -903,7 +1021,7 @@ class ConfirmationTest extends TestCase
         $page = $this->get('/confirmations/tickets?date=2026-10-01')->assertOk();
         $this->assertStringNotContainsString('value="' . $one->id . '" class="check-ticket-inbounds"', $page->getContent());   // no check box on a confirmed one
         $this->assertStringContainsString('value="' . $left->id . '" class="check-ticket-inbounds"', $page->getContent());
-        $this->get('/confirmations?date=2026-10-01')->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 3]));
+        $this->get('/confirmations?date=2026-10-01')->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 3, 'money' => 0]));
 
         // nothing checked is an error
         $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets'])->assertSessionHasErrors('tickets');

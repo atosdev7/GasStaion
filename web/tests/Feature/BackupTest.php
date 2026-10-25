@@ -87,6 +87,7 @@ class BackupTest extends TestCase
     {
         return FuelInbound::forceCreate([
             'tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => $kg, 'cost' => 1, 'inbound_date' => $date, 'user_id' => 1,
+            'confirmed_at' => now(), 'confirmed_by' => 1, // (confirmed: an unconfirmed one stops a backup, see the test of the blockers)
         ]);
     }
 
@@ -122,7 +123,7 @@ class BackupTest extends TestCase
         $debt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => $old->id, 'amount' => 20, 'payment_method' => 'cash', 'user_id' => 1]);
         DebtPayment::forceCreate([
             'customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 5, 'payment_method' => 'cash',
-            'paid_date' => '2026-09-11', 'date' => '2026-09-11', 'user_id' => 1,
+            'paid_date' => '2026-09-11', 'date' => '2026-09-11', 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1,
         ]);
         $loan = TicketLoan::forceCreate([
             'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 10, 'settled_amount_kg' => 5,
@@ -626,4 +627,31 @@ class BackupTest extends TestCase
         $this->assertSame(1, Backup::count());
         $this->assertSame(2, \App\Models\Tickets\TicketInbound::count());
         $this->assertSame(1, \App\Models\Tickets\TicketPublish::count());
-    }}
+    }
+
+    public function testNothingIsClearedWhileTheDebtPaymentsAndFuelInboundsOfThoseDaysAreNotConfirmed()
+    {
+        $this->sale('2026-09-10');
+        $payment = DebtPayment::forceCreate([
+            'customer_id' => $this->customer->id, 'debt_id' => null, 'amount' => 5, 'payment_method' => 'cash', 'paid_date' => '2026-09-11', 'date' => '2026-09-11', 'user_id' => 1,
+        ]);
+        $inbound = FuelInbound::forceCreate(['tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 1, 'inbound_date' => '2026-09-08', 'user_id' => 1]);
+        FuelInbound::forceCreate(['tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 1, 'inbound_date' => '2026-09-20', 'user_id' => 1]);   // after the date: no matter
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('2 debt payments and fuel inbounds', session('errors')->first('up_to'));
+        $this->assertStringContainsString('2026-09-08', session('errors')->first('up_to'));
+        $this->assertSame(1, Sale::count());
+        $this->assertSame(0, Backup::count());
+
+        $inbound->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('1 debt payments and fuel inbounds', session('errors')->first('up_to'));
+
+        $payment->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(1, Backup::count());
+    }
+
+}

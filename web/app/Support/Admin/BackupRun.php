@@ -4,6 +4,7 @@ namespace App\Support\Admin;
 
 use App\Models\Admin\Backup;
 use App\Models\Admin\Device;
+use App\Models\Debts\DebtPayment;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelOutbound;
 use App\Models\Sales\Sale;
@@ -70,6 +71,15 @@ class BackupRun
         if ($ticketCount) {
             $oldest = array_filter([$inbounds->min('inbound_date'), $publishes->min('date')]);
             $blockers[] = __('admin.backup_blocked_tickets', ['count' => $ticketCount, 'date' => substr((string) min($oldest), 0, 10)]);
+        }
+
+        // the money received and the fuel that came in too (the fuel inbounds are cleared with the backup, the payments stay: the day is not finished until they are confirmed)
+        $payments = DebtPayment::where('paid_date', '<=', $upTo)->whereNull('confirmed_at');
+        $fuelInbounds = FuelInbound::where('inbound_date', '<=', $upTo)->whereNull('confirmed_at');
+        $moneyCount = (clone $payments)->count() + (clone $fuelInbounds)->count();
+        if ($moneyCount) {
+            $oldest = array_filter([$payments->min('paid_date'), $fuelInbounds->min('inbound_date')]);
+            $blockers[] = __('admin.backup_blocked_money', ['count' => $moneyCount, 'date' => substr((string) min($oldest), 0, 10)]);
         }
 
         $dayEnds = Carbon::parse($upTo)->addDay()->setTime((int) config('backup.business_day_start_hour'), 0, 0);

@@ -39,6 +39,7 @@ return [
     'confirmation_sales' => 'Sales',
     'confirmation_supplements' => 'Supplements',
     'confirmation_tickets' => 'Ticket stock',
+    'confirmation_payments' => 'Payments and fuel',
     'confirmation_summary' => 'Summary',
     'init_debts' => 'Debts',
     'ticket_summary' => 'Summary Tickets',

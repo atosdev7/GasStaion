@@ -12,7 +12,13 @@ class FuelInbound extends Model
 
     protected $casts = [
         'is_default' => 'boolean',
+        'confirmed_at' => 'datetime',
     ];
+
+    public function isConfirmed()
+    {
+        return $this->confirmed_at !== null;
+    }
 
     /**
      * Cost per kg that pre-fills the cost field of a sales form:

@@ -23,6 +23,7 @@ return [
     'backup_done' => 'Backup finished: :file',
     'backup_blocked_unconfirmed' => 'Nothing was cleared: :sales sales and :supplements supplements up to this date are not confirmed yet (the oldest is of :date). Confirm them on the Daily confirmation page first.',
     'backup_blocked_tickets' => 'Nothing was cleared: :count ticket inbounds and publishes up to this date are not confirmed yet (the oldest is of :date). Confirm them on the Daily confirmation page (Ticket stock) first.',
+    'backup_blocked_money' => 'Nothing was cleared: :count debt payments and fuel inbounds up to this date are not confirmed yet (the oldest is of :date). Confirm them on the Daily confirmation page (Payments and fuel) first.',
     'backup_blocked_devices' => 'Nothing was cleared: :devices has not uploaded since :time, so it may still hold records of these days. Wait until it has uploaded.',
     'backup_history' => 'Backup history',
     'backup_date' => 'Run at',

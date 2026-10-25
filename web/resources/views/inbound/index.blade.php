@@ -76,13 +76,17 @@
                                         <button type="submit" class="btn btn-sm btn-outline-secondary">{{ __('fuel.make_default') }}</button>
                                     </form>
                                 @endunless
-                                <a href="{{ route('inbound.edit', $row->id) }}" class="btn btn-sm btn-outline-primary">{{ __('fuel.edit') }}</a>
-                                <form method="POST" action="{{ route('inbound.destroy', $row->id) }}" class="d-inline"
-                                      onsubmit="return confirm(@json(__('fuel.inbound_delete_confirm')))">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('fuel.delete') }}</button>
-                                </form>
+                                @if ($row->isConfirmed())
+                                    <span class="text-muted" title="{{ __('fuel.confirmed_locked') }}"><i class="fas fa-lock"></i></span>
+                                @else
+                                    <a href="{{ route('inbound.edit', $row->id) }}" class="btn btn-sm btn-outline-primary">{{ __('fuel.edit') }}</a>
+                                    <form method="POST" action="{{ route('inbound.destroy', $row->id) }}" class="d-inline"
+                                          onsubmit="return confirm(@json(__('fuel.inbound_delete_confirm')))">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('fuel.delete') }}</button>
+                                    </form>
+                                @endif
                             </td>
                         @endcan
                     </tr>

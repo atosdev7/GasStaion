@@ -11,6 +11,13 @@ class DebtPayment extends Model
 {
     use SoftDeletes;
 
+    protected $casts = ['confirmed_at' => 'datetime'];
+
+    public function isConfirmed()
+    {
+        return $this->confirmed_at !== null;
+    }
+
     // The debt it pays (null for a general payment of the customer); a deleted debt is still shown.
     public function debt()
     {

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'confirmed_locked' => 'This record is confirmed and cannot be changed or deleted. A manager can take the confirmation back.',
     // Fuel inbound
     'default' => 'Default',
     'make_default' => 'Make default',

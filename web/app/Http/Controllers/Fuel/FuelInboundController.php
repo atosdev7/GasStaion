@@ -97,6 +97,9 @@ class FuelInboundController extends Controller
     public function edit($id)
     {
         $inbound = FuelInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.confirmed_locked')]);
+        }
 
         return view('inbound.edit', [
             'inbound' => $inbound,
@@ -111,6 +114,9 @@ class FuelInboundController extends Controller
     public function update(Request $request, $id)
     {
         $inbound = FuelInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.confirmed_locked')]);
+        }
         $data = $request->validate([
             'tank_id' => 'required|exists:tanks,id',
             'inbound_date' => 'required|date',
@@ -144,6 +150,9 @@ class FuelInboundController extends Controller
     public function destroy($id)
     {
         $inbound = FuelInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.confirmed_locked')]);
+        }
 
         if ($inbound->is_default && FuelInbound::where('fuel_type', $inbound->fuel_type)->where('id', '<>', $inbound->id)->exists()) {
             return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.inbound_default_delete')]);

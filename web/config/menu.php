@@ -52,6 +52,7 @@ return [
             ['label' => 'confirmation_sales',       'route' => 'confirmations.index',       'permission' => 'confirmations.manage'],
             ['label' => 'confirmation_supplements', 'route' => 'confirmations.supplements', 'permission' => 'confirmations.manage'],
             ['label' => 'confirmation_tickets',     'route' => 'confirmations.tickets',     'permission' => 'confirmations.manage'],
+            ['label' => 'confirmation_payments',    'route' => 'confirmations.payments',    'permission' => 'confirmations.manage'],
             ['label' => 'confirmation_summary',     'route' => 'confirmations.summary',     'permission' => 'confirmations.manage'],
         ],
     ],
