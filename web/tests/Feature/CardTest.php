@@ -272,6 +272,17 @@ class CardTest extends TestCase
         $this->as('manager')->get('/card-sales?card=nope')->assertSessionHasErrors('card');
     }
 
+    public function testATopUpWorthMoreThanOneSaleCanBeIsRefusedOnThePrice()
+    {
+        $card = $this->card('AA01', 'Li Wei');
+        $this->as('manager');
+
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 50000, 'price' => 2000])->assertSessionHasErrors('price'); // 100,000,000
+        $this->assertSame(0, Sale::where('sale_type', 'card')->count());
+        $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 49999, 'price' => 2000])->assertSessionHasNoErrors();
+        $this->assertSame(1, Sale::where('sale_type', 'card')->count());
+    }
+
     public function testOnlyTheManagerDeletesACardSaleAndOnlyWhileTheBalanceStaysAboveZero()
     {
         $card = $this->card('AA01', 'Li Wei');

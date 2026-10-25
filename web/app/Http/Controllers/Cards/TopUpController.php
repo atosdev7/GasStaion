@@ -72,6 +72,7 @@ class TopUpController extends Controller
 
             $kg = round((float) $data['amount_kg'], 2);
             $total = round($kg * (float) $data['price'], 2);
+            \App\Http\Controllers\Sales\SaleController::checkTotal($total);
 
             $sale = new Sale;
             $sale->forceFill([

@@ -34,6 +34,7 @@ class SaleController extends Controller
     const USAGES = ['sale', 'self', 'other', 'ticket_loan'];
     const PAYMENT_METHODS = ['cash', 'bank'];
     const SALE_TYPES = ['ticket', 'spot', 'card'];
+    const MAX_TOTAL = 99999999; // the most one sale may be worth (the terminal and its upload have the same limit; the column holds far more)
 
     // The list page of each way to sell (Ticket Sales, Spot Sales and Card Sales in the menu), also where a finished sale goes back to.
     public static function listRoute($saleType)
@@ -251,6 +252,7 @@ class SaleController extends Controller
             }
 
             $totalAmount = $isSale ? round($amountKg * $data['price'], 2) : 0;
+            self::checkTotal($totalAmount);
             $paidAmount = $isSale ? min(round((float) $data['paid_amount'], 2), $totalAmount) : 0;
             $unpaidAmount = $isSale ? round($totalAmount - $paidAmount, 2) : 0;
 
@@ -324,6 +326,7 @@ class SaleController extends Controller
         $isSale = $data['usage'] === 'sale';
         $amountKg = round((float) $data['amount_kg'], 2);
         $totalAmount = $isSale ? round($amountKg * $data['price'], 2) : 0;
+        self::checkTotal($totalAmount);
         $paidAmount = $isSale ? min(round((float) ($data['paid_amount'] ?? 0), 2), $totalAmount) : 0;
         $unpaidAmount = $isSale ? round($totalAmount - $paidAmount, 2) : 0;
 
@@ -446,6 +449,14 @@ class SaleController extends Controller
         }
 
         return FuelInbound::costAt($fuelType, $soldAt);
+    }
+
+    // A total no sale can have: nearly always a price or a weight typed wrong, said on the price field.
+    public static function checkTotal($total)
+    {
+        if ($total > self::MAX_TOTAL) {
+            throw ValidationException::withMessages(['price' => __('sales.total_too_big', ['total' => number_format($total, 2, '.', ''), 'max' => number_format(self::MAX_TOTAL, 2, '.', '')])]);
+        }
     }
 
     // A sale (usage "sale") has a price above 0: a price of 0 would be a free sale. Own use and other use have no amount, so any price does.

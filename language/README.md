@@ -10,7 +10,7 @@ Generated 2026-10-19. One file per sidebar group; inside each file one section p
 | [web/01_dashboard.md](web/01_dashboard.md) | Dashboard | 29 |
 | [web/02_fuel.md](web/02_fuel.md) | Fuel | 38 |
 | [web/03_tickets.md](web/03_tickets.md) | Tickets | 99 |
-| [web/04_sales.md](web/04_sales.md) | Sales | 123 |
+| [web/04_sales.md](web/04_sales.md) | Sales | 124 |
 | [web/05_supplements.md](web/05_supplements.md) | Supplements | 64 |
 | [web/06_confirmations.md](web/06_confirmations.md) | Daily confirmation | 86 |
 | [web/07_debts.md](web/07_debts.md) | Debts | 63 |

@@ -159,6 +159,7 @@ Files: `resources/views/sale/index.blade.php`, `resources/views/sale/create_spot
 | `sales.spec` | Spec (cylinder weight) |
 | `sales.spot_sale` | Spot sale |
 | `sales.spot_sale_cash_hint` | Spot sales are always paid in cash. |
+| `sales.total_too_big` | The total :total is more than one sale can be (:max). Check the price and the weight. |
 | `sales.all_fuels` | All fuel types |
 | `sales.all_usages` | All usages |
 | `sales.sale_date_too_old` | A sale cannot be dated more than :days days back. Ask the manager. |

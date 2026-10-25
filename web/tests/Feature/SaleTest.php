@@ -595,6 +595,24 @@ class SaleTest extends TestCase
         $this->assertSame([], $names('/spot-sales?sale_date=' . today()->toDateString()));
     }
 
+    public function testATotalNoSaleCanHaveIsRefusedWithAMessageOnThePrice()
+    {
+        $this->publishTickets(10);
+        $this->as('manager');
+        $before = Sale::count();
+
+        // a ticket sale: 3 tickets of 5 kg at 9,999,999 are 149,999,985; a spot sale of 999,999 kg at 9,999,999 is far beyond the column
+        $this->sell(3, ['price' => 9999999, 'paid_amount' => 0])->assertSessionHasErrors('price');
+        $this->assertStringContainsString('more than one sale can be', session('errors')->first('price'));
+        $this->spotSell(999999, ['price' => 9999999, 'paid_amount' => 0])->assertSessionHasErrors('price');
+        $this->spotSell(50000, ['price' => 2000, 'paid_amount' => 0])->assertSessionHasErrors('price'); // 100,000,000
+        $this->assertSame($before, Sale::count());
+        $this->assertSame(10, Ticket::where('status', config('ticket_statuses.publish'))->count()); // nothing was taken
+
+        // the limit itself is fine, and own use has no amount whatever the price
+        $this->spotSell(49999.99, ['price' => 2000, 'paid_amount' => 0])->assertSessionHasNoErrors();
+        $this->spotSell(999999, ['price' => 9999999, 'usage' => 'self', 'paid_amount' => null])->assertSessionHasNoErrors();
+    }
     public function testTheSalesTableCanBeFilteredByFuelTypeAndUsage()
     {
         $this->publishTickets(10);
