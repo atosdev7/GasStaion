@@ -25,7 +25,10 @@ LoanSettleDialog::LoanSettleDialog(QSqlDatabase db, Session *session, const QStr
     list_ = ui_->settleTable;
     list_->setColumnCount(2);
     list_->setHorizontalHeaderLabels(QStringList() << tr("Ticket") << tr("kg"));
-    list_->horizontalHeader()->setStretchLastSection(true);
+    // the ticket column is as wide as the 16 digits, the weight takes the rest and sits at the right like its numbers
+    list_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    list_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    list_->horizontalHeaderItem(1)->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     list_->verticalHeader()->setVisible(false);
     list_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     list_->setSelectionBehavior(QAbstractItemView::SelectRows);
