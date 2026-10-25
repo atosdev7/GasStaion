@@ -822,4 +822,16 @@ class SaleTest extends TestCase
         $this->as('cashier')->get('/spot-sales')->assertForbidden();
         $this->as('assistant')->get('/spot-sales')->assertOk();
     }
-}
+
+    public function testASaleNeedsAPriceAboveZeroButOwnUseAndOtherUseDoNot()
+    {
+        $this->as('assistant');
+        $this->spotSell(5, ['price' => 0])->assertSessionHasErrors('price');
+        $this->assertStringContainsString('above 0', session('errors')->first('price'));
+        $this->assertSame(0, Sale::count());
+
+        // own use and other use have no amount: a price of 0 does no harm
+        $this->spotSell(5, ['price' => 0, 'usage' => 'self'])->assertSessionDoesntHaveErrors('price');
+        $this->spotSell(5, ['price' => 0, 'usage' => 'other'])->assertSessionDoesntHaveErrors('price');
+        $this->assertSame(2, Sale::count());
+    }}

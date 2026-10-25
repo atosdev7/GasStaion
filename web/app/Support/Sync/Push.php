@@ -188,6 +188,9 @@ class Push
         // The receipt is a yes/no on the web; the device sends nothing, or some text, for it.
         $d['receipt'] = !empty($d['receipt']);
 
+        if ($d['usage'] === 'sale' && $d['price'] <= 0) {
+            throw new RejectedRow('a sale needs a price above 0');
+        }
         if (abs($d['paid_amount'] + $d['unpaid_amount'] - $d['total_amount']) > 0.01) {
             throw new RejectedRow('paid and unpaid amounts do not add up to the total');
         }

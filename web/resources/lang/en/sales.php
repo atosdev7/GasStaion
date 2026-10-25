@@ -3,6 +3,7 @@
 return [
     // Ticket sales
     'recent_sales' => 'Recent sales',
+    'price_above_zero' => 'The price of a sale must be above 0.',
     'no_sale_stock' => 'There are no published tickets to sell yet. Publish tickets first.',
     'ticket_sale' => 'Ticket sale',
     'ticket_lines' => 'Tickets to sell',

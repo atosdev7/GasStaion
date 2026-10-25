@@ -180,7 +180,7 @@ class SaleController extends Controller
             'lines.*.start_serial' => 'nullable|integer|min:1|max:' . Barcode::MAX_SERIAL,
             'customer_id' => ['required_without:new_customer', 'nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'new_customer' => 'nullable|string|max:100', // a name typed in the form that is not a customer yet
-            'price' => 'required|numeric|min:0|max:9999999',
+            'price' => ['required', 'numeric', 'min:0', 'max:9999999', self::priceAboveZeroForASale()],
             'cost' => 'nullable|numeric|min:0|max:9999999',
             'usage' => ['required', Rule::in(self::USAGES)],
             'payment_method' => ['required_if:usage,sale', 'nullable', Rule::in(self::PAYMENT_METHODS)],
@@ -293,7 +293,7 @@ class SaleController extends Controller
             'amount_kg' => 'required|numeric|min:0.01|max:999999',
             'customer_id' => ['required_without:new_customer', 'nullable', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'new_customer' => 'nullable|string|max:100', // a name typed in the form that is not a customer yet
-            'price' => 'required|numeric|min:0|max:9999999',
+            'price' => ['required', 'numeric', 'min:0', 'max:9999999', self::priceAboveZeroForASale()],
             'cost' => 'nullable|numeric|min:0|max:9999999',
             'usage' => ['required', Rule::in(self::USAGES)],
             'paid_amount' => 'required_if:usage,sale|nullable|numeric|min:0|max:99999999',
@@ -403,6 +403,16 @@ class SaleController extends Controller
         $date = $data['sale_date'] ?? today()->toDateString();
 
         return $date === today()->toDateString() ? now() : Carbon::parse($date . ' ' . now()->format('H:i:s'));
+    }
+
+    // A sale (usage "sale") has a price above 0: a price of 0 would be a free sale. Own use and other use have no amount, so any price does.
+    public static function priceAboveZeroForASale()
+    {
+        return function ($attribute, $value, $fail) {
+            if (request('usage') === 'sale' && is_numeric($value) && (float) $value <= 0) {
+                $fail(__('sales.price_above_zero'));
+            }
+        };
     }
 
     // Shared by both sale types: a ticket_loan usage creates the linked loan, and any usage that

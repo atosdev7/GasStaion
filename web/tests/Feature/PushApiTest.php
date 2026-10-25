@@ -951,4 +951,16 @@ class PushApiTest extends TestCase
 
         $this->assertEquals(12, \App\Models\Debts\TicketLoan::find($loan['id'])->settled_amount_kg);
     }
-}
+
+    public function testASaleFromTheTerminalNeedsAPriceAboveZero()
+    {
+        $free = $this->sale(['price' => '0.00', 'total_amount' => '0.00', 'paid_amount' => '0.00']);
+        $own = $this->sale(['price' => '0.00', 'total_amount' => '0.00', 'paid_amount' => '0.00', 'usage' => 'self']);
+
+        $result = $this->push('sales', [$free, $own]);
+
+        $this->assertSame([$free['id']], array_column($result['rejected'], 'key'));
+        $this->assertStringContainsString('price above 0', $result['rejected'][0]['error']);
+        $this->assertNull(Sale::find($free['id']));
+        $this->assertNotNull(Sale::find($own['id']));
+    }}
