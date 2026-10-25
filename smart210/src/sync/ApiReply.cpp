@@ -5,6 +5,12 @@
 #include <QTimer>
 #include <QVariant>
 
+// (a constant that is used by reference needs a definition for the linker of the older compilers)
+const int ApiReply::MaxRetries;
+const int ApiReply::MaxWaitMs;
+const int ApiReply::DefaultWaitMs;
+const int ApiReply::LongestWaitMs;
+
 ApiReply::ApiReply(int timeoutMs, QObject *parent)
     : QObject(parent), manager_(0), post_(false), timeoutMs_(timeoutMs), reply_(0), ok_(false), busy_(false), networkError_(false),
       timedOut_(false), httpStatus_(0), retries_(0), waitedMs_(0)

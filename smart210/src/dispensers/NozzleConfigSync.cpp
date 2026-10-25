@@ -3,6 +3,8 @@
 #include "Decimal.h"
 #include "Settings.h"
 
+#include <QStringList>
+
 using namespace BoardProtocol;
 
 NozzleConfigSync::NozzleConfigSync(QSqlDatabase db, BoardBus *bus, QObject *parent)
