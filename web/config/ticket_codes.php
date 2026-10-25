@@ -8,6 +8,6 @@
 //
 // Keyed by config/fuel_types.php's letter, then by the spec key (config/ticket_specs.php).
 return [
-    'A' => [0 => '03', 1 => '04', 2 => '01'],            // Gasoline: 5kg=03, 10kg=04, 15kg=01
+    'A' => [0 => '03', 1 => '04', 2 => '01', 3 => '08'], // Gasoline: 5kg=03, 10kg=04, 15kg=01, 50kg=08
     'D' => [0 => '06', 1 => '07', 2 => '02', 3 => '05'], // Diesel: 5kg=06, 10kg=07, 15kg=02, 50kg=05
 ];

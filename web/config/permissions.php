@@ -44,7 +44,7 @@ return [
             'inbound.manage',
             'outbound.manage',
             'costs.view',
-            'ticket_stock.view',
+            'ticket_stock.manage', // adds, changes and deletes ticket inbounds and publishes blank tickets, like the assistant
             'ticket_sales.manage',
             'payments.manage',
             'tickets.restrict',

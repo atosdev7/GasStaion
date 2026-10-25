@@ -15,9 +15,6 @@
                     <span class="badge badge-secondary mr-1">{{ __('tickets.ticket_status_' . $name) }}: {{ $perStatus[config('ticket_statuses.' . $name)] ?? 0 }}</span>
                 @endforeach
             </div>
-            @if ($touched)
-                <div class="text-muted mt-2"><i class="fas fa-lock"></i> {{ $touched }}</div>
-            @endif
         </div>
     </div>
 

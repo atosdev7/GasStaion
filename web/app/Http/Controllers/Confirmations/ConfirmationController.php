@@ -11,6 +11,8 @@ use App\Models\Supplements\Remainder;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
 use App\Support\Reports\ReportSheets;
 use App\Support\Sales\SaleDeletion;
@@ -19,7 +21,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-// Daily confirmation: the accountant (or manager) picks a date, reviews the sales and supplements of that date, checks the ones not confirmed
+// Daily confirmation: the accountant (or manager) picks a date, reviews the sales, the supplements and the blank ticket stock (ticket inbounds and
+// publishes) of that date, checks the ones not confirmed
 // yet and confirms them. Every record of the date stays in the tables with its state (confirmed or not); a record that has a problem is
 // changed (see SaleEditController: its date, comment, receipt) and so leaves that date. A confirmed sale can no longer be deleted or edited
 // (a manager can take a confirmation back, see UnconfirmController); later corrections are made with a return entry.
@@ -39,6 +42,7 @@ class ConfirmationController extends Controller
             'waiting' => $waiting,
             'confirmedSales' => Sale::where('sale_date', $date)->whereNotNull('confirmed_at')->count(),
             'confirmedSupplements' => Supplement::where('supply_date', $date)->whereNotNull('confirmed_at')->count(),
+            'confirmedTickets' => TicketInbound::where('inbound_date', $date)->whereNotNull('confirmed_at')->count() + TicketPublish::where('date', $date)->whereNotNull('confirmed_at')->count(),
             'deletedSales' => Sale::onlyTrashed()->where('sale_date', $date)->count(),
             'fuels' => config('fuel_types'),
         ];
@@ -218,6 +222,19 @@ class ConfirmationController extends Controller
         return response()->download($path, 'confirmation-supplements-' . $data['date'] . '.xlsx', ['Content-Type' => XlsxWriter::MIME])->deleteFileAfterSend(true);
     }
 
+    // Ticket stock: the ticket inbounds (by their date) and the publishes (by their date) of the date, to be checked and confirmed like the sales. A confirmed
+    // inbound can no longer be changed or deleted (see TicketInboundController); a manager can take the confirmation back (UnconfirmController).
+    public function tickets(Request $request)
+    {
+        $page = $this->page($request);
+
+        return view('confirmation.tickets', $page + [
+            'inbounds' => TicketInbound::where('inbound_date', $page['date'])->orderBy('id')->get(),
+            'publishes' => TicketPublish::where('date', $page['date'])->orderBy('id')->get(),
+            'specs' => config('ticket_specs'),
+        ]);
+    }
+
     // Summary: the figures of the whole date.
     public function summaryPage(Request $request)
     {
@@ -384,21 +401,27 @@ class ConfirmationController extends Controller
             'sales.*' => 'uuid',
             'supplements' => 'nullable|array|max:2000',
             'supplements.*' => 'uuid',
-            'from' => 'nullable|in:sales,supplements', // the page the form was on
+            'ticket_inbounds' => 'nullable|array|max:2000',
+            'ticket_inbounds.*' => 'integer',
+            'ticket_publishes' => 'nullable|array|max:2000',
+            'ticket_publishes.*' => 'integer',
+            'from' => 'nullable|in:sales,supplements,tickets', // the page the form was on
             'tab' => 'nullable|in:ticket,spot,card,others', // the tab of the Sales page, to come back to it
         ]);
         $from = $data['from'] ?? 'sales';
         $saleIds = $data['sales'] ?? [];
         $supplementIds = $data['supplements'] ?? [];
+        $inboundIds = $data['ticket_inbounds'] ?? [];
+        $publishIds = $data['ticket_publishes'] ?? [];
 
         // Confirming with nothing checked is allowed only to erase the deleted sales waiting on that date.
-        if (!$saleIds && !$supplementIds && ($from === 'supplements' || !Sale::onlyTrashed()->where('sale_date', $data['date'])->exists())) {
+        if (!$saleIds && !$supplementIds && !$inboundIds && !$publishIds && ($from !== 'sales' || !Sale::onlyTrashed()->where('sale_date', $data['date'])->exists())) {
             throw ValidationException::withMessages([$from => __('confirm.nothing_checked')]);
         }
 
         // Only records of the chosen date that are still unconfirmed count, so a stale page or a doctored form cannot
         // confirm anything else. The date's deleted sales are erased for good in the same step.
-        list($sales, $supplements, $erased) = DB::transaction(function () use ($data, $saleIds, $supplementIds, $from) {
+        list($sales, $supplements, $erased, $inbounds, $publishes) = DB::transaction(function () use ($data, $saleIds, $supplementIds, $inboundIds, $publishIds, $from) {
             $stamp = ['confirmed_at' => now(), 'confirmed_by' => auth()->id()];
 
             $confirm = function ($query, array $ids, $column) use ($data, $stamp) {
@@ -409,23 +432,27 @@ class ConfirmationController extends Controller
                 $confirm(Sale::query(), $saleIds, 'sale_date'),
                 $confirm(Supplement::query(), $supplementIds, 'supply_date'),
                 $from === 'sales' ? SaleDeletion::purge($data['date']) : 0, // the deleted sales are shown, and erased, on the Sales page
+                $confirm(TicketInbound::query(), $inboundIds, 'inbound_date'),
+                $confirm(TicketPublish::query(), $publishIds, 'date'),
             ];
         });
 
-        Audit::log('confirm', $data['date'] . ': ' . $sales . ' sales, ' . $supplements . ' supplements, ' . $erased . ' deleted sales erased');
+        Audit::log('confirm', $data['date'] . ': ' . $sales . ' sales, ' . $supplements . ' supplements, ' . $inbounds . ' ticket inbounds, ' . $publishes . ' ticket publishes, ' . $erased . ' deleted sales erased');
 
-        $message = __('confirm.done', ['sales' => $sales, 'supplements' => $supplements, 'date' => $data['date']]);
+        $message = $from === 'tickets'
+            ? __('confirm.done_tickets', ['inbounds' => $inbounds, 'publishes' => $publishes, 'date' => $data['date']])
+            : __('confirm.done', ['sales' => $sales, 'supplements' => $supplements, 'date' => $data['date']]);
         if ($erased) {
             $message .= ' ' . __('confirm.erased', ['count' => $erased]);
         }
 
         // The day is finished when nothing of it is left to confirm: the database is dumped, after the response, as it stands now.
-        if (config('backup.dump_on_confirmation') && ($sales || $supplements) && $this->dayIsFullyConfirmed($data['date'])) {
+        if (config('backup.dump_on_confirmation') && ($sales || $supplements || $inbounds || $publishes) && $this->dayIsFullyConfirmed($data['date'])) {
             RunBackupDump::dispatchAfterResponse('confirmed ' . $data['date']);
             $message .= ' ' . __('confirm.backup_queued');
         }
 
-        $url = route($from === 'supplements' ? 'confirmations.supplements' : 'confirmations.index', ['date' => $data['date']]);
+        $url = route(['sales' => 'confirmations.index', 'supplements' => 'confirmations.supplements', 'tickets' => 'confirmations.tickets'][$from], ['date' => $data['date']]);
 
         return redirect($url . ($from === 'sales' && !empty($data['tab']) ? '#tab-' . $data['tab'] : ''))->with('status', $message);
     }
@@ -433,26 +460,32 @@ class ConfirmationController extends Controller
     private function dayIsFullyConfirmed($date)
     {
         return !Sale::where('sale_date', $date)->whereNull('confirmed_at')->exists()
-            && !Supplement::where('supply_date', $date)->whereNull('confirmed_at')->exists();
+            && !Supplement::where('supply_date', $date)->whereNull('confirmed_at')->exists()
+            && !TicketInbound::where('inbound_date', $date)->whereNull('confirmed_at')->exists()
+            && !TicketPublish::where('date', $date)->whereNull('confirmed_at')->exists();
     }
 
-    // date => ['sales' => n, 'supplements' => n, 'deleted' => n]: records not confirmed yet and deleted sales
+    // date => ['sales' => n, 'supplements' => n, 'tickets' => n, 'deleted' => n]: records not confirmed yet (tickets: inbounds and publishes) and deleted sales
     // still waiting to be erased, newest date first.
     private function waitingByDate()
     {
         $queries = [
             'sales' => [Sale::whereNull('confirmed_at'), 'sale_date'],
             'supplements' => [Supplement::whereNull('confirmed_at'), 'supply_date'],
+            'tickets' => [TicketInbound::whereNull('confirmed_at'), 'inbound_date'],
+            'tickets_publish' => [TicketPublish::whereNull('confirmed_at'), 'date'], // (counted with the inbounds: the two are added up)
             'deleted' => [Sale::onlyTrashed(), 'sale_date'],
         ];
 
         $waiting = [];
         foreach ($queries as $key => $pair) {
             list($query, $column) = $pair;
+            $key = $key === 'tickets_publish' ? 'tickets' : $key;
             $counts = $query->whereNotNull($column)->selectRaw('`' . $column . '` AS day, COUNT(*) AS n')->groupBy($column)->pluck('n', 'day');
             foreach ($counts as $date => $n) {
-                $waiting[$date] = ($waiting[$date] ?? ['sales' => 0, 'supplements' => 0, 'deleted' => 0]);
-                $waiting[$date][$key] = (int) $n;
+                $date = substr((string) $date, 0, 10);
+                $waiting[$date] = ($waiting[$date] ?? ['sales' => 0, 'supplements' => 0, 'tickets' => 0, 'deleted' => 0]);
+                $waiting[$date][$key] += (int) $n;
             }
         }
         krsort($waiting);

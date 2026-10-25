@@ -136,15 +136,15 @@ class TicketSummaryTest extends TestCase
         $this->receive('2026-09-03', 30);
         $this->publish('2026-09-04', 1, 20);
         TicketInbound::where('quantity', 30)->first()->delete();                      // a wrong record, deleted
-        $this->delete('/ticket-publish/' . TicketPublish::first()->id);              // a cancelled batch
 
         $page = $this->summary('D', 0);
         $rows = $page->viewData('rows');
 
-        $this->assertSame(['2026-09-02'], $rows->pluck('day')->all());
+        $this->assertSame(['2026-09-02', '2026-09-04'], $rows->pluck('day')->all());      // the deleted record is not counted, the batch is
         $this->assertSame(100, $rows[0]->balance);
+        $this->assertSame(80, $rows[1]->balance);
         $this->assertSame(100, $page->viewData('totalIn'));
-        $this->assertSame(0, $page->viewData('totalOut'));
+        $this->assertSame(20, $page->viewData('totalOut'));
     }
 
     public function testTheChoiceIsValidated()

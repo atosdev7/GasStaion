@@ -12,7 +12,7 @@
                 <span class="text-muted mr-2">{{ __('confirm.waiting') }}:</span>
                 @forelse ($waiting as $d => $counts)
                     <a href="{{ route($route, ['date' => $d]) }}" class="badge {{ $d === $date ? 'badge-primary' : 'badge-secondary' }} p-2 ml-1">
-                        {{ $d }} ({{ $counts['sales'] }} / {{ $counts['supplements'] }}@if ($counts['deleted']) / {{ $counts['deleted'] }} {{ __('confirm.deleted_short') }}@endif)
+                        {{ $d }} ({{ $counts['sales'] }} / {{ $counts['supplements'] }} / {{ $counts['tickets'] }}@if ($counts['deleted']) / {{ $counts['deleted'] }} {{ __('confirm.deleted_short') }}@endif)
                     </a>
                 @empty
                     <span class="text-muted">{{ __('confirm.none_waiting') }}</span>
@@ -20,8 +20,8 @@
                 <small class="form-text text-muted">{{ __('confirm.counts_hint') }}</small>
             </div>
         </div>
-        @if ($confirmedSales || $confirmedSupplements)
-            <small class="form-text text-muted">{{ __('confirm.already', ['sales' => $confirmedSales, 'supplements' => $confirmedSupplements]) }}</small>
+        @if ($confirmedSales || $confirmedSupplements || $confirmedTickets)
+            <small class="form-text text-muted">{{ __('confirm.already', ['sales' => $confirmedSales, 'supplements' => $confirmedSupplements, 'tickets' => $confirmedTickets]) }}</small>
         @endif
     </div>
 </div>

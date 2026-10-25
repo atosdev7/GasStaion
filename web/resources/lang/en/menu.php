@@ -38,6 +38,7 @@ return [
     'debt_summary' => 'Summary',
     'confirmation_sales' => 'Sales',
     'confirmation_supplements' => 'Supplements',
+    'confirmation_tickets' => 'Ticket stock',
     'confirmation_summary' => 'Summary',
     'init_debts' => 'Debts',
     'ticket_summary' => 'Summary Tickets',

@@ -18,9 +18,9 @@ use Illuminate\Validation\ValidationException;
 // both fixed, non-admin-editable constants (see App\Support\Tickets\Barcode) — the admin only picks the
 // fuel type + spec and enters the serial range.
 //
-// A batch can be looked at (its tickets), changed (the serial range and the date) or deleted while it is untouched: every ticket of it is still blank
-// and none was downloaded by a terminal yet. After that the terminals hold its tickets and it stays as it is. A deleted batch is really deleted
-// (no soft delete, nothing is kept of it): its serial numbers are free again, and the start number suggested for a new batch ignores it.
+// A batch can be looked at (its tickets) but never changed or deleted: publishing cannot be reversed (the form asks to confirm it), and a ticket
+// that was published wrongly is restricted instead. Blank tickets spoiled in printing are taken out of the stock with a negative ticket inbound.
+// Confirmed with the daily confirmation (see ConfirmationController).
 class TicketPublishController extends Controller
 {
     const MAX_QUANTITY = 50000;
@@ -146,75 +146,7 @@ class TicketPublishController extends Controller
             'tickets' => Ticket::where('publish_id', $batch->id)->orderBy('serial')->paginate(100),
             'perStatus' => Ticket::where('publish_id', $batch->id)->selectRaw('status, COUNT(*) AS n')->groupBy('status')->pluck('n', 'status'),
             'fuels' => config('fuel_types'),
-            'touched' => $this->touchedReason($batch),
         ]);
-    }
-
-    public function edit($id)
-    {
-        $batch = TicketPublish::findOrFail($id);
-        if ($reason = $this->touchedReason($batch)) {
-            return redirect()->route('ticket-publish.index')->withErrors(['batch' => $reason]);
-        }
-
-        return view('ticket_publish.edit', ['batch' => $batch, 'fuels' => config('fuel_types')]);
-    }
-
-    // Gives the batch another serial range (the fuel type, the spec and the code stay): its blank tickets are numbered again.
-    public function update(Request $request, $id)
-    {
-        $data = $request->validate([
-            'start_serial' => 'required|integer|min:1|max:' . Barcode::MAX_SERIAL,
-            'end_serial' => 'required|integer|min:1|max:' . Barcode::MAX_SERIAL,
-            'date' => 'nullable|date',
-        ]);
-        $startSerial = (int) $data['start_serial'];
-        $endSerial = (int) $data['end_serial'];
-        $quantity = $this->quantityOf($startSerial, $endSerial);
-        $date = isset($data['date']) ? Carbon::parse($data['date'])->toDateString() : null; // null: the date stays
-
-        $before = '';
-        $batch = DB::transaction(function () use ($id, $startSerial, $endSerial, $quantity, $date, &$before) {
-            $batch = TicketPublish::lockForUpdate()->findOrFail($id);
-            if ($reason = $this->touchedReason($batch, true)) {
-                throw ValidationException::withMessages(['start_serial' => $reason]);
-            }
-            // the blank tickets of this batch go back to the stock first: the new range may take as many as the stock holds
-            if ($quantity > TicketStock::available($batch->fuel_type, $batch->spec) + $batch->count) {
-                throw ValidationException::withMessages(['end_serial' => __('tickets.not_enough_stock')]);
-            }
-            $this->refuseOverlap($batch->fuel_type, $batch->spec, $startSerial, $endSerial, $batch->id);
-
-            $before = $batch->start_serial . '-' . $batch->end_serial;
-            Ticket::where('publish_id', $batch->id)->delete();
-            $batch->forceFill(['start_serial' => $startSerial, 'end_serial' => $endSerial, 'count' => $quantity] + ($date ? ['date' => $date] : []))->save();
-            $this->insertTickets($batch, $startSerial, $endSerial);
-
-            return $batch;
-        });
-
-        Audit::log('ticket_publish_update', 'publish #' . $batch->id . ' serial ' . $before . ' -> ' . $startSerial . '-' . $endSerial);
-
-        return redirect()->route('ticket-publish.index')->with('status', __('tickets.saved'));
-    }
-
-    // Cancels a wrong batch: its blank tickets are removed and go back to the blank stock, and the batch itself is deleted for good (its numbers are free).
-    public function destroy($id)
-    {
-        $batch = DB::transaction(function () use ($id) {
-            $batch = TicketPublish::lockForUpdate()->findOrFail($id);
-            if ($reason = $this->touchedReason($batch, true)) {
-                throw ValidationException::withMessages(['batch' => $reason]);
-            }
-            Ticket::where('publish_id', $batch->id)->delete();
-            $batch->delete();
-
-            return $batch;
-        });
-
-        Audit::log('ticket_publish_delete', 'publish #' . $batch->id . ' serial ' . $batch->start_serial . '-' . $batch->end_serial);
-
-        return redirect()->route('ticket-publish.index')->with('status', __('tickets.deleted'));
     }
 
     // ---- helpers ----
@@ -268,28 +200,5 @@ class TicketPublishController extends Controller
                 ];
             }, $serials));
         }
-    }
-
-    // null when the batch is untouched (every ticket of it is blank, none was downloaded by a terminal), else the reason it cannot change.
-    // A ticket counts as sold when it is no longer 'published', or names a sale or a supplement. A terminal can sell a ticket before the web app
-    // hears of it, so a downloaded batch is never deleted either. $lock (inside a transaction): the tickets are locked first, so that a sale
-    // made at the same moment cannot slip in between this check and the delete.
-    private function touchedReason(TicketPublish $batch, $lock = false)
-    {
-        $tickets = Ticket::where('publish_id', $batch->id);
-        if ($lock) {
-            (clone $tickets)->lockForUpdate()->count();
-        }
-        $used = (clone $tickets)->where(function ($q) {
-            $q->where('status', '<>', config('ticket_statuses.publish'))->orWhereNotNull('sale_id')->orWhereNotNull('sale_date')->orWhereNotNull('supplement_id');
-        })->exists();
-        $downloaded = (clone $tickets)->where('synced', 1)->exists();
-
-        // a ticket that is gone was used and removed by a backup
-        if ($used || (clone $tickets)->count() !== (int) $batch->count) {
-            return __('tickets.batch_used');
-        }
-
-        return $downloaded ? __('tickets.batch_downloaded') : null;
     }
 }

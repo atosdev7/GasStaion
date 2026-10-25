@@ -8,7 +8,7 @@
     @endif
 
     <div class="card">
-        <form method="POST" action="{{ route('ticket-publish.store') }}">
+        <form method="POST" action="{{ route('ticket-publish.store') }}" id="publish-form">
             @csrf
             <div class="card-body">
                 <div class="form-group">
@@ -93,6 +93,21 @@
             count.value = e - s + 1;
         }
     }
+
+    // Publishing cannot be reversed: the user is asked first, and told so in the question.
+    var question = @json(__('tickets.publish_confirm'));
+    document.getElementById('publish-form').addEventListener('submit', function (event) {
+        var opt = stockItem.options[stockItem.selectedIndex];
+        var s = intVal(start), e = intVal(end);
+        var text = question
+            .replace(':count', s !== null && e !== null && e >= s ? (e - s + 1) : '?')
+            .replace(':item', opt ? opt.text.replace(/\s+/g, ' ').trim() : '')
+            .replace(':start', s !== null ? s : '?')
+            .replace(':end', e !== null ? e : '?');
+        if (!window.confirm(text)) {
+            event.preventDefault();
+        }
+    });
 
     stockItem.addEventListener('change', onStockChange);
     count.addEventListener('input', recalcEndFromCount);

@@ -29,6 +29,7 @@
                     <th class="text-right">{{ __('tickets.spec') }}</th>
                     <th class="text-right">{{ __('tickets.quantity') }}</th>
                     <th>{{ __('tickets.note') }}</th>
+                    <th>{{ __('tickets.confirmation') }}</th>
                     @can('ticket_stock.manage')
                         <th class="text-right" style="width: 1%">{{ __('tickets.actions') }}</th>
                     @endcan
@@ -51,7 +52,7 @@
                             @endforeach
                         </select>
                     </th>
-                    <th colspan="2">
+                    <th colspan="3">
                         @cannot('ticket_stock.manage')
                             <button type="submit" form="ticket-inbound-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
                             <a href="{{ route('ticket-inbound.index') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
@@ -73,20 +74,25 @@
                         <td class="text-right">{{ config('ticket_specs.' . $row->spec) }} {{ __('tickets.kg') }}</td>
                         <td class="text-right">{{ $row->quantity }}</td>
                         <td>{{ $row->note }}</td>
+                        <td>@if ($row->isConfirmed())<span class="badge badge-success">{{ __('tickets.confirmed') }}</span>@else<span class="badge badge-secondary">{{ __('tickets.not_confirmed') }}</span>@endif</td>
                         @can('ticket_stock.manage')
                             <td class="text-right">
-                                <a href="{{ route('ticket-inbound.edit', $row->id) }}" class="btn btn-sm btn-outline-primary">{{ __('tickets.edit') }}</a>
-                                <form method="POST" action="{{ route('ticket-inbound.destroy', $row->id) }}" class="d-inline"
-                                      onsubmit="return confirm(@json(__('tickets.ticket_inbound_delete_confirm')))">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('tickets.delete') }}</button>
-                                </form>
+                                @if ($row->isConfirmed())
+                                    <span class="text-muted" title="{{ __('tickets.confirmed_locked') }}"><i class="fas fa-lock"></i></span>
+                                @else
+                                    <a href="{{ route('ticket-inbound.edit', $row->id) }}" class="btn btn-sm btn-outline-primary">{{ __('tickets.edit') }}</a>
+                                    <form method="POST" action="{{ route('ticket-inbound.destroy', $row->id) }}" class="d-inline"
+                                          onsubmit="return confirm(@json(__('tickets.ticket_inbound_delete_confirm')))">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('tickets.delete') }}</button>
+                                    </form>
+                                @endif
                             </td>
                         @endcan
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
+                    <tr><td colspan="7" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

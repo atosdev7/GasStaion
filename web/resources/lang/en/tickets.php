@@ -5,6 +5,14 @@ return [
     'blank_inbound' => 'Blank ticket inbound',
     'spec_hint' => 'The cylinder weight this ticket is for.',
     'ticket_inbound_delete_confirm' => 'Delete this blank ticket inbound record? The blank ticket stock goes down by its quantity.',
+    'quantity_hint' => 'A negative number takes blank tickets out of the stock (for example the ones spoiled in printing).',
+    'confirmation' => 'Confirmation',
+    'confirmed' => 'Confirmed',
+    'not_confirmed' => 'Not confirmed',
+    'confirmed_locked' => 'This record is confirmed and cannot be changed or deleted. A manager can take the confirmation back.',
+    'publish_confirm' => "Publish :count tickets (:item), serial :start to :end?
+
+A published batch cannot be reversed: it cannot be changed or deleted.",
     'ticket_inbound_below_published' => 'Not possible: fewer blank tickets would be received than were published already for this fuel type and spec.',
     'ticket_inbound_fixed_hint' => 'The fuel type and the spec of a record do not change: the published batches are numbered for them.',
 
@@ -26,10 +34,6 @@ return [
     'published' => 'Published :count tickets: :start to :end.',
     'batch_tickets' => 'Tickets of the batch',
     'ticket_downloaded' => 'Downloaded by a terminal',
-    'batch_delete_confirm' => 'Delete this batch? Its blank tickets are removed and go back to the blank stock, and its serial numbers are free again.',
-    'batch_used' => 'Not possible: some tickets of this batch were already sold, supplied or restricted.',
-    'batch_downloaded' => 'Not possible: a terminal has already downloaded the tickets of this batch.',
-    'batch_edit_hint' => 'The fuel type, the spec and the code of a batch do not change. A new serial range numbers its blank tickets again.',
 
     // Ticket lookup
     'ticket_not_found' => 'No ticket found with that barcode.',

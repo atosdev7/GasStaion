@@ -103,8 +103,9 @@ class TicketPublishTest extends TestCase
     public function testSpecWithoutAConfiguredCodeCannotBePublished()
     {
         $this->as('manager');
-        // Gasoline ('A') has no code configured for spec 3 (50kg) in config/ticket_codes.php
-        // (only 0, 1, 2 are). Receiving stock for it is still allowed; publishing it isn't.
+        // a (fuel type, spec) with no code configured in config/ticket_codes.php (gasoline 50kg had none before it got 08): receiving stock for it is
+        // still allowed; publishing it isn't.
+        config(['ticket_codes.A.3' => null]);
         $this->receive(10, 3, 'A');
 
         $this->publish(1, 10, 3, 'A')->assertSessionHasErrors('stock_item');
@@ -200,12 +201,15 @@ class TicketPublishTest extends TestCase
         $this->publish(1, 5)->assertRedirect('/ticket-publish'); // assistant can publish
         $this->assertSame(5, DB::table('tickets')->count());
 
-        $this->as('accountant')->get('/ticket-publish')->assertOk(); // view only
-        $this->get('/ticket-publish/create')->assertForbidden();
-        $this->publish(6, 6)->assertForbidden();
+        $this->as('accountant')->get('/ticket-publish')->assertOk(); // the accountant publishes like the assistant
+        $this->get('/ticket-publish/create')->assertOk();
+        $this->receive(1);
+        $this->publish(6, 6)->assertRedirect('/ticket-publish');
 
         $this->as('cashier')->get('/ticket-publish')->assertForbidden();
-        $this->assertSame(5, DB::table('tickets')->count());
+        $this->get('/ticket-publish/create')->assertForbidden();
+        $this->publish(7, 7)->assertForbidden();
+        $this->assertSame(6, DB::table('tickets')->count());
     }
 
     public function testScreensRender()
@@ -267,135 +271,6 @@ class TicketPublishTest extends TestCase
         $this->get('/ticket-publish/999999')->assertNotFound();
     }
 
-    public function testEditGivesAnUntouchedBatchAnotherRangeAndNumbersItsTicketsAgain()
-    {
-        $this->as('manager');
-        $this->receive(20);
-        $this->publish(1, 5);
-        $batch = $this->batch();
-
-        $this->get('/ticket-publish/' . $batch->id . '/edit')->assertOk();
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 101, 'end_serial' => 108])->assertRedirect('/ticket-publish');
-
-        $batch = $batch->fresh();
-        $this->assertSame([101, 108, 8], [(int) $batch->start_serial, (int) $batch->end_serial, (int) $batch->count]);
-        $this->assertSame(8, DB::table('tickets')->where('publish_id', $batch->id)->count());
-        $this->assertSame(8, DB::table('tickets')->count());
-        $this->assertNull(DB::table('tickets')->where('barcode', Barcode::make('D', 0, 3))->first()); // the old numbers are gone
-        $this->assertNotNull(DB::table('tickets')->where('barcode', Barcode::make('D', 0, 105))->first());
-        $this->assertSame(12, \App\Support\Tickets\TicketStock::available('D', 0)); // 20 received, 8 published
-
-        // a range that overlaps the old one of the same batch is fine
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 105, 'end_serial' => 110])->assertRedirect('/ticket-publish');
-        $this->assertSame(6, DB::table('tickets')->count());
-    }
-
-    public function testEditIsValidatedAndNeverTakesMoreThanTheStockOrTheNumbersOfAnotherBatch()
-    {
-        $this->as('manager');
-        $this->receive(10);
-        $this->publish(1, 5);
-        $this->publish(11, 13);
-        $batch = $this->batch();
-
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 9, 'end_serial' => 8])->assertSessionHasErrors('end_serial');   // backwards
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 1, 'end_serial' => 8])->assertSessionHasErrors('end_serial');   // 8 > 2 left + 5
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 10, 'end_serial' => 12])->assertSessionHasErrors('start_serial'); // overlaps 11-13
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 'x', 'end_serial' => 8])->assertSessionHasErrors('start_serial');
-        $this->assertSame(5, (int) $batch->fresh()->count);
-        $this->assertSame(8, DB::table('tickets')->count());
-    }
-
-    public function testDeleteGivesTheBlankTicketsBackAndTheNumbersAreFreeAgain()
-    {
-        $this->as('manager');
-        $this->receive(20);
-        $this->publish(1, 5);
-        $batch = $this->batch();
-        $this->assertSame(15, \App\Support\Tickets\TicketStock::available('D', 0));
-
-        $this->delete('/ticket-publish/' . $batch->id)->assertRedirect('/ticket-publish');
-
-        $this->assertNull(\App\Models\Tickets\TicketPublish::find($batch->id));
-        $this->assertSame(0, DB::table('ticket_publishes')->count());                               // really deleted, nothing is kept
-        $this->assertNull(DB::table('ticket_publishes')->value('deleted_at'));
-        $this->assertSame(0, DB::table('tickets')->count());
-        $this->assertSame(20, \App\Support\Tickets\TicketStock::available('D', 0));
-
-        // its numbers are free: the suggested start ignores it, and the same numbers can be published again
-        $suggest = $this->get('/ticket-publish/create')->assertOk()->viewData('nextSerials');
-        $this->assertSame(1, $suggest['D:0']);
-        $this->publish(1, 5)->assertRedirect('/ticket-publish');
-        $this->assertSame(5, DB::table('tickets')->count());
-
-        // with a batch after the deleted one, the start continues after the batch that is left
-        $this->publish(6, 8)->assertRedirect('/ticket-publish');
-        $first = \App\Models\Tickets\TicketPublish::where('start_serial', 1)->first();
-        $this->delete('/ticket-publish/' . $first->id)->assertRedirect('/ticket-publish');
-        $this->publish(3, 8)->assertSessionHasErrors('start_serial');                                // overlaps the batch that is left
-        $suggest = $this->get('/ticket-publish/create')->assertOk()->viewData('nextSerials');
-        $this->assertSame(9, $suggest['D:0']);
-        $last = \App\Models\Tickets\TicketPublish::first();
-        $this->delete('/ticket-publish/' . $last->id)->assertRedirect('/ticket-publish');         // the last one goes: the start is 1 again
-        $this->assertSame(1, $this->get('/ticket-publish/create')->viewData('nextSerials')['D:0']);
-    }
-
-    public function testATouchedBatchCannotBeChangedOrDeleted()
-    {
-        $this->as('manager');
-        $this->receive(20);
-        $this->publish(1, 5);
-        $batch = $this->batch();
-        $range = ['start_serial' => 21, 'end_serial' => 25];
-
-        // downloaded by a terminal
-        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 2)->update(['synced' => 1]);
-        $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
-        $this->put('/ticket-publish/' . $batch->id, $range)->assertSessionHasErrors('start_serial');
-        $this->get('/ticket-publish/' . $batch->id . '/edit')->assertRedirect('/ticket-publish');
-        $this->assertSame(5, DB::table('tickets')->where('publish_id', $batch->id)->count());
-
-        // sold
-        DB::table('tickets')->where('publish_id', $batch->id)->update(['synced' => 0]);
-        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.sale')]);
-        $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
-        $this->put('/ticket-publish/' . $batch->id, $range)->assertSessionHasErrors('start_serial');
-
-        // sold, whichever field says so: the sale, the day of the sale or the supply
-        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.publish')]);
-        foreach (['sale_id' => 'a-sale-id', 'sale_date' => '2026-09-20', 'supplement_id' => 'a-supplement-id'] as $column => $value) {
-            DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update([$column => $value]);
-            $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
-            DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update([$column => null]);
-        }
-        $this->assertSame(5, DB::table('tickets')->where('publish_id', $batch->id)->count());
-
-        // a ticket gone from the batch (used and removed by a backup)
-        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 3)->update(['status' => config('ticket_statuses.publish')]);
-        DB::table('tickets')->where('publish_id', $batch->id)->where('serial', 4)->delete();
-        $this->delete('/ticket-publish/' . $batch->id)->assertSessionHasErrors('batch');
-
-        $this->assertNotNull(\App\Models\Tickets\TicketPublish::find($batch->id));
-    }
-
-    public function testBatchActionsNeedTheStockPermission()
-    {
-        $this->as('manager');
-        $this->receive(20);
-        $this->publish(1, 5);
-        $batch = $this->batch();
-
-        $page = $this->as('accountant')->get('/ticket-publish')->assertOk();
-        $page->assertSee(route('ticket-publish.show', $batch->id))->assertDontSee(route('ticket-publish.edit', $batch->id));
-        $this->get('/ticket-publish/' . $batch->id . '/edit')->assertForbidden();
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 21, 'end_serial' => 25])->assertForbidden();
-        $this->delete('/ticket-publish/' . $batch->id)->assertForbidden();
-
-        $this->as('assistant')->get('/ticket-publish')->assertOk()->assertSee(route('ticket-publish.edit', $batch->id));
-        $this->as('cashier')->get('/ticket-publish/' . $batch->id)->assertForbidden();
-        $this->assertNotNull(\App\Models\Tickets\TicketPublish::find($batch->id));
-    }
-
     public function testABatchHasTheDateItWasPublishedAndTheListAndThePageShowIt()
     {
         $this->as('manager');
@@ -409,9 +284,6 @@ class TicketPublishTest extends TestCase
         $this->get('/ticket-publish')->assertOk()->assertSee(__('report.date'))->assertSee('2026-09-21');
         $this->get('/ticket-publish/' . $batch->id)->assertOk()->assertSee('2026-09-21');
 
-        // changing the range later keeps the date of the batch
-        $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 11, 'end_serial' => 15])->assertRedirect('/ticket-publish');
-        $this->assertSame('2026-09-21', substr((string) $batch->fresh()->date, 0, 10));
     }
 
     public function testThePublishFormHasADateAndTheBatchKeepsIt()
@@ -437,14 +309,6 @@ class TicketPublishTest extends TestCase
         $this->assertSame(today()->toDateString(), substr((string) DB::table('tickets')->where('publish_id', $batches[1]->id)->value('publish_date'), 0, 10));
         $this->get('/tickets/lookup?barcode=' . Barcode::make('D', 0, 2))->assertOk()->assertSee('2026-09-18');
 
-        // the batch can be given another date (and keeps it when the date is not sent)
-        $this->get('/ticket-publish/' . $batches[0]->id . '/edit')->assertOk()->assertSee('2026-09-18');
-        $this->put('/ticket-publish/' . $batches[0]->id, ['start_serial' => 1, 'end_serial' => 5, 'date' => '2026-09-19'])->assertRedirect('/ticket-publish');
-        $this->assertSame('2026-09-19', substr((string) $batches[0]->fresh()->date, 0, 10));
-        $this->assertSame('2026-09-19', substr((string) DB::table('tickets')->where('publish_id', $batches[0]->id)->value('publish_date'), 0, 10));
-        $this->put('/ticket-publish/' . $batches[0]->id, ['start_serial' => 1, 'end_serial' => 5])->assertRedirect('/ticket-publish');
-        $this->assertSame('2026-09-19', substr((string) $batches[0]->fresh()->date, 0, 10));
-        $this->put('/ticket-publish/' . $batches[0]->id, ['start_serial' => 1, 'end_serial' => 5, 'date' => 'nope'])->assertSessionHasErrors('date');
     }
 
     public function testTheBatchTableFiltersByDateFuelTypeAndSpec()
@@ -505,4 +369,81 @@ class TicketPublishTest extends TestCase
         $this->assertStringContainsString('fuel_type=' . $this->diesel . '&amp;page=2', $first->getContent());
         $this->assertCount(2, $this->get('/ticket-publish?fuel_type=' . $this->diesel . '&page=2')->viewData('batches'));
         $this->assertCount(0, $this->get('/ticket-publish?fuel_type=A')->viewData('batches'));
-    }}
+    }
+    // ---- publishing cannot be reversed ----
+
+    public function testABatchCanBeLookedAtButNeverChangedOrDeleted()
+    {
+        $this->as('manager');
+        $this->receive(20);
+        $this->publish(1, 5);
+        $batch = $this->batch();
+
+        $page = $this->get('/ticket-publish')->assertOk();
+        $page->assertSee(route('ticket-publish.show', $batch->id));
+        $this->assertStringNotContainsString('/ticket-publish/' . $batch->id . '/edit', $page->getContent());
+        $this->assertStringNotContainsString('>Delete</button>', $page->getContent());
+
+        // there are no routes for it, for any role
+        foreach (['admin', 'manager', 'accountant', 'assistant'] as $role) {
+            $this->as($role);
+            $this->get('/ticket-publish/' . $batch->id . '/edit')->assertStatus(404);
+            $this->put('/ticket-publish/' . $batch->id, ['start_serial' => 21, 'end_serial' => 25])->assertStatus(405); // (the address only has the view)
+            $this->delete('/ticket-publish/' . $batch->id)->assertStatus(405);
+        }
+        $this->assertSame(5, DB::table('tickets')->where('publish_id', $batch->id)->count());
+        $this->assertSame(1, (int) $batch->fresh()->start_serial);
+        $this->as('cashier')->get('/ticket-publish/' . $batch->id)->assertForbidden();
+    }
+
+    public function testThePublishButtonAsksFirstAndSaysThatItCannotBeReversed()
+    {
+        $this->as('assistant');
+        $this->receive(20);
+
+        $html = $this->get('/ticket-publish/create')->assertOk()->getContent();
+        $this->assertStringContainsString('id="publish-form"', $html);
+        $this->assertStringContainsString('window.confirm(text)', $html);                                  // the question comes before the form is sent
+        $this->assertStringContainsString('A published batch cannot be reversed', $html);                  // and says so
+        $this->assertStringContainsString('Publish :count tickets (:item), serial :start to :end?', str_replace('\\u003A', ':', $html));
+    }
+
+    public function testGasoline50KgIsPublishedWithItsOwnCode()
+    {
+        $this->as('manager');
+        $this->receive(10, 3, 'A');
+
+        $this->publish(1, 10, 3, 'A')->assertRedirect('/ticket-publish')->assertSessionHasNoErrors();
+
+        $batch = \App\Models\Tickets\TicketPublish::first();
+        $this->assertSame('08', $batch->code);
+        $this->assertSame(Barcode::make('A', 3, 1), DB::table('tickets')->where('publish_id', $batch->id)->orderBy('serial')->value('barcode'));
+        $this->assertSame('08', substr(Barcode::make('A', 3, 1), 5, 2));
+    }
+
+    // ---- confirmed with the daily confirmation ----
+
+    public function testABatchIsConfirmedWithTheDailyConfirmationAndOnlyAManagerTakesItBack()
+    {
+        $this->as('accountant');
+        $this->receive(20);
+        $this->publish(1, 5);
+        $batch = $this->batch();
+        $date = substr((string) $batch->date, 0, 10);
+        $this->get('/ticket-publish')->assertSee('Not confirmed');
+
+        $this->post('/confirmations', ['date' => $date, 'from' => 'tickets', 'ticket_publishes' => [$batch->id]])->assertRedirect();
+        $this->assertTrue($batch->fresh()->isConfirmed());
+        $this->assertSame($this->actingUserId(), (int) $batch->fresh()->confirmed_by);
+        $this->get('/ticket-publish')->assertSee('Confirmed');
+
+        $this->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertForbidden();
+        $this->as('manager')->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertRedirect();
+        $this->assertFalse($batch->fresh()->isConfirmed());
+    }
+
+    private function actingUserId()
+    {
+        return (int) auth()->id();
+    }
+}

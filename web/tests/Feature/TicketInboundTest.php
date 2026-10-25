@@ -69,12 +69,14 @@ class TicketInboundTest extends TestCase
         $this->as('assistant')->get('/ticket-inbound')->assertOk();
         $this->receive(10)->assertRedirect('/ticket-inbound'); // assistant can manage stock
 
-        $this->as('accountant')->get('/ticket-inbound')->assertOk(); // view only
-        $this->get('/ticket-inbound/create')->assertForbidden();
-        $this->receive(1)->assertForbidden();
+        $this->as('accountant')->get('/ticket-inbound')->assertOk(); // the accountant manages the stock like the assistant
+        $this->get('/ticket-inbound/create')->assertOk();
+        $this->receive(1)->assertRedirect('/ticket-inbound');
 
         $this->as('cashier')->get('/ticket-inbound')->assertForbidden();
-        $this->assertSame(1, DB::table('ticket_inbounds')->count());
+        $this->get('/ticket-inbound/create')->assertForbidden();
+        $this->receive(1)->assertForbidden();
+        $this->assertSame(2, DB::table('ticket_inbounds')->count());
     }
 
     public function testScreensRender()
@@ -166,11 +168,21 @@ class TicketInboundTest extends TestCase
 
         $this->get('/ticket-inbound')->assertOk()->assertSee('Actions')->assertSee(route('ticket-inbound.edit', $row->id));
 
-        $this->as('accountant')->get('/ticket-inbound')->assertOk()->assertDontSee('Actions')->assertDontSee(route('ticket-inbound.edit', $row->id));
-        $this->get('/ticket-inbound/' . $row->id . '/edit')->assertForbidden();
+        // the accountant adds, changes and deletes too
+        $this->as('accountant')->get('/ticket-inbound')->assertOk()->assertSee('Actions')->assertSee(route('ticket-inbound.edit', $row->id));
+        $this->get('/ticket-inbound/' . $row->id . '/edit')->assertOk();
+        $this->put('/ticket-inbound/' . $row->id, ['quantity' => 12, 'inbound_date' => '2026-09-20'])->assertRedirect('/ticket-inbound');
+        $this->assertSame(12, (int) $row->fresh()->quantity);
+        $this->delete('/ticket-inbound/' . $row->id)->assertRedirect('/ticket-inbound');
+        $this->assertNull(\App\Models\Tickets\TicketInbound::find($row->id));
+
+        // the cashier does nothing here
+        $row = \App\Models\Tickets\TicketInbound::withTrashed()->find($row->id);
+        $row->restore();
+        $this->as('cashier')->get('/ticket-inbound/' . $row->id . '/edit')->assertForbidden();
         $this->put('/ticket-inbound/' . $row->id, ['quantity' => 1, 'inbound_date' => '2026-09-20'])->assertForbidden();
         $this->delete('/ticket-inbound/' . $row->id)->assertForbidden();
-        $this->assertSame(10, (int) $row->fresh()->quantity);
+        $this->assertSame(12, (int) $row->fresh()->quantity);
     }
 
 
@@ -228,4 +240,77 @@ class TicketInboundTest extends TestCase
         $this->assertStringContainsString('fuel_type=' . $this->diesel . '&amp;page=2', $first->getContent());
         $this->assertCount(2, $this->get('/ticket-inbound?fuel_type=' . $this->diesel . '&page=2')->viewData('rows'));
         $this->assertSame(53, $this->get('/ticket-inbound')->viewData('rows')->total());
-    }}
+    }
+    // ---- a negative quantity takes blank tickets out of the stock ----
+
+    public function testANegativeQuantityTakesBlankTicketsOutOfTheStockButNeverBelowWhatWasPublished()
+    {
+        $this->as('manager');
+        $this->receive(100)->assertRedirect('/ticket-inbound');
+        $this->receive(-8)->assertRedirect('/ticket-inbound')->assertSessionHasNoErrors();   // spoiled in printing
+        $this->assertSame(92, TicketStock::available($this->diesel, 0));
+        $this->assertSame(-8, (int) \App\Models\Tickets\TicketInbound::orderByDesc('id')->first()->quantity);
+
+        // zero is nothing to record; the count stays whole and inside the limit
+        $this->receive(0)->assertSessionHasErrors('quantity');
+        $this->receive(1.5)->assertSessionHasErrors('quantity');
+        $this->receive(-10000001)->assertSessionHasErrors('quantity');
+
+        // publish 90 of the 92: only 2 are left to take out
+        $this->post('/ticket-publish', ['stock_item' => $this->diesel . ':0', 'start_serial' => 1, 'end_serial' => 90])->assertSessionHasNoErrors();
+        $this->receive(-3)->assertSessionHasErrors('quantity');
+        $this->assertStringContainsString('fewer blank tickets', session('errors')->first('quantity'));
+        $this->receive(-2)->assertSessionHasNoErrors();
+        $this->assertSame(0, TicketStock::available($this->diesel, 0));
+
+        // a record can be changed to a negative quantity (and back) within the same limit; deleting a negative one puts the tickets back
+        $row = \App\Models\Tickets\TicketInbound::where('quantity', -2)->first();
+        $this->put('/ticket-inbound/' . $row->id, ['quantity' => -1, 'inbound_date' => '2026-09-20'])->assertSessionHasNoErrors();
+        $this->assertSame(1, TicketStock::available($this->diesel, 0));
+        $this->put('/ticket-inbound/' . $row->id, ['quantity' => -5, 'inbound_date' => '2026-09-20'])->assertSessionHasErrors('quantity');
+        $this->delete('/ticket-inbound/' . $row->id)->assertSessionHasNoErrors();
+        $this->assertSame(2, TicketStock::available($this->diesel, 0));
+    }
+
+    // ---- confirmed with the daily confirmation ----
+
+    public function testAConfirmedInboundCannotBeChangedOrDeletedUntilAManagerTakesTheConfirmationBack()
+    {
+        $this->as('accountant');
+        $this->receive(10);
+        $row = $this->firstInbound();
+        $this->get('/ticket-inbound')->assertSee('Not confirmed');
+
+        $this->post('/confirmations', ['date' => '2026-09-20', 'from' => 'tickets', 'ticket_inbounds' => [$row->id]])->assertRedirect()->assertSessionHas('status');
+        $this->assertTrue($row->fresh()->isConfirmed());
+
+        $page = $this->get('/ticket-inbound')->assertOk();
+        $page->assertSee('Confirmed')->assertDontSee(route('ticket-inbound.edit', $row->id));
+        $this->get('/ticket-inbound/' . $row->id . '/edit')->assertRedirect('/ticket-inbound')->assertSessionHasErrors('inbound');
+        $this->put('/ticket-inbound/' . $row->id, ['quantity' => 99, 'inbound_date' => '2026-09-20'])->assertSessionHasErrors('inbound');
+        $this->delete('/ticket-inbound/' . $row->id)->assertSessionHasErrors('inbound');
+        $this->assertSame(10, (int) $row->fresh()->quantity);
+        $this->assertNull($row->fresh()->deleted_at);
+
+        // the accountant cannot take it back, a manager can
+        $this->post('/ticket-inbound/' . $row->id . '/unconfirm')->assertForbidden();
+        $this->as('manager')->post('/ticket-inbound/' . $row->id . '/unconfirm')->assertRedirect();
+        $this->assertFalse($row->fresh()->isConfirmed());
+        $this->put('/ticket-inbound/' . $row->id, ['quantity' => 11, 'inbound_date' => '2026-09-20'])->assertSessionHasNoErrors();
+        $this->assertSame(11, (int) $row->fresh()->quantity);
+    }
+
+    public function testGasolineHas50KgTickets()
+    {
+        $this->assertSame('08', config('ticket_codes.A.3'));
+        $this->assertSame('08', \App\Support\Tickets\Barcode::codeFor('A', 3));
+
+        $this->as('manager');
+        $this->receive(5, 3, 'A')->assertRedirect('/ticket-inbound');
+        $this->post('/ticket-publish', ['stock_item' => 'A:3', 'start_serial' => 1, 'end_serial' => 5])->assertSessionHasNoErrors();
+        $barcodes = \App\Models\Tickets\Ticket::where('fuel_type', 'A')->where('spec', 3)->orderBy('serial')->pluck('barcode')->all();
+        $this->assertCount(5, $barcodes);
+        $this->assertSame('08', substr($barcodes[0], 5, 2));
+        $this->assertSame(0, TicketStock::available('A', 3));
+    }
+}

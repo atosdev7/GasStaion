@@ -10,9 +10,13 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 // Blank ticket stock received: fuel type, spec (fixed cylinder weight), count. No serial numbers yet
-// (numbering happens on publish, see TicketPublishController).
+// (numbering happens on publish, see TicketPublishController). The count may be negative: blank tickets that were spoiled in printing are taken out of the
+// stock with a record of their own. The stock can never fall below what was published already. Confirmed with the daily confirmation: a confirmed record
+// can no longer be changed or deleted (a manager can take the confirmation back, see UnconfirmController).
 class TicketInboundController extends Controller
 {
+    const MAX_QUANTITY = 10000000;
+
     // Every filter sits in the head of its column: the day of the inbound, the fuel type and the spec.
     public function index(Request $request)
     {
@@ -54,10 +58,15 @@ class TicketInboundController extends Controller
         $data = $request->validate([
             'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
             'spec' => ['required', Rule::in(array_keys(config('ticket_specs')))],
-            'quantity' => 'required|integer|min:1|max:10000000',
+            'quantity' => 'required|integer|not_in:0|min:-' . self::MAX_QUANTITY . '|max:' . self::MAX_QUANTITY,
             'inbound_date' => 'required|date',
             'note' => 'nullable|string|max:255',
         ]);
+
+        // blank tickets that were published cannot be taken out of the stock
+        if (TicketStock::available($data['fuel_type'], $data['spec']) + $data['quantity'] < 0) {
+            return back()->withInput()->withErrors(['quantity' => __('tickets.ticket_inbound_below_published')]);
+        }
 
         $inbound = new TicketInbound;
         $inbound->forceFill($data + ['user_id' => auth()->id()])->save();
@@ -70,8 +79,13 @@ class TicketInboundController extends Controller
 
     public function edit($id)
     {
+        $inbound = TicketInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('ticket-inbound.index')->withErrors(['inbound' => __('tickets.confirmed_locked')]);
+        }
+
         return view('ticket_inbound.edit', [
-            'inbound' => TicketInbound::findOrFail($id),
+            'inbound' => $inbound,
             'fuels' => config('fuel_types'),
         ]);
     }
@@ -81,8 +95,11 @@ class TicketInboundController extends Controller
     public function update(Request $request, $id)
     {
         $inbound = TicketInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('ticket-inbound.index')->withErrors(['inbound' => __('tickets.confirmed_locked')]);
+        }
         $data = $request->validate([
-            'quantity' => 'required|integer|min:1|max:10000000',
+            'quantity' => 'required|integer|not_in:0|min:-' . self::MAX_QUANTITY . '|max:' . self::MAX_QUANTITY,
             'inbound_date' => 'required|date',
             'note' => 'nullable|string|max:255',
         ]);
@@ -102,6 +119,9 @@ class TicketInboundController extends Controller
     public function destroy($id)
     {
         $inbound = TicketInbound::findOrFail($id);
+        if ($inbound->isConfirmed()) {
+            return redirect()->route('ticket-inbound.index')->withErrors(['inbound' => __('tickets.confirmed_locked')]);
+        }
 
         if (TicketStock::available($inbound->fuel_type, $inbound->spec) - $inbound->quantity < 0) {
             return redirect()->route('ticket-inbound.index')->withErrors(['inbound' => __('tickets.ticket_inbound_below_published')]);

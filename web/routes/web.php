@@ -73,9 +73,6 @@ Route::middleware(SetLocale::class)->group(function () {
         Route::middleware('can:ticket_stock.manage')->group(function () {
             Route::get('ticket-publish/create', 'Tickets\TicketPublishController@create')->name('ticket-publish.create');
             Route::post('ticket-publish', 'Tickets\TicketPublishController@store')->name('ticket-publish.store');
-            Route::get('ticket-publish/{id}/edit', 'Tickets\TicketPublishController@edit')->name('ticket-publish.edit');
-            Route::put('ticket-publish/{id}', 'Tickets\TicketPublishController@update')->name('ticket-publish.update');
-            Route::delete('ticket-publish/{id}', 'Tickets\TicketPublishController@destroy')->name('ticket-publish.destroy');
         });
 
         Route::get('ticket-sales', 'Sales\SaleController@index')->name('ticket-sales.index')->middleware('can:ticket_sales.view');
@@ -97,6 +94,8 @@ Route::middleware(SetLocale::class)->group(function () {
         Route::middleware('can:confirmations.unconfirm')->group(function () {
             Route::post('ticket-sales/{id}/unconfirm', 'Confirmations\UnconfirmController@sale')->name('ticket-sales.unconfirm')->where('id', '[0-9a-fA-F-]{36}');
             Route::post('supplements/{id}/unconfirm', 'Confirmations\UnconfirmController@supplement')->name('supplements.unconfirm')->where('id', '[0-9a-fA-F-]{36}');
+            Route::post('ticket-inbound/{id}/unconfirm', 'Confirmations\UnconfirmController@ticketInbound')->name('ticket-inbound.unconfirm')->where('id', '[0-9]+');
+            Route::post('ticket-publish/{id}/unconfirm', 'Confirmations\UnconfirmController@ticketPublish')->name('ticket-publish.unconfirm')->where('id', '[0-9]+');
         });
 
         Route::get('card-sales', 'Sales\CardSaleController@index')->name('card-sales.index')->middleware('can:ticket_sales.view');
@@ -174,6 +173,7 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::get('confirmations', 'Confirmations\ConfirmationController@index')->name('confirmations.index');
             Route::get('confirmations/sales-export', 'Confirmations\ConfirmationController@salesExport')->name('confirmations.sales-export');
             Route::get('confirmations/supplements', 'Confirmations\ConfirmationController@supplements')->name('confirmations.supplements');
+            Route::get('confirmations/tickets', 'Confirmations\ConfirmationController@tickets')->name('confirmations.tickets');
             Route::get('confirmations/supplements-export', 'Confirmations\ConfirmationController@supplementsExport')->name('confirmations.supplements-export');
             Route::get('confirmations/remainders-export', 'Confirmations\ConfirmationController@remaindersExport')->name('confirmations.remainders-export');
             Route::get('confirmations/summary-export', 'Confirmations\ConfirmationController@summaryExport')->name('confirmations.summary-export');

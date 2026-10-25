@@ -6,6 +6,8 @@ use App\Jobs\RunBackupDump;
 use App\Models\Sales\Customer;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
+use App\Models\Tickets\TicketInbound;
+use App\Models\Tickets\TicketPublish;
 use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
@@ -717,8 +719,8 @@ class ConfirmationTest extends TestCase
         $this->supplement('2026-10-02');
 
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (2 / 0)')
-            ->assertSee('2026-10-02 (0 / 1)');
+            ->assertSee('2026-10-01 (2 / 0 / 0)')
+            ->assertSee('2026-10-02 (0 / 1 / 0)');
     }
 
     public function testConfirmingStampsOnlyTheCheckedRecords()
@@ -747,7 +749,7 @@ class ConfirmationTest extends TestCase
 
         $this->get('/confirmations?date=2026-10-01')->assertOk()
             ->assertDontSee('name="sales[]"', false)
-            ->assertSee(__('confirm.already', ['sales' => 1, 'supplements' => 0]));
+            ->assertSee(__('confirm.already', ['sales' => 1, 'supplements' => 0, 'tickets' => 0]));
     }
 
     public function testARecordOfAnotherDateOrAlreadyConfirmedIsNotTouched()
@@ -831,5 +833,114 @@ class ConfirmationTest extends TestCase
         $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$sale->id]])->assertRedirect();
 
         Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);
+    }
+
+    // ---- the blank ticket stock: ticket inbounds and publishes ----
+
+    private function inbound($date, $quantity = 10, $extra = [])
+    {
+        return TicketInbound::forceCreate($extra + ['fuel_type' => 'D', 'spec' => 0, 'quantity' => $quantity, 'inbound_date' => $date, 'user_id' => 1]);
+    }
+
+    private function publishBatch($date, $start = 1, $end = 5, $extra = [])
+    {
+        return TicketPublish::forceCreate($extra + ['fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => $start, 'end_serial' => $end,
+            'count' => $end - $start + 1, 'date' => $date, 'user_id' => 1]);
+    }
+
+    public function testTheTicketStockPageListsTheInboundsAndPublishesOfTheDate()
+    {
+        $in = $this->inbound('2026-10-01', 100);
+        $out = $this->inbound('2026-10-01', -8, ['note' => 'spoiled']);
+        $this->inbound('2026-10-02', 50);                                   // another date
+        $batch = $this->publishBatch('2026-10-01', 1, 90);
+        $this->publishBatch('2026-10-02', 91, 95);
+
+        $response = $this->as('accountant')->get('/confirmations/tickets?date=2026-10-01')->assertOk();
+        $this->assertSame([$in->id, $out->id], $response->viewData('inbounds')->pluck('id')->all());
+        $this->assertSame([$batch->id], $response->viewData('publishes')->pluck('id')->all());
+        $response->assertSee('name="ticket_inbounds[]"', false)->assertSee('name="ticket_publishes[]"', false)->assertSee('spoiled');
+        $this->assertStringContainsString('<td class="text-right">92</td>', $response->getContent());      // the total of the quantities: 100 - 8
+
+        $this->as('manager')->get('/confirmations/tickets')->assertOk();
+        $this->as('assistant')->get('/confirmations/tickets')->assertForbidden();
+        $this->as('cashier')->get('/confirmations/tickets')->assertForbidden();
+        $this->as('accountant')->get('/confirmations/supplements')->assertOk()->assertSee('Ticket stock');   // the menu of the group
+    }
+
+    public function testTheWaitingDatesCountTheTicketStockToo()
+    {
+        $this->sale('2026-10-01');
+        $this->inbound('2026-10-01');
+        $this->inbound('2026-10-01', 5);
+        $this->publishBatch('2026-10-01');
+        $this->inbound('2026-10-03');
+
+        $this->as('manager')->get('/confirmations')->assertOk()
+            ->assertSee('2026-10-01 (1 / 0 / 3)')
+            ->assertSee('2026-10-03 (0 / 0 / 1)');
+    }
+
+    public function testConfirmingTheTicketStockStampsOnlyTheCheckedRecordsOfTheDate()
+    {
+        $one = $this->inbound('2026-10-01');
+        $left = $this->inbound('2026-10-01');
+        $other = $this->inbound('2026-10-02');
+        $batch = $this->publishBatch('2026-10-01');
+        $done = $this->inbound('2026-10-01', 7, ['confirmed_at' => now()->subDays(3), 'confirmed_by' => 99]);
+
+        $this->as('accountant')->post('/confirmations', [
+            'date' => '2026-10-01', 'from' => 'tickets', 'ticket_inbounds' => [$one->id, $other->id, $done->id], 'ticket_publishes' => [$batch->id],
+        ])->assertRedirect('/confirmations/tickets?date=2026-10-01')
+            ->assertSessionHas('status', __('confirm.done_tickets', ['inbounds' => 1, 'publishes' => 1, 'date' => '2026-10-01']));
+
+        $this->assertNotNull($one->fresh()->confirmed_at);
+        $this->assertNotNull($batch->fresh()->confirmed_at);
+        $this->assertNull($left->fresh()->confirmed_at);                        // not checked
+        $this->assertNull($other->fresh()->confirmed_at);                       // another date
+        $this->assertSame(99, (int) $done->fresh()->confirmed_by);              // not confirmed again by someone else
+
+        $page = $this->get('/confirmations/tickets?date=2026-10-01')->assertOk();
+        $this->assertStringNotContainsString('value="' . $one->id . '" class="check-ticket-inbounds"', $page->getContent());   // no check box on a confirmed one
+        $this->assertStringContainsString('value="' . $left->id . '" class="check-ticket-inbounds"', $page->getContent());
+        $this->get('/confirmations?date=2026-10-01')->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 3]));
+
+        // nothing checked is an error
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets'])->assertSessionHasErrors('tickets');
+    }
+
+    public function testAManagerTakesTheConfirmationOfTheTicketStockBack()
+    {
+        $inbound = $this->inbound('2026-10-01');
+        $batch = $this->publishBatch('2026-10-01');
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets', 'ticket_inbounds' => [$inbound->id], 'ticket_publishes' => [$batch->id]]);
+
+        $page = $this->get('/confirmations/tickets?date=2026-10-01')->assertOk()->getContent();
+        $this->assertStringNotContainsString(route('ticket-inbound.unconfirm', $inbound->id), $page);         // the accountant has no such button
+        $this->post('/ticket-inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+        $this->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertForbidden();
+
+        $page = $this->as('manager')->get('/confirmations/tickets?date=2026-10-01')->assertOk()->getContent();
+        $this->assertStringContainsString(route('ticket-inbound.unconfirm', $inbound->id), $page);
+        $this->assertStringContainsString(route('ticket-publish.unconfirm', $batch->id), $page);
+        $this->post('/ticket-inbound/' . $inbound->id . '/unconfirm')->assertRedirect();
+        $this->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertRedirect();
+        $this->assertNull($inbound->fresh()->confirmed_at);
+        $this->assertNull($batch->fresh()->confirmed_at);
+        $this->post('/ticket-inbound/' . $inbound->id . '/unconfirm')->assertSessionHasErrors('record'); // not confirmed any more
+    }
+
+    public function testTheDumpAfterAFullyConfirmedDayWaitsForTheTicketStockToo()
+    {
+        Bus::fake();
+        config(['backup.dump_on_confirmation' => true]);
+        $sale = $this->sale('2026-10-01');
+        $inbound = $this->inbound('2026-10-01');
+
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$sale->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);              // the inbound of the day is still waiting
+
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets', 'ticket_inbounds' => [$inbound->id]]);
+        Bus::assertDispatchedAfterResponse(RunBackupDump::class);
     }
 }

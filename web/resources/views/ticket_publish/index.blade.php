@@ -33,6 +33,7 @@
                     <th class="text-right">{{ __('tickets.start_serial') }}</th>
                     <th class="text-right">{{ __('tickets.end_serial') }}</th>
                     <th class="text-right">{{ __('tickets.quantity') }}</th>
+                    <th>{{ __('tickets.confirmation') }}</th>
                     <th class="text-right" style="width: 1%">{{ __('tickets.actions') }}</th>
                 </tr>
                 <tr class="filters">
@@ -54,7 +55,7 @@
                             @endforeach
                         </select>
                     </th>
-                    <th colspan="4"></th>
+                    <th colspan="5"></th>
                     <th class="text-nowrap text-right">
                         <button type="submit" form="ticket-publish-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
                         <a href="{{ route('ticket-publish.index') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
@@ -72,21 +73,13 @@
                         <td class="text-right">{{ $b->start_serial }}</td>
                         <td class="text-right">{{ $b->end_serial }}</td>
                         <td class="text-right">{{ $b->count }}</td>
+                        <td>@if ($b->isConfirmed())<span class="badge badge-success">{{ __('tickets.confirmed') }}</span>@else<span class="badge badge-secondary">{{ __('tickets.not_confirmed') }}</span>@endif</td>
                         <td class="text-right">
                             <a href="{{ route('ticket-publish.show', $b->id) }}" class="btn btn-sm btn-outline-secondary">{{ __('tickets.view_tickets') }}</a>
-                            @can('ticket_stock.manage')
-                                <a href="{{ route('ticket-publish.edit', $b->id) }}" class="btn btn-sm btn-outline-primary">{{ __('tickets.edit') }}</a>
-                                <form method="POST" action="{{ route('ticket-publish.destroy', $b->id) }}" class="d-inline"
-                                      onsubmit="return confirm(@json(__('tickets.batch_delete_confirm')))">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ __('tickets.delete') }}</button>
-                                </form>
-                            @endcan
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
+                    <tr><td colspan="10" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

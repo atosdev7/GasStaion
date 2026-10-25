@@ -157,8 +157,9 @@ class TicketLookupTest extends TestCase
         $this->as('cashier')->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()
             ->assertSee('2026-09-18')->assertDontSee(route('ticket-publish.show', $batch->id));
 
-        // the date of the batch changed later: the lookup follows
-        $this->as('manager')->put('/ticket-publish/' . $batch->id, ['start_serial' => 1, 'end_serial' => 5, 'date' => '2026-09-20']);
+        // the date of the batch changed later (by the database: a batch cannot be changed on the screens): the lookup follows
+        $batch->forceFill(['date' => '2026-09-20'])->save();
+        $this->as('manager');
         $this->get('/tickets/lookup?modal=1&barcode=' . $barcode)->assertOk()->assertSee('2026-09-20')->assertDontSee('2026-09-18');
 
         // a ticket without a batch row (an old one) shows its own publish date

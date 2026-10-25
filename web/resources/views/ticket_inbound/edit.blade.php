@@ -20,6 +20,7 @@
                 <div class="form-group">
                     <label for="f_quantity">{{ __('tickets.quantity') }}</label>
                     <input id="f_quantity" name="quantity" type="number" step="1" value="{{ old('quantity', $inbound->quantity) }}" class="form-control @error('quantity') is-invalid @enderror">
+                    <small class="form-text text-muted">{{ __('tickets.quantity_hint') }}</small>
                     @error('quantity') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
                 <div class="form-group">
