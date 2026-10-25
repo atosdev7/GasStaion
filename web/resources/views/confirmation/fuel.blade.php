@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', __('menu.group_confirmations') . ' - ' . __('menu.confirmation_payments'))
+@section('title', __('menu.group_confirmations') . ' - ' . __('menu.confirmation_fuel'))
 
 @section('content')
     @if (session('status'))
@@ -10,73 +10,15 @@
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
 
-    @include('confirmation._header', ['route' => 'confirmations.payments'])
+    @include('confirmation._header', ['route' => 'confirmations.fuel'])
 
-    {{-- The money received and the fuel that came in on the date: the debt payments (a reversal is a line of its own, with the negative amount) and the fuel
-         inbounds. The confirm button confirms the ones checked that are not confirmed yet; Unconfirm (a manager) sends the same form to its own address (formaction). --}}
+    {{-- The fuel stock of the date: the fuel inbounds and the fuel outbounds made by hand (the outbound of a supply follows the supply). The confirm button confirms the
+         ones checked that are not confirmed yet; Unconfirm (a manager) sends the same form to its own address (formaction). --}}
     <form method="POST" action="{{ route('confirmations.store') }}">
         @csrf
         <input type="hidden" name="date" value="{{ $date }}">
-        <input type="hidden" name="from" value="payments">
-        <p class="text-muted">{{ __('confirm.payments_hint') }}</p>
-
-        <div class="card">
-            <div class="card-header"><h3 class="card-title">{{ __('confirm.debt_payments') }} ({{ $payments->count() }})</h3></div>
-            <div class="card-body table-responsive p-0">
-                <table class="table table-sm table-hover text-nowrap">
-                    <thead>
-                    <tr>
-                        <th style="width: 30px"><input type="checkbox" class="check-all" data-target="check-debt-payments" title="{{ __('confirm.check_all') }}"></th>
-                        <th>#</th>
-                        <th>{{ __('confirm.customer_id') }}</th>
-                        <th>{{ __('confirm.debt') }}</th>
-                        <th>{{ __('confirm.payment_method') }}</th>
-                        <th class="text-right">{{ __('confirm.amount') }}</th>
-                        <th>{{ __('confirm.note') }}</th>
-                        <th class="text-right">{{ __('confirm.actions') }}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    @forelse ($payments as $row)
-                        <tr>
-                            <td>
-                                @if ($row->isConfirmed())
-                                    <i class="fas fa-check-circle text-success" title="{{ __('confirm.confirmed') }}"></i><span class="sr-only">{{ __('confirm.confirmed') }}</span>
-                                @else
-                                    <input type="checkbox" name="debt_payments[]" value="{{ $row->id }}" class="check-debt-payments">
-                                @endif
-                            </td>
-                            <td>{{ $row->id }}</td>
-                            <td>{{ $customers[$row->customer_id] ?? $row->customer_id }}</td>
-                            <td>{{ $row->debt && $row->debt->sale ? $row->debt->sale->sale_date : __('confirm.debt_unallocated') }}</td>
-                            <td>{{ __('confirm.payment_' . $row->payment_method) }}</td>
-                            <td class="text-right">{{ number_format($row->amount, 2) }}</td>
-                            <td>{{ $row->note }}</td>
-                            <td class="text-right">
-                                @if ($row->isConfirmed())
-                                    @can('confirmations.unconfirm')
-                                        <button type="submit" formmethod="post" formaction="{{ route('payments.unconfirm', $row->id) }}" class="btn btn-xs btn-outline-secondary"
-                                                onclick="return confirm(@json(__('confirm.unconfirm_confirm')))"><i class="fas fa-undo fa-fw"></i> {{ __('confirm.unconfirm') }}</button>
-                                    @endcan
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="8" class="text-muted">{{ __('confirm.nothing_here') }}</td></tr>
-                    @endforelse
-                    </tbody>
-                    @if ($payments->isNotEmpty())
-                        <tfoot>
-                        <tr class="font-weight-bold">
-                            <td colspan="5">{{ __('confirm.total') }}</td>
-                            <td class="text-right">{{ number_format($payments->sum('amount'), 2) }}</td>
-                            <td colspan="2"></td>
-                        </tr>
-                        </tfoot>
-                    @endif
-                </table>
-            </div>
-        </div>
+        <input type="hidden" name="from" value="fuel">
+        <p class="text-muted">{{ __('confirm.fuel_hint') }}</p>
 
         <div class="card">
             <div class="card-header"><h3 class="card-title">{{ __('confirm.fuel_inbounds') }} ({{ $inbounds->count() }})</h3></div>
@@ -138,7 +80,63 @@
             </div>
         </div>
 
-        @if ($payments->contains(function ($row) { return !$row->isConfirmed(); }) || $inbounds->contains(function ($row) { return !$row->isConfirmed(); }))
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">{{ __('confirm.fuel_outbounds') }} ({{ $outbounds->count() }})</h3></div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-sm table-hover text-nowrap">
+                    <thead>
+                    <tr>
+                        <th style="width: 30px"><input type="checkbox" class="check-all" data-target="check-fuel-outbounds" title="{{ __('confirm.check_all') }}"></th>
+                        <th>#</th>
+                        <th>{{ __('confirm.tank') }}</th>
+                        <th>{{ __('confirm.to_name') }}</th>
+                        <th class="text-right">{{ __('confirm.amount_kg') }}</th>
+                        <th>{{ __('confirm.note') }}</th>
+                        <th class="text-right">{{ __('confirm.actions') }}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @forelse ($outbounds as $row)
+                        <tr>
+                            <td>
+                                @if ($row->isConfirmed())
+                                    <i class="fas fa-check-circle text-success" title="{{ __('confirm.confirmed') }}"></i><span class="sr-only">{{ __('confirm.confirmed') }}</span>
+                                @else
+                                    <input type="checkbox" name="fuel_outbounds[]" value="{{ $row->id }}" class="check-fuel-outbounds">
+                                @endif
+                            </td>
+                            <td>{{ $row->id }}</td>
+                            <td>{{ $tanks[$row->tank_id] ?? $row->tank_id }}</td>
+                            <td>{{ $row->to_name }}</td>
+                            <td class="text-right">{{ number_format($row->amount_kg, 2) }}</td>
+                            <td>{{ $row->note }}</td>
+                            <td class="text-right">
+                                @if ($row->isConfirmed())
+                                    @can('confirmations.unconfirm')
+                                        <button type="submit" formmethod="post" formaction="{{ route('outbound.unconfirm', $row->id) }}" class="btn btn-xs btn-outline-secondary"
+                                                onclick="return confirm(@json(__('confirm.unconfirm_confirm')))"><i class="fas fa-undo fa-fw"></i> {{ __('confirm.unconfirm') }}</button>
+                                    @endcan
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="text-muted">{{ __('confirm.nothing_here') }}</td></tr>
+                    @endforelse
+                    </tbody>
+                    @if ($outbounds->isNotEmpty())
+                        <tfoot>
+                        <tr class="font-weight-bold">
+                            <td colspan="4">{{ __('confirm.total') }}</td>
+                            <td class="text-right">{{ number_format($outbounds->sum('amount_kg'), 2) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        </tfoot>
+                    @endif
+                </table>
+            </div>
+        </div>
+
+        @if ($inbounds->contains(function ($row) { return !$row->isConfirmed(); }) || $outbounds->contains(function ($row) { return !$row->isConfirmed(); }))
             <button type="submit" class="btn btn-success" onclick="return confirm(@json(__('confirm.confirm_question', ['date' => $date])))">
                 <i class="fas fa-check-double"></i> {{ __('confirm.confirm') }}
             </button>

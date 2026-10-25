@@ -1,6 +1,30 @@
 {{-- The figures of the whole date, confirmed or not; deleted sales are not counted. Sections: Sales, Supplements, Remainders. --}}
 @php($money = function ($n) { return number_format($n, 2); })
-{{-- Sales: ticket sales (a row per fuel type, with the tickets of each spec); spot sales, self use and the others each its own table with the fuel
+{{-- The money of the day, by how it was paid: to check the cash of the cashier and the bank --}}
+<h5 class="mt-3">{{ __('confirm.money_title') }}</h5>
+<p class="text-muted mb-1">{{ __('confirm.money_hint') }}</p>
+<div class="table-responsive">
+    <table class="table table-sm text-nowrap w-auto" id="money-of-the-day">
+        <thead>
+        <tr>
+            <th></th>
+            <th class="text-right">{{ __('confirm.payment_cash') }}</th>
+            <th class="text-right">{{ __('confirm.payment_bank') }}</th>
+            <th class="text-right">{{ __('confirm.total') }}</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (['sales_received', 'sales_refunded', 'payments_received', 'payments_reversed', 'net', 'credit'] as $line)
+            <tr class="{{ $line === 'net' ? 'font-weight-bold border-top' : '' }} money-{{ $line }}">
+                <td>{{ __('confirm.money_' . $line) }}</td>
+                <td class="text-right">{{ $money($summary['money']['cash'][$line]) }}</td>
+                <td class="text-right">{{ $money($summary['money']['bank'][$line]) }}</td>
+                <td class="text-right">{{ $money($summary['money']['cash'][$line] + $summary['money']['bank'][$line]) }}</td>
+            </tr>
+        @endforeach
+        </tbody>
+    </table>
+</div>{{-- Sales: ticket sales (a row per fuel type, with the tickets of each spec); spot sales, self use and the others each its own table with the fuel
      types side by side (the first on the left, the second on the right) --}}
 <h5 class="mt-3">{{ __('confirm.sales') }}</h5>
 @php($saleLabel = function ($kind) { return in_array($kind, ['ticket', 'spot', 'card'], true) ? __('menu.' . $kind . '_sales') : __('confirm.sum_kind_' . $kind); })

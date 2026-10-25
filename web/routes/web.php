@@ -98,6 +98,8 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::post('ticket-publish/{id}/unconfirm', 'Confirmations\UnconfirmController@ticketPublish')->name('ticket-publish.unconfirm')->where('id', '[0-9]+');
             Route::post('payments/{id}/unconfirm', 'Confirmations\UnconfirmController@debtPayment')->name('payments.unconfirm')->where('id', '[0-9]+');
             Route::post('inbound/{id}/unconfirm', 'Confirmations\UnconfirmController@fuelInbound')->name('inbound.unconfirm')->where('id', '[0-9]+');
+            Route::post('outbound/{id}/unconfirm', 'Confirmations\UnconfirmController@fuelOutbound')->name('outbound.unconfirm')->where('id', '[0-9]+');
+            Route::post('loans/settlements/{id}/unconfirm', 'Confirmations\UnconfirmController@ticketSettlement')->name('loans.settlements.unconfirm')->where('id', '[0-9a-fA-F-]{36}');
         });
 
         Route::get('card-sales', 'Sales\CardSaleController@index')->name('card-sales.index')->middleware('can:card_sales.view');
@@ -182,7 +184,9 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::get('confirmations/sales-export', 'Confirmations\ConfirmationController@salesExport')->name('confirmations.sales-export');
             Route::get('confirmations/supplements', 'Confirmations\ConfirmationController@supplements')->name('confirmations.supplements');
             Route::get('confirmations/tickets', 'Confirmations\ConfirmationController@tickets')->name('confirmations.tickets');
-            Route::get('confirmations/payments', 'Confirmations\ConfirmationController@payments')->name('confirmations.payments');
+            Route::get('confirmations/overview', 'Confirmations\ConfirmationController@overview')->name('confirmations.overview');
+            Route::get('confirmations/fuel', 'Confirmations\ConfirmationController@fuel')->name('confirmations.fuel');
+            Route::get('confirmations/debts', 'Confirmations\ConfirmationController@debts')->name('confirmations.debts');
             Route::get('confirmations/supplements-export', 'Confirmations\ConfirmationController@supplementsExport')->name('confirmations.supplements-export');
             Route::get('confirmations/remainders-export', 'Confirmations\ConfirmationController@remaindersExport')->name('confirmations.remainders-export');
             Route::get('confirmations/summary-export', 'Confirmations\ConfirmationController@summaryExport')->name('confirmations.summary-export');

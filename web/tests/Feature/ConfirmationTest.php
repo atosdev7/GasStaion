@@ -719,8 +719,8 @@ class ConfirmationTest extends TestCase
         $this->supplement('2026-10-02');
 
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (2 / 0 / 0 / 0)')
-            ->assertSee('2026-10-02 (0 / 1 / 0 / 0)');
+            ->assertSee('2026-10-01 (0 / 0 / 2 / 0 / 0)')
+            ->assertSee('2026-10-02 (0 / 0 / 0 / 1 / 0)');
     }
 
     public function testConfirmingStampsOnlyTheCheckedRecords()
@@ -749,7 +749,7 @@ class ConfirmationTest extends TestCase
 
         $this->get('/confirmations?date=2026-10-01')->assertOk()
             ->assertDontSee('name="sales[]"', false)
-            ->assertSee(__('confirm.already', ['sales' => 1, 'supplements' => 0, 'tickets' => 0, 'money' => 0]));
+            ->assertSee(__('confirm.already', ['fuel' => 0, 'tickets' => 0, 'sales' => 1, 'supplements' => 0, 'debts' => 0]));
     }
 
     public function testARecordOfAnotherDateOrAlreadyConfirmedIsNotTouched()
@@ -792,86 +792,162 @@ class ConfirmationTest extends TestCase
         ]);
     }
 
+    private function tank()
+    {
+        return \App\Models\Fuel\Tank::first() ?: \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
+    }
+
     private function fuelInbound($date, $extra = [])
     {
-        $tank = \App\Models\Fuel\Tank::first() ?: \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
-
         return \App\Models\Fuel\FuelInbound::forceCreate($extra + [
-            'tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 1000, 'cost' => 6.5, 'inbound_date' => $date, 'user_id' => 1, 'from_name' => 'Refinery',
+            'tank_id' => $this->tank()->id, 'fuel_type' => 'D', 'amount_kg' => 1000, 'cost' => 6.5, 'inbound_date' => $date, 'user_id' => 1, 'from_name' => 'Refinery',
         ]);
     }
 
-    public function testThePaymentsAndFuelPageListsAndConfirmsTheDebtPaymentsAndTheFuelInbounds()
+    private function fuelOutbound($date, $extra = [])
+    {
+        $outbound = new \App\Models\Fuel\FuelOutbound;
+        $outbound->forceFill($extra + ['tank_id' => $this->tank()->id, 'outbound_date' => $date, 'amount_kg' => 40, 'to_name' => 'Tractor', 'user_id' => 1])->save();
+
+        return $outbound;
+    }
+
+    private function settlement($date, $extra = [])
+    {
+        $customer = \App\Models\Sales\Customer::first();
+        $loan = \App\Models\Debts\TicketLoan::first() ?: \App\Models\Debts\TicketLoan::forceCreate([
+            'loaned_at' => $date . ' 09:00:00', 'customer_id' => $customer->id, 'fuel_type' => 'D', 'amount_kg' => 20, 'user_id' => 1,
+        ]);
+
+        return \App\Models\Debts\TicketLoanSettlement::forceCreate($extra + [
+            'loan_id' => $loan->id, 'ticket_barcode' => '0000025500000001', 'amount_kg' => 5, 'settled_at' => $date . ' 10:00:00', 'date' => $date, 'user_id' => 1,
+        ]);
+    }
+
+    public function testTheMenuOfTheDailyConfirmationHasTheOverviewTheStocksTheSalesTheSupplementsTheDebtsAndTheSummary()
+    {
+        $html = $this->as('accountant')->get('/')->assertOk()->getContent();
+        $html = substr($html, strpos($html, __('menu.group_confirmations')));   // the group of the daily confirmation
+        $labels = ['Overview', 'Fuel stock', 'Ticket stock', 'Sales', 'Supplements', 'Debts', 'Summary'];
+        $at = -1;
+        foreach ($labels as $label) {
+            $pos = strpos($html, '>' . $label . '<', $at + 1);
+            $this->assertNotFalse($pos, $label);
+            $this->assertGreaterThan($at, $pos, $label . ' is in the order of the menu');
+            $at = $pos;
+        }
+        foreach (['/confirmations/overview', '/confirmations/fuel', '/confirmations/tickets', '/confirmations', '/confirmations/supplements', '/confirmations/debts', '/confirmations/summary'] as $path) {
+            $this->get($path)->assertOk();
+        }
+        foreach (['assistant', 'cashier'] as $role) {
+            foreach (['/confirmations/overview', '/confirmations/fuel', '/confirmations/debts'] as $path) {
+                $this->as($role)->get($path)->assertForbidden();
+            }
+        }
+    }
+
+    public function testTheFuelStockPageListsAndConfirmsTheInboundsAndTheOutboundsMadeByHand()
+    {
+        $inbound = $this->fuelInbound('2026-10-01');
+        $otherInbound = $this->fuelInbound('2026-10-03');
+        $outbound = $this->fuelOutbound('2026-10-01');
+        $otherOutbound = $this->fuelOutbound('2026-10-02');
+        $supplement = $this->supplement('2026-10-01');   // the outbound of a supply follows the supply: not a line here
+        $this->fuelOutbound('2026-10-01', ['supplement_id' => $supplement->id]);
+
+        $html = $this->as('accountant')->get('/confirmations/fuel?date=2026-10-01')->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'name="fuel_inbounds[]"'));
+        $this->assertSame(1, substr_count($html, 'name="fuel_outbounds[]"'));            // the one made by hand, not the supply's
+        $this->assertStringContainsString('Refinery', $html);
+        $this->assertStringContainsString('Tractor', $html);
+
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel', 'fuel_inbounds' => [$inbound->id, $otherInbound->id], 'fuel_outbounds' => [$outbound->id, $otherOutbound->id]])
+            ->assertRedirect(route('confirmations.fuel', ['date' => '2026-10-01']))->assertSessionHas('status');
+        $this->assertStringContainsString('Confirmed 1 fuel inbounds and 1 fuel outbounds for 2026-10-01', session('status'));
+        $this->assertNotNull($inbound->fresh()->confirmed_at);
+        $this->assertNotNull($outbound->fresh()->confirmed_at);
+        $this->assertNull($otherInbound->fresh()->confirmed_at);                          // another date: not touched
+        $this->assertNull($otherOutbound->fresh()->confirmed_at);
+
+        // confirmed ones have no check box; the accountant cannot take a confirmation back, a manager can
+        $html = $this->get('/confirmations/fuel?date=2026-10-01')->getContent();
+        $this->assertSame(0, substr_count($html, 'name="fuel_inbounds[]"') + substr_count($html, 'name="fuel_outbounds[]"'));
+        $this->assertStringNotContainsString('/unconfirm', $html);
+        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+        $this->post('/outbound/' . $outbound->id . '/unconfirm')->assertForbidden();
+        $this->as('manager')->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
+        $this->post('/outbound/' . $outbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
+        $this->assertNull($inbound->fresh()->confirmed_at);
+        $this->assertNull($outbound->fresh()->confirmed_at);
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel'])->assertSessionHasErrors('fuel');   // nothing checked
+    }
+
+    public function testTheDebtsPageListsAndConfirmsTheDebtPaymentsAndTheTicketSettlements()
     {
         \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
         $payment = $this->payment('2026-10-01');
         $reversal = $this->payment('2026-10-01', ['amount' => -50, 'reverses_payment_id' => $payment->id]);
         $other = $this->payment('2026-10-02');
-        $inbound = $this->fuelInbound('2026-10-01');
-        $otherInbound = $this->fuelInbound('2026-10-03');
+        $settlement = $this->settlement('2026-10-01');
+        $otherSettlement = $this->settlement('2026-10-02');
 
-        // the page of the date, in the menu of the daily confirmation
-        $this->as('accountant')->get('/')->assertOk()->assertSee('Payments and fuel');
-        $html = $this->get('/confirmations/payments?date=2026-10-01')->assertOk()->getContent();
-        $this->assertSame(2, substr_count($html, 'name="debt_payments[]"'));        // the payment and its reversal (a line of its own, negative)
-        $this->assertSame(1, substr_count($html, 'name="fuel_inbounds[]"'));
+        $html = $this->as('accountant')->get('/confirmations/debts?date=2026-10-01')->assertOk()->getContent();
+        $this->assertSame(2, substr_count($html, 'name="debt_payments[]"'));             // the payment and its reversal (a line of its own, negative)
+        $this->assertSame(1, substr_count($html, 'name="ticket_settlements[]"'));
         $this->assertStringContainsString('ACME', $html);
-        $this->assertStringContainsString('Refinery', $html);
         $this->assertStringContainsString('-50.00', $html);
-        $this->assertStringNotContainsString('value="' . $other->id . '" class="check-debt-payments"', $html);   // another date
+        $this->assertStringContainsString('0000025500000001', $html);
 
-        // confirming stamps the checked ones of the date only, and comes back to the page
-        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'debt_payments' => [$payment->id, $other->id], 'fuel_inbounds' => [$inbound->id, $otherInbound->id]])
-            ->assertRedirect(route('confirmations.payments', ['date' => '2026-10-01']))->assertSessionHas('status');
-        $this->assertStringContainsString('Confirmed 1 debt payments and 1 fuel inbounds for 2026-10-01', session('status'));
+        $this->post('/confirmations', [
+            'date' => '2026-10-01', 'from' => 'debts', 'debt_payments' => [$payment->id, $other->id], 'ticket_settlements' => [$settlement->id, $otherSettlement->id],
+        ])->assertRedirect(route('confirmations.debts', ['date' => '2026-10-01']))->assertSessionHas('status');
+        $this->assertStringContainsString('Confirmed 1 debt payments and 1 ticket settlements for 2026-10-01', session('status'));
         $this->assertNotNull($payment->fresh()->confirmed_at);
-        $this->assertNotNull($inbound->fresh()->confirmed_at);
-        $this->assertNull($reversal->fresh()->confirmed_at);                         // not checked
-        $this->assertNull($other->fresh()->confirmed_at);                            // another date: not touched
-        $this->assertNull($otherInbound->fresh()->confirmed_at);
-        $this->assertSame(auth()->id(), (int) $payment->fresh()->confirmed_by);
+        $this->assertNotNull($settlement->fresh()->confirmed_at);
+        $this->assertNull($reversal->fresh()->confirmed_at);                              // not checked
+        $this->assertNull($other->fresh()->confirmed_at);                                 // another date: not touched
+        $this->assertNull($otherSettlement->fresh()->confirmed_at);
 
-        // confirmed ones have no check box and no taking back for the accountant
-        $html = $this->get('/confirmations/payments?date=2026-10-01')->getContent();
+        $html = $this->get('/confirmations/debts?date=2026-10-01')->getContent();
         $this->assertSame(1, substr_count($html, 'name="debt_payments[]"'));
-        $this->assertSame(0, substr_count($html, 'name="fuel_inbounds[]"'));
+        $this->assertSame(0, substr_count($html, 'name="ticket_settlements[]"'));
         $this->assertStringNotContainsString('/unconfirm', $html);
         $this->post('/payments/' . $payment->id . '/unconfirm')->assertForbidden();
-        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+        $this->post('/loans/settlements/' . $settlement->id . '/unconfirm')->assertForbidden();
 
-        // a manager takes the confirmations back
-        $html = $this->as('manager')->get('/confirmations/payments?date=2026-10-01')->getContent();
+        $html = $this->as('manager')->get('/confirmations/debts?date=2026-10-01')->getContent();
         $this->assertStringContainsString('formaction="' . url('/payments/' . $payment->id . '/unconfirm') . '"', $html);
+        $this->assertStringContainsString('formaction="' . url('/loans/settlements/' . $settlement->id . '/unconfirm') . '"', $html);
         $this->post('/payments/' . $payment->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
-        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
+        $this->post('/loans/settlements/' . $settlement->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
         $this->assertNull($payment->fresh()->confirmed_at);
-        $this->assertNull($inbound->fresh()->confirmed_at);
-        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertSessionHasErrors('record');   // not confirmed any more
-
-        // nothing checked is an error; the assistant and the cashier cannot open the page
-        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments'])->assertSessionHasErrors('payments');
-        foreach (['assistant', 'cashier'] as $role) {
-            $this->as($role)->get('/confirmations/payments')->assertForbidden();
-        }
+        $this->assertNull($settlement->fresh()->confirmed_at);
+        $this->post('/loans/settlements/' . $settlement->id . '/unconfirm')->assertSessionHasErrors('record');   // not confirmed any more
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'debts'])->assertSessionHasErrors('debts');   // nothing checked
     }
 
-    public function testTheWaitingDatesCountTheDebtPaymentsAndTheFuelInboundsToo()
+    public function testTheWaitingDatesCountTheFuelStockAndTheDebtsToo()
     {
         \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
         $this->payment('2026-10-01');
         $this->payment('2026-10-01');
+        $this->settlement('2026-10-01');
         $this->fuelInbound('2026-10-01');
+        $this->fuelOutbound('2026-10-01');
         $this->fuelInbound('2026-10-04', ['confirmed_at' => now(), 'confirmed_by' => 1]);     // confirmed: not waiting
 
-        $this->as('manager')->get('/confirmations')->assertOk()->assertSee('2026-10-01 (0 / 0 / 0 / 3)')->assertDontSee('2026-10-04 (');
-        $this->get('/confirmations?date=2026-10-04')->assertOk()->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 0, 'money' => 1]));
+        // fuel stock / ticket stock / sales / supplements / debts
+        $this->as('manager')->get('/confirmations')->assertOk()->assertSee('2026-10-01 (2 / 0 / 0 / 0 / 3)')->assertDontSee('2026-10-04 (');
+        $this->get('/confirmations?date=2026-10-04')->assertOk()->assertSee(__('confirm.already', ['fuel' => 1, 'tickets' => 0, 'sales' => 0, 'supplements' => 0, 'debts' => 0]));
     }
 
-    public function testAConfirmedFuelInboundCannotBeChangedOrDeletedUntilAManagerTakesTheConfirmationBack()
+    public function testAConfirmedFuelInboundOrOutboundCannotBeChangedOrDeletedUntilAManagerTakesTheConfirmationBack()
     {
         $inbound = $this->fuelInbound('2026-10-01', ['is_default' => false]);
-        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'fuel_inbounds' => [$inbound->id]]);
+        $outbound = $this->fuelOutbound('2026-10-01');
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel', 'fuel_inbounds' => [$inbound->id], 'fuel_outbounds' => [$outbound->id]]);
         $this->assertNotNull($inbound->fresh()->confirmed_at);
+        $this->assertNotNull($outbound->fresh()->confirmed_at);
 
         $this->get('/inbound/' . $inbound->id . '/edit')->assertRedirect('/inbound')->assertSessionHasErrors('inbound');
         $this->put('/inbound/' . $inbound->id, ['tank_id' => $inbound->tank_id, 'inbound_date' => '2026-10-01', 'amount_kg' => 5, 'cost' => 1])->assertSessionHasErrors('inbound');
@@ -880,27 +956,108 @@ class ConfirmationTest extends TestCase
         $this->assertNotNull(\App\Models\Fuel\FuelInbound::find($inbound->id));
         $this->get('/inbound')->assertOk()->assertDontSee(route('inbound.edit', $inbound->id));      // the list shows a lock instead
 
+        $this->get('/outbound/' . $outbound->id . '/edit')->assertRedirect('/outbound')->assertSessionHasErrors('outbound');
+        $this->put('/outbound/' . $outbound->id, ['tank_id' => $outbound->tank_id, 'outbound_date' => '2026-10-01', 'amount_kg' => 5])->assertSessionHasErrors('outbound');
+        $this->assertEquals(40, $outbound->fresh()->amount_kg);
+        $this->delete('/outbound/' . $outbound->id)->assertSessionHasErrors('outbound');
+        $this->assertNotNull(\App\Models\Fuel\FuelOutbound::find($outbound->id));
+        $this->get('/outbound')->assertOk()->assertDontSee(route('outbound.edit', $outbound->id));
+
         $this->as('manager')->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect();
+        $this->post('/outbound/' . $outbound->id . '/unconfirm')->assertRedirect();
         $this->as('accountant')->get('/inbound/' . $inbound->id . '/edit')->assertOk();
         $this->put('/inbound/' . $inbound->id, ['tank_id' => $inbound->tank_id, 'inbound_date' => '2026-10-01', 'amount_kg' => 1200, 'cost' => 6.5])->assertSessionHasNoErrors();
         $this->assertEquals(1200, $inbound->fresh()->amount_kg);
+        $this->put('/outbound/' . $outbound->id, ['tank_id' => $outbound->tank_id, 'outbound_date' => '2026-10-01', 'amount_kg' => 55])->assertSessionHasNoErrors();
+        $this->assertEquals(55, $outbound->fresh()->amount_kg);
     }
 
-    public function testTheDayIsNotFullyConfirmedWhileADebtPaymentOrAFuelInboundWaits()
+    public function testTheDayIsNotFullyConfirmedWhileSomethingOfTheFuelStockOrTheDebtsWaits()
     {
         config(['backup.dump_on_confirmation' => true]);
         Bus::fake();
         \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
         $sale = $this->sale('2026-10-01');
         $payment = $this->payment('2026-10-01');
+        $settlement = $this->settlement('2026-10-01');
         $inbound = $this->fuelInbound('2026-10-01');
+        $outbound = $this->fuelOutbound('2026-10-01');
 
         $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$sale->id]]);
         Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);
-        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'debt_payments' => [$payment->id]]);
-        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);                    // the fuel inbound still waits
-        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'payments', 'fuel_inbounds' => [$inbound->id]]);
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'debts', 'debt_payments' => [$payment->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);                    // the settlement still waits
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'debts', 'ticket_settlements' => [$settlement->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);                    // the fuel stock still waits
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel', 'fuel_inbounds' => [$inbound->id]]);
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);                    // the outbound still waits
+        $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel', 'fuel_outbounds' => [$outbound->id]]);
         Bus::assertDispatchedAfterResponse(RunBackupDump::class);
+    }
+
+    public function testTheOverviewShowsEachAreaOfTheDateAndWhatToLookAt()
+    {
+        \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
+        $sale = $this->sale('2026-10-01');                                                                           // no cost, confirmed below
+        $this->sale('2026-10-01', ['cost' => 5]);
+        $this->supplement('2026-10-01');                                                                              // no tickets, no card
+        $this->payment('2026-10-01');
+        $this->settlement('2026-10-01');
+        $this->fuelInbound('2026-10-01');
+        $gone = $this->sale('2026-10-01', ['cost' => 5]);
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$sale->id]]);
+        $gone->delete();                                                                                              // waits to be erased (confirming the sales erases the deleted ones)
+
+        $page = $this->get('/confirmations/overview?date=2026-10-01')->assertOk();
+        $html = $page->getContent();
+        $rows = function ($key) use ($html) {
+            preg_match('/<tr class="overview-' . $key . '">(.*?)<\/tr>/s', $html, $m);
+            preg_match_all('/<td[^>]*>\s*(\d+)\s*<\/td>/', $m[1], $n);
+
+            return array_map('intval', $n[1]);                                                                       // records, confirmed, waiting
+        };
+        $this->assertSame([1, 0, 1], $rows('fuel'));
+        $this->assertSame([0, 0, 0], $rows('tickets'));
+        $this->assertSame([2, 1, 1], $rows('sales'));
+        $this->assertSame([1, 0, 1], $rows('supplements'));
+        $this->assertSame([2, 0, 2], $rows('debts'));
+
+        // the order of the menu and the links to the pages of the date
+        $this->assertTrue(strpos($html, 'overview-fuel') < strpos($html, 'overview-tickets') && strpos($html, 'overview-tickets') < strpos($html, 'overview-sales')
+            && strpos($html, 'overview-sales') < strpos($html, 'overview-supplements') && strpos($html, 'overview-supplements') < strpos($html, 'overview-debts'));
+        $this->assertStringContainsString(route('confirmations.debts', ['date' => '2026-10-01']), $html);
+
+        // what to look at: the sale without a cost (the other one has it), the supply without tickets, the deleted sale; the terminals once the day is over
+        $this->assertStringContainsString('1 sales of this date have no cost.', $html);                          // the confirmed one has none either: it is counted with the day
+        $this->assertStringContainsString('1 supplies of this date have no tickets and no card.', $html);
+        $this->assertStringContainsString('1 deleted sales of this date', $html);
+        $device = \App\Models\Admin\Device::forceCreate(['name' => 'POS1', 'initial_sync_done' => true, 'last_synced_at' => '2026-10-01 18:00:00']);
+        $this->get('/confirmations/overview?date=2026-10-01')->assertSee('POS1');                                // it uploaded before the day ended (9:00 of the next day)
+        $device->forceFill(['last_synced_at' => '2026-10-02 10:00:00'])->save();
+        $this->get('/confirmations/overview?date=2026-10-01')->assertDontSee('have not uploaded');
+        $this->get('/confirmations/overview?date=' . today()->toDateString())->assertDontSee('have not uploaded');   // the running day: not a warning yet
+    }
+
+    public function testTheSummaryHasTheMoneyOfTheDayByCashAndBank()
+    {
+        \App\Models\Sales\Customer::forceCreate(['name' => 'ACME']);
+        $this->sale('2026-10-01', ['payment_method' => 'cash', 'total_amount' => 100, 'paid_amount' => 100, 'unpaid_amount' => 0]);
+        $this->sale('2026-10-01', ['payment_method' => 'cash', 'total_amount' => -30, 'paid_amount' => -30, 'unpaid_amount' => 0, 'reverses_sale_id' => $this->sale('2026-09-30')->id]);   // a return
+        $this->sale('2026-10-01', ['payment_method' => 'bank', 'total_amount' => 200, 'paid_amount' => 50, 'unpaid_amount' => 150]);
+        $this->sale('2026-10-02', ['payment_method' => 'cash', 'total_amount' => 999, 'paid_amount' => 999, 'unpaid_amount' => 0]);                         // another day
+        $this->payment('2026-10-01', ['payment_method' => 'cash', 'amount' => 40]);
+        $this->payment('2026-10-01', ['payment_method' => 'cash', 'amount' => -10]);
+        $this->payment('2026-10-01', ['payment_method' => 'bank', 'amount' => 25]);
+        $gone = $this->sale('2026-10-01', ['payment_method' => 'cash', 'total_amount' => 70, 'paid_amount' => 70, 'unpaid_amount' => 0]);
+        $gone->delete();                                                                                                                                    // a deleted sale is not counted
+
+        $summary = $this->as('accountant')->get('/confirmations/summary?date=2026-10-01')->assertOk()->viewData('summary');
+        $this->assertEquals(['sales_received' => 100, 'sales_refunded' => -30, 'payments_received' => 40, 'payments_reversed' => -10, 'net' => 100, 'credit' => 0], $summary['money']['cash']);
+        $this->assertEquals(['sales_received' => 50, 'sales_refunded' => 0, 'payments_received' => 25, 'payments_reversed' => 0, 'net' => 75, 'credit' => 150], $summary['money']['bank']);
+
+        $html = $this->get('/confirmations/summary?date=2026-10-01')->getContent();
+        $this->assertStringContainsString('Money of the day', $html);
+        $this->assertRegExp('/money-net">\s*<td>Net received<\/td>\s*<td class="text-right">100.00<\/td>\s*<td class="text-right">75.00<\/td>\s*<td class="text-right">175.00<\/td>/', $html);
     }
     public function testConfirmingAWholeDayQueuesTheBackupAfterTheResponse()
     {
@@ -995,8 +1152,8 @@ class ConfirmationTest extends TestCase
         $this->inbound('2026-10-03');
 
         $this->as('manager')->get('/confirmations')->assertOk()
-            ->assertSee('2026-10-01 (1 / 0 / 3 / 0)')
-            ->assertSee('2026-10-03 (0 / 0 / 1 / 0)');
+            ->assertSee('2026-10-01 (0 / 3 / 1 / 0 / 0)')
+            ->assertSee('2026-10-03 (0 / 1 / 0 / 0 / 0)');
     }
 
     public function testConfirmingTheTicketStockStampsOnlyTheCheckedRecordsOfTheDate()
@@ -1021,7 +1178,7 @@ class ConfirmationTest extends TestCase
         $page = $this->get('/confirmations/tickets?date=2026-10-01')->assertOk();
         $this->assertStringNotContainsString('value="' . $one->id . '" class="check-ticket-inbounds"', $page->getContent());   // no check box on a confirmed one
         $this->assertStringContainsString('value="' . $left->id . '" class="check-ticket-inbounds"', $page->getContent());
-        $this->get('/confirmations?date=2026-10-01')->assertSee(__('confirm.already', ['sales' => 0, 'supplements' => 0, 'tickets' => 3, 'money' => 0]));
+        $this->get('/confirmations?date=2026-10-01')->assertSee(__('confirm.already', ['fuel' => 0, 'tickets' => 3, 'sales' => 0, 'supplements' => 0, 'debts' => 0]));
 
         // nothing checked is an error
         $this->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets'])->assertSessionHasErrors('tickets');

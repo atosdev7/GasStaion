@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Jobs\RunBackupDump;
 use App\Models\Cards\Card;
 use App\Models\Debts\DebtPayment;
+use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\Tank;
 use App\Models\Sales\Customer;
 use App\Models\Fuel\Nozzle;
@@ -17,6 +19,7 @@ use App\Models\Tickets\Ticket;
 use App\Models\Tickets\TicketInbound;
 use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
+use App\Support\Admin\BackupRun;
 use App\Support\Reports\ReportSheets;
 use App\Support\Sales\SaleDeletion;
 use App\Support\Reports\XlsxWriter;
@@ -46,7 +49,10 @@ class ConfirmationController extends Controller
             'confirmedSales' => Sale::where('sale_date', $date)->whereNotNull('confirmed_at')->count(),
             'confirmedSupplements' => Supplement::where('supply_date', $date)->whereNotNull('confirmed_at')->count(),
             'confirmedTickets' => TicketInbound::where('inbound_date', $date)->whereNotNull('confirmed_at')->count() + TicketPublish::where('date', $date)->whereNotNull('confirmed_at')->count(),
-            'confirmedMoney' => DebtPayment::where('paid_date', $date)->whereNotNull('confirmed_at')->count() + FuelInbound::where('inbound_date', $date)->whereNotNull('confirmed_at')->count(),
+            'confirmedFuel' => FuelInbound::where('inbound_date', $date)->whereNotNull('confirmed_at')->count()
+                + FuelOutbound::whereNull('supplement_id')->where('outbound_date', $date)->whereNotNull('confirmed_at')->count(),
+            'confirmedDebts' => DebtPayment::where('paid_date', $date)->whereNotNull('confirmed_at')->count()
+                + TicketLoanSettlement::where('date', $date)->whereNotNull('confirmed_at')->count(),
             'deletedSales' => Sale::onlyTrashed()->where('sale_date', $date)->count(),
             'fuels' => config('fuel_types'),
         ];
@@ -239,19 +245,80 @@ class ConfirmationController extends Controller
         ]);
     }
 
-    // Payments and fuel: the debt payments received on the date (a reversal is a line of its own, with the negative amount) and the fuel inbounds of the date.
-    public function payments(Request $request)
+    // Fuel stock: the fuel inbounds of the date and the fuel outbounds made by hand (the outbound of a supply follows the supply, which is confirmed on its own page).
+    public function fuel(Request $request)
     {
         $page = $this->page($request);
 
-        return view('confirmation.payments', $page + [
-            'payments' => DebtPayment::with('debt.sale')->where('paid_date', $page['date'])->orderBy('id')->get(),
-            'customers' => Customer::withTrashed()->pluck('name', 'id'),
+        return view('confirmation.fuel', $page + [
             'inbounds' => FuelInbound::where('inbound_date', $page['date'])->orderBy('id')->get(),
+            'outbounds' => FuelOutbound::whereNull('supplement_id')->where('outbound_date', $page['date'])->orderBy('id')->get(),
             'tanks' => Tank::withTrashed()->pluck('name', 'id'),
         ]);
     }
 
+    // Debts: the debt payments received on the date (a reversal is a line of its own, with the negative amount) and the settlements of the ticket loans of the date
+    // (the tickets given back; a reversal has the negative kg). The debts and the ticket loans themselves are not confirmed.
+    public function debts(Request $request)
+    {
+        $page = $this->page($request);
+
+        return view('confirmation.debts', $page + [
+            'payments' => DebtPayment::with('debt.sale')->where('paid_date', $page['date'])->orderBy('id')->get(),
+            'settlements' => TicketLoanSettlement::with('loan')->where('date', $page['date'])->orderBy('settled_at')->get(),
+            'customers' => Customer::withTrashed()->pluck('name', 'id'),
+        ]);
+    }
+
+    // Overview: for the date, each area of the daily confirmation with how many records it has, how many are confirmed and how many wait, and the things to look at
+    // before confirming (a terminal that has not uploaded, a sale without its cost, a supply without tickets, deleted sales waiting to be erased).
+    public function overview(Request $request)
+    {
+        $page = $this->page($request);
+        $date = $page['date'];
+
+        $count = function ($query) {
+            $total = (clone $query)->count();
+            $waiting = (clone $query)->whereNull('confirmed_at')->count();
+
+            return ['total' => $total, 'confirmed' => $total - $waiting, 'waiting' => $waiting];
+        };
+        $add = function (array $parts) {
+            $sum = ['total' => 0, 'confirmed' => 0, 'waiting' => 0];
+            foreach ($parts as $part) {
+                foreach ($sum as $key => $value) {
+                    $sum[$key] += $part[$key];
+                }
+            }
+
+            return $sum;
+        };
+        $areas = [
+            'fuel' => ['confirmations.fuel', $add([
+                $count(FuelInbound::where('inbound_date', $date)), $count(FuelOutbound::whereNull('supplement_id')->where('outbound_date', $date)),
+            ])],
+            'tickets' => ['confirmations.tickets', $add([
+                $count(TicketInbound::where('inbound_date', $date)), $count(TicketPublish::where('date', $date)),
+            ])],
+            'sales' => ['confirmations.index', $count(Sale::where('sale_date', $date))],
+            'supplements' => ['confirmations.supplements', $count(Supplement::where('supply_date', $date))],
+            'debts' => ['confirmations.debts', $add([
+                $count(DebtPayment::where('paid_date', $date)), $count(TicketLoanSettlement::where('date', $date)),
+            ])],
+        ];
+
+        // what to look at: the terminals matter once the business day is over (until then they simply have not finished it)
+        list($silent, $dayEnds) = BackupRun::silentDevices($date);
+        $warnings = [
+            'silent' => $dayEnds->isFuture() ? [] : $silent->all(),
+            'dayEnds' => $dayEnds,
+            'noCost' => Sale::where('sale_date', $date)->whereNull('cost')->whereNull('reverses_sale_id')->whereIn('sale_type', ['ticket', 'spot'])->count(),
+            'noTickets' => Supplement::where('supply_date', $date)->whereNull('card_id')->whereDoesntHave('tickets')->count(),
+            'deleted' => $page['deletedSales'],
+        ];
+
+        return view('confirmation.overview', $page + ['areas' => $areas, 'warnings' => $warnings]);
+    }
     // Summary: the figures of the whole date.
     public function summaryPage(Request $request)
     {
@@ -280,6 +347,31 @@ class ConfirmationController extends Controller
     // - supplements: by the kind of the tickets they used (tickets of the published stock, spot, remainder, self use, others: given away /
     //   ticket loan), by fuel type
     // - remainders: made on the date and used up on it, by fuel type
+    // The money of the day by how it was paid (cash, bank): what the sales received, what the returns gave back, the debt payments received and reversed, the net of those, and
+    // what was sold on credit (not paid). Deleted sales are not counted. It is the figure to check the cash of the cashier and the bank against.
+    private function money($date)
+    {
+        $sales = Sale::where('sale_date', $date)->get(['payment_method', 'paid_amount', 'unpaid_amount']);
+        $payments = DebtPayment::where('paid_date', $date)->get(['payment_method', 'amount']);
+
+        $rows = [];
+        foreach (['cash', 'bank'] as $method) {
+            $s = $sales->where('payment_method', $method);
+            $p = $payments->where('payment_method', $method);
+            $row = [
+                'sales_received' => round((float) $s->where('paid_amount', '>', 0)->sum('paid_amount'), 2),
+                'sales_refunded' => round((float) $s->where('paid_amount', '<', 0)->sum('paid_amount'), 2),
+                'payments_received' => round((float) $p->where('amount', '>', 0)->sum('amount'), 2),
+                'payments_reversed' => round((float) $p->where('amount', '<', 0)->sum('amount'), 2),
+            ];
+            $row['net'] = round($row['sales_received'] + $row['sales_refunded'] + $row['payments_received'] + $row['payments_reversed'], 2);
+            $row['credit'] = round((float) $s->sum('unpaid_amount'), 2);
+            $rows[$method] = $row;
+        }
+
+        return $rows;
+    }
+
     private function summary($date)
     {
         $sales = Sale::with('items')->where('sale_date', $date)->get();
@@ -403,6 +495,7 @@ class ConfirmationController extends Controller
 
         return [
             'fuelKeys' => $fuels,
+            'money' => $this->money($date),
             'ticketSpecs' => $this->ticketSpecs(),
             'salesBy' => $salesBy,
             'remaindersBy' => $remaindersBy,
@@ -424,9 +517,13 @@ class ConfirmationController extends Controller
             'ticket_publishes.*' => 'integer',
             'debt_payments' => 'nullable|array|max:2000',
             'debt_payments.*' => 'integer',
+            'ticket_settlements' => 'nullable|array|max:2000',
+            'ticket_settlements.*' => 'uuid',
+            'fuel_outbounds' => 'nullable|array|max:2000',
+            'fuel_outbounds.*' => 'integer',
             'fuel_inbounds' => 'nullable|array|max:2000',
             'fuel_inbounds.*' => 'integer',
-            'from' => 'nullable|in:sales,supplements,tickets,payments', // the page the form was on
+            'from' => 'nullable|in:sales,supplements,tickets,fuel,debts', // the page the form was on
             'tab' => 'nullable|in:ticket,spot,card,others', // the tab of the Sales page, to come back to it
         ]);
         $from = $data['from'] ?? 'sales';
@@ -436,15 +533,17 @@ class ConfirmationController extends Controller
         $publishIds = $data['ticket_publishes'] ?? [];
         $paymentIds = $data['debt_payments'] ?? [];
         $fuelInboundIds = $data['fuel_inbounds'] ?? [];
+        $fuelOutboundIds = $data['fuel_outbounds'] ?? [];
+        $settlementIds = $data['ticket_settlements'] ?? [];
 
         // Confirming with nothing checked is allowed only to erase the deleted sales waiting on that date.
-        if (!$saleIds && !$supplementIds && !$inboundIds && !$publishIds && !$paymentIds && !$fuelInboundIds && ($from !== 'sales' || !Sale::onlyTrashed()->where('sale_date', $data['date'])->exists())) {
+        if (!$saleIds && !$supplementIds && !$inboundIds && !$publishIds && !$paymentIds && !$fuelInboundIds && !$fuelOutboundIds && !$settlementIds && ($from !== 'sales' || !Sale::onlyTrashed()->where('sale_date', $data['date'])->exists())) {
             throw ValidationException::withMessages([$from => __('confirm.nothing_checked')]);
         }
 
         // Only records of the chosen date that are still unconfirmed count, so a stale page or a doctored form cannot
         // confirm anything else. The date's deleted sales are erased for good in the same step.
-        list($sales, $supplements, $erased, $inbounds, $publishes, $payments, $fuelInbounds) = DB::transaction(function () use ($data, $saleIds, $supplementIds, $inboundIds, $publishIds, $paymentIds, $fuelInboundIds, $from) {
+        list($sales, $supplements, $erased, $inbounds, $publishes, $payments, $fuelInbounds, $fuelOutbounds, $settlements) = DB::transaction(function () use ($data, $saleIds, $supplementIds, $inboundIds, $publishIds, $paymentIds, $fuelInboundIds, $fuelOutboundIds, $settlementIds, $from) {
             $stamp = ['confirmed_at' => now(), 'confirmed_by' => auth()->id()];
 
             $confirm = function ($query, array $ids, $column) use ($data, $stamp) {
@@ -459,27 +558,31 @@ class ConfirmationController extends Controller
                 $confirm(TicketPublish::query(), $publishIds, 'date'),
                 $confirm(DebtPayment::query(), $paymentIds, 'paid_date'),
                 $confirm(FuelInbound::query(), $fuelInboundIds, 'inbound_date'),
+                $confirm(FuelOutbound::whereNull('supplement_id'), $fuelOutboundIds, 'outbound_date'),
+                $confirm(TicketLoanSettlement::query(), $settlementIds, 'date'),
             ];
         });
 
-        Audit::log('confirm', $data['date'] . ': ' . $sales . ' sales, ' . $supplements . ' supplements, ' . $inbounds . ' ticket inbounds, ' . $publishes . ' ticket publishes, ' . $payments . ' debt payments, ' . $fuelInbounds . ' fuel inbounds, ' . $erased . ' deleted sales erased');
+        Audit::log('confirm', $data['date'] . ': ' . $sales . ' sales, ' . $supplements . ' supplements, ' . $inbounds . ' ticket inbounds, ' . $publishes . ' ticket publishes, ' . $payments . ' debt payments, ' . $settlements . ' ticket settlements, ' . $fuelInbounds . ' fuel inbounds, ' . $fuelOutbounds . ' fuel outbounds, ' . $erased . ' deleted sales erased');
 
         $message = $from === 'tickets'
             ? __('confirm.done_tickets', ['inbounds' => $inbounds, 'publishes' => $publishes, 'date' => $data['date']])
-            : ($from === 'payments'
-                ? __('confirm.done_payments', ['payments' => $payments, 'inbounds' => $fuelInbounds, 'date' => $data['date']])
-                : __('confirm.done', ['sales' => $sales, 'supplements' => $supplements, 'date' => $data['date']]));
+            : ($from === 'fuel'
+                ? __('confirm.done_fuel', ['inbounds' => $fuelInbounds, 'outbounds' => $fuelOutbounds, 'date' => $data['date']])
+                : ($from === 'debts'
+                    ? __('confirm.done_debts', ['payments' => $payments, 'settlements' => $settlements, 'date' => $data['date']])
+                    : __('confirm.done', ['sales' => $sales, 'supplements' => $supplements, 'date' => $data['date']])));
         if ($erased) {
             $message .= ' ' . __('confirm.erased', ['count' => $erased]);
         }
 
         // The day is finished when nothing of it is left to confirm: the database is dumped, after the response, as it stands now.
-        if (config('backup.dump_on_confirmation') && ($sales || $supplements || $inbounds || $publishes || $payments || $fuelInbounds) && $this->dayIsFullyConfirmed($data['date'])) {
+        if (config('backup.dump_on_confirmation') && ($sales || $supplements || $inbounds || $publishes || $payments || $fuelInbounds || $fuelOutbounds || $settlements) && $this->dayIsFullyConfirmed($data['date'])) {
             RunBackupDump::dispatchAfterResponse('confirmed ' . $data['date']);
             $message .= ' ' . __('confirm.backup_queued');
         }
 
-        $url = route(['sales' => 'confirmations.index', 'supplements' => 'confirmations.supplements', 'tickets' => 'confirmations.tickets', 'payments' => 'confirmations.payments'][$from], ['date' => $data['date']]);
+        $url = route(['sales' => 'confirmations.index', 'supplements' => 'confirmations.supplements', 'tickets' => 'confirmations.tickets', 'fuel' => 'confirmations.fuel', 'debts' => 'confirmations.debts'][$from], ['date' => $data['date']]);
 
         return redirect($url . ($from === 'sales' && !empty($data['tab']) ? '#tab-' . $data['tab'] : ''))->with('status', $message);
     }
@@ -491,11 +594,13 @@ class ConfirmationController extends Controller
             && !TicketInbound::where('inbound_date', $date)->whereNull('confirmed_at')->exists()
             && !TicketPublish::where('date', $date)->whereNull('confirmed_at')->exists()
             && !DebtPayment::where('paid_date', $date)->whereNull('confirmed_at')->exists()
-            && !FuelInbound::where('inbound_date', $date)->whereNull('confirmed_at')->exists();
+            && !FuelInbound::where('inbound_date', $date)->whereNull('confirmed_at')->exists()
+            && !FuelOutbound::whereNull('supplement_id')->where('outbound_date', $date)->whereNull('confirmed_at')->exists()
+            && !TicketLoanSettlement::where('date', $date)->whereNull('confirmed_at')->exists();
     }
 
-    // date => ['sales' => n, 'supplements' => n, 'tickets' => n, 'money' => n, 'deleted' => n]: records not confirmed yet (tickets: inbounds and publishes; money: debt payments
-    // and fuel inbounds) and deleted sales
+    // date => ['sales' => n, 'supplements' => n, 'tickets' => n, 'fuel' => n, 'debts' => n, 'deleted' => n]: records not confirmed yet (tickets: inbounds and publishes; fuel:
+    // inbounds and outbounds by hand; debts: payments and ticket settlements) and deleted sales
     // still waiting to be erased, newest date first.
     private function waitingByDate()
     {
@@ -504,19 +609,21 @@ class ConfirmationController extends Controller
             'supplements' => [Supplement::whereNull('confirmed_at'), 'supply_date'],
             'tickets' => [TicketInbound::whereNull('confirmed_at'), 'inbound_date'],
             'tickets_publish' => [TicketPublish::whereNull('confirmed_at'), 'date'], // (counted with the inbounds: the two are added up)
-            'money' => [DebtPayment::whereNull('confirmed_at'), 'paid_date'],
-            'money_fuel' => [FuelInbound::whereNull('confirmed_at'), 'inbound_date'], // (counted with the payments)
+            'fuel' => [FuelInbound::whereNull('confirmed_at'), 'inbound_date'],
+            'fuel_out' => [FuelOutbound::whereNull('supplement_id')->whereNull('confirmed_at'), 'outbound_date'], // (counted with the inbounds)
+            'debts' => [DebtPayment::whereNull('confirmed_at'), 'paid_date'],
+            'debts_settle' => [TicketLoanSettlement::whereNull('confirmed_at'), 'date'], // (counted with the payments)
             'deleted' => [Sale::onlyTrashed(), 'sale_date'],
         ];
 
         $waiting = [];
         foreach ($queries as $key => $pair) {
             list($query, $column) = $pair;
-            $key = $key === 'tickets_publish' ? 'tickets' : ($key === 'money_fuel' ? 'money' : $key);
+            $key = ['tickets_publish' => 'tickets', 'fuel_out' => 'fuel', 'debts_settle' => 'debts'][$key] ?? $key;
             $counts = $query->whereNotNull($column)->selectRaw('`' . $column . '` AS day, COUNT(*) AS n')->groupBy($column)->pluck('n', 'day');
             foreach ($counts as $date => $n) {
                 $date = substr((string) $date, 0, 10);
-                $waiting[$date] = ($waiting[$date] ?? ['sales' => 0, 'supplements' => 0, 'tickets' => 0, 'money' => 0, 'deleted' => 0]);
+                $waiting[$date] = ($waiting[$date] ?? ['sales' => 0, 'supplements' => 0, 'tickets' => 0, 'fuel' => 0, 'debts' => 0, 'deleted' => 0]);
                 $waiting[$date][$key] += (int) $n;
             }
         }

@@ -350,7 +350,7 @@ class SaleDeleteTest extends TestCase
 
         $this->as('accountant')->get('/confirmations?date=' . today()->toDateString())->assertOk()
             ->assertSee(__('confirm.will_erase', ['count' => 1]))
-            ->assertSee(today()->toDateString() . ' (0 / 0 / 1 / 0 / 1 ' . __('confirm.deleted_short') . ')');
+            ->assertSee(today()->toDateString() . ' (0 / 1 / 0 / 0 / 0 / 1 ' . __('confirm.deleted_short') . ')');
     }
 
     // ---- a ticket of a deleted sale can never be used again ----

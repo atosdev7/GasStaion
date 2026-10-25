@@ -131,7 +131,7 @@ class BackupTest extends TestCase
         ]);
         TicketLoanSettlement::forceCreate([
             'loan_id' => $loan->id, 'ticket_barcode' => '0000006000000001', 'amount_kg' => 5, 'settled_at' => '2026-09-10',
-            'date' => '2026-09-10', 'user_id' => 1,
+            'date' => '2026-09-10', 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1,
         ]);
     }
 
@@ -207,7 +207,7 @@ class BackupTest extends TestCase
         $this->scenario();
         foreach (['2026-09-12' => 20, '2026-09-20' => 15] as $date => $kg) {   // by hand: one inside the cut-off, one after it
             $row = new \App\Models\Fuel\FuelOutbound;
-            $row->forceFill(['tank_id' => $this->tank->id, 'outbound_date' => $date, 'amount_kg' => $kg, 'user_id' => 1])->save();
+            $row->forceFill(['tank_id' => $this->tank->id, 'outbound_date' => $date, 'amount_kg' => $kg, 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1])->save();
         }
         $before = TankLevels::all()->first()->current;                           // 1000 + 800 - (100 + 40 + 7) - (20 + 15) = 1618
         $this->assertEquals(1618, $before);
@@ -639,16 +639,28 @@ class BackupTest extends TestCase
         FuelInbound::forceCreate(['tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 1, 'inbound_date' => '2026-09-20', 'user_id' => 1]);   // after the date: no matter
 
         $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
-        $this->assertStringContainsString('2 debt payments and fuel inbounds', session('errors')->first('up_to'));
+        $this->assertStringContainsString('2 fuel inbounds and outbounds, debt payments and ticket settlements', session('errors')->first('up_to'));
         $this->assertStringContainsString('2026-09-08', session('errors')->first('up_to'));
         $this->assertSame(1, Sale::count());
         $this->assertSame(0, Backup::count());
 
         $inbound->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
         $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
-        $this->assertStringContainsString('1 debt payments and fuel inbounds', session('errors')->first('up_to'));
+        $this->assertStringContainsString('1 fuel inbounds and outbounds, debt payments and ticket settlements', session('errors')->first('up_to'));
 
         $payment->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+
+        // the outbound made by hand and the settlement of a ticket loan wait too (the outbound of a supply follows the supply)
+        $outbound = new \App\Models\Fuel\FuelOutbound;
+        $outbound->forceFill(['tank_id' => $this->tank->id, 'outbound_date' => '2026-09-09', 'amount_kg' => 10, 'user_id' => 1])->save();
+        $loan = TicketLoan::forceCreate(['loaned_at' => '2026-09-09 09:00:00', 'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 10, 'user_id' => 1]);
+        $settlement = TicketLoanSettlement::forceCreate(['loan_id' => $loan->id, 'ticket_barcode' => '0000006000000009', 'amount_kg' => 5, 'settled_at' => '2026-09-09 10:00:00', 'date' => '2026-09-09', 'user_id' => 1]);
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasErrors('up_to');
+        $this->assertStringContainsString('2 fuel inbounds and outbounds', session('errors')->first('up_to'));
+        $this->assertStringContainsString('2026-09-09', session('errors')->first('up_to'));
+        $outbound->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $settlement->forceFill(['confirmed_at' => now(), 'confirmed_by' => 1])->save();
+
         $this->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
         $this->assertSame(0, Sale::count());
         $this->assertSame(1, Backup::count());

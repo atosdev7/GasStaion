@@ -11,6 +11,13 @@ class FuelOutbound extends Model
 {
     use SoftDeletes;
 
+    protected $casts = ['confirmed_at' => 'datetime'];
+
+    public function isConfirmed()
+    {
+        return $this->confirmed_at !== null;
+    }
+
     public function tank()
     {
         return $this->belongsTo(Tank::class)->withTrashed();

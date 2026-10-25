@@ -12,7 +12,13 @@ class TicketLoanSettlement extends Model
 
     protected $casts = [
         'synced' => 'boolean',
+        'confirmed_at' => 'datetime',
     ];
+
+    public function isConfirmed()
+    {
+        return $this->confirmed_at !== null;
+    }
 
     public function loan()
     {

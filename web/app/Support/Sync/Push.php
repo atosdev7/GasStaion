@@ -380,7 +380,14 @@ class Push
             'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        self::store(self::find(TicketLoanSettlement::class, $d['id']), $d, ['synced' => true]);
+        $settlement = self::find(TicketLoanSettlement::class, $d['id']);
+        if ($settlement->confirmed_at) {
+            self::refuseEditOfConfirmed($settlement, $d, 'date');
+
+            return; // confirmed by the accountant: final, so a repeated push changes nothing
+        }
+
+        self::store($settlement, $d, ['synced' => true]);
 
         // Recomputed from the ledger, as the web does. An ordinary save: the new total goes back to the device with its
         // next pull, together with anything settled on the web meanwhile.

@@ -5,6 +5,7 @@ namespace App\Support\Admin;
 use App\Models\Admin\Backup;
 use App\Models\Admin\Device;
 use App\Models\Debts\DebtPayment;
+use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelOutbound;
 use App\Models\Sales\Sale;
@@ -73,25 +74,39 @@ class BackupRun
             $blockers[] = __('admin.backup_blocked_tickets', ['count' => $ticketCount, 'date' => substr((string) min($oldest), 0, 10)]);
         }
 
-        // the money received and the fuel that came in too (the fuel inbounds are cleared with the backup, the payments stay: the day is not finished until they are confirmed)
+        // the fuel that came in and went out by hand (cleared with the backup), the money received and the tickets given back for a loan (kept, but the day is not finished
+        // until they are confirmed)
         $payments = DebtPayment::where('paid_date', '<=', $upTo)->whereNull('confirmed_at');
+        $settlements = TicketLoanSettlement::whereNotNull('date')->where('date', '<=', $upTo)->whereNull('confirmed_at');
         $fuelInbounds = FuelInbound::where('inbound_date', '<=', $upTo)->whereNull('confirmed_at');
-        $moneyCount = (clone $payments)->count() + (clone $fuelInbounds)->count();
+        $fuelOutbounds = FuelOutbound::whereNull('supplement_id')->where('outbound_date', '<=', $upTo)->whereNull('confirmed_at');
+        $moneyCount = (clone $payments)->count() + (clone $settlements)->count() + (clone $fuelInbounds)->count() + (clone $fuelOutbounds)->count();
         if ($moneyCount) {
-            $oldest = array_filter([$payments->min('paid_date'), $fuelInbounds->min('inbound_date')]);
+            $oldest = array_filter([$payments->min('paid_date'), $settlements->min('date'), $fuelInbounds->min('inbound_date'), $fuelOutbounds->min('outbound_date')]);
             $blockers[] = __('admin.backup_blocked_money', ['count' => $moneyCount, 'date' => substr((string) min($oldest), 0, 10)]);
         }
 
-        $dayEnds = Carbon::parse($upTo)->addDay()->setTime((int) config('backup.business_day_start_hour'), 0, 0);
-        $silent = Device::where('initial_sync_done', true)
-            ->where(function ($q) use ($dayEnds) {
-                $q->whereNull('last_synced_at')->orWhere('last_synced_at', '<', $dayEnds);
-            })->orderBy('name')->pluck('name');
+        list($silent, $dayEnds) = static::silentDevices($upTo);
         if ($silent->isNotEmpty()) {
             $blockers[] = __('admin.backup_blocked_devices', ['devices' => $silent->implode(', '), 'time' => $dayEnds->format('Y-m-d H:i')]);
         }
 
         return $blockers;
+    }
+
+    /**
+     * The terminals that have not uploaded since the business day of $date ended (they may still hold records of it that the web does not know yet), and the moment
+     * that day ended. [names, moment]
+     */
+    public static function silentDevices($date)
+    {
+        $dayEnds = Carbon::parse($date)->addDay()->setTime((int) config('backup.business_day_start_hour'), 0, 0);
+        $names = Device::where('initial_sync_done', true)
+            ->where(function ($q) use ($dayEnds) {
+                $q->whereNull('last_synced_at')->orWhere('last_synced_at', '<', $dayEnds);
+            })->orderBy('name')->pluck('name');
+
+        return [$names, $dayEnds];
     }
 
     /** Net kg per tank in the rows a backup up to $upTo would clear: inbound minus outbound (the supplies' rows and the ones made by hand). */

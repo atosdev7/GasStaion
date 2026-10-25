@@ -78,6 +78,9 @@ class OutboundController extends Controller
     public function edit($id)
     {
         $outbound = $this->byHand($id);
+        if ($outbound->isConfirmed()) {
+            return redirect()->route('outbound.index')->withErrors(['outbound' => __('fuel.confirmed_locked')]);
+        }
 
         return view('outbound.form', ['outbound' => $outbound, 'tanks' => Tank::orderBy('name')->pluck('name', 'id')]);
     }
@@ -85,6 +88,9 @@ class OutboundController extends Controller
     public function update(Request $request, $id)
     {
         $outbound = $this->byHand($id);
+        if ($outbound->isConfirmed()) {
+            return redirect()->route('outbound.index')->withErrors(['outbound' => __('fuel.confirmed_locked')]);
+        }
         $data = $this->validated($request);
 
         $before = '#' . $outbound->id . ' ' . $outbound->outbound_date . ', tank ' . $outbound->tank_id . ', ' . $outbound->amount_kg . ' kg';
@@ -98,6 +104,9 @@ class OutboundController extends Controller
     public function destroy($id)
     {
         $outbound = $this->byHand($id);
+        if ($outbound->isConfirmed()) {
+            return redirect()->route('outbound.index')->withErrors(['outbound' => __('fuel.confirmed_locked')]);
+        }
         $outbound->delete();
 
         Audit::log('outbound_delete', '#' . $outbound->id . ' ' . $outbound->outbound_date . ', tank ' . $outbound->tank_id . ', ' . $outbound->amount_kg . ' kg');

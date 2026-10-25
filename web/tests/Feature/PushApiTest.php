@@ -955,6 +955,33 @@ class PushApiTest extends TestCase
         $this->assertEquals(15, \App\Models\Debts\TicketLoan::find($loan['id'])->settled_amount_kg);
     }
 
+    public function testAConfirmedSettlementIsFinalToo()
+    {
+        $loan = $this->loanRow();
+        $this->push('ticket_loans', [$loan]);
+        $row = $this->settlementRow($loan['id'], ['comment' => 'first']);
+        $this->push('ticket_loan_settlements', [$row]);
+        \App\Models\Debts\TicketLoanSettlement::whereKey($row['id'])->update(['confirmed_at' => now(), 'confirmed_by' => 1]);
+
+        $same = $this->push('ticket_loan_settlements', [$row]);                                                       // the same data again is fine
+        $moved = $this->push('ticket_loan_settlements', [array_merge($row, ['date' => '2026-10-07'])]);
+        $noted = $this->push('ticket_loan_settlements', [array_merge($row, ['comment' => 'late note'])]);
+
+        $this->assertSame([$row['id']], $same['saved']);
+        $this->assertSame([], $moved['saved']);
+        $this->assertStringContainsString('confirmed by the accountant', $moved['rejected'][0]['error']);
+        $this->assertStringContainsString('take the confirmation back', $noted['rejected'][0]['error']);
+        $stored = \App\Models\Debts\TicketLoanSettlement::find($row['id']);
+        $this->assertSame('first', $stored->comment);
+        $this->assertSame('2026-10-06', substr((string) $stored->date, 0, 10));
+
+        // taken back, the correction of the cashier is taken
+        \App\Models\Debts\TicketLoanSettlement::whereKey($row['id'])->update(['confirmed_at' => null, 'confirmed_by' => null]);
+        $taken = $this->push('ticket_loan_settlements', [array_merge($row, ['comment' => 'corrected', 'date' => '2026-10-07'])]);
+        $this->assertSame([$row['id']], $taken['saved']);
+        $this->assertSame('corrected', \App\Models\Debts\TicketLoanSettlement::find($row['id'])->comment);
+    }
+
     public function testPushingASettlementTwiceDoesNotCountItTwice()
     {
         $loan = $this->loanRow();
