@@ -121,7 +121,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="upperRow" stretch="1,0">
+        <layout class="QHBoxLayout" name="upperRow" stretch="3,2">
          <property name="leftMargin"><number>0</number></property>
          <property name="topMargin"><number>0</number></property>
          <property name="rightMargin"><number>0</number></property>
@@ -133,103 +133,113 @@
          </item>
          <item>
           <layout class="QVBoxLayout" name="formColumn">
-           <property name="leftMargin"><number>0</number></property>
-           <property name="topMargin"><number>0</number></property>
-           <property name="rightMargin"><number>0</number></property>
-           <property name="bottomMargin"><number>0</number></property>
+           <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
            <property name="spacing"><number>6</number></property>
            <item>
             <widget class="QLabel" name="selectedNozzle">
             </widget>
            </item>
            <item>
-            <layout class="QFormLayout" name="nozzleForm">
-             <property name="leftMargin"><number>0</number></property>
-             <property name="topMargin"><number>0</number></property>
-             <property name="rightMargin"><number>0</number></property>
-             <property name="bottomMargin"><number>0</number></property>
-             <property name="spacing"><number>6</number></property>
-             <item row="0" column="0">
-              <widget class="QLabel" name="nozzleModeLabel">
-               <property name="text"><string>Mode</string></property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QComboBox" name="nozzleMode">
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="nozzleFuelLabel">
-               <property name="text"><string>Fuel type</string></property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QComboBox" name="nozzleFuel">
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="nozzleDensityLabel">
-               <property name="text"><string>Density</string></property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QLineEdit" name="nozzleDensity">
-               <property name="placeholderText"><string>kg/L, e.g. 0.8300</string></property>
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="nozzlePulsesLabel">
-               <property name="text"><string>Pulses per litre</string></property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QLineEdit" name="nozzlePulses">
-               <property name="placeholderText"><string>e.g. 1200 or 1234.5</string></property>
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="nozzleNameLabel">
-               <property name="text"><string>Name</string></property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QLineEdit" name="nozzleName">
-               <property name="maxLength"><number>50</number></property>
-               <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
-              </widget>
-             </item>
-            </layout>
+            <widget class="QGroupBox" name="nozzleNameBox">
+             <property name="title"><string>Name</string></property>
+             <layout class="QHBoxLayout" name="nozzleNameRow" stretch="1,0">
+              <property name="leftMargin"><number>9</number></property><property name="topMargin"><number>9</number></property><property name="rightMargin"><number>9</number></property><property name="bottomMargin"><number>9</number></property>
+              <property name="spacing"><number>6</number></property>
+              <item>
+               <widget class="QLineEdit" name="nozzleName">
+                <property name="maxLength"><number>50</number></property>
+                <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+                <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="saveNozzleNameButton">
+                <property name="text"><string>Save name</string></property>
+                <property name="minimumSize"><size><width>130</width><height>38</height></size></property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="nozzleButtons" stretch="1,1,1">
-             <property name="leftMargin"><number>0</number></property>
-             <property name="topMargin"><number>0</number></property>
-             <property name="rightMargin"><number>0</number></property>
-             <property name="bottomMargin"><number>0</number></property>
-             <property name="spacing"><number>6</number></property>
-             <item>
-              <widget class="QPushButton" name="updateNozzleButton">
-               <property name="text"><string>Update</string></property>
-               <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="readNozzlesButton">
-               <property name="text"><string>Read</string></property>
-               <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="saveNozzleNameButton">
-               <property name="text"><string>Save name</string></property>
-               <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
-              </widget>
-             </item>
-            </layout>
+            <widget class="QGroupBox" name="nozzleConfigBox">
+             <property name="title"><string>Config</string></property>
+             <layout class="QVBoxLayout" name="nozzleConfigLayout">
+              <property name="leftMargin"><number>9</number></property><property name="topMargin"><number>9</number></property><property name="rightMargin"><number>9</number></property><property name="bottomMargin"><number>9</number></property>
+              <property name="spacing"><number>6</number></property>
+              <item>
+               <layout class="QFormLayout" name="nozzleForm">
+                <property name="fieldGrowthPolicy"><enum>QFormLayout::AllNonFixedFieldsGrow</enum></property>
+                <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+                <property name="spacing"><number>6</number></property>
+                <item row="0" column="0">
+                 <widget class="QLabel" name="nozzleModeLabel">
+                  <property name="text"><string>Mode</string></property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QComboBox" name="nozzleMode">
+                  <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+                  <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="nozzleFuelLabel">
+                  <property name="text"><string>Fuel type</string></property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QComboBox" name="nozzleFuel">
+                  <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+                  <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="nozzleDensityLabel">
+                  <property name="text"><string>Density</string></property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QLineEdit" name="nozzleDensity">
+                  <property name="placeholderText"><string>kg/L, e.g. 0.8300</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+                  <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="nozzlePulsesLabel">
+                  <property name="text"><string>Pulses per litre</string></property>
+                 </widget>
+                </item>
+                <item row="3" column="1">
+                 <widget class="QLineEdit" name="nozzlePulses">
+                  <property name="placeholderText"><string>e.g. 1200 or 1234.5</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>38</height></size></property>
+                  <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="nozzleButtons" stretch="1,1">
+                <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+                <property name="spacing"><number>6</number></property>
+                <item>
+                 <widget class="QPushButton" name="updateNozzleButton">
+                  <property name="text"><string>Update</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="readNozzlesButton">
+                  <property name="text"><string>Read</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>48</height></size></property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
            </item>
            <item>
             <spacer name="spacer3">

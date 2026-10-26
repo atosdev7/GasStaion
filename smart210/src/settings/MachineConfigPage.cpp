@@ -121,11 +121,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     density_ = ui_->nozzleDensity;
     pulses_ = ui_->nozzlePulses;
     nozzleName_ = ui_->nozzleName;
-    // the form is narrow, the table gets the rest of the tab
-    mode_->setMaximumWidth(180);
-    fuel_->setMaximumWidth(180);
-    density_->setMaximumWidth(180);
-    pulses_->setMaximumWidth(180);
+    // (the fields of the config use the width of their group: the form column shares the tab with the table, see the .ui)
 
     converterPort_ = ui_->converterPort;
     converterPort_->setValidator(new QIntValidator(1, 65535, converterPort_));

@@ -6775,6 +6775,35 @@ void Smart210Test::theMachineConfigPageShowsTypesAndSavesTheNameOfANozzle()
     QCOMPARE(table->item(0, 1)->text(), QString());                          // no name yet
     QCOMPARE(name->maxLength(), 50);
 
+    // the right side has two groups, the Name group (the field and Save name) above the Config group (mode, fuel type, density, pulses, Update, Read)
+    QGroupBox *nameBox = window.findChild<QGroupBox *>("nozzleNameBox");
+    QGroupBox *configBox = window.findChild<QGroupBox *>("nozzleConfigBox");
+    QVERIFY(nameBox != 0 && configBox != 0);
+    QCOMPARE(nameBox->title(), QString("Name"));
+    QCOMPARE(configBox->title(), QString("Config"));
+    QVERIFY(nameBox->isAncestorOf(name) && nameBox->isAncestorOf(save));
+    foreach (const char *field, QList<const char *>() << "nozzleMode" << "nozzleFuel" << "nozzleDensity" << "nozzlePulses" << "updateNozzleButton" << "readNozzlesButton") {
+        QVERIFY2(configBox->isAncestorOf(window.findChild<QWidget *>(field)), field);
+        QVERIFY2(!nameBox->isAncestorOf(window.findChild<QWidget *>(field)), field);
+    }
+    QLayout *column = window.findChild<QLayout *>("formColumn");
+    QVERIFY(column != 0);
+    QCOMPARE(column->itemAt(1)->widget(), static_cast<QWidget *>(nameBox));      // after the label of the picked nozzle: the Name group, then the Config group
+    QCOMPARE(column->itemAt(2)->widget(), static_cast<QWidget *>(configBox));
+    QFormLayout *form = window.findChild<QFormLayout *>("nozzleForm");
+    QVERIFY(form != 0);
+    QCOMPARE(form->fieldGrowthPolicy(), QFormLayout::AllNonFixedFieldsGrow);     // the fields of the config use the width that there is
+    int row = -1;
+    QFormLayout::ItemRole role;
+    QList<int> rows;
+    foreach (const char *field, QList<const char *>() << "nozzleMode" << "nozzleFuel" << "nozzleDensity" << "nozzlePulses") {
+        QWidget *edit = window.findChild<QWidget *>(field);
+        QCOMPARE(edit->sizePolicy().horizontalPolicy(), QSizePolicy::Expanding);
+        QVERIFY2(edit->maximumWidth() > 400, field);                                 // no narrow limit: it takes the width of the group
+        form->getWidgetPosition(edit, &row, &role);
+        rows << row;
+    }
+    QCOMPARE(rows, QList<int>() << 0 << 1 << 2 << 3);
     // pick a nozzle, type its name, Save name: the table, the label of the form and the change log show it; the web app is told
     table->selectRow(0);
     QCOMPARE(selected->text(), QString("Nozzle 1"));
