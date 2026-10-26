@@ -5,3 +5,5 @@ src/shell/MainWindow.cpp
 src/shell/AppShell.cpp
 src/shell/AppShell.ui
 src/shell/main.cpp
+src/shell/ConfirmDialog.cpp
+src/shell/ConfirmDialog.ui

@@ -2,6 +2,25 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
+    <name>ConfirmDialog</name>
+    <message>
+        <location filename="../src/shell/ConfirmDialog.ui" line="5"/>
+        <location filename="../src/shell/ConfirmDialog.ui" line="16"/>
+        <source>Confirm</source>
+        <translation>Confirm</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/ConfirmDialog.ui" line="36"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location filename="../src/shell/ConfirmDialog.ui" line="42"/>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <location filename="../src/shell/MainWindow.cpp" line="59"/>
@@ -19,37 +38,37 @@
         <translation>Supplies</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="503"/>
+        <location filename="../src/shell/MainWindow.cpp" line="524"/>
         <source>Time zone: not known yet</source>
         <translation>Time zone: not known yet</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="503"/>
+        <location filename="../src/shell/MainWindow.cpp" line="524"/>
         <source>Time zone: %1</source>
         <translation>Time zone: %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="523"/>
+        <location filename="../src/shell/MainWindow.cpp" line="544"/>
         <source>Cashier: %1</source>
         <translation>Cashier: %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="611"/>
+        <location filename="../src/shell/MainWindow.cpp" line="632"/>
         <source>The remainder ticket was sent to the printer.</source>
         <translation>The remainder ticket was sent to the printer.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="614"/>
+        <location filename="../src/shell/MainWindow.cpp" line="635"/>
         <source>The remainder ticket %1 was not printed: %2 Print it on the Remainders screen.</source>
         <translation>The remainder ticket %1 was not printed: %2 Print it on the Remainders screen.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="680"/>
+        <location filename="../src/shell/MainWindow.cpp" line="701"/>
         <source>The clock differs from the server&apos;s by %1 s.</source>
         <translation>The clock differs from the server&apos;s by %1 s.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="499"/>
+        <location filename="../src/shell/MainWindow.cpp" line="520"/>
         <source>Server %1:%2, this terminal is %3</source>
         <translation>Server %1:%2, this terminal is %3</translation>
     </message>
@@ -59,12 +78,12 @@
         <translation>Manual input</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="582"/>
+        <location filename="../src/shell/MainWindow.cpp" line="603"/>
         <source>%1 not printed</source>
         <translation>%1 not printed</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="612"/>
+        <location filename="../src/shell/MainWindow.cpp" line="633"/>
         <source>The ticket %1 was sent to the printer.</source>
         <translation>The ticket %1 was sent to the printer.</translation>
     </message>
@@ -74,22 +93,22 @@
         <translation>Sessions</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="615"/>
+        <location filename="../src/shell/MainWindow.cpp" line="636"/>
         <source>The ticket %1 was not printed: %2</source>
         <translation>The ticket %1 was not printed: %2</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="674"/>
+        <location filename="../src/shell/MainWindow.cpp" line="695"/>
         <source>The last download failed, it will be tried again: %1</source>
         <translation>The last download failed, it will be tried again: %1</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="676"/>
+        <location filename="../src/shell/MainWindow.cpp" line="697"/>
         <source>No download yet.</source>
         <translation>No download yet.</translation>
     </message>
     <message>
-        <location filename="../src/shell/MainWindow.cpp" line="676"/>
+        <location filename="../src/shell/MainWindow.cpp" line="697"/>
         <source>Last download: %1</source>
         <translation>Last download: %1</translation>
     </message>
@@ -205,37 +224,37 @@
         <translation>Sales</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="24"/>
+        <location filename="../src/shell/SideBar.ui" line="25"/>
         <source>Supplies</source>
         <translation>Supplies</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="33"/>
+        <location filename="../src/shell/SideBar.ui" line="35"/>
         <source>Remainders</source>
         <translation>Remainders</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="42"/>
+        <location filename="../src/shell/SideBar.ui" line="45"/>
         <source>Cards</source>
         <translation>Cards</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="51"/>
+        <location filename="../src/shell/SideBar.ui" line="55"/>
         <source>Dispensers</source>
         <translation>Dispensers</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="60"/>
+        <location filename="../src/shell/SideBar.ui" line="65"/>
         <source>Ticket Debt</source>
         <translation>Ticket Debt</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="76"/>
+        <location filename="../src/shell/SideBar.ui" line="82"/>
         <source>Review</source>
         <translation>Review</translation>
     </message>
     <message>
-        <location filename="../src/shell/SideBar.ui" line="85"/>
+        <location filename="../src/shell/SideBar.ui" line="92"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>

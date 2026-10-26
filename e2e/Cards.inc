@@ -234,6 +234,17 @@ static int cardsManyScenario(Terminal &t, const QString &factsFile, const QStrin
     check(t.one("SELECT COUNT(*) FROM supplements WHERE card_id IS NOT NULL").toInt() == CardCount * Rounds, "fifteen fills are recorded as supplements with a card");
     check(t.one("SELECT COUNT(*) FROM sales WHERE sale_type = 'card'").toInt() == CardCount * Rounds, "fifteen top-ups are recorded as card sales");
 
+    step("Fill Manual: the supplier filled at the manual nozzle 2, the cashier types what came out");
+    const qlonglong density = plant.config.nozzle(2).density;
+    check(density > 0, "the density of nozzle 2 is known (" + QString::number(density) + ")");
+    const qlonglong manualKg = 500;                                            // 5.00 kg from card 1
+    const qlonglong manualLiters = density > 0 ? (manualKg * 10000 + density / 2) / density : 0;
+    QString manualWhy;
+    check(plant.supply.recordManualCard(2, ids.at(0), manualKg, manualLiters, QDateTime::currentDateTime().addSecs(-30), &manualWhy), "a fill of 5.00 kg is typed in for card 1 (" + manualWhy + ")");
+    expected[0] -= manualKg;
+    check(Cards::findById(t.db(), ids.at(0)).balanceX100 == expected.at(0), uids.at(0) + " holds " + QString::number(expected.at(0) / 100.0, 'f', 2) + " kg on the terminal");
+    check(!plant.supply.recordManualCard(1, ids.at(0), 100, 120, QDateTime::currentDateTime().addSecs(-30), &manualWhy) && manualWhy.contains("auto mode"), "nozzle 1 (auto) is refused for a manual fill (" + manualWhy + ")");
+
     step("Upload data");
     int rejected = 0;
     int saved = 0;
@@ -256,7 +267,7 @@ static int cardsManyScenario(Terminal &t, const QString &factsFile, const QStrin
 
     step("the terminal downloads: the same balances and ledgers");
     check(t.download(&message), "the download finishes (" + message + ")");
-    const int entryCounts[] = {6, 7, 7, 6, 7};                           // 3 top-ups and 3 fills; the web top-ups and the reversal on top
+    const int entryCounts[] = {7, 7, 7, 6, 7};                           // 3 top-ups and 3 fills (card 1: and the fill typed in); the web top-ups and the reversal on top
     for (int i = 0; i < CardCount; ++i) {
         check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), uids.at(i) + " holds " + QString::number(expected.at(i) / 100.0, 'f', 2) + " kg on the terminal, as on the web app");
         check(t.one("SELECT COUNT(*) FROM card_transactions WHERE card_id = '" + ids.at(i) + "'").toInt() == entryCounts[i], uids.at(i) + " has " + QString::number(entryCounts[i]) + " ledger entries");

@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "gasstation-web",
-      "runtimeExecutable": "D:\\php72\\php.exe",
+      "runtimeExecutable": "D:\\xampp\\php\\php.exe",
       "runtimeArgs": ["-S", "127.0.0.1:8123", "-t", "D:\\Projects\\GasStaion\\web\\public", "D:\\Projects\\GasStaion\\web\\server.php"],
       "port": 8123
     }

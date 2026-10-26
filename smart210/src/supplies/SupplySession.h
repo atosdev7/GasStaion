@@ -58,6 +58,12 @@ public:
     // they cover, and what is left of the tickets is a remainder, as when the result comes from the board.
     bool recordManual(int nozzle, qlonglong dispensedX100, qlonglong litersX100, const QList<qlonglong> &tickets, const QDateTime &when, QString *why = 0, const QString &comment = QString());
 
+    // A fill at a MANUAL-mode nozzle paid with a card (Cards screen, Fill Manual): the supplier filled at the dispenser, the cashier types what came out
+    // (kg x100, litres x100) and when (as on Manual input: not in the future, not further back than the days of Machine Config). The card must be active, of
+    // the nozzle's fuel type and hold at least the kg; the nozzle must be in manual mode and have nothing running. The supplement (mode manual) names
+    // the card and the card's balance falls by the kg, as with a fill of an auto nozzle (startCard).
+    bool recordManualCard(int nozzle, const QString &cardId, qlonglong dispensedX100, qlonglong litersX100, const QDateTime &when, QString *why = 0);
+
 public slots:
     // A barcode from the supplier's scanner: it goes to the queue of the chosen nozzle.
     void scanned(const QString &barcode);

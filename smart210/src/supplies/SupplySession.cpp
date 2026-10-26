@@ -224,6 +224,68 @@ bool SupplySession::recordManual(int nozzle, qlonglong dispensedX100, qlonglong 
     return false;
 }
 
+bool SupplySession::recordManualCard(int nozzle, const QString &cardId, qlonglong dispensedX100, qlonglong litersX100, const QDateTime &when, QString *why)
+{
+    QString reason;
+    const MachineConfig::Nozzle info = config_->nozzle(nozzle);
+    const Cards::Card card = Cards::findById(db_, cardId);
+    const int state = bus_->isOnline(nozzle) ? bus_->lastStatus(nozzle).state : int(StateIdle);
+
+    const QDateTime now = QDateTime::currentDateTime();
+    const int days = Settings(db_).intValue(SettingKey::ManualSupplyDays, 3);
+
+    if (nozzle < 1 || nozzle > MachineConfig::NozzleCount || !info.seen()) {
+        reason = tr("Choose a nozzle first.");
+    } else if (info.mode != ModeManual) {
+        reason = tr("Nozzle %1 is in auto mode: use Fill Auto.").arg(nozzle);
+    } else if (!card.exists || !card.isActive()) {
+        reason = tr("This card cannot be used: it is not active.");
+    } else if (info.fuelType != card.fuelType) {
+        reason = tr("Nozzle %1 gives another fuel type than the card (%2).").arg(nozzle).arg(card.fuelType);
+    } else if (dispensedX100 <= 0 || litersX100 <= 0) {
+        reason = tr("Enter the weight and the litres that were dispensed.");
+    } else if (dispensedX100 > card.balanceX100) {
+        reason = tr("The card holds only %1 kg.").arg(kg(card.balanceX100));
+    } else if (when > now.addSecs(60)) {
+        reason = tr("The time is in the future.");
+    } else if (when < QDateTime(now.date().addDays(-days), QTime(0, 0, 0))) {
+        reason = days > 0 ? tr("The time cannot be more than %1 days back (Machine Config, Options).").arg(days) : tr("The time must be today (Machine Config, Options).");
+    } else if (state == StateDispensing || state == StateResult) {
+        reason = tr("Nozzle %1 has a fill running or a result waiting: the app reads it by itself.").arg(nozzle);
+    } else if (isLocked(nozzle)) {
+        reason = tr("Nozzle %1 has started already.").arg(nozzle);
+    } else if (session_->userId() <= 0) {
+        reason = tr("Log in first.");
+    }
+
+    if (reason.isEmpty()) {
+        // The fill is recorded like one of an auto nozzle that was paid with a card: a session that keeps the card, then the reading. (The session is made
+        // here because a manual nozzle never starts one; it goes with the record, or at once when the record is refused.)
+        if (!SupplyQueue::begin(db_, nozzle, dispensedX100, when, card.id)) {
+            reason = tr("The supply could not be saved.");
+        } else {
+            SupplyRecord::Reading reading;
+            reading.dispensedX100 = dispensedX100;
+            reading.litersX100 = litersX100;
+            reading.byHand = true;
+            const SupplyRecord::Outcome outcome = SupplyRecord::record(db_, nozzle, reading, when);
+            if (outcome.ok) {
+                saved(nozzle, outcome);
+
+                return true;
+            }
+            SupplyQueue::end(db_, nozzle);
+            reason = outcome.error;
+        }
+    }
+
+    if (why) {
+        *why = reason;
+    }
+
+    return false;
+}
+
 void SupplySession::saved(int nozzle, const SupplyRecord::Outcome &outcome)
 {
     emit queueChanged(nozzle);

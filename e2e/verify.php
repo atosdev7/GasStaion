@@ -117,10 +117,18 @@ if ($scenario === 'cardsmany') {
         ok($negative === 0, $f['uid'] . ': the balance never fell below zero');
         $topups = DB::table('sales')->where('card_id', $f['id'])->where('sale_type', 'card')->whereNull('deleted_at')->count();
         $fills = DB::table('supplements')->where('card_id', $f['id'])->whereNull('deleted_at')->count();
-        ok($fills === 3, $f['uid'] . ' has three fills (' . $fills . ')');
+        $wantedFills = $n === 0 ? 4 : 3;                                   // card 1 has the fill that was typed in too
+        ok($fills === $wantedFills, $f['uid'] . ' has ' . $wantedFills . ' fills (' . $fills . ')');
         $wanted = [3, 2, 4, 3, 4][$n];                            // card 2 lost its first top-up; cards 3 and 5 got one from the web
         ok($topups === $wanted, $f['uid'] . ' has ' . $wanted . ' top-up sales left (' . $topups . ')');
     }
+
+    section('the fill typed in for the manual nozzle');
+    $manual = DB::table('supplements')->where('card_id', $facts['cards'][0]['id'])->where('mode', 'manual')->whereNull('deleted_at')->get();
+    ok($manual->count() === 1 && abs((float) $manual[0]->out_amount_kg - 5) < 0.005 && abs((float) $manual[0]->preset_kg - 5) < 0.005, 'one supplement of card 1 in manual mode, 5.00 kg');
+    ok($manual->count() === 1 && (float) $manual[0]->density > 0 && abs((float) $manual[0]->out_amount_lt - round(5 / (float) $manual[0]->density, 2)) < 0.011, 'its litres follow from the kg and the density of the nozzle');
+    ok(DB::table('tickets')->where('supplement_id', $manual[0]->id ?? 'none')->count() === 0 && DB::table('remainders')->where('supplement_id', $manual[0]->id ?? 'none')->count() === 0, 'it has no tickets and no remainder');
+    ok(DB::table('supplements')->where('card_id', $facts['cards'][0]['id'])->where('mode', 'auto')->count() === 3, 'the three fills with the auto nozzle are in auto mode');
 
     section('what the web app did');
     $deleted = DB::table('sales')->where('id', $facts['deleted_sale'])->first();
@@ -131,7 +139,7 @@ if ($scenario === 'cardsmany') {
     section('the terminal holds the same ledger');
     $webAll = DB::table('card_transactions')->orderBy('card_id')->orderBy('occurred_at')->orderBy('seq')->get();
     $local = $facts['ledger'];
-    ok(count($local) === $webAll->count() && $webAll->count() === 33, 'the same number of entries on both sides (' . count($local) . ' and ' . $webAll->count() . ')');
+    ok(count($local) === $webAll->count() && $webAll->count() === 34, 'the same number of entries on both sides (' . count($local) . ' and ' . $webAll->count() . ')');
     $same = count($local) === $webAll->count();
     foreach ($webAll as $i => $entry) {
         $l = $local[$i] ?? null;

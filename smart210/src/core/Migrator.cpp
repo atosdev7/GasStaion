@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QRegExp>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QVariant>
@@ -31,6 +32,45 @@ int Migrator::version(QSqlDatabase db)
     return -1;
 }
 
+// The lines "-- add-column-if-missing: <table> <column> <definition>" of a script: the column is added only when the table does not have it yet. (SQLite has
+// no ADD COLUMN IF NOT EXISTS, and an old database may lack a column that a new one was made with.) A table that does not exist fails the script.
+bool Migrator::addMissingColumns(QSqlDatabase db, const QString &script, QString *error)
+{
+    QRegExp directive("--\\s*add-column-if-missing:\\s*(\\w+)\\s+(\\w+)\\s+(.+)");
+
+    foreach (const QString &line, script.split('\n')) {
+        if (!directive.exactMatch(line.trimmed())) {
+            continue;
+        }
+        const QString table = directive.cap(1);
+        const QString column = directive.cap(2);
+        const QString definition = directive.cap(3).trimmed();
+
+        QSqlQuery info(db);
+        if (!info.exec("PRAGMA table_info(" + table + ")")) {
+            *error = info.lastError().text();
+
+            return false;
+        }
+        bool has = false;
+        while (info.next()) {
+            has = has || info.value(1).toString().compare(column, Qt::CaseInsensitive) == 0;
+        }
+        if (has) {
+            continue;
+        }
+
+        QSqlQuery add(db);
+        if (!add.exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition)) {
+            *error = add.lastError().text() + " (" + table + "." + column + ")";
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool Migrator::apply(QSqlDatabase db, const QStringList &scripts, QString *error)
 {
     const int current = version(db);
@@ -54,11 +94,18 @@ bool Migrator::apply(QSqlDatabase db, const QStringList &scripts, QString *error
 
         QSqlQuery query(db);
         bool ok = true;
-        foreach (const QString &statement, splitStatements(scripts.at(number - 1))) {
-            if (!query.exec(statement)) {
-                *error = QString("Migration %1 failed: %2 (%3)").arg(number).arg(query.lastError().text()).arg(statement.left(80));
-                ok = false;
-                break;
+        QString columnError;
+        if (!addMissingColumns(db, scripts.at(number - 1), &columnError)) {
+            *error = QString("Migration %1 failed: %2").arg(number).arg(columnError);
+            ok = false;
+        }
+        if (ok) {
+            foreach (const QString &statement, splitStatements(scripts.at(number - 1))) {
+                if (!query.exec(statement)) {
+                    *error = QString("Migration %1 failed: %2 (%3)").arg(number).arg(query.lastError().text()).arg(statement.left(80));
+                    ok = false;
+                    break;
+                }
             }
         }
 

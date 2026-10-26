@@ -1,0 +1,4 @@
+-- The phone number of the holder of a card (the Cards screen asks for it). A database that was made before the column was put into 001_initial.sql
+-- does not have it, a new one has it already, and SQLite has no ADD COLUMN IF NOT EXISTS: the directive below is run by Migrator, which adds the column
+-- only where the table lacks it (so the phone numbers of a database that has the column stay as they are).
+-- add-column-if-missing: cards holder_phone TEXT

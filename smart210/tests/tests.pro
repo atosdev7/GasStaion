@@ -52,6 +52,7 @@ SOURCES += \
     ../src/supplies/SupplierScanner.cpp \
     ../src/supplies/SupplyPage.cpp \
     ../src/shell/AppShell.cpp \
+    ../src/shell/ConfirmDialog.cpp \
     ../src/dispensers/DispensersPage.cpp \
     ../src/shell/TabbedPage.cpp \
     ../src/core/Theme.cpp \
@@ -133,6 +134,7 @@ HEADERS += \
     ../src/supplies/SupplierScanner.h \
     ../src/supplies/SupplyPage.h \
     ../src/shell/AppShell.h \
+    ../src/shell/ConfirmDialog.h \
     ../src/dispensers/DispensersPage.h \
     ../src/shell/TabbedPage.h \
     ../src/core/Theme.h \
