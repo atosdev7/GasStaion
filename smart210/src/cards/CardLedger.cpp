@@ -1,5 +1,7 @@
 #include "CardLedger.h"
 
+#include "TicketStatus.h"
+
 #include <QSqlQuery>
 #include <QVariant>
 
@@ -70,6 +72,22 @@ QList<CardLedger::Entry> CardLedger::entries(QSqlDatabase db, const QString &car
             entry.when = fills.value(0).toString();
             entry.type = "fill";
             entry.kgX100 = -fills.value(1).toLongLong();
+            entry.provisional = true;
+            pending << entry;
+        }
+    }
+
+    QSqlQuery tickets(db); // the tickets made for the card (they paid when they were made, whether used yet or not)
+    // (put together with +, not arg(): QString::arg would take the %01 of the printf format for the place marker %1)
+    tickets.prepare("SELECT sale_date, amount_kg FROM tickets WHERE card_id = ? AND status IN (" + QString::number(TicketStatus::Sale) + ", " + QString::number(TicketStatus::Supply) + ") "
+                    "AND printf('%016d', barcode) NOT IN (SELECT source_id FROM card_transactions WHERE type = 'fill')");
+    tickets.addBindValue(cardId);
+    if (tickets.exec()) {
+        while (tickets.next()) {
+            Entry entry;
+            entry.when = tickets.value(0).toString();
+            entry.type = "fill";
+            entry.kgX100 = -tickets.value(1).toLongLong();
             entry.provisional = true;
             pending << entry;
         }

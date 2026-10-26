@@ -418,6 +418,7 @@ class Push
             'sale_date' => ['nullable', self::DATETIME],
             'supply_date' => ['nullable', self::DATETIME],
             'supplement_id' => 'nullable|uuid',
+            'card_id' => ['nullable', 'uuid', Rule::exists('cards', 'id')], // a ticket made for a card (the card paid for it): it has no sale
         ]);
         $status = (int) $d['status'];
 
@@ -432,12 +433,17 @@ class Push
         $ticket = Ticket::find($d['barcode']);
         if (!$ticket) {
             self::createDeviceTicket($d, $status);
+            // The card paid with kg it did not have (a top-up deleted, a clock that was wrong): the ticket is stored, as fuel that was poured is a fact, and the staff see
+            // the case among the sync problems; the card is listed below zero on the Cards page.
+            if (!empty($d['card_id']) && \App\Support\Cards\CardLedger::balance($d['card_id']) < -0.004) {
+                SyncError::record($device->id, 'tickets', $d['barcode'], json_encode($d), 'conflict: the card held less than the ticket (' . number_format(\App\Support\Cards\CardLedger::balance($d['card_id']), 2, '.', '') . ' kg now): stored');
+            }
 
             return;
         }
 
         $remainderCode = config('ticket_reserved_codes.remainder');
-        if ($status === $s['sale'] && empty($d['sale_id']) && $ticket->code !== $remainderCode) {
+        if ($status === $s['sale'] && empty($d['sale_id']) && $ticket->code !== $remainderCode && empty($ticket->card_id)) {
             throw new RejectedRow('a sold ticket needs its sale');
         }
 
@@ -502,7 +508,15 @@ class Push
         if (empty($d['amount_kg'])) {
             throw new RejectedRow('a new ticket needs its amount');
         }
-        if ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $parsed['code'] !== config('ticket_reserved_codes.remainder')) {
+        if (!empty($d['card_id'])) {
+            // a ticket made for a card: paid for with the card's kg, no sale behind it; of the card's fuel type, with the code of the tickets a Smart210 makes itself
+            if ($parsed['code'] !== config('ticket_reserved_codes.direct')) {
+                throw new RejectedRow('a ticket made for a card has the code of a direct ticket');
+            }
+            if (Card::find($d['card_id'])->fuel_type !== $d['fuel_type']) {
+                throw new RejectedRow('the fuel type is not the fuel type of the card');
+            }
+        } elseif ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $parsed['code'] !== config('ticket_reserved_codes.remainder')) {
             throw new RejectedRow('a sold ticket needs its sale');
         }
         self::requireRecords($d);
@@ -514,6 +528,7 @@ class Push
             'amount_kg' => $d['amount_kg'], 'status' => $status,
             'sale_id' => $d['sale_id'] ?? null, 'sale_date' => $d['sale_date'] ?? null,
             'supply_date' => $d['supply_date'] ?? null, 'supplement_id' => $d['supplement_id'] ?? null,
+            'card_id' => $d['card_id'] ?? null,
             'synced' => true,
         ]);
     }

@@ -71,27 +71,27 @@
 <context>
     <name>SetupFlow</name>
     <message>
-        <location filename="../src/login/SetupFlow.cpp" line="29"/>
+        <location filename="../src/login/SetupFlow.cpp" line="30"/>
         <source>Enter the server address.</source>
         <translation>Enter the server address.</translation>
     </message>
     <message>
-        <location filename="../src/login/SetupFlow.cpp" line="34"/>
+        <location filename="../src/login/SetupFlow.cpp" line="35"/>
         <source>Enter a port from 1 to 65535.</source>
         <translation>Enter a port from 1 to 65535.</translation>
     </message>
     <message>
-        <location filename="../src/login/SetupFlow.cpp" line="62"/>
+        <location filename="../src/login/SetupFlow.cpp" line="63"/>
         <source>The server is reachable, but this terminal&apos;s address (%1) is not registered. Ask the admin to add it on the Devices screen.</source>
         <translation>The server is reachable, but this terminal&apos;s address (%1) is not registered. Ask the admin to add it on the Devices screen.</translation>
     </message>
     <message>
-        <location filename="../src/login/SetupFlow.cpp" line="74"/>
+        <location filename="../src/login/SetupFlow.cpp" line="75"/>
         <source>The server address could not be saved on this device.</source>
         <translation>The server address could not be saved on this device.</translation>
     </message>
     <message>
-        <location filename="../src/login/SetupFlow.cpp" line="79"/>
+        <location filename="../src/login/SetupFlow.cpp" line="84"/>
         <source>Connected as %1. Server time %2.</source>
         <translation>Connected as %1. Server time %2.</translation>
     </message>

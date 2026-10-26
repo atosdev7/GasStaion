@@ -1,8 +1,11 @@
 #include "Cards.h"
 #include "Checkout.h"
 
+#include "Barcode.h"
 #include "PosHash.h"
 #include "SpotSale.h"
+#include "TicketNumbers.h"
+#include "TicketStatus.h"
 
 #include <QCryptographicHash>
 #include <QObject>
@@ -318,6 +321,145 @@ Cards::TopUpResult Cards::topUp(QSqlDatabase db, const QString &cardId, qlonglon
     result.balanceX100 = card.balanceX100 + kgX100;
 
     return result;
+}
+
+Cards::TicketResult Cards::issueTicket(QSqlDatabase db, const QString &cardId, qlonglong kgX100, int userId, const QDateTime &now)
+{
+    TicketResult result;
+
+    if (userId <= 0) {
+        result.error = QObject::tr("Log in first.");
+
+        return result;
+    }
+    if (kgX100 < 1 || kgX100 > SpotSale::MaxKgX100) {
+        result.error = QObject::tr("Enter the weight in kg, above 0 and up to 999999.");
+
+        return result;
+    }
+    if (!db.transaction()) {
+        result.error = db.lastError().text();
+
+        return result;
+    }
+
+    const Card card = findById(db, cardId);
+    if (!card.exists || card.deleted) {
+        db.rollback();
+        result.error = QObject::tr("This card is not known.");
+
+        return result;
+    }
+    if (!card.isActive()) {
+        db.rollback();
+        result.error = card.status == "blocked" ? QObject::tr("This card is blocked (lost).") : QObject::tr("This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.");
+
+        return result;
+    }
+    if (kgX100 > card.balanceX100) {
+        db.rollback();
+        result.error = QObject::tr("The card holds only %1 kg.").arg(QString::number(card.balanceX100 / 100.0, 'f', 2));
+
+        return result;
+    }
+
+    QString error;
+    const qlonglong barcode = TicketNumbers::next(db, "direct", &error);
+    if (barcode < 0) {
+        db.rollback();
+        result.error = error;
+
+        return result;
+    }
+
+    // Sold in the moment it is made: the card has paid for it, so there is no sale behind it.
+    QSqlQuery ticket(db);
+    ticket.prepare("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_id, sale_date, synced, card_id) VALUES (?, ?, NULL, ?, ?, NULL, ?, 0, ?)");
+    ticket.addBindValue(barcode);
+    ticket.addBindValue(card.fuelType);
+    ticket.addBindValue(kgX100);
+    ticket.addBindValue(int(TicketStatus::Sale));
+    ticket.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
+    ticket.addBindValue(card.id);
+
+    if (!ticket.exec() || !adjustBalance(db, card.id, -kgX100) || !db.commit()) {
+        db.rollback();
+        result.error = QObject::tr("The ticket could not be saved.");
+
+        return result;
+    }
+
+    result.ok = true;
+    result.barcode = Barcode::fromKey(barcode);
+    result.kgX100 = kgX100;
+    result.balanceX100 = card.balanceX100 - kgX100;
+
+    return result;
+}
+
+bool Cards::cancelTicket(QSqlDatabase db, const QString &barcode, QString *why)
+{
+    const qlonglong key = Barcode::toKey(barcode);
+    QSqlQuery find(db);
+    find.prepare("SELECT card_id, status, synced, amount_kg FROM tickets WHERE barcode = ?");
+    find.addBindValue(key);
+    if (key < 0 || !find.exec() || !find.next() || find.value(0).isNull()) {
+        *why = QObject::tr("This is not a ticket made for a card.");
+
+        return false;
+    }
+
+    const QString cardId = find.value(0).toString();
+    const qlonglong kg = find.value(3).toLongLong();
+    if (find.value(1).toInt() != int(TicketStatus::Sale)) {
+        *why = QObject::tr("This ticket was used already: it cannot be cancelled.");
+
+        return false;
+    }
+    if (find.value(2).toInt() == 0) {
+        QSqlQuery queued(db);
+        queued.prepare("SELECT 1 FROM supply_queue WHERE barcode = ?");
+        queued.addBindValue(key);
+        if (queued.exec() && queued.next()) {
+            *why = QObject::tr("This ticket is in the queue of a nozzle: take it out first.");
+
+            return false;
+        }
+    } else {
+        *why = QObject::tr("This ticket was uploaded already: the manager cancels it on the web app by restricting it, and the kg go back to the card.");
+
+        return false;
+    }
+
+    if (!db.transaction()) {
+        *why = db.lastError().text();
+
+        return false;
+    }
+    QSqlQuery remove(db);
+    remove.prepare("DELETE FROM tickets WHERE barcode = ?");
+    remove.addBindValue(key);
+    if (!remove.exec() || !adjustBalance(db, cardId, kg) || !db.commit()) {
+        db.rollback();
+        *why = QObject::tr("The ticket could not be cancelled.");
+
+        return false;
+    }
+
+    return true;
+}
+
+QString Cards::lastTicket(QSqlDatabase db, const QString &cardId)
+{
+    QSqlQuery query(db);
+    query.prepare("SELECT barcode FROM tickets WHERE card_id = ? AND status = ? ORDER BY sale_date DESC, barcode DESC LIMIT 1");
+    query.addBindValue(cardId);
+    query.addBindValue(int(TicketStatus::Sale));
+    if (query.exec() && query.next()) {
+        return Barcode::fromKey(query.value(0).toLongLong());
+    }
+
+    return QString();
 }
 
 bool Cards::adjustBalance(QSqlDatabase db, const QString &cardId, qlonglong deltaX100)

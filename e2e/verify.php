@@ -65,8 +65,11 @@ if ($scenario === 'cards') {
     section('the records behind it');
     $deleted = DB::table('sales')->where('id', $facts['topup_sale'])->first();
     ok($deleted && $deleted->deleted_at !== null, 'the deleted top-up is still a row (deleted), and the ledger keeps both entries');
-    $supply = DB::table('supplements')->where('card_id', $facts['card_id'])->first();
-    ok($supply && abs((float) $supply->out_amount_kg - 20) < 0.005, 'the fill of 20.00 kg is a supplement with the card');
+    $ticket = DB::table('tickets')->where('card_id', $facts['card_id'])->first();
+    ok($ticket && abs((float) $ticket->amount_kg - 20) < 0.005 && (int) $ticket->status === (int) config('ticket_statuses.supply') && $ticket->sale_id === null && $ticket->code === config('ticket_reserved_codes.direct'),
+        'the fill of 20.00 kg is a ticket made for the card (no sale), supplied');
+    $supply = DB::table('supplements')->where('id', $ticket->supplement_id ?? 'none')->first();
+    ok($supply && abs((float) $supply->out_amount_kg - 20) < 0.005 && $supply->card_id === null, 'the fuel that came out for it is an ordinary supplement of 20.00 kg');
     $card = App\Models\Cards\Card::find($facts['card_id']);
     ok(abs($card->balance() - $card->balanceFromRecords()) < 0.005, 'the ledger agrees with the records that are left (' . $card->balance() . ')');
 
@@ -116,20 +119,22 @@ if ($scenario === 'cardsmany') {
         $negative = $web->filter(function ($e) { return (float) $e->balance_kg < -0.004; })->count();
         ok($negative === 0, $f['uid'] . ': the balance never fell below zero');
         $topups = DB::table('sales')->where('card_id', $f['id'])->where('sale_type', 'card')->whereNull('deleted_at')->count();
-        $fills = DB::table('supplements')->where('card_id', $f['id'])->whereNull('deleted_at')->count();
-        $wantedFills = $n === 0 ? 4 : 3;                                   // card 1 has the fill that was typed in too
-        ok($fills === $wantedFills, $f['uid'] . ' has ' . $wantedFills . ' fills (' . $fills . ')');
+        $fills = DB::table('tickets')->where('card_id', $f['id'])->where('status', '<>', config('ticket_statuses.restrict'))->count();
+        $wantedFills = $n === 0 ? 4 : 3;                                   // card 1 has the ticket that was typed in at the manual nozzle too
+        ok($fills === $wantedFills, $f['uid'] . ' has ' . $wantedFills . ' tickets made for it (' . $fills . ')');
         $wanted = [3, 2, 4, 3, 4][$n];                            // card 2 lost its first top-up; cards 3 and 5 got one from the web
         ok($topups === $wanted, $f['uid'] . ' has ' . $wanted . ' top-up sales left (' . $topups . ')');
     }
 
-    section('the fill typed in for the manual nozzle');
-    $manual = DB::table('supplements')->where('card_id', $facts['cards'][0]['id'])->where('mode', 'manual')->whereNull('deleted_at')->get();
-    ok($manual->count() === 1 && abs((float) $manual[0]->out_amount_kg - 5) < 0.005 && abs((float) $manual[0]->preset_kg - 5) < 0.005, 'one supplement of card 1 in manual mode, 5.00 kg');
-    ok($manual->count() === 1 && (float) $manual[0]->density > 0 && abs((float) $manual[0]->out_amount_lt - round(5 / (float) $manual[0]->density, 2)) < 0.011, 'its litres follow from the kg and the density of the nozzle');
-    ok(DB::table('tickets')->where('supplement_id', $manual[0]->id ?? 'none')->count() === 0 && DB::table('remainders')->where('supplement_id', $manual[0]->id ?? 'none')->count() === 0, 'it has no tickets and no remainder');
-    ok(DB::table('supplements')->where('card_id', $facts['cards'][0]['id'])->where('mode', 'auto')->count() === 3, 'the three fills with the auto nozzle are in auto mode');
-
+    section('the ticket typed in for the manual nozzle');
+    $card1 = $facts['cards'][0]['id'];
+    $manualTicket = DB::table('tickets')->where('card_id', $card1)->where('amount_kg', 5)->first();
+    $manual = DB::table('supplements')->where('id', $manualTicket->supplement_id ?? 'none')->first();
+    ok($manual && $manual->mode === 'manual' && abs((float) $manual->out_amount_kg - 5) < 0.005, 'the ticket of 5.00 kg of card 1 was used by a supplement in manual mode, 5.00 kg');
+    ok($manual && (float) $manual->density > 0 && abs((float) $manual->out_amount_lt - round(5 / (float) $manual->density, 2)) < 0.011, 'its litres follow from the kg and the density of the nozzle');
+    ok($manual && DB::table('remainders')->where('supplement_id', $manual->id)->count() === 0, 'it has no remainder');
+    $autoFills = DB::table('tickets')->where('card_id', $card1)->where('amount_kg', '<>', 5)->pluck('supplement_id')->all();
+    ok(DB::table('supplements')->whereIn('id', $autoFills)->where('mode', 'auto')->count() === 3, 'the three fills with the auto nozzle are in auto mode');
     section('what the web app did');
     $deleted = DB::table('sales')->where('id', $facts['deleted_sale'])->first();
     ok($deleted && $deleted->deleted_at !== null, 'the deleted top-up is still a row (deleted)');

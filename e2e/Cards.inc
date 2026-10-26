@@ -1,5 +1,5 @@
 // The "cards" scenario of e2e.cpp (included there): the ledger of a card from one end to the other. The terminal registers a card, tops it up twice and fills
-// with it on a simulated board, uploads; the web app turns that into ledger entries with their running balances; the terminal downloads them (its History
+// with it (the card pays for a ticket, which the supplier scans at a simulated board), uploads; the web app turns that into ledger entries with their running balances; the terminal downloads them (its History
 // list, first as "not confirmed yet" entries, then as the web app's entries); the web app tops the card up and deletes one of the terminal's top-ups
 // (cards_step.php); the terminal downloads again and must show the same ledger and the same balance as the web app.
 
@@ -47,21 +47,14 @@ static int cardsScenario(Terminal &t, const QString &factsFile, const QString &p
     const Cards::TopUpResult second = Cards::topUp(t.db(), cardId, 1000, 800, t.userId, now.addSecs(-10));
     check(second.ok && second.balanceX100 == 5000 && second.totalX100 == 8000, "a top-up of 10.00 kg at 8.00 = 80.00 (" + second.error + ")");
 
-    step("a fill with the card");
-    QString why;
-    const bool chosen = plant.selection.select(1, &why);
-    check(chosen, "the supplier chooses nozzle 1 (" + why + ")");
-    check(waitFor([&]() { return plant.selection.current() == 1 && plant.selection.isSelected(1); }), "the choice is kept");
-    check(waitFor([&]() { return boards.board(1).beeps == 1; }), "the board has beeped");
-    pause(200);                                                                // and its answer came: the command slot is free
-    const int recordedBefore = plant.recorded;
-    const bool started = plant.supply.startCard(1, cardId, 2000, &why);
-    check(started, "the fill of 20.00 kg is started (" + why + ")");
-    check(waitFor([&]() { return boards.board(1).state == BoardProtocol::StateDispensing; }), "the board dispenses");
-    boards.simulator().tick(1000000);
-    check(waitFor([&]() { return plant.recorded > recordedBefore && boards.board(1).state == BoardProtocol::StateIdle; }), "the fill is recorded and acknowledged (" + plant.lastMessage + ")");
+    step("a fill with the card: the card pays for a ticket, the supplier scans it");
+    const Cards::TicketResult ticket = Cards::issueTicket(t.db(), cardId, 2000, t.userId, QDateTime::currentDateTime());
+    check(ticket.ok && ticket.balanceX100 == 3000, "a ticket of 20.00 kg is made for the card: it holds 30.00 kg at once (" + ticket.error + ")");
     check(Cards::findById(t.db(), cardId).balanceX100 == 3000, "the card holds 30.00 kg on the terminal");
-
+    const bool filled = plant.autoFill(1, QList<qlonglong>() << Barcode::toKey(ticket.barcode), 0);
+    check(filled, "the supplier scans the ticket at nozzle 1: the fill of 20.00 kg is recorded and acknowledged (" + plant.lastMessage + ")");
+    check(Cards::findById(t.db(), cardId).balanceX100 == 3000, "the card still holds 30.00 kg when the fuel has come out");
+    check(plant.remainders.isEmpty(), "the ticket was used up: no remainder");
     step("the History list before the web app has entered anything");
     QList<CardLedger::Entry> entries = CardLedger::entries(t.db(), cardId, 50);
     check(entries.size() == 3, "three entries, all made on the terminal (" + QString::number(entries.size()) + ")");
@@ -123,7 +116,7 @@ static int cardsScenario(Terminal &t, const QString &factsFile, const QString &p
 }
 
 // The "cardsmany" scenario: five cards, each topped up and filled three times on the terminal (round by round, so that the ledger of the five cards is
-// mixed), a fill that asks for more than the card holds (refused), upload; then the web app tops two cards up and deletes one of the terminal's top-ups
+// mixed; a fill is a ticket the card pays for and the supplier scans), a ticket that asks for more than the card holds (refused), upload; then the web app tops two cards up and deletes one of the terminal's top-ups
 // (cards_step.php); the terminal downloads. After every step the balance of every card on the terminal is the one worked out here, and at the end the web
 // app (verify.php) has the same ledger, balances and records for every card.
 static int cardsManyScenario(Terminal &t, const QString &factsFile, const QString &php, const QString &dir)
@@ -156,37 +149,16 @@ static int cardsManyScenario(Terminal &t, const QString &factsFile, const QStrin
         expected << 0;
     }
 
-    // one fill on nozzle 1 (an automatic nozzle) with a card: select the nozzle (when it is not selected), start, let the board dispense, wait for the record
+    // one fill on nozzle 1 (an automatic nozzle) with a card: the card pays for a ticket, the supplier scans it, the board dispenses, the fill is recorded
     QString whyNot;
     auto fill = [&](const QString &cardId, qlonglong kgX100) -> bool {
-        QString why;
-        if (!(plant.selection.current() == 1 && plant.selection.isSelected(1))) {
-            const int beeps = boards.board(1).beeps;
-            if (!plant.selection.select(1, &why)) {
-                whyNot = "select: " + why;
-
-                return false;
-            }
-            if (!waitFor([&]() { return plant.selection.current() == 1 && plant.selection.isSelected(1) && boards.board(1).beeps > beeps; })) {
-                whyNot = "the board did not beep";
-
-                return false;
-            }
-            pause(200);
-        }
-        const int before = plant.recorded;
-        if (!plant.supply.startCard(1, cardId, kgX100, &why)) {
-            whyNot = why;
+        const Cards::TicketResult ticket = Cards::issueTicket(t.db(), cardId, kgX100, t.userId, QDateTime::currentDateTime());
+        if (!ticket.ok) {
+            whyNot = ticket.error;
 
             return false;
         }
-        if (!waitFor([&]() { return boards.board(1).state == BoardProtocol::StateDispensing; })) {
-            whyNot = "the board did not start";
-
-            return false;
-        }
-        boards.simulator().tick(1000000);
-        if (!waitFor([&]() { return plant.recorded > before && boards.board(1).state == BoardProtocol::StateIdle; })) {
+        if (!plant.autoFill(1, QList<qlonglong>() << Barcode::toKey(ticket.barcode), 0)) {
             whyNot = "the fill was not recorded (" + plant.lastMessage + ")";
 
             return false;
@@ -201,7 +173,6 @@ static int cardsManyScenario(Terminal &t, const QString &factsFile, const QStrin
 
         return true;
     };
-
     step("top-ups and fills, round by round");
     const QDateTime base = QDateTime::currentDateTime().addSecs(-3600);
     int counter = 0;
@@ -221,30 +192,33 @@ static int cardsManyScenario(Terminal &t, const QString &factsFile, const QStrin
 
             if (round == 0 && i == 0) {                                     // a card cannot be filled with more than it holds
                 const bool tooMuch = fill(ids.at(i), expected.at(i) + 100);
-                check(!tooMuch && whyNot.contains("holds only"), "a fill of more than the card holds is refused (" + whyNot + ")");
-                check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), "the refused fill changed nothing");
+                check(!tooMuch && whyNot.contains("holds only"), "a ticket for more than the card holds is refused (" + whyNot + ")");
+                check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i) && t.one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt() == 0, "the refused ticket changed nothing");
             }
 
             const bool filled = fill(ids.at(i), fillX100);
             expected[i] -= fillX100;
-            check(filled, uids.at(i) + " round " + QString::number(round + 1) + ": a fill of " + QString::number(fillX100 / 100.0, 'f', 2) + " kg is recorded (" + whyNot + ")");
+            check(filled, uids.at(i) + " round " + QString::number(round + 1) + ": a ticket of " + QString::number(fillX100 / 100.0, 'f', 2) + " kg is made and its fill is recorded (" + whyNot + ")");
             check(Cards::findById(t.db(), ids.at(i)).balanceX100 == expected.at(i), uids.at(i) + " holds " + QString::number(expected.at(i) / 100.0, 'f', 2) + " kg on the terminal");
         }
     }
-    check(t.one("SELECT COUNT(*) FROM supplements WHERE card_id IS NOT NULL").toInt() == CardCount * Rounds, "fifteen fills are recorded as supplements with a card");
+    check(t.one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL AND status = 2").toInt() == CardCount * Rounds, "fifteen tickets made for cards are supplied");
+    check(t.one("SELECT COUNT(*) FROM supplements").toInt() == CardCount * Rounds, "and their fifteen fills are recorded as ordinary supplements");
     check(t.one("SELECT COUNT(*) FROM sales WHERE sale_type = 'card'").toInt() == CardCount * Rounds, "fifteen top-ups are recorded as card sales");
 
-    step("Fill Manual: the supplier filled at the manual nozzle 2, the cashier types what came out");
+    step("a ticket for a card at the manual nozzle 2: the supplier filled, the cashier types what came out with the ticket");
     const qlonglong density = plant.config.nozzle(2).density;
     check(density > 0, "the density of nozzle 2 is known (" + QString::number(density) + ")");
     const qlonglong manualKg = 500;                                            // 5.00 kg from card 1
     const qlonglong manualLiters = density > 0 ? (manualKg * 10000 + density / 2) / density : 0;
-    QString manualWhy;
-    check(plant.supply.recordManualCard(2, ids.at(0), manualKg, manualLiters, QDateTime::currentDateTime().addSecs(-30), &manualWhy), "a fill of 5.00 kg is typed in for card 1 (" + manualWhy + ")");
+    const Cards::TicketResult manualTicket = Cards::issueTicket(t.db(), ids.at(0), manualKg, t.userId, QDateTime::currentDateTime());
+    check(manualTicket.ok, "a ticket of 5.00 kg is made for card 1 (" + manualTicket.error + ")");
     expected[0] -= manualKg;
+    QString manualWhy;
+    check(plant.supply.recordManual(2, manualKg, manualLiters, QList<qlonglong>() << Barcode::toKey(manualTicket.barcode), QDateTime::currentDateTime().addSecs(-30), &manualWhy),
+          "the 5.00 kg are typed in with the ticket (" + manualWhy + ")");
     check(Cards::findById(t.db(), ids.at(0)).balanceX100 == expected.at(0), uids.at(0) + " holds " + QString::number(expected.at(0) / 100.0, 'f', 2) + " kg on the terminal");
-    check(!plant.supply.recordManualCard(1, ids.at(0), 100, 120, QDateTime::currentDateTime().addSecs(-30), &manualWhy) && manualWhy.contains("auto mode"), "nozzle 1 (auto) is refused for a manual fill (" + manualWhy + ")");
-
+    check(t.one("SELECT status FROM tickets WHERE barcode = " + QString::number(Barcode::toKey(manualTicket.barcode))).toInt() == 2, "the ticket is used");
     step("Upload data");
     int rejected = 0;
     int saved = 0;

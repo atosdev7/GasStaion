@@ -12,7 +12,10 @@
 //   PIN           the cashier types it for every supply; a wrong one counts, the 5th wrong one in a row locks the card (status "locked"): only
 //                 the web app unlocks it (a manager or the accountant), or resets the PIN. A right PIN counts the wrong ones from zero again.
 //   top-up        a sale of type "card": cash only, paid in full, no customer, no ticket; the balance grows by its kg.
-//   supply        see SupplySession::startCard and SupplyRecord: no tickets, the balance falls by the kg that really came out.
+//   fill          the cashier asks for kg with the card (the PIN is checked first): the balance falls at once and a ticket is made (code "direct", card_id
+//                 set, no sale), printed and given to the supplier, who scans it at the dispenser like the ticket of a spot sale. Fuel it did not use
+//                 comes back as a remainder ticket (the usual rule); a ticket that was not used can be cancelled here while it waits for its upload, and
+//                 the kg go back to the card. (Before this, a card paid a supply directly: those supplements keep their card_id.)
 //
 // The balance of a card is `balance_kg`: the web app's figure at the last pull plus what was topped up and taken here since (see 015_cards.sql),
 // so it is right at once. All weights kg x100, money x100.
@@ -95,6 +98,25 @@ public:
     // A locked card can be topped up, a blocked (lost) one cannot.
     static TopUpResult topUp(QSqlDatabase db, const QString &cardId, qlonglong kgX100, qlonglong priceX100, int userId, const QDateTime &now,
                              qlonglong totalX100 = -1);
+
+    struct TicketResult {
+        TicketResult() : ok(false), kgX100(0), balanceX100(0) {}
+
+        bool ok;
+        QString error;
+        QString barcode;       // the 16 digits
+        qlonglong kgX100;
+        qlonglong balanceX100; // the balance after the fill
+    };
+    // The card pays kgX100 and a ticket for them is made. The PIN is checked by the caller (checkPin) before this. A locked or blocked card cannot fill.
+    static TicketResult issueTicket(QSqlDatabase db, const QString &cardId, qlonglong kgX100, int userId, const QDateTime &now);
+
+    // Takes back a ticket made for a card that was not used: it must wait for its upload (synced = 0), not be used and not be in the queue of a nozzle.
+    // The kg go back to the card. False and `why` when it cannot be taken back.
+    static bool cancelTicket(QSqlDatabase db, const QString &barcode, QString *why);
+
+    // The newest ticket made for the card that is still sold (not supplied, not restricted), as its 16 digits; empty when there is none.
+    static QString lastTicket(QSqlDatabase db, const QString &cardId);
 
     // Moves the balance of a card, inside the transaction of whatever caused it (a top-up, a supply). False when there is no such card.
     static bool adjustBalance(QSqlDatabase db, const QString &cardId, qlonglong deltaX100);

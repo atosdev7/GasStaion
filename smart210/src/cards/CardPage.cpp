@@ -1,38 +1,31 @@
 #include "CardPage.h"
 
-#include "BoardBus.h"
+#include "Barcode.h"
 #include "CardHistoryDialog.h"
 #include "CardReader.h"
 #include "ConfirmDialog.h"
 #include "Decimal.h"
 #include "EnterChain.h"
-#include "MachineConfig.h"
-#include "NozzleDialog.h"
+#include "PrintService.h"
 #include "Session.h"
 #include "SpotSale.h"
-#include "SupplyQueue.h"
-#include "SupplySelection.h"
-#include "SupplySession.h"
 #include "ui_CardPage.h"
 #include "Theme.h"
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRegExpValidator>
 #include <QSqlQuery>
 #include <QStackedWidget>
-#include <QTimer>
-
-using namespace BoardProtocol;
 
 namespace {
 
 enum { PanelNone, PanelRegister, PanelCard };
-
-const int RefreshMs = 500;
+enum { ActionFill, ActionTopUp };
 
 QString kg(qlonglong x100)
 {
@@ -53,10 +46,9 @@ QString statusText(const QString &status)
 
 }
 
-CardPage::CardPage(QSqlDatabase db, Session *session, BoardBus *bus, MachineConfig *config, SupplySelection *selection, SupplySession *supply,
-                   CardReader *reader, QWidget *parent)
-    : QWidget(parent), ui_(new Ui::CardPage), db_(db), session_(session), bus_(bus), config_(config), selection_(selection), supply_(supply), reader_(reader),
-      fillNozzleNumber_(0), priceTouched_(false), totalTyped_(false)
+CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, CardReader *reader, QWidget *parent)
+    : QWidget(parent), ui_(new Ui::CardPage), db_(db), session_(session), printer_(printer), reader_(reader),
+      printing_(false), priceTouched_(false), totalTyped_(false)
 {
     ui_->setupUi(this);
 
@@ -75,7 +67,7 @@ CardPage::CardPage(QSqlDatabase db, Session *session, BoardBus *bus, MachineConf
     balance_ = ui_->cardBalance;
     state_ = ui_->cardState;
 
-    // the panels: nothing yet, register, or the card's top-up and fill
+    // the panels: nothing yet, register, or the card's fill and top-up
     panels_ = ui_->cardPanels;
     registerName_ = ui_->registerNameField;
     registerPhone_ = ui_->registerPhoneField;
@@ -91,27 +83,18 @@ CardPage::CardPage(QSqlDatabase db, Session *session, BoardBus *bus, MachineConf
     topUpTotal_ = ui_->topUpTotal;
     topUpTotal_->setValidator(decimal);
 
-    fillPin_ = ui_->fillPinField;
+    // the two actions of a registered card: the Fill page is the main one, the button above History shows the Top Up page
+    actionPages_ = ui_->cardActionPages;
+    switchButton_ = ui_->cardTopUpButton;
     fillKg_ = ui_->fillKgField;
     fillKg_->setValidator(decimal);
-    fillNozzle_ = ui_->fillNozzleCombo;
-    fillNozzleState_ = ui_->fillNozzleState;
-    start_ = ui_->fillStartButton;
-
-    // the three actions of a registered card: a button each on the left, its page on the right
-    actionPages_ = ui_->cardActionPages;
-    topUpAction_ = ui_->cardTopUpButton;
-    fillAutoAction_ = ui_->cardFillAutoButton;
-    fillManualAction_ = ui_->cardFillManualButton;
-    manualPin_ = ui_->manualPinField;
-    manualNozzle_ = ui_->manualNozzleCombo;
-    manualKg_ = ui_->manualKgField;
-    manualKg_->setValidator(decimal);
-    manualLiters_ = ui_->manualLitersField;
+    fillPin_ = ui_->fillPinField;
+    fillOk_ = ui_->fillOkButton;
+    ticketBox_ = ui_->ticketBox;
+    ticketLabel_ = ui_->ticketLabel;
+    printAgain_ = ui_->ticketPrintButton;
+    cancelTicket_ = ui_->ticketCancelButton;
     message_ = ui_->cardMessage;
-
-    timer_ = new QTimer(this);
-    timer_->setInterval(RefreshMs);
 
     connect(ui_->cardHistoryButton, SIGNAL(clicked()), this, SLOT(historyClicked()));
     connect(ui_->registerButton, SIGNAL(clicked()), this, SLOT(registerClicked()));
@@ -119,37 +102,24 @@ CardPage::CardPage(QSqlDatabase db, Session *session, BoardBus *bus, MachineConf
     connect(topUpKg_, SIGNAL(textEdited(QString)), this, SLOT(topUpEdited()));
     connect(topUpPrice_, SIGNAL(textEdited(QString)), this, SLOT(topUpEdited()));
     connect(topUpTotal_, SIGNAL(textEdited(QString)), this, SLOT(topUpTotalEdited()));
-    connect(start_, SIGNAL(clicked()), this, SLOT(startClicked()));
-    connect(topUpAction_, SIGNAL(clicked()), this, SLOT(actionClicked()));
-    connect(fillAutoAction_, SIGNAL(clicked()), this, SLOT(actionClicked()));
-    connect(fillManualAction_, SIGNAL(clicked()), this, SLOT(actionClicked()));
-    connect(manualKg_, SIGNAL(textEdited(QString)), this, SLOT(manualKgEdited()));
-    connect(manualNozzle_, SIGNAL(currentIndexChanged(int)), this, SLOT(manualKgEdited()));
-    connect(ui_->manualSaveButton, SIGNAL(clicked()), this, SLOT(manualSaveClicked()));
+    connect(fillOk_, SIGNAL(clicked()), this, SLOT(fillClicked()));
+    connect(switchButton_, SIGNAL(clicked()), this, SLOT(switchClicked()));
+    connect(printAgain_, SIGNAL(clicked()), this, SLOT(printAgainClicked()));
+    connect(cancelTicket_, SIGNAL(clicked()), this, SLOT(cancelTicketClicked()));
 
     // keyboard entry: Enter in a field moves on to the next one of the page (the PIN is the last), Enter on the button presses it
+    fillChain_ = new EnterChain(this);
+    fillChain_->add(fillKg_);
+    fillChain_->add(fillPin_);
+    fillChain_->add(fillOk_);
     topUpChain_ = new EnterChain(this);
     topUpChain_->add(topUpKg_);
     topUpChain_->add(topUpPrice_);
     topUpChain_->add(topUpTotal_);
     topUpChain_->add(ui_->topUpButton);
-    fillAutoChain_ = new EnterChain(this);
-    fillAutoChain_->add(fillKg_);
-    fillAutoChain_->add(fillNozzle_);
-    fillAutoChain_->add(fillPin_);
-    fillAutoChain_->add(start_);
-    manualChain_ = new EnterChain(this);
-    manualChain_->add(manualNozzle_);
-    manualChain_->add(manualKg_);
-    manualChain_->add(manualPin_);
-    manualChain_->add(ui_->manualSaveButton);
-    connect(fillNozzle_, SIGNAL(activated(int)), this, SLOT(nozzleChosen()));
-    connect(timer_, SIGNAL(timeout()), this, SLOT(refreshNozzles()));
     connect(reader_, SIGNAL(cardRead(QString)), this, SLOT(showCard(QString)));
     connect(reader_, SIGNAL(openChanged(bool)), this, SLOT(readerChanged()));
-    connect(supply_, SIGNAL(recorded(int,QString)), this, SLOT(supplyRecorded(int,QString)));
-    connect(supply_, SIGNAL(message(QString,bool)), this, SLOT(supplyMessage(QString,bool)));
-    timer_->start();
+    connect(printer_, SIGNAL(finished(bool,QString)), this, SLOT(printFinished(bool,QString)));
 
     reload();
 }
@@ -163,9 +133,12 @@ void CardPage::reload()
 {
     cardId_.clear();
     uid_.clear();
+    ticket_.clear();
+    filled_.clear();
     idField_->clear();
     message_->clear();
     holder_->clear();
+    ui_->cardPhone->clear();
     fuel_->clear();
     balance_->clear();
     state_->clear();
@@ -179,6 +152,7 @@ void CardPage::reload()
     fillPin_->clear();
     fillKg_->clear();
     priceTouched_ = false;
+    totalTyped_ = false;
 
     registerFuel_->clear();
     QSqlQuery fuels(db_);
@@ -188,13 +162,11 @@ void CardPage::reload()
     }
 
     ui_->cardHistoryButton->setEnabled(false);
-    manualPin_->clear();
-    manualKg_->clear();
-    manualLiters_->clear();
+    switchButton_->setEnabled(false);
     showPanel(PanelNone);
     readerChanged();
-    fillNozzles();
-    showAction(0);
+    showAction(ActionFill);
+    showTicket();
 }
 
 void CardPage::readerChanged()
@@ -258,6 +230,7 @@ void CardPage::showCard(const QString &id)
     if (!card.exists || card.deleted) {
         cardId_.clear();
         ui_->cardHistoryButton->setEnabled(false);
+        switchButton_->setEnabled(false);
         holder_->clear();
         ui_->cardPhone->clear();
         fuel_->clear();
@@ -275,6 +248,7 @@ void CardPage::showCard(const QString &id)
 
     cardId_ = card.id;
     ui_->cardHistoryButton->setEnabled(true);
+    switchButton_->setEnabled(true);
     showInfo(card);
     fillPin_->clear();
     fillKg_->clear();
@@ -282,6 +256,7 @@ void CardPage::showCard(const QString &id)
     topUpTotal_->clear();
     priceTouched_ = false;
     totalTyped_ = false;
+    filled_.clear();
 
     // the price of the card's fuel is the default of a top-up
     QSqlQuery price(db_);
@@ -290,8 +265,8 @@ void CardPage::showCard(const QString &id)
     topUpPrice_->setText(price.exec() && price.next() ? kg(price.value(0).toLongLong()) : QString());
 
     showPanel(PanelCard);
-    fillNozzles();
-    showAction(0);                  // a card that is shown starts with no page: the cashier chooses
+    showAction(ActionFill);         // a card that is shown starts with the Fill page, the cursor in its first field
+    showTicket();
     if (card.status == "blocked") {
         showStatus(tr("This card is blocked (lost): it cannot be used or topped up."), false);
     } else if (card.status == "locked") {
@@ -425,76 +400,29 @@ void CardPage::topUpClicked()
     showStatus(tr("Topped up %1 kg for %2 (cash). The card holds %3 kg.").arg(kg(weight)).arg(kg(result.totalX100)).arg(kg(result.balanceX100)), true);
 }
 
-// The nozzles of the card's fuel type that can be filled from the screen (auto mode).
-void CardPage::fillNozzles()
+// The page that shows on the right (Fill or Top Up); the button above History offers the other one. The cursor goes to the first field of the page.
+void CardPage::showAction(int page)
 {
-    const int chosen = fillNozzle_->itemData(fillNozzle_->currentIndex()).toInt();
-    const Cards::Card card = cardId_.isEmpty() ? Cards::Card() : Cards::findById(db_, cardId_);
+    actionPages_->setCurrentIndex(page);
+    switchButton_->setText(page == ActionFill ? tr("Top Up") : tr("Fill"));
 
-    fillNozzle_->blockSignals(true);
-    fillNozzle_->clear();
-    if (card.exists) {
-        const QList<MachineConfig::Nozzle> nozzles = config_->nozzles();
-        for (int i = 0; i < nozzles.size(); ++i) {
-            const MachineConfig::Nozzle &nozzle = nozzles.at(i);
-            if (nozzle.seen() && nozzle.fuelType == card.fuelType && nozzle.mode == ModeAuto) {
-                fillNozzle_->addItem(nozzle.label(), nozzle.number);
-            }
-        }
-        const int at = fillNozzle_->findData(chosen);
-        fillNozzle_->setCurrentIndex(at >= 0 ? at : (fillNozzle_->count() > 0 ? 0 : -1));
+    if (page == ActionFill) {
+        fillChain_->focusFirst();
+    } else {
+        topUpChain_->focusFirst();
     }
-    fillNozzle_->blockSignals(false);
-
-    // the manual-mode nozzles of the card's fuel type, for Fill Manual
-    const int chosenManual = manualNozzle_->itemData(manualNozzle_->currentIndex()).toInt();
-    manualNozzle_->blockSignals(true);
-    manualNozzle_->clear();
-    if (card.exists) {
-        const QList<MachineConfig::Nozzle> nozzles = config_->nozzles();
-        for (int i = 0; i < nozzles.size(); ++i) {
-            const MachineConfig::Nozzle &nozzle = nozzles.at(i);
-            if (nozzle.seen() && nozzle.fuelType == card.fuelType && nozzle.mode == ModeManual) {
-                manualNozzle_->addItem(nozzle.label(), nozzle.number);
-            }
-        }
-        const int at = manualNozzle_->findData(chosenManual);
-        manualNozzle_->setCurrentIndex(at >= 0 ? at : (manualNozzle_->count() > 0 ? 0 : -1));
-    }
-    manualNozzle_->blockSignals(false);
-    manualKgEdited();
-    refreshNozzles();
 }
 
-QString CardPage::stateText(int nozzle) const
+void CardPage::switchClicked()
 {
-    return NozzleDialog::stateText(db_, bus_, nozzle);
+    showAction(actionPages_->currentIndex() == ActionFill ? ActionTopUp : ActionFill);
 }
 
-void CardPage::refreshNozzles()
-{
-    const int nozzle = fillNozzle_->itemData(fillNozzle_->currentIndex()).toInt();
-    fillNozzleState_->setText(nozzle > 0 ? stateText(nozzle) : QString());
-}
-
-// Choosing a nozzle selects it on its board (its select light), like tapping it on the Supplies screen.
-void CardPage::nozzleChosen()
-{
-    const int nozzle = fillNozzle_->itemData(fillNozzle_->currentIndex()).toInt();
-    if (nozzle < 1) {
-        return;
-    }
-    QString why;
-    if (!selection_->select(nozzle, &why)) {
-        showStatus(why, false);
-    }
-    refreshNozzles();
-}
-
-void CardPage::startClicked()
+// OK on the Fill page: the card pays the kg and a ticket for them is made and printed. The same checks first, then "OK / Cancel", then the PIN (a wrong one
+// counts, the 5th locks the card).
+void CardPage::fillClicked()
 {
     const Cards::Card card = Cards::findById(db_, cardId_);
-    const int nozzle = fillNozzle_->itemData(fillNozzle_->currentIndex()).toInt();
     qlonglong weight = 0;
 
     if (!card.exists) {
@@ -522,18 +450,12 @@ void CardPage::startClicked()
 
         return;
     }
-    if (nozzle < 1) {
-        showStatus(tr("Choose a nozzle of the card's fuel type."), false);
-
-        return;
-    }
-    if (!ConfirmDialog::ask(this, tr("Confirm fill"), tr("Fill %1 kg at nozzle %2 for the card of %3?\nThe card holds %4 kg.").arg(kg(weight)).arg(nozzle).arg(card.holderName).arg(kg(card.balanceX100)))) {
+    if (!ConfirmDialog::ask(this, tr("Confirm fill"), tr("Fill %1 kg for the card of %2?\nThe card holds %3 kg.").arg(kg(weight)).arg(card.holderName).arg(kg(card.balanceX100)))) {
         message_->clear();
 
         return;
     }
 
-    // the PIN: a wrong one counts, the 5th locks the card
     const Cards::PinCheck pin = Cards::checkPin(db_, card.id, fillPin_->text());
     if (pin.result != Cards::PinRight) {
         fillPin_->clear();
@@ -544,186 +466,107 @@ void CardPage::startClicked()
         return;
     }
     fillPin_->clear();
+
+    const Cards::TicketResult made = Cards::issueTicket(db_, card.id, weight, session_->userId(), QDateTime::currentDateTime());
+    if (!made.ok) {
+        showStatus(made.error, false);
+        emit saved();
+
+        return;
+    }
+
+    fillKg_->clear();
+    showInfo(Cards::findById(db_, card.id));
+    showTicket();
     emit saved();
-
-    QString why;
-    if (bus_->isConnected() && selection_->current() != nozzle && !selection_->select(nozzle, &why)) {   // (Enter skipped the list: the nozzle is selected on its board now)
-        showStatus(why, false);
-
-        return;
-    }
-    if (!supply_->startCard(nozzle, card.id, weight, &why)) {
-        showStatus(why, false);
-
-        return;
-    }
-
-    fillNozzleNumber_ = nozzle;
-    showStatus(tr("Nozzle %1: %2 kg are set. Start the fill at the nozzle.").arg(nozzle).arg(kg(weight)), true);
+    filled_ = tr("The ticket %1 for %2 kg is made. The card holds %3 kg.").arg(made.barcode).arg(kg(made.kgX100)).arg(kg(made.balanceX100));
+    startPrint(made.barcode);
 }
 
-// The page of the button that is pressed (1 Top Up, 2 Fill Auto, 3 Fill Manual) shows on the right; 0 shows none and no button is pressed.
-void CardPage::showAction(int page)
+// The last ticket of the card that is not used yet, with the two things the cashier can do with it.
+void CardPage::showTicket()
 {
-    actionPages_->setCurrentIndex(page);
-
-    QPushButton *buttons[3] = {topUpAction_, fillAutoAction_, fillManualAction_};
-    for (int i = 0; i < 3; ++i) {
-        buttons[i]->setAutoExclusive(false); // (a button of an exclusive group cannot be unchecked)
-        buttons[i]->setChecked(page == i + 1);
-        buttons[i]->setAutoExclusive(true);
-    }
-
-    // the cursor goes to the first field of the page
-    if (page == 1) {
-        topUpChain_->focusFirst();
-    } else if (page == 2) {
-        fillAutoChain_->focusFirst();
-    } else if (page == 3) {
-        manualChain_->focusFirst();
-    }
-}
-
-void CardPage::actionClicked()
-{
-    QObject *from = sender();
-    if (from == topUpAction_) {
-        showAction(1);
-    } else if (from == fillAutoAction_) {
-        showAction(2);
-    } else if (from == fillManualAction_) {
-        showAction(3);
-    }
-}
-
-// kg per litre x 10000 of the nozzle chosen for Fill Manual; -1 when there is none or its config was not read
-qlonglong CardPage::manualDensity() const
-{
-    const int nozzle = manualNozzle_->itemData(manualNozzle_->currentIndex()).toInt();
-
-    return nozzle > 0 ? config_->nozzle(nozzle).density : -1;
-}
-
-// The litres follow from the kg and the density of the nozzle (litres = kg / density): they are never typed.
-void CardPage::manualKgEdited()
-{
-    qlonglong weight = 0;
-    const qlonglong density = manualDensity();
-    if (density > 0 && Decimal::parse(manualKg_->text().trimmed(), 2, &weight) && weight > 0) {
-        manualLiters_->setText(kg((weight * 10000 + density / 2) / density));
-    } else {
-        manualLiters_->clear();
-    }
-}
-
-// Fill Manual: the supplier filled at a manual-mode nozzle and the cashier types what came out. The same checks as Fill Auto (the PIN counts, 5 wrong ones lock
-// the card), then SupplySession::recordManualCard writes the supplement and the card's balance falls by the kg.
-void CardPage::manualSaveClicked()
-{
-    const Cards::Card card = Cards::findById(db_, cardId_);
-    const int nozzle = manualNozzle_->itemData(manualNozzle_->currentIndex()).toInt();
-    qlonglong weight = 0;
-    qlonglong liters = 0;
-
-    if (!card.exists) {
-        showStatus(tr("Read a card first."), false);
+    ticket_ = cardId_.isEmpty() ? QString() : Cards::lastTicket(db_, cardId_);
+    ticketBox_->setVisible(!ticket_.isEmpty());
+    if (ticket_.isEmpty()) {
+        ticketLabel_->clear();
 
         return;
     }
-    if (session_->userId() <= 0) {
-        showStatus(tr("Log in first."), false);
-
-        return;
-    }
-    if (!card.isActive()) {
-        showStatus(card.status == "blocked" ? tr("This card is blocked (lost).") : tr("This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app."), false);
-
-        return;
-    }
-    if (nozzle < 1) {
-        showStatus(tr("Choose a manual nozzle of the card's fuel type."), false);
-
-        return;
-    }
-    if (manualDensity() <= 0) {
-        showStatus(tr("The density of this nozzle is not known yet, so the litres cannot be worked out: read its config first."), false);
-
-        return;
-    }
-    if (!Decimal::parse(manualKg_->text().trimmed(), 2, &weight) || weight <= 0) {
-        showStatus(tr("Enter the weight that was dispensed."), false);
-
-        return;
-    }
-    liters = (weight * 10000 + manualDensity() / 2) / manualDensity();       // the litres follow from the kg and the density (what the field shows)
-    if (weight > card.balanceX100) {
-        showStatus(tr("The card holds only %1 kg.").arg(kg(card.balanceX100)), false);
-
-        return;
-    }
-    if (!ConfirmDialog::ask(this, tr("Confirm fill"), tr("Save a fill of %1 kg (%2 litres) from nozzle %3 for the card of %4?\nThe card holds %5 kg.").arg(kg(weight)).arg(kg(liters)).arg(nozzle).arg(card.holderName).arg(kg(card.balanceX100)))) {
-        message_->clear();
-
-        return;
-    }
-
-    // the PIN: a wrong one counts, the 5th locks the card
-    const Cards::PinCheck pin = Cards::checkPin(db_, card.id, manualPin_->text());
-    if (pin.result != Cards::PinRight) {
-        manualPin_->clear();
-        showInfo(Cards::findById(db_, card.id));
-        showStatus(pin.error, false);
-        emit saved(); // the wrong tries wait for the upload
-
-        return;
-    }
-    manualPin_->clear();
-    emit saved();
-
-    QString why;
-    if (!supply_->recordManualCard(nozzle, card.id, weight, liters, QDateTime::currentDateTime(), &why)) {
-        showStatus(why, false);
-
-        return;
-    }
-
-    manualKg_->clear();
-    manualLiters_->clear();
-    const Cards::Card after = Cards::findById(db_, card.id);
-    showInfo(after);
-    showStatus(tr("Nozzle %1: %2 kg were supplied. The card holds %3 kg.").arg(nozzle).arg(kg(weight)).arg(kg(after.balanceX100)), true);
-    emit saved();
-}
-
-// A fill of this screen ended: the card shows its new balance.
-void CardPage::supplyRecorded(int nozzle, const QString &supplementId)
-{
 
     QSqlQuery query(db_);
-    query.prepare("SELECT card_id, out_amount_kg FROM supplements WHERE id = ?");
-    query.addBindValue(supplementId);
-    if (!query.exec() || !query.next() || query.value(0).toString().isEmpty()) {
-        return; // a supply of tickets
+    query.prepare("SELECT amount_kg, COALESCE(sale_date, '') FROM tickets WHERE barcode = ?");
+    query.addBindValue(Barcode::toKey(ticket_));
+    if (query.exec() && query.next()) {
+        ticketLabel_->setText(tr("%1\n%2 kg, %3").arg(ticket_).arg(kg(query.value(0).toLongLong())).arg(query.value(1).toString()));
     }
-
-    const QString id = query.value(0).toString();
-    const qlonglong dispensed = query.value(1).toLongLong();
-    const Cards::Card card = Cards::findById(db_, id);
-    if (id == cardId_) {
-        showInfo(card);
-    }
-    if (nozzle == fillNozzleNumber_) {
-        fillNozzleNumber_ = 0;
-        showStatus(tr("Nozzle %1: %2 kg were supplied. The card holds %3 kg.").arg(nozzle).arg(kg(dispensed)).arg(kg(card.balanceX100)), true);
-    }
-    emit saved();
+    printAgain_->setEnabled(!printing_);
 }
 
-void CardPage::supplyMessage(const QString &text, bool good)
+// The ticket goes to the printer; it is saved already, so a printer that fails only gives a message and Print again tries once more.
+void CardPage::startPrint(const QString &barcode)
 {
-    if (fillNozzleNumber_ > 0 && text.startsWith(tr("Nozzle %1").arg(fillNozzleNumber_))) {
-        showStatus(text, good);
+    if (printer_->isBusy()) {
+        showStatus(filled_ + "\n" + tr("The printer is busy. Print again prints the ticket."), false);
+
+        return;
     }
+
+    printing_ = true;
+    printAgain_->setEnabled(false);
+    showStatus(filled_ + "\n" + tr("Printing..."), true);
+    printer_->printCardTicket(barcode);
+}
+
+void CardPage::printAgainClicked()
+{
+    if (ticket_.isEmpty()) {
+        return;
+    }
+
+    filled_ = tr("The ticket %1.").arg(ticket_);
+    startPrint(ticket_);
+}
+
+void CardPage::printFinished(bool ok, const QString &message)
+{
+    if (!printing_) {
+        return; // another screen's print
+    }
+
+    printing_ = false;
+    printAgain_->setEnabled(!ticket_.isEmpty());
+    showStatus(filled_ + "\n" + (ok ? tr("The ticket was sent to the printer.") : tr("It was not printed: %1 Print again prints it.").arg(message)), ok);
+}
+
+// Cancel ticket: the ticket was not used and has not been uploaded; it goes away and its kg go back to the card.
+void CardPage::cancelTicketClicked()
+{
+    if (ticket_.isEmpty()) {
+        return;
+    }
+
+    QSqlQuery query(db_);
+    query.prepare("SELECT amount_kg FROM tickets WHERE barcode = ?");
+    query.addBindValue(Barcode::toKey(ticket_));
+    const qlonglong weight = query.exec() && query.next() ? query.value(0).toLongLong() : 0;
+    if (!ConfirmDialog::ask(this, tr("Cancel ticket"), tr("Cancel the ticket %1 (%2 kg)?\nThe kg go back to the card.").arg(ticket_).arg(kg(weight)))) {
+        return;
+    }
+
+    QString why;
+    if (!Cards::cancelTicket(db_, ticket_, &why)) {
+        showStatus(why, false);
+
+        return;
+    }
+
+    const QString cancelled = ticket_;
+    const Cards::Card card = Cards::findById(db_, cardId_);
+    showInfo(card);
+    showTicket();
+    emit saved();
+    showStatus(tr("The ticket %1 is cancelled: %2 kg are back on the card. The card holds %3 kg.").arg(cancelled).arg(kg(weight)).arg(kg(card.balanceX100)), true);
 }
 
 void CardPage::showStatus(const QString &message, bool ok)

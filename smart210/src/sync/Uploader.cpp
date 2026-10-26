@@ -66,7 +66,8 @@ QString dateCondition(const QString &table, const QString &date)
         return "(sale_id IN (SELECT id FROM sales WHERE " + Checkout::dateExpression("sales", "created_at", "sale_date") + " = " + day + ") "
                "OR supplement_id IN (SELECT id FROM supplements WHERE " + Checkout::dateExpression("supplements", "supplied_at", "supply_date") + " = " + day + ") "
                "OR barcode IN (SELECT ticket_barcode FROM ticket_loan_settlements WHERE " + Checkout::dateExpression("ticket_loan_settlements", "settled_at") + " = " + day + ") "
-               "OR barcode IN (SELECT ticket_barcode FROM remainders WHERE " + Checkout::dateExpression("remainders", "created_at", "remainder_date") + " = " + day + "))";
+               "OR barcode IN (SELECT ticket_barcode FROM remainders WHERE " + Checkout::dateExpression("remainders", "created_at", "remainder_date") + " = " + day + ") "
+               "OR (card_id IS NOT NULL AND " + "date(sale_date, '-" + QString::number(Checkout::StartHour) + " hours')" + " = " + day + "))";
     }
 
     return QString();
@@ -96,7 +97,8 @@ QString beforeCondition(const QString &table, const QString &before)
         return "(sale_id IN (SELECT id FROM sales WHERE created_at < " + at + ") "
                "OR supplement_id IN (SELECT id FROM supplements WHERE supplied_at < " + at + ") "
                "OR barcode IN (SELECT ticket_barcode FROM ticket_loan_settlements WHERE settled_at < " + at + ") "
-               "OR barcode IN (SELECT ticket_barcode FROM remainders WHERE created_at < " + at + "))";
+               "OR barcode IN (SELECT ticket_barcode FROM remainders WHERE created_at < " + at + ") "
+               "OR (card_id IS NOT NULL AND sale_date < " + at + "))";
     }
 
     return QString();
@@ -327,6 +329,7 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
         row.insert("sale_date", textOrNull(q, "sale_date"));
         row.insert("supply_date", textOrNull(q, "supply_date"));
         row.insert("supplement_id", textOrNull(q, "supplement_id"));
+        row.insert("card_id", textOrNull(q, "card_id")); // a ticket made for a card (the card paid for it; there is no sale)
     }
 
     return row;

@@ -51,7 +51,8 @@ class Card extends Model
     public function balanceFromRecords()
     {
         $in = (float) Sale::where('sale_type', 'card')->where('card_id', $this->id)->sum('amount_kg');
-        $out = (float) Supplement::where('card_id', $this->id)->sum('out_amount_kg');
+        $out = (float) Supplement::where('card_id', $this->id)->sum('out_amount_kg')
+            + (float) \App\Models\Tickets\Ticket::where('card_id', $this->id)->where('status', '<>', config('ticket_statuses.restrict'))->sum('amount_kg');   // the tickets made for it
 
         return round($in - $out, 2);
     }

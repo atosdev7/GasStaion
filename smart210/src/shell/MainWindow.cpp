@@ -114,7 +114,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     supplySession_ = new SupplySession(db, boardBus_, machineConfig_, supplySelection_, session_, this);
     spotPage_ = new SpotSalePage(db, session_, printer_, boardBus_, machineConfig_, supplySelection_, supplySession_);
     supplyPage_ = new SupplyPage(db, boardBus_, machineConfig_, supplySelection_, supplySession_);
-    cardPage_ = new CardPage(db, session_, boardBus_, machineConfig_, supplySelection_, supplySession_, cardReader_);
+    cardPage_ = new CardPage(db, session_, printer_, cardReader_);
     manualPage_ = new ManualSupplyPage(db, machineConfig_, supplySession_);
     remainderPage_ = new RemainderTicketsPage(db);
     dispensersPage_ = new DispensersPage(db, boardBus_, machineConfig_);

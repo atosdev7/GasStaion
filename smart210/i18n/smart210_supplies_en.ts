@@ -443,220 +443,189 @@
 <context>
     <name>SupplySession</name>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="54"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="53"/>
         <source>Choose a nozzle first: tap it, or press its select key at the dispenser.</source>
         <translation>Choose a nozzle first: tap it, or press its select key at the dispenser.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="56"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="55"/>
         <source>The config of nozzle %1 has not been read yet.</source>
         <translation>The config of nozzle %1 has not been read yet.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="58"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="57"/>
         <source>Nozzle %1 is in manual mode: the supplier types the amount at the dispenser, the cashier enters the tickets afterwards.</source>
         <translation>Nozzle %1 is in manual mode: the supplier types the amount at the dispenser, the cashier enters the tickets afterwards.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="60"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="91"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="107"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="59"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="90"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="106"/>
         <source>Nozzle %1 has started: its tickets cannot be changed.</source>
         <translation>Nozzle %1 has started: its tickets cannot be changed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="65"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="64"/>
         <source>Nozzle %1: ticket added, %2 kg. Together %3 kg.</source>
         <translation>Nozzle %1: ticket added, %2 kg. Together %3 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="126"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="186"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="238"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="127"/>
         <source>Choose a nozzle first.</source>
         <translation>Choose a nozzle first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="128"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="242"/>
         <source>This card cannot be used: it is not active.</source>
-        <translation>This card cannot be used: it is not active.</translation>
+        <translation type="vanished">This card cannot be used: it is not active.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="130"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="244"/>
         <source>Nozzle %1 gives another fuel type than the card (%2).</source>
-        <translation>Nozzle %1 gives another fuel type than the card (%2).</translation>
+        <translation type="vanished">Nozzle %1 gives another fuel type than the card (%2).</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="132"/>
         <source>Nozzle %1 is in manual mode: the supplier starts the fill at the dispenser.</source>
-        <translation>Nozzle %1 is in manual mode: the supplier starts the fill at the dispenser.</translation>
+        <translation type="vanished">Nozzle %1 is in manual mode: the supplier starts the fill at the dispenser.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="134"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="256"/>
         <source>Nozzle %1 has started already.</source>
-        <translation>Nozzle %1 has started already.</translation>
+        <translation type="vanished">Nozzle %1 has started already.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="136"/>
         <source>Nozzle %1 has tickets in its queue: clear them first.</source>
-        <translation>Nozzle %1 has tickets in its queue: clear them first.</translation>
+        <translation type="vanished">Nozzle %1 has tickets in its queue: clear them first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="138"/>
         <source>Enter the weight to supply.</source>
-        <translation>Enter the weight to supply.</translation>
+        <translation type="vanished">Enter the weight to supply.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="140"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="248"/>
         <source>The card holds only %1 kg.</source>
-        <translation>The card holds only %1 kg.</translation>
+        <translation type="vanished">The card holds only %1 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="142"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="258"/>
         <source>Log in first.</source>
-        <translation>Log in first.</translation>
+        <translation type="vanished">Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="144"/>
         <source>There is no connection to the boards.</source>
-        <translation>There is no connection to the boards.</translation>
+        <translation type="vanished">There is no connection to the boards.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="146"/>
         <source>The board of nozzle %1 does not answer.</source>
-        <translation>The board of nozzle %1 does not answer.</translation>
+        <translation type="vanished">The board of nozzle %1 does not answer.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="148"/>
         <source>Choose the nozzle first.</source>
-        <translation>Choose the nozzle first.</translation>
+        <translation type="vanished">Choose the nozzle first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="150"/>
         <source>Nozzle %1 is busy.</source>
-        <translation>Nozzle %1 is busy.</translation>
+        <translation type="vanished">Nozzle %1 is busy.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="165"/>
         <source>The board is busy. Try again.</source>
-        <translation>The board is busy. Try again.</translation>
+        <translation type="vanished">The board is busy. Try again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="188"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="246"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="129"/>
         <source>Enter the weight and the litres that were dispensed.</source>
         <translation>Enter the weight and the litres that were dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="190"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="250"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="131"/>
         <source>The time is in the future.</source>
         <translation>The time is in the future.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="192"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="252"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="133"/>
         <source>The time cannot be more than %1 days back (Machine Config, Options).</source>
         <translation>The time cannot be more than %1 days back (Machine Config, Options).</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="192"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="252"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="133"/>
         <source>The time must be today (Machine Config, Options).</source>
         <translation>The time must be today (Machine Config, Options).</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="194"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="254"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="135"/>
         <source>Nozzle %1 has a fill running or a result waiting: the app reads it by itself.</source>
         <translation>Nozzle %1 has a fill running or a result waiting: the app reads it by itself.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="196"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="137"/>
         <source>More than was asked for (%1 kg). Check the reading.</source>
         <translation>More than was asked for (%1 kg). Check the reading.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="198"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="139"/>
         <source>More than the tickets cover (%1 kg). Check the reading.</source>
         <translation>More than the tickets cover (%1 kg). Check the reading.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="200"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="141"/>
         <source>Enter the tickets first.</source>
         <translation>Enter the tickets first.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="240"/>
         <source>Nozzle %1 is in auto mode: use Fill Auto.</source>
-        <translation>Nozzle %1 is in auto mode: use Fill Auto.</translation>
+        <translation type="vanished">Nozzle %1 is in auto mode: use Fill Auto.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="265"/>
         <source>The supply could not be saved.</source>
-        <translation>The supply could not be saved.</translation>
+        <translation type="vanished">The supply could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="335"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="214"/>
         <source>Nozzle %1: the queue was cleared at the dispenser.</source>
         <translation>Nozzle %1: the queue was cleared at the dispenser.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="382"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="452"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="261"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="315"/>
         <source>Nozzle %1 started: %2 kg.</source>
         <translation>Nozzle %1 started: %2 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="421"/>
         <source>Nozzle %1 does not answer. Press Start again.</source>
-        <translation>Nozzle %1 does not answer. Press Start again.</translation>
+        <translation type="vanished">Nozzle %1 does not answer. Press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="422"/>
         <source>Nozzle %1 does not answer. The tickets stay: press Start again.</source>
-        <translation>Nozzle %1 does not answer. The tickets stay: press Start again.</translation>
+        <translation type="vanished">Nozzle %1 does not answer. The tickets stay: press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="427"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="522"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="299"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="380"/>
         <source>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</source>
         <translation>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="441"/>
         <source>Nozzle %1: the board is busy. Press Start again.</source>
-        <translation>Nozzle %1: the board is busy. Press Start again.</translation>
+        <translation type="vanished">Nozzle %1: the board is busy. Press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="473"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="336"/>
         <source>Nozzle %1: the result could not be saved: %2</source>
         <translation>Nozzle %1: the result could not be saved: %2</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="480"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="343"/>
         <source>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</source>
         <translation>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="482"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="345"/>
         <source>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</source>
         <translation>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="484"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="347"/>
         <source>Nozzle %1: %2 kg dispensed.</source>
         <translation>Nozzle %1: %2 kg dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="506"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="511"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="518"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="369"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="376"/>
         <source>Nozzle %1: %2</source>
         <translation>Nozzle %1: %2</translation>
     </message>

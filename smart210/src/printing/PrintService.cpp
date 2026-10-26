@@ -37,6 +37,9 @@ QString PrintService::titleFor(const QString &usage) const
     if (usage == "remainder") {
         return tr("Gas Station Remainder Ticket");
     }
+    if (usage == "card") {
+        return tr("Gas Station Card Fuel Ticket");
+    }
 
     return tr("Gas Station Fuel Ticket");
 }
@@ -83,6 +86,36 @@ bool PrintService::remainderTicketOf(const QString &barcode, TicketData *ticket,
     ticket->barcode = Barcode::fromKey(key);
 
     return true;
+}
+
+bool PrintService::cardTicketOf(const QString &barcode, TicketData *ticket, QString *error) const
+{
+    if (!remainderTicketOf(barcode, ticket, error)) { // the same columns: the fuel, the weight, the moment
+        return false;
+    }
+    ticket->title = titleFor("card");
+
+    return true;
+}
+
+void PrintService::printCardTicket(const QString &barcode)
+{
+    TicketData ticket;
+    QString error;
+    if (!cardTicketOf(barcode, &ticket, &error)) {
+        emit finished(false, error);
+
+        return;
+    }
+    if (!hasPrinter()) {
+        emit finished(false, tr("No printer is set up. Enter its address on the Machine Config page."));
+
+        return;
+    }
+
+    Settings settings(db_);
+    connection_.send(settings.value(SettingKey::PrinterHost), settings.intValue(SettingKey::PrinterPort, DefaultPort),
+                     TicketRenderer::render(ticket, options_));
 }
 
 void PrintService::printRemainderTicket(const QString &barcode)

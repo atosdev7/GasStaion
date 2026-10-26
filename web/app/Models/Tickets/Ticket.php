@@ -4,6 +4,7 @@ namespace App\Models\Tickets;
 
 use App\Models\Concerns\ResetsSynced;
 use App\Models\Debts\TicketLoanSettlement;
+use App\Support\Cards\CardLedger;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
@@ -21,6 +22,13 @@ class Ticket extends Model
     protected static function boot()
     {
         parent::boot();
+
+        // a ticket made for a card is an entry of the card's ledger (made once, and undone when the ticket is restricted)
+        static::saved(function (Ticket $ticket) {
+            if ($ticket->card_id) {
+                CardLedger::syncTicket($ticket);
+            }
+        });
 
         static::saved(function (Ticket $ticket) {
             if (!$ticket->wasChanged('status')) {

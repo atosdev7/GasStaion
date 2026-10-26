@@ -6,9 +6,10 @@ use App\Models\Cards\Card;
 use App\Models\Cards\CardTransaction;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
+use App\Models\Tickets\Ticket;
 
-// The ledger of the cards (card_transactions): one entry for every top-up (a sale of type card) and every fill made with a card (a supplement
-// with a card_id), each with the running balance of the card after it, in the order of the moments they happened. The entries are made by the
+// The ledger of the cards (card_transactions): one entry for every top-up (a sale of type card) and every fill made with a card (a ticket made for the
+// card, tickets.card_id; before that, a supplement with a card_id), each with the running balance of the card after it, in the order of the moments they happened. The entries are made by the
 // model events of Sale and Supplement, so every way a record is made (the Smart210's push, a top-up on the web, a hand entry) is covered, and the
 // same record never counts twice (type + source_id is unique). A deleted top-up or fill is not removed from the ledger: a reversal entry undoes
 // it. The balance of a card is the sum of its ledger; the records it came from may be deleted or cleared and the ledger still holds the history.
@@ -46,6 +47,37 @@ class CardLedger
         ]);
         $entry->save();
         self::recompute($supplement->card_id);
+    }
+
+    // A ticket made for a card (tickets.card_id): the card paid for it with its kg, so a fill entry for its weight is made when the ticket is, once. A
+    // restricted ticket gives the kg back (a reversal entry); when the restriction is lifted that entry keeps its place and goes to 0, so the terminals
+    // get the change like any other entry.
+    public static function syncTicket(Ticket $ticket)
+    {
+        if (!$ticket->card_id) {
+            return;
+        }
+
+        $kg = round((float) $ticket->amount_kg, 2);
+        $entry = CardTransaction::where('type', 'fill')->where('source_id', $ticket->barcode)->first() ?: new CardTransaction;
+        $entry->forceFill([
+            'type' => 'fill', 'source_id' => $ticket->barcode,
+            'card_id' => $ticket->card_id, 'kg' => -$kg,
+            'occurred_at' => $ticket->sale_date ?: now(), 'comment' => 'ticket ' . $ticket->barcode,
+        ]);
+        $entry->save();
+
+        $restricted = (int) $ticket->status === (int) config('ticket_statuses.restrict');
+        $reversal = CardTransaction::where('type', 'reversal')->where('source_id', $ticket->barcode)->first();
+        if ($restricted && !$reversal) {
+            CardTransaction::forceCreate([
+                'card_id' => $ticket->card_id, 'type' => 'reversal', 'source_id' => $ticket->barcode, 'kg' => $kg, 'occurred_at' => now(),
+                'comment' => 'ticket restricted',
+            ]);
+        } elseif ($reversal && round((float) $reversal->kg, 2) !== ($restricted ? $kg : 0.0)) {
+            $reversal->forceFill(['kg' => $restricted ? $kg : 0.0, 'comment' => $restricted ? 'ticket restricted' : 'restriction lifted'])->save();
+        }
+        self::recompute($ticket->card_id);
     }
 
     // The sale of a top-up was deleted: an entry that takes its kg back (once).
@@ -125,6 +157,13 @@ class CardLedger
             self::syncSupplement($supplement);
             if ($supplement->trashed()) {
                 self::reverseSupplement($supplement);
+            }
+        }
+
+        // (the migration that made the ledger runs this before tickets had a card_id)
+        if (\Illuminate\Support\Facades\Schema::hasColumn('tickets', 'card_id')) {
+            foreach (Ticket::whereNotNull('card_id')->orderBy('sale_date')->get() as $ticket) {
+                self::syncTicket($ticket);
             }
         }
 

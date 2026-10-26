@@ -49,22 +49,22 @@
         <translation>kg</translation>
     </message>
     <message>
-        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="59"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="62"/>
         <source>%1 tickets, %2 kg, balance after: %3 kg</source>
         <translation>%1 tickets, %2 kg, balance after: %3 kg</translation>
     </message>
     <message>
-        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="74"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="77"/>
         <source>This ticket is already in the list.</source>
         <translation>This ticket is already in the list.</translation>
     </message>
     <message>
-        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="139"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="142"/>
         <source>Settled %1 tickets, %2 kg. Still owed: %3 kg</source>
         <translation>Settled %1 tickets, %2 kg. Still owed: %3 kg</translation>
     </message>
     <message>
-        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="140"/>
+        <location filename="../src/ticket_debt/LoanSettleDialog.cpp" line="143"/>
         <source>Settled %1 tickets, %2 kg. The loan is paid off.</source>
         <translation>Settled %1 tickets, %2 kg. The loan is paid off.</translation>
     </message>

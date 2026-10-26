@@ -47,7 +47,8 @@ class TicketRestrictController extends Controller
 
             // The sale link survives a restriction, so the previous status can be derived from it. A remainder ticket
             // has no sale but is already paid for, so it goes back to sold, never to blank stock.
-            $sold = $ticket->sale_id !== null || $ticket->code === config('ticket_reserved_codes.remainder');
+            // (so has a ticket made for a card: the card paid for it)
+            $sold = $ticket->sale_id !== null || $ticket->code === config('ticket_reserved_codes.remainder') || $ticket->card_id !== null;
             $previous = $sold ? 'sale' : 'publish';
             $ticket->forceFill(['status' => config('ticket_statuses.' . $previous)])->save();
 

@@ -65,6 +65,16 @@ class CardSummaryController extends Controller
             }
         }
 
+        // the tickets made for the cards (the card paid for them when they were made; a restricted one gave the kg back)
+        foreach (\App\Models\Tickets\Ticket::whereNotNull('card_id')->where('status', '<>', config('ticket_statuses.restrict'))->get() as $ticket) {
+            $day = substr((string) $ticket->sale_date, 0, 10);
+            if ($day < $from) {
+                $add($ticket->card_id, 'opening', -$ticket->amount_kg);
+            } elseif ($day <= $to) {
+                $add($ticket->card_id, 'used_kg', $ticket->amount_kg);
+            }
+        }
+
         // a card with nothing in the period and nothing on it is left out
         $cards = Card::withTrashed()->orderBy('holder_name')->orderBy('uid')->get();
         $rows = [];

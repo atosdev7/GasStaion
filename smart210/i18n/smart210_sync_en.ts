@@ -4,27 +4,32 @@
 <context>
     <name>ApiReply</name>
     <message>
-        <location filename="../src/sync/ApiReply.cpp" line="33"/>
+        <location filename="../src/sync/ApiReply.cpp" line="58"/>
         <source>The server did not answer in time.</source>
         <translation>The server did not answer in time.</translation>
     </message>
     <message>
-        <location filename="../src/sync/ApiReply.cpp" line="40"/>
+        <location filename="../src/sync/ApiReply.cpp" line="65"/>
         <source>Cannot reach the server: %1</source>
         <translation>Cannot reach the server: %1</translation>
     </message>
     <message>
-        <location filename="../src/sync/ApiReply.cpp" line="51"/>
+        <location filename="../src/sync/ApiReply.cpp" line="87"/>
+        <source>The server is busy (too many requests), try again in a minute.</source>
+        <translation>The server is busy (too many requests), try again in a minute.</translation>
+    </message>
+    <message>
+        <location filename="../src/sync/ApiReply.cpp" line="98"/>
         <source>The server sent an unexpected answer (HTTP %1).</source>
         <translation>The server sent an unexpected answer (HTTP %1).</translation>
     </message>
     <message>
-        <location filename="../src/sync/ApiReply.cpp" line="64"/>
+        <location filename="../src/sync/ApiReply.cpp" line="111"/>
         <source>The server is busy, try again in a minute.</source>
         <translation>The server is busy, try again in a minute.</translation>
     </message>
     <message>
-        <location filename="../src/sync/ApiReply.cpp" line="68"/>
+        <location filename="../src/sync/ApiReply.cpp" line="115"/>
         <source>The server refused the request (HTTP %1).</source>
         <translation>The server refused the request (HTTP %1).</translation>
     </message>
@@ -53,23 +58,29 @@
     </message>
     <message>
         <location filename="../src/printing/PrintService.cpp" line="41"/>
+        <source>Gas Station Card Fuel Ticket</source>
+        <translation>Gas Station Card Fuel Ticket</translation>
+    </message>
+    <message>
+        <location filename="../src/printing/PrintService.cpp" line="44"/>
         <source>Gas Station Fuel Ticket</source>
         <translation>Gas Station Fuel Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="52"/>
+        <location filename="../src/printing/PrintService.cpp" line="55"/>
         <source>There is no ticket to print for this sale.</source>
         <translation>There is no ticket to print for this sale.</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="74"/>
+        <location filename="../src/printing/PrintService.cpp" line="77"/>
         <source>There is no ticket to print.</source>
         <translation>There is no ticket to print.</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="98"/>
-        <location filename="../src/printing/PrintService.cpp" line="118"/>
+        <location filename="../src/printing/PrintService.cpp" line="111"/>
         <location filename="../src/printing/PrintService.cpp" line="131"/>
+        <location filename="../src/printing/PrintService.cpp" line="151"/>
+        <location filename="../src/printing/PrintService.cpp" line="164"/>
         <source>No printer is set up. Enter its address on the Machine Config page.</source>
         <translation>No printer is set up. Enter its address on the Machine Config page.</translation>
     </message>
@@ -143,27 +154,27 @@
         <translation>No server is set up.</translation>
     </message>
     <message>
-        <location filename="../src/sync/SyncClient.cpp" line="100"/>
+        <location filename="../src/sync/SyncClient.cpp" line="114"/>
         <source>The downloaded settings could not be saved: %1</source>
         <translation>The downloaded settings could not be saved: %1</translation>
     </message>
     <message>
-        <location filename="../src/sync/SyncClient.cpp" line="112"/>
+        <location filename="../src/sync/SyncClient.cpp" line="126"/>
         <source>The downloaded data could not be saved: %1</source>
         <translation>The downloaded data could not be saved: %1</translation>
     </message>
     <message>
-        <location filename="../src/sync/SyncClient.cpp" line="235"/>
+        <location filename="../src/sync/SyncClient.cpp" line="249"/>
         <source>Download complete: %1 rows stored, %2 kept until they are uploaded.</source>
         <translation>Download complete: %1 rows stored, %2 kept until they are uploaded.</translation>
     </message>
     <message>
-        <location filename="../src/sync/SyncClient.cpp" line="236"/>
+        <location filename="../src/sync/SyncClient.cpp" line="250"/>
         <source>Download complete: %1 rows stored.</source>
         <translation>Download complete: %1 rows stored.</translation>
     </message>
     <message>
-        <location filename="../src/sync/SyncClient.cpp" line="238"/>
+        <location filename="../src/sync/SyncClient.cpp" line="252"/>
         <source>The server&apos;s database was restored: %1 records will be sent again with the next upload.</source>
         <translation>The server&apos;s database was restored: %1 records will be sent again with the next upload.</translation>
     </message>
@@ -171,17 +182,17 @@
 <context>
     <name>Uploader</name>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="383"/>
+        <location filename="../src/sync/Uploader.cpp" line="439"/>
         <source>No server is set up.</source>
         <translation>No server is set up.</translation>
     </message>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="531"/>
+        <location filename="../src/sync/Uploader.cpp" line="606"/>
         <source>Uploaded %1 records. The server refused %2: see the list of refused records.</source>
         <translation>Uploaded %1 records. The server refused %2: see the list of refused records.</translation>
     </message>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="532"/>
+        <location filename="../src/sync/Uploader.cpp" line="607"/>
         <source>Uploaded %1 records.</source>
         <translation>Uploaded %1 records.</translation>
     </message>

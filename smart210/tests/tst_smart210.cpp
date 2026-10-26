@@ -44,6 +44,7 @@
 #include "Database.h"
 #include "BoardBus.h"
 #include "BoardClock.h"
+#include "CardLedger.h"
 #include "CardPage.h"
 #include "ConfirmDialog.h"
 #include "CardReader.h"
@@ -433,18 +434,19 @@ private slots:
     void aTopUpIsRefusedForABlockedCardAndForBadInput();
     void theCardReaderCutsItsBytesIntoIds();
     void theCardReaderEmitsTheIdsItReads();
-    void aFillWithACardRecordsASupplementWithoutTicketsAndLowersTheBalance();
-    void aCardFillThatIsStoppedTakesOnlyWhatCameOut();
-    void aCardFillIsRefusedWhenItCannotRun();
     void aCardFillTypedInIsRecordedWithTheCard();
     void aSupplyRecordsTheModeAndTheDensity();
     void theUploadSendsCardsCardSalesAndCardSupplements();
     void aDownloadStoresCardsWithTheBalanceAndKeepsUnuploadedOnes();
     void theCardScreenRegistersTopsUpAndChecksThePin();
-    void theCardScreenOffersTopUpFillAutoAndFillManualOnTheLeftAndTheirPagesOnTheRight();
-    void aManualFillWithACardNeedsAManualNozzleAndTakesItsKgFromTheCard();
     void theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWithThePinLast();
     void theCardActionsAskForAnOkBeforeTheyDoIt();
+    void theCardScreenStartsOnTheFillPageWithTheTopUpButtonAboveHistory();
+    void theFillPageMakesATicketForTheCardAndPrintsIt();
+    void aFillIsATicketMadeForTheCardAndItIsCancelledWhileItWaitsForTheUpload();
+    void aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalanceKeepsIt();
+    void theHistoryOfACardShowsTheFillsOfItsTickets();
+    void anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets();
     void theConfirmDialogHasOkAsItsDefaultAndCancel();
     void theMachineConfigSavesTheCardReader();
     void salesHasOnlyTheSpotSaleAndTheTicketSale();
@@ -3423,7 +3425,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 7);                                   // the program still opens it
+    QCOMPARE(Migrator::version(db), 8);                                   // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -6848,7 +6850,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 7);
+    QCOMPARE(all.size(), 8);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -6858,7 +6860,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
     run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
     run("INSERT INTO nozzles (id, number, tank_id, fuel_type, board_address, synced, deleted, mode, density, seen_at) VALUES (10, 1, 1, 'D', 1, 1, 0, 0, 8300, '2026-10-08 09:00:00')");
 
-    QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
+    QVERIFY2(Migrator::apply(db, all.mid(0, 7), &error), qPrintable(error));
     QCOMPARE(Migrator::version(db), 7);
     QVERIFY(migratedColumnsOf(db, "nozzles").contains("name"));
     QCOMPARE(one("SELECT COUNT(*) FROM nozzles WHERE number = 1 AND fuel_type = 'D' AND density = 8300 AND name IS NULL").toInt(), 1);   // the nozzle is as it was, without a name
@@ -6868,6 +6870,26 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
     QVERIFY(config.setNozzleName(1, "Diesel 1", 0, &error));
     QCOMPARE(config.nozzle(1).label(), QString("Diesel 1"));
 }
+
+// 008: a terminal database at version 7 gets the card of a ticket and keeps its tickets
+void Smart210Test::anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets()
+{
+    QSqlDatabase db = openDatabase(false);
+    const QStringList all = Migrator::bundled();
+    QVERIFY(all.at(7).contains("ALTER TABLE tickets ADD COLUMN card_id"));
+
+    QString error;
+    QVERIFY2(Migrator::apply(db, all.mid(0, 7), &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 7);
+    QVERIFY(!migratedColumnsOf(db, "tickets").contains("card_id"));         // the old database
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
+
+    QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 8);
+    QVERIFY(migratedColumnsOf(db, "tickets").contains("card_id"));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND status = 1 AND card_id IS NULL").toInt(), 1);   // the ticket is as it was
+}
+
 void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndAnAddNeedsATank()
 {
     setUpLoggedInTerminalWithAPin();                                         // nozzles 1 and 2 were added; tank T1 holds diesel
@@ -10499,142 +10521,6 @@ void Smart210Test::theCardReaderEmitsTheIdsItReads()
     reader.stop();
 }
 
-void Smart210Test::aFillWithACardRecordsASupplementWithoutTicketsAndLowersTheBalance()
-{
-    setUpSupplying();
-    QSqlDatabase db = QSqlDatabase::database(connection_);
-    const QString card = makeCard(db, "AA01", 4000);                 // 40.00 kg
-    SupplyBench bench(db);
-    QVERIFY(bench.session.login(7, "secret1"));
-    QSignalSpy recorded(&bench.supply, SIGNAL(recorded(int,QString)));
-    QSignalSpy remainders(&bench.supply, SIGNAL(remainderMade(QString)));
-    QVERIFY(startBus(&bench.bus, &bench.boards));
-    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
-    QVERIFY(bench.selection.select(1));
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).beeps, 1, 3000);    // the board has beeped
-    QTest::qWait(200);                                                  // and its answer came: the command slot is free
-
-    QString why;
-    QVERIFY2(bench.supply.startCard(1, card, 3500, &why), qPrintable(why));
-    QVERIFY(bench.supply.isLocked(1));
-    QVERIFY(SupplyQueue::session(db, 1).byCard());
-    QCOMPARE(SupplyQueue::session(db, 1).cardId, card);
-    QCOMPARE(SupplyQueue::session(db, 1).presetX100, qlonglong(3500));
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateDispensing), 3000);
-    QCOMPARE(bench.boards.board(1).presetG, quint32(35000));        // the preset went to the dispenser like a ticket fill's
-    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(4000)); // nothing came out yet
-    QVERIFY(!bench.supply.startCard(1, card, 100, &why));
-    QVERIFY(why.contains("started already"));
-
-    bench.boards.simulator().tick(80000);
-    QTRY_COMPARE_WITH_TIMEOUT(recorded.size(), 1, 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
-    QCOMPARE(recorded.at(0).at(0).toInt(), 1);
-    QCOMPARE(remainders.size(), 0);
-
-    QCOMPARE(countRows("supplements"), 1);
-    QCOMPARE(one("SELECT card_id FROM supplements").toString(), card);
-    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 3500);
-    QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 3500);
-    QCOMPARE(one("SELECT out_amount_lt FROM supplements").toInt(), 4217);
-    QCOMPARE(one("SELECT density FROM supplements").toInt(), 8300);
-    QCOMPARE(one("SELECT mode FROM supplements").toString(), QString("auto"));
-    QCOMPARE(one("SELECT fuel_type FROM supplements").toString(), QString("D"));
-    QCOMPARE(one("SELECT synced FROM supplements").toInt(), 0);
-    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL").toInt(), 0);
-    QCOMPARE(countRows("remainders"), 0);
-    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(500));  // 40.00 - 35.00
-    QVERIFY(!bench.supply.isLocked(1));
-    QCOMPARE(Uploader::pending(db).value("supplements"), 1);
-    QCOMPARE(Uploader::pending(db).value("tickets"), 0);
-}
-
-void Smart210Test::aCardFillThatIsStoppedTakesOnlyWhatCameOut()
-{
-    setUpSupplying();
-    QSqlDatabase db = QSqlDatabase::database(connection_);
-    const QString card = makeCard(db, "AA01", 4000);
-    SupplyBench bench(db);
-    QVERIFY(bench.session.login(7, "secret1"));
-    QSignalSpy recorded(&bench.supply, SIGNAL(recorded(int,QString)));
-    QSignalSpy remainders(&bench.supply, SIGNAL(remainderMade(QString)));
-    QVERIFY(startBus(&bench.bus, &bench.boards));
-    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
-    QVERIFY(bench.selection.select(1));
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).beeps, 1, 3000);
-    QTest::qWait(200);
-    QString why;
-    QVERIFY2(bench.supply.startCard(1, card, 3500, &why), qPrintable(why));
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateDispensing), 3000);
-
-    bench.boards.simulator().tick(10000);   // 5.00 kg out of the 35.00
-    bench.boards.simulator().stopFill(1);   // the supplier stops it
-
-    QTRY_COMPARE_WITH_TIMEOUT(recorded.size(), 1, 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
-    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 500);
-    QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 3500);
-    QCOMPARE(one("SELECT card_id FROM supplements").toString(), card);
-    QCOMPARE(remainders.size(), 0);                                    // the card keeps the rest: no remainder ticket
-    QCOMPARE(countRows("remainders"), 0);
-    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(3500)); // 40.00 - 5.00 that really came out
-    QVERIFY(!bench.supply.isLocked(1));
-}
-
-void Smart210Test::aCardFillIsRefusedWhenItCannotRun()
-{
-    setUpSupplying();
-    QSqlDatabase db = QSqlDatabase::database(connection_);
-    run("INSERT OR REPLACE INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 800, NULL)");
-    const QString card = makeCard(db, "AA01", 4000);
-    const QString gasoline = makeCard(db, "BB02", 4000, "A");
-    SupplyBench bench(db);
-    QString why;
-
-    QVERIFY(!bench.supply.startCard(9, card, 1000, &why));
-    QVERIFY(why.contains("Choose a nozzle first"));
-    QVERIFY(!bench.supply.startCard(1, "no-such-card", 1000, &why));
-    QVERIFY(why.contains("not active"));
-    run("UPDATE cards SET status = 'locked' WHERE id = '" + card + "'");
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));
-    QVERIFY(why.contains("not active"));
-    run("UPDATE cards SET status = 'blocked' WHERE id = '" + card + "'");
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));
-    QVERIFY(why.contains("not active"));
-    run("UPDATE cards SET status = 'active' WHERE id = '" + card + "'");
-    QVERIFY(!bench.supply.startCard(1, gasoline, 1000, &why));
-    QVERIFY(why.contains("another fuel type"));
-    QVERIFY(!bench.supply.startCard(3, card, 1000, &why));                // nozzle 3 is in manual mode
-    QVERIFY(why.contains("manual mode"));
-
-    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", QDateTime::currentDateTime()).ok);
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));
-    QVERIFY(why.contains("tickets in its queue"));
-    SupplyQueue::clear(db, 1);
-
-    QVERIFY(!bench.supply.startCard(1, card, 0, &why));
-    QVERIFY(why.contains("Enter the weight"));
-    QVERIFY(!bench.supply.startCard(1, card, 4001, &why));               // the card holds 40.00 kg
-    QVERIFY(why.contains("holds only 40.00 kg"));
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));
-    QVERIFY(why.contains("Log in"));
-    QVERIFY(bench.session.login(7, "secret1"));
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));
-    QVERIFY(why.contains("no connection"));
-    QVERIFY(!bench.supply.isLocked(1));
-    QVERIFY(!SupplyQueue::session(db, 1).exists);
-
-    QVERIFY(startBus(&bench.bus, &bench.boards));
-    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
-    QVERIFY(!bench.supply.startCard(1, card, 1000, &why));                // the nozzle is not chosen on the board yet
-    QVERIFY(why.contains("Choose the nozzle"));
-    QVERIFY(bench.selection.select(1));
-    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).beeps, 1, 3000);
-    QTest::qWait(200);
-    QVERIFY2(bench.supply.startCard(1, card, 1000, &why), qPrintable(why));
-    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(4000));     // only a fill that happened lowers the balance
-}
-
 void Smart210Test::aCardFillTypedInIsRecordedWithTheCard()
 {
     setUpSupplying();
@@ -10711,6 +10597,153 @@ void Smart210Test::aSupplyRecordsTheModeAndTheDensity()
     QCOMPARE(one("SELECT COUNT(*) FROM supplements WHERE card_id IS NOT NULL").toInt(), 0);
 }
 
+// Cards::issueTicket: the card pays at once and a ticket for the kg is made; Cards::cancelTicket takes an unused one back
+void Smart210Test::aFillIsATicketMadeForTheCardAndItIsCancelledWhileItWaitsForTheUpload()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QString card = makeCard(db, "AA01", 4000);
+    const QDateTime now = QDateTime::currentDateTime();
+
+    // what it refuses
+    QVERIFY(Cards::issueTicket(db, card, 0, 7, now).error.contains("Enter the weight"));
+    QVERIFY(Cards::issueTicket(db, card, 4001, 7, now).error.contains("holds only 40.00 kg"));
+    QVERIFY(Cards::issueTicket(db, card, 1000, 0, now).error.contains("Log in"));
+    QVERIFY(Cards::issueTicket(db, "no-such-card", 1000, 7, now).error.contains("not known"));
+    run("UPDATE cards SET status = 'locked' WHERE id = '" + card + "'");
+    QVERIFY(Cards::issueTicket(db, card, 1000, 7, now).error.contains("locked"));
+    run("UPDATE cards SET status = 'blocked' WHERE id = '" + card + "'");
+    QVERIFY(Cards::issueTicket(db, card, 1000, 7, now).error.contains("blocked"));
+    run("UPDATE cards SET status = 'active' WHERE id = '" + card + "'");
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 0);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(4000));
+    QVERIFY(Cards::lastTicket(db, card).isEmpty());
+
+    // the ticket: the card pays at once; it is sold, has no sale and waits for the upload
+    const Cards::TicketResult made = Cards::issueTicket(db, card, 1500, 7, now);
+    QVERIFY2(made.ok, qPrintable(made.error));
+    QCOMPARE(made.kgX100, qlonglong(1500));
+    QCOMPARE(made.balanceX100, qlonglong(2500));
+    QCOMPARE(made.barcode.size(), 16);
+    QCOMPARE(made.barcode.mid(5, 2), QString("21"));                        // the code of a ticket this terminal makes
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + card + "' AND amount_kg = 1500 AND status = 1 AND sale_id IS NULL AND fuel_type = 'D' AND synced = 0").toInt(), 1);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2500));
+    QCOMPARE(Cards::lastTicket(db, card), made.barcode);
+    const Cards::TicketResult second = Cards::issueTicket(db, card, 1000, 7, now.addSecs(1));
+    QVERIFY(second.ok);
+    QVERIFY(second.barcode != made.barcode);
+    QCOMPARE(Cards::lastTicket(db, card), second.barcode);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(1500));
+
+    // it is uploaded with the card, but the kg are already taken from the balance
+    QCOMPARE(Uploader::pending(db).value("tickets"), 2);
+
+    // what cannot be cancelled: a ticket in the queue of a nozzle, a ticket that is used, one that is uploaded, one that is not a card's
+    QString why;
+    QVERIFY2(SupplyQueue::add(db, 1, second.barcode, "D", now).ok, "the supplier scans the ticket");
+    QVERIFY(!Cards::cancelTicket(db, second.barcode, &why));
+    QVERIFY2(why.contains("queue of a nozzle"), qPrintable(why));
+    SupplyQueue::clear(db, 1);
+    run("UPDATE tickets SET status = 2 WHERE barcode = " + QString::number(Barcode::toKey(second.barcode)));
+    QVERIFY(!Cards::cancelTicket(db, second.barcode, &why));
+    QVERIFY2(why.contains("used already"), qPrintable(why));
+    run("UPDATE tickets SET status = 1, synced = 1 WHERE barcode = " + QString::number(Barcode::toKey(second.barcode)));
+    QVERIFY(!Cards::cancelTicket(db, second.barcode, &why));
+    QVERIFY2(why.contains("uploaded already"), qPrintable(why));
+    QVERIFY(!Cards::cancelTicket(db, code(3000000041), &why));
+    QVERIFY2(why.contains("not a ticket made for a card"), qPrintable(why));
+    QVERIFY(!Cards::cancelTicket(db, "abc", &why));
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(1500));
+    QCOMPARE(Cards::lastTicket(db, card), second.barcode);                  // (the uploaded one is still sold)
+
+    // the one that waits for the upload is cancelled: the ticket goes and the kg come back
+    QVERIFY2(Cards::cancelTicket(db, made.barcode, &why), qPrintable(why));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + card + "'").toInt(), 1);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(3000));
+    QVERIFY(!Cards::cancelTicket(db, made.barcode, &why));                  // gone
+}
+
+// the upload sends the ticket with its card; the balance of a downloaded card keeps the tickets the web app has not counted yet
+void Smart210Test::aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalanceKeepsIt()
+{
+    configureServer();
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SyncStore store(db);
+    const QString id = "22222222-2222-2222-2222-222222222222";
+    const QString row = "[{'id':'" + id + "','uid':'AA01','holder_name':'Li Wei','holder_phone':null,'fuel_type':'D','pin_salt':'ab12','pin_hash':'hh',"
+                        "'failed_attempts':0,'status':'active','balance_kg':'40.00','deleted':false}]";
+    QVERIFY(store.applyPage("cards", rowsOf(row)).ok);
+    QCOMPARE(Cards::findById(db, id).balanceX100, qlonglong(4000));
+
+    const Cards::TicketResult made = Cards::issueTicket(db, id, 1500, 7, QDateTime::currentDateTime());
+    QVERIFY2(made.ok, qPrintable(made.error));
+    QCOMPARE(Uploader::pending(db).value("tickets"), 1);
+
+    // the web app does not count the ticket yet: the balance it sends keeps the 15.00 kg off
+    QVERIFY(store.applyPage("cards", rowsOf(row)).ok);
+    QCOMPARE(Cards::findById(db, id).balanceX100, qlonglong(2500));
+
+    server_->reply("/api/push/tickets", 200, q("{'status':'ok','saved':['") + made.barcode.toUtf8() + q("'],'rejected':[]}"));
+    Uploader uploader(db);
+    QString message;
+    QVERIFY(uploadOk(uploader, &message));
+    QCOMPARE(message, QString("Uploaded 1 records."));
+    QCOMPARE(server_->log(), QStringList() << "POST /api/push/tickets");
+    const QJsonObject ticket = QJsonDocument::fromJson(server_->requests().at(0).body).object().value("rows").toArray().at(0).toObject();
+    QCOMPARE(ticket.value("barcode").toString(), made.barcode);
+    QCOMPARE(ticket.value("card_id").toString(), id);
+    QVERIFY(ticket.value("sale_id").isNull());
+    QCOMPARE(ticket.value("status").toInt(), 1);
+    QCOMPARE(ticket.value("amount_kg").toString(), QString("15.00"));
+    QCOMPARE(ticket.value("fuel_type").toString(), QString("D"));
+    QCOMPARE(Uploader::pendingTotal(db), 0);
+
+    // the web app has it now: its figure includes the ticket
+    QVERIFY(store.applyPage("cards", rowsOf(QString(row).replace("'40.00'", "'25.00'"))).ok);
+    QCOMPARE(Cards::findById(db, id).balanceX100, qlonglong(2500));
+
+    // the ticket comes back in the download with its card (supplied now)
+    const SyncStore::PageResult page = store.applyPage("tickets", rowsOf("[{'barcode':'" + made.barcode + "','fuel_type':'D','spec':null,'amount_kg':'15.00','status':2,'sale_id':null,"
+                                                                    "'sale_date':'2026-10-26 10:00:00','card_id':'" + id + "'}]"));
+    QVERIFY2(page.ok, qPrintable(page.error));
+    const QString where = " WHERE barcode = " + QString::number(Barcode::toKey(made.barcode));
+    QCOMPARE(one("SELECT card_id FROM tickets" + where).toString(), id);
+    QCOMPARE(one("SELECT status FROM tickets" + where).toInt(), 2);
+}
+
+// the history of a card lists the tickets made for it as fills until the web app has an entry for them
+void Smart210Test::theHistoryOfACardShowsTheFillsOfItsTickets()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QString card = makeCard(db, "AA01", 4000);
+    QVERIFY(Cards::issueTicket(db, card, 1500, 7, QDateTime::currentDateTime()).ok);
+
+    const QList<CardLedger::Entry> entries = CardLedger::entries(db, card, 10);
+    int fills = 0;
+    foreach (const CardLedger::Entry &entry, entries) {
+        if (entry.type == "fill") {
+            ++fills;
+            QCOMPARE(entry.kgX100, qlonglong(-1500));
+            QCOMPARE(entry.balanceX100, qlonglong(2500));
+            QVERIFY(entry.provisional);
+        }
+    }
+    QCOMPARE(fills, 1);
+    QCOMPARE(entries.size(), 2);                                            // the top-up and the fill
+
+    // the web app has an entry for the ticket (its source is the 16 digits): the fill is that entry now, not made up here again
+    run("INSERT INTO card_transactions (id, card_id, type, kg, balance_kg, source_id, occurred_at, seq) VALUES ('e1', '" + card + "', 'fill', -1500, 2500, '" + Cards::lastTicket(db, card) + "', '2026-10-26 10:00:00', 1)");
+    const QList<CardLedger::Entry> confirmed = CardLedger::entries(db, card, 10);
+    int provisionalFills = 0;
+    foreach (const CardLedger::Entry &entry, confirmed) {
+        if (entry.type == "fill" && entry.provisional) {
+            ++provisionalFills;
+        }
+    }
+    QCOMPARE(provisionalFills, 0);
+}
 void Smart210Test::theUploadSendsCardsCardSalesAndCardSupplements()
 {
     configureServer();
@@ -10830,11 +10863,13 @@ void Smart210Test::aDownloadStoresCardsWithTheBalanceAndKeepsUnuploadedOnes()
     QVERIFY(Cards::findById(db, id).deleted);
 }
 
-// the Cards screen of a registered card: three buttons on the left (Top Up, Fill Auto, Fill Manual), the page of the pressed one on the right
-void Smart210Test::theCardScreenOffersTopUpFillAutoAndFillManualOnTheLeftAndTheirPagesOnTheRight()
+// the registered card of the next tests: Li Wei with 50 kg of Diesel
+static const char *CardId = "A2425234";
+
+// The Cards screen of a registered card shows the Fill page; the Top Up button is above History and shows the Top Up page (and then says Fill)
+void Smart210Test::theCardScreenStartsOnTheFillPageWithTheTopUpButtonAboveHistory()
 {
     setUpLoggedInTerminalWithAPin();
-    run("UPDATE nozzles SET mode = 1 WHERE number = 2");                    // nozzle 1 is automatic, nozzle 2 manual (both Diesel, density 0.83)
     QSqlDatabase db = QSqlDatabase::database(connection_);
     const Cards::Registration li = Cards::registerCard(db, "04A1B2", "Li Wei", "D", "1234", "");
     QVERIFY(li.ok);
@@ -10849,187 +10884,155 @@ void Smart210Test::theCardScreenOffersTopUpFillAutoAndFillManualOnTheLeftAndThei
     CardPage *cards = window.findChild<CardPage *>();
     QStackedWidget *panels = window.findChild<QStackedWidget *>("cardPanels");
     QStackedWidget *pages = window.findChild<QStackedWidget *>("cardActionPages");
-    QPushButton *topUp = window.findChild<QPushButton *>("cardTopUpButton");
-    QPushButton *fillAuto = window.findChild<QPushButton *>("cardFillAutoButton");
-    QPushButton *fillManual = window.findChild<QPushButton *>("cardFillManualButton");
-    QLabel *message = window.findChild<QLabel *>("cardMessage");
-    QVERIFY(cards != 0 && panels != 0 && pages != 0 && topUp != 0 && fillAuto != 0 && fillManual != 0 && message != 0);
+    QPushButton *switchButton = window.findChild<QPushButton *>("cardTopUpButton");
+    QPushButton *history = window.findChild<QPushButton *>("cardHistoryButton");
+    QVERIFY(cards != 0 && panels != 0 && pages != 0 && switchButton != 0 && history != 0);
 
-    // a card that is not registered has no buttons (its register form is shown); a registered one has them
+    // nothing to do with no card, or with a card that is not registered
+    QVERIFY(!switchButton->isEnabled() && !history->isEnabled());
     cards->showCard("99 FF 00");
     QCOMPARE(panels->currentIndex(), 1);
+    QVERIFY(!switchButton->isEnabled() && !history->isEnabled());
     cards->showCard("04 a1 b2");
     QCOMPARE(panels->currentIndex(), 2);
     QCOMPARE(window.findChild<QLabel *>("cardHolder")->text(), QString("Li Wei"));
     QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("50.00"));
+    QVERIFY(switchButton->isEnabled() && history->isEnabled());
 
-    // the buttons are one under the other on the left, in this order, and the pages are on the right of them
-    QLayout *column = window.findChild<QLayout *>("cardActionsColumn");
+    // the Top Up button is right above History, in the box of the card
+    QLayout *column = window.findChild<QLayout *>("cardHistoryColumn");
     QVERIFY(column != 0);
-    QCOMPARE(column->itemAt(0)->widget(), static_cast<QWidget *>(topUp));
-    QCOMPARE(column->itemAt(1)->widget(), static_cast<QWidget *>(fillAuto));
-    QCOMPARE(column->itemAt(2)->widget(), static_cast<QWidget *>(fillManual));
-    QCOMPARE(topUp->text(), QString("Top Up"));
-    QCOMPARE(fillAuto->text(), QString("Fill Auto"));
-    QCOMPARE(fillManual->text(), QString("Fill Manual"));
-    QHBoxLayout *row = qobject_cast<QHBoxLayout *>(window.findChild<QWidget *>("cardPanelCard")->layout());
-    QVERIFY(row != 0);
-    QCOMPARE(row->itemAt(0)->layout(), column);                              // the buttons first (left)
-    QCOMPARE(row->itemAt(1)->widget(), static_cast<QWidget *>(pages));       // the pages after them (right)
+    QCOMPARE(column->indexOf(history), column->indexOf(switchButton) + 1);
+    QCOMPARE(switchButton->text(), QString("Top Up"));
 
-    // nothing is open until a button is pressed
-    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionNone"));
-    QVERIFY(!topUp->isChecked() && !fillAuto->isChecked() && !fillManual->isChecked());
+    // the Fill page shows first (no nozzle to choose, no Fill Auto / Fill Manual), the cursor in its weight
+    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFill"));
+    QVERIFY(window.findChild<QComboBox *>("fillNozzleCombo") == 0);
+    QVERIFY(window.findChild<QPushButton *>("cardFillAutoButton") == 0 && window.findChild<QPushButton *>("cardFillManualButton") == 0);
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillKgField"));
+    QVERIFY(!window.findChild<QWidget *>("ticketBox")->isVisibleTo(cards));            // no ticket yet
 
-    topUp->click();
+    // the button shows the Top Up page and then says Fill, which comes back
+    switchButton->click();
     QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionTopUp"));
-    QVERIFY(topUp->isChecked() && !fillAuto->isChecked() && !fillManual->isChecked());
-    QVERIFY(pages->currentWidget()->findChild<QLineEdit *>("topUpKgField") != 0);
-    fillAuto->click();
-    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFillAuto"));
-    QVERIFY(!topUp->isChecked() && fillAuto->isChecked() && !fillManual->isChecked());
-    QVERIFY(pages->currentWidget()->findChild<QLineEdit *>("fillKgField") != 0);
-    QCOMPARE(window.findChild<QComboBox *>("fillNozzleCombo")->count(), 1);          // the automatic nozzle of the card's fuel type only
-    fillManual->click();
-    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFillManual"));
-    QVERIFY(!topUp->isChecked() && !fillAuto->isChecked() && fillManual->isChecked());
-    QVERIFY(pages->currentWidget()->findChild<QLineEdit *>("manualKgField") != 0);
-    QComboBox *nozzle = window.findChild<QComboBox *>("manualNozzleCombo");
-    QCOMPARE(nozzle->count(), 1);                                                    // the manual nozzle only
-    QCOMPARE(nozzle->itemData(0).toInt(), 2);
+    QCOMPARE(switchButton->text(), QString("Fill"));
+    switchButton->click();
+    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFill"));
+    QCOMPARE(switchButton->text(), QString("Top Up"));
 
-    // the same card read again: the page stays; another card: no page again
+    // the same card read again keeps the page; another card starts on the Fill page again
+    switchButton->click();
     cards->showCard("04A1B2");
-    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFillManual"));
+    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionTopUp"));
     cards->showCard("04A1B3");
     QCOMPARE(window.findChild<QLabel *>("cardHolder")->text(), QString("Wang Fang"));
-    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionNone"));
-    QVERIFY(!topUp->isChecked() && !fillAuto->isChecked() && !fillManual->isChecked());
-    cards->showCard("04A1B2");
+    QCOMPARE(pages->currentWidget()->objectName(), QString("cardActionFill"));
+    QCOMPARE(switchButton->text(), QString("Top Up"));
+}
 
-    // Fill Manual: the litres follow the kg and the density of the nozzle (litres = kg / 0.83)
-    QLineEdit *pin = window.findChild<QLineEdit *>("manualPinField");
-    QLineEdit *kgField = window.findChild<QLineEdit *>("manualKgField");
-    QLineEdit *litres = window.findChild<QLineEdit *>("manualLitersField");
-    QPushButton *save = window.findChild<QPushButton *>("manualSaveButton");
-    fillManual->click();
-    QVERIFY(litres->isReadOnly());
-    QTest::keyClicks(kgField, "10");
-    QCOMPARE(litres->text(), QString("12.05"));
-    kgField->clear();
-    QTest::keyClicks(kgField, "10.5");
-    QCOMPARE(litres->text(), QString("12.65"));
-    kgField->selectAll();
-    QTest::keyClick(kgField, Qt::Key_Backspace);                             // the cashier deletes it
-    QVERIFY(kgField->text().isEmpty());
-    QVERIFY(litres->text().isEmpty());
+// OK on the Fill page: the checks, the PIN, then the card pays and a ticket is made, printed (here: no printer), and can be printed again or cancelled
+void Smart210Test::theFillPageMakesATicketForTheCardAndPrintsIt()
+{
+    setUpSellingTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const Cards::Registration li = Cards::registerCard(db, "04A1B2", "Li Wei", "D", "1234", "");
+    QVERIFY(li.ok);
+    QVERIFY(Cards::topUp(db, li.cardId, 5000, 750, 7, QDateTime::currentDateTime().addSecs(-60)).ok);
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300); // the start-up download has finished
+    window.showPage("cards");
+    window.findChild<CardPage *>()->showCard("04A1B2");
+    QLineEdit *kgField = window.findChild<QLineEdit *>("fillKgField");
+    QLineEdit *pin = window.findChild<QLineEdit *>("fillPinField");
+    QPushButton *ok = window.findChild<QPushButton *>("fillOkButton");
+    QPushButton *printAgain = window.findChild<QPushButton *>("ticketPrintButton");
+    QPushButton *cancelTicket = window.findChild<QPushButton *>("ticketCancelButton");
+    QWidget *ticketBox = window.findChild<QWidget *>("ticketBox");
+    QLabel *message = window.findChild<QLabel *>("cardMessage");
+    QVERIFY(kgField != 0 && pin != 0 && ok != 0 && printAgain != 0 && cancelTicket != 0 && ticketBox != 0 && message != 0);
+    const QString cardTickets = "SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "'";
 
     // no weight, more than the card holds (before the PIN is asked), a wrong PIN (it counts)
-    save->click();
+    ok->click();
     QVERIFY(message->text().contains("Enter the weight"));
     kgField->setText("60");
     pin->setText("9999");
-    save->click();
+    ok->click();
     QVERIFY(message->text().contains("holds only 50.00 kg"));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 0);
     kgField->setText("10");
     pin->setText("9999");
-    save->click();
+    ok->click();
     QVERIFY(message->text().contains("Wrong PIN. 4 tries left"));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 1);
     QCOMPARE(pin->text(), QString());
-    QCOMPARE(countRows("supplements"), 0);
+    QCOMPARE(one(cardTickets).toInt(), 0);
     QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(5000));
 
-    // the right PIN: the supply is saved (mode manual, with the card), the balance falls, the fields are empty again
+    // the right PIN: the card pays, a ticket of the direct kind is made (sold, no sale behind it, waiting for the upload), the fields are empty again
     kgField->setText("10");
     pin->setText("1234");
-    save->click();
-    QVERIFY2(message->text().contains("10.00 kg were supplied. The card holds 40.00 kg."), qPrintable(message->text()));
-    QCOMPARE(countRows("supplements"), 1);
-    QCOMPARE(one("SELECT COUNT(*) FROM supplements s JOIN nozzles n ON n.id = s.nozzle_id WHERE n.number = 2 AND s.mode = 'manual' AND s.out_amount_kg = 1000 AND s.out_amount_lt = 1205 "
-                 "AND s.preset_kg = 1000 AND s.card_id = '" + li.cardId + "'").toInt(), 1);
+    ok->click();
+    QVERIFY2(message->text().contains("is made. The card holds 40.00 kg."), qPrintable(message->text()));
+    QCOMPARE(one(cardTickets).toInt(), 1);
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "' AND amount_kg = 1000 AND status = 1 AND sale_id IS NULL AND synced = 0 AND fuel_type = 'D' "
+                 "AND substr(printf('%016d', barcode), 6, 2) = '21'").toInt(), 1);
     QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(4000));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 0);
     QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("40.00"));
     QCOMPARE(kgField->text(), QString());
-    QCOMPARE(litres->text(), QString());
     QCOMPARE(pin->text(), QString());
-    QCOMPARE(countRows("remainders"), 0);                                   // a card keeps what was not taken: no remainder ticket
-}
-
-// SupplySession::recordManualCard: what it refuses, and what it saves
-void Smart210Test::aManualFillWithACardNeedsAManualNozzleAndTakesItsKgFromTheCard()
-{
-    setUpSupplying();                                                       // nozzles 1, 2 and 4 are automatic, 3 manual (Diesel, density 0.83)
-    QSqlDatabase db = QSqlDatabase::database(connection_);
-    Session session(db);
-    QVERIFY(session.login(7, "secret1"));
-    MachineConfig config(db);
-    FakeBoards boards;
-    BoardBus bus;
-    quickBus(&bus, &boards);
-    SupplySelection selection(&bus, &config);
-    SupplySession supply(db, &bus, &config, &selection, &session);
-    QSignalSpy recorded(&supply, SIGNAL(recorded(int,QString)));
-
-    const QDateTime now = QDateTime::currentDateTime();
-    run("INSERT OR IGNORE INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 800, NULL)");
-    const Cards::Registration diesel = Cards::registerCard(db, "04A1B2", "Li Wei", "D", "1234", "");
-    const Cards::Registration petrol = Cards::registerCard(db, "04A1B3", "Wang Fang", "A", "1234", "");
-    QVERIFY(diesel.ok && petrol.ok);
-    QVERIFY(Cards::topUp(db, diesel.cardId, 5000, 750, 7, now.addSecs(-120)).ok);
-    QVERIFY(Cards::topUp(db, petrol.cardId, 5000, 800, 7, now.addSecs(-120)).ok);
-    const QDateTime when = now.addSecs(-60);
-    QString why;
-
-    QVERIFY(!supply.recordManualCard(1, diesel.cardId, 1000, 1205, when, &why));
-    QVERIFY2(why.contains("auto mode"), qPrintable(why));                   // a nozzle in auto mode is for Fill Auto
-    QVERIFY(!supply.recordManualCard(3, petrol.cardId, 1000, 1205, when, &why));
-    QVERIFY2(why.contains("another fuel type"), qPrintable(why));
-    QVERIFY(!supply.recordManualCard(3, diesel.cardId, 6000, 7229, when, &why));
-    QVERIFY2(why.contains("holds only 50.00 kg"), qPrintable(why));
-    QVERIFY(!supply.recordManualCard(3, diesel.cardId, 0, 0, when, &why));
-    QVERIFY2(why.contains("Enter the weight"), qPrintable(why));
-    QVERIFY(!supply.recordManualCard(3, diesel.cardId, 1000, 1205, now.addDays(1), &why));
-    QVERIFY2(why.contains("future"), qPrintable(why));
-    QVERIFY(!supply.recordManualCard(3, "no-such-card", 1000, 1205, when, &why));
-    QVERIFY2(why.contains("not active"), qPrintable(why));
-    QCOMPARE(countRows("supplements"), 0);                                  // nothing was saved,
-    QVERIFY(!SupplyQueue::session(db, 3).exists);                           // and no session was left behind
-    QCOMPARE(Cards::findById(db, diesel.cardId).balanceX100, qlonglong(5000));
-
-    // a card that is blocked cannot be used
-    run("UPDATE cards SET status = 'blocked' WHERE uid = '04A1B2'");
-    QVERIFY(!supply.recordManualCard(3, diesel.cardId, 1000, 1205, when, &why));
-    QVERIFY2(why.contains("not active"), qPrintable(why));
-    run("UPDATE cards SET status = 'active' WHERE uid = '04A1B2'");
-
-    // the supply: a supplement of the manual nozzle with the card (mode manual, no tickets), the card's balance falls by the kg, nothing is left over
-    QVERIFY2(supply.recordManualCard(3, diesel.cardId, 1000, 1205, when, &why), qPrintable(why));
-    QCOMPARE(recorded.count(), 1);
-    QCOMPARE(countRows("supplements"), 1);
-    QCOMPARE(one("SELECT COUNT(*) FROM supplements s JOIN nozzles n ON n.id = s.nozzle_id WHERE n.number = 3 AND s.mode = 'manual' AND s.out_amount_kg = 1000 AND s.out_amount_lt = 1205 "
-                 "AND s.preset_kg = 1000 AND s.density = 8300 AND s.synced = 0 AND s.card_id = '" + diesel.cardId + "'").toInt(), 1);
-    QCOMPARE(Cards::findById(db, diesel.cardId).balanceX100, qlonglong(4000));
-    QVERIFY(!SupplyQueue::session(db, 3).exists);
+    const QString barcode = Cards::lastTicket(db, li.cardId);
+    QCOMPARE(barcode.size(), 16);
+    QVERIFY(message->text().contains(barcode));
+    QVERIFY(ticketBox->isVisibleTo(window.findChild<CardPage *>()));
+    QVERIFY(window.findChild<QLabel *>("ticketLabel")->text().contains(barcode));
+    QVERIFY(window.findChild<QLabel *>("ticketLabel")->text().contains("10.00 kg"));
+    QCOMPARE(countRows("supplements"), 0);                                  // nothing was supplied yet: the supplier scans the ticket
     QCOMPARE(countRows("remainders"), 0);
-    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL").toInt(), 0);
 
-    // and again, until the card is empty
-    QVERIFY(supply.recordManualCard(3, diesel.cardId, 4000, 4819, when, &why));
-    QCOMPARE(Cards::findById(db, diesel.cardId).balanceX100, qlonglong(0));
-    QVERIFY(!supply.recordManualCard(3, diesel.cardId, 100, 120, when, &why));
-    QVERIFY2(why.contains("holds only 0.00 kg"), qPrintable(why));
+    // there is no printer address: the ticket is made, it only says so; Print again tries once more
+    QVERIFY(message->text().contains("It was not printed"));
+    QVERIFY(message->text().contains("No printer is set up"));
+    QVERIFY(printAgain->isEnabled());
+    message->clear();
+    printAgain->click();
+    QVERIFY(message->text().contains("No printer is set up"));
+
+    // Cancel ticket asks first; Cancel does nothing, OK takes the ticket away and gives the kg back
+    ConfirmDialog::setAutoAnswer(ConfirmDialog::No);
+    cancelTicket->click();
+    QVERIFY(ConfirmDialog::lastQuestion().contains(barcode) && ConfirmDialog::lastQuestion().contains("10.00 kg"));
+    QCOMPARE(one(cardTickets).toInt(), 1);
+    ConfirmDialog::setAutoAnswer(ConfirmDialog::Yes);
+    cancelTicket->click();
+    QVERIFY2(message->text().contains("is cancelled: 10.00 kg are back on the card. The card holds 50.00 kg."), qPrintable(message->text()));
+    QCOMPARE(one(cardTickets).toInt(), 0);
+    QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(5000));
+    QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("50.00"));
+    QVERIFY(!ticketBox->isVisibleTo(window.findChild<CardPage *>()));
+
+    // a ticket the web app has already is not cancelled here
+    kgField->setText("5");
+    pin->setText("1234");
+    ok->click();
+    QCOMPARE(one(cardTickets).toInt(), 1);
+    run("UPDATE tickets SET synced = 1");
+    cancelTicket->click();
+    QVERIFY2(message->text().contains("uploaded already"), qPrintable(message->text()));
+    QCOMPARE(one(cardTickets).toInt(), 1);
+    QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(4500));
 }
-// the registered card of the next two tests: Li Wei with 50 kg of Diesel; nozzle 1 is automatic, nozzle 2 manual
-static const char *CardId = "A2425234";
 
-// choosing an action puts the cursor in its first field; Enter moves on field by field, the PIN is the last, and Enter on the button presses it
+// the Fill page: the cursor is in the weight, Enter moves on field by field (the PIN is the last) and Enter on the button presses it; the Top Up page the same
 void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWithThePinLast()
 {
-    setUpLoggedInTerminalWithAPin();
-    run("UPDATE nozzles SET mode = 1 WHERE number = 2");
+    setUpSellingTerminal();
     QSqlDatabase db = QSqlDatabase::database(connection_);
     const Cards::Registration li = Cards::registerCard(db, CardId, "TEST CARD1", "D", "1234", "");
     QVERIFY(Cards::topUp(db, li.cardId, 5000, 750, 7, QDateTime::currentDateTime().addSecs(-60)).ok);
@@ -11038,27 +11041,29 @@ void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWit
     config.setBoardLink(false);
     config.setChangeLogFile(changeLog());
     MainWindow window(config, QString(), "db", db);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
     window.showPage("cards");
     window.findChild<CardPage *>()->showCard(CardId);
 
-    // the order of the fields: the PIN is the last of both fill forms
-    QFormLayout *autoForm = window.findChild<QFormLayout *>("fillForm");
-    QFormLayout *manualForm = window.findChild<QFormLayout *>("fillManualForm");
-    QVERIFY(autoForm != 0 && manualForm != 0);
+    // the order of the fields of the Fill page: the weight, then the PIN (the last)
+    QFormLayout *form = window.findChild<QFormLayout *>("fillForm");
+    QVERIFY(form != 0);
     int row = -1;
     QFormLayout::ItemRole role;
-    QList<int> autoRows;
-    foreach (const char *name, QList<const char *>() << "fillKgField" << "fillNozzleCombo" << "fillPinField") {
-        autoForm->getWidgetPosition(window.findChild<QWidget *>(name), &row, &role);
-        autoRows << row;
+    QList<int> rows;
+    foreach (const char *name, QList<const char *>() << "fillKgField" << "fillPinField") {
+        form->getWidgetPosition(window.findChild<QWidget *>(name), &row, &role);
+        rows << row;
     }
-    QCOMPARE(autoRows, QList<int>() << 0 << 1 << 3);                        // weight, nozzle, (the nozzle's status), PIN
-    QList<int> manualRows;
-    foreach (const char *name, QList<const char *>() << "manualNozzleCombo" << "manualKgField" << "manualPinField") {
-        manualForm->getWidgetPosition(window.findChild<QWidget *>(name), &row, &role);
-        manualRows << row;
-    }
-    QCOMPARE(manualRows, QList<int>() << 0 << 1 << 3);                      // nozzle, kg (and the litres), PIN
+    QCOMPARE(rows, QList<int>() << 0 << 1);
+
+    // Fill: the cursor is in the weight; Enter goes to the PIN, then to OK
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillKgField"));
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillPinField"));
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillOkButton"));
 
     // Top Up: the cursor is in the weight; Enter goes to the price, the total, then the button
     window.findChild<QPushButton *>("cardTopUpButton")->click();
@@ -11070,27 +11075,9 @@ void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWit
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("topUpButton"));
 
-    // Fill Auto: weight, nozzle, PIN, Start
-    window.findChild<QPushButton *>("cardFillAutoButton")->click();
+    // the cursor goes to the first field of the page whenever the page is shown again
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillKgField"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillNozzleCombo"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillPinField"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillStartButton"));
-
-    // Fill Manual: nozzle, kg, PIN, Save
-    window.findChild<QPushButton *>("cardFillManualButton")->click();
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("manualNozzleCombo"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("manualKgField"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("manualPinField"));
-    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
-    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("manualSaveButton"));
-
-    // the cursor goes to the first field again whenever the button is pressed again
     window.findChild<QPushButton *>("cardTopUpButton")->click();
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("topUpKgField"));
 
@@ -11104,13 +11091,23 @@ void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWit
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
     QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(6000));
     QVERIFY(ConfirmDialog::lastQuestion().contains("10.00 kg"));
+
+    // Fill with the keyboard alone: weight, Enter, PIN, Enter, Enter on OK
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
+    QTest::keyClicks(window.focusWidget(), "20");
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QTest::keyClicks(window.focusWidget(), "1234");
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillOkButton"));
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(4000));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "' AND amount_kg = 2000").toInt(), 1);
 }
 
-// Top Up, Start fill and Save fill ask OK / Cancel; Cancel does nothing at all, OK does it
+// Top Up and OK on the Fill page ask OK / Cancel; Cancel does nothing at all, OK does it
 void Smart210Test::theCardActionsAskForAnOkBeforeTheyDoIt()
 {
-    setUpLoggedInTerminalWithAPin();
-    run("UPDATE nozzles SET mode = 1 WHERE number = 2");
+    setUpSellingTerminal();
     QSqlDatabase db = QSqlDatabase::database(connection_);
     const Cards::Registration li = Cards::registerCard(db, CardId, "TEST CARD1", "D", "1234", "");
     QVERIFY(Cards::topUp(db, li.cardId, 5000, 750, 7, QDateTime::currentDateTime().addSecs(-60)).ok);
@@ -11119,12 +11116,15 @@ void Smart210Test::theCardActionsAskForAnOkBeforeTheyDoIt()
     config.setBoardLink(false);
     config.setChangeLogFile(changeLog());
     MainWindow window(config, QString(), "db", db);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
     window.showPage("cards");
     window.findChild<CardPage *>()->showCard(CardId);
     QLabel *message = window.findChild<QLabel *>("cardMessage");
     ConfirmDialog::setAutoAnswer(ConfirmDialog::No);                        // the cashier presses Cancel
 
     // Top Up: asks with the weight, the card, the price and the total; Cancel: nothing is sold
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
     QLineEdit *topKg = window.findChild<QLineEdit *>("topUpKgField");
     QTest::keyClicks(topKg, "40");
     window.findChild<QPushButton *>("topUpButton")->click();
@@ -11144,39 +11144,30 @@ void Smart210Test::theCardActionsAskForAnOkBeforeTheyDoIt()
     QVERIFY(message->text().contains("Enter the weight"));
     QCOMPARE(ConfirmDialog::lastQuestion(), before);
 
-    // Fill Auto: asks before the PIN is looked at, so Cancel does not count a wrong PIN
+    // Fill: asks before the PIN is looked at, so Cancel does not count a wrong PIN and makes no ticket
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
     QLineEdit *fillKg = window.findChild<QLineEdit *>("fillKgField");
     QLineEdit *fillPin = window.findChild<QLineEdit *>("fillPinField");
     fillKg->setText("10");
     fillPin->setText("9999");
     ConfirmDialog::setAutoAnswer(ConfirmDialog::No);
-    window.findChild<QPushButton *>("fillStartButton")->click();
-    QVERIFY2(ConfirmDialog::lastQuestion().contains("Fill 10.00 kg at nozzle 1") && ConfirmDialog::lastQuestion().contains("TEST CARD1") && ConfirmDialog::lastQuestion().contains("90.00 kg"),
-             qPrintable(ConfirmDialog::lastQuestion()));
+    window.findChild<QPushButton *>("fillOkButton")->click();
+    QVERIFY2(ConfirmDialog::lastQuestion().contains("Fill 10.00 kg for the card of TEST CARD1") && ConfirmDialog::lastQuestion().contains("90.00 kg"), qPrintable(ConfirmDialog::lastQuestion()));
     QCOMPARE(Cards::find(db, CardId).failedAttempts, 0);
     QCOMPARE(fillPin->text(), QString("9999"));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 0);
     ConfirmDialog::setAutoAnswer(ConfirmDialog::Yes);
-    window.findChild<QPushButton *>("fillStartButton")->click();
+    window.findChild<QPushButton *>("fillOkButton")->click();
     QCOMPARE(Cards::find(db, CardId).failedAttempts, 1);                    // now the PIN was looked at (and it is wrong)
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 0);
 
-    // Fill Manual: asks with the kg, the litres, the nozzle and the card; Cancel saves nothing
-    QLineEdit *manualKg = window.findChild<QLineEdit *>("manualKgField");
-    QLineEdit *manualPin = window.findChild<QLineEdit *>("manualPinField");
-    QTest::keyClicks(manualKg, "10");
-    manualPin->setText("1234");
-    ConfirmDialog::setAutoAnswer(ConfirmDialog::No);
-    window.findChild<QPushButton *>("manualSaveButton")->click();
-    QVERIFY2(ConfirmDialog::lastQuestion().contains("10.00 kg (12.05 litres) from nozzle 2") && ConfirmDialog::lastQuestion().contains("TEST CARD1"), qPrintable(ConfirmDialog::lastQuestion()));
-    QCOMPARE(countRows("supplements"), 0);
-    QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(9000));
-    QCOMPARE(Cards::find(db, CardId).failedAttempts, 1);                    // the PIN was not looked at
-    ConfirmDialog::setAutoAnswer(ConfirmDialog::Yes);
-    window.findChild<QPushButton *>("manualSaveButton")->click();
-    QCOMPARE(countRows("supplements"), 1);
-    QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(8000));
+    // OK with the right PIN: the ticket is made
+    fillPin->setText("1234");
+    window.findChild<QPushButton *>("fillOkButton")->click();
     QCOMPARE(Cards::find(db, CardId).failedAttempts, 0);
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 1);
+    QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(8000));
 }
-
 // the window itself: a question, Cancel and OK (OK is the default button, so Enter confirms)
 void Smart210Test::theConfirmDialogHasOkAsItsDefaultAndCancel()
 {
@@ -11206,12 +11197,14 @@ void Smart210Test::theConfirmDialogHasOkAsItsDefaultAndCancel()
 }
 void Smart210Test::theCardScreenRegistersTopsUpAndChecksThePin()
 {
-    setUpLoggedInTerminalWithAPin();
+    setUpSellingTerminal();
     AppConfig config;
     config.setBoardLink(false);
     config.setChangeLogFile(changeLog());
     MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
     QSqlDatabase db = QSqlDatabase::database(connection_);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300); // the start-up download has finished
     window.showPage("cards");
     QCOMPARE(window.currentPage(), QString("cards"));
 
@@ -11272,7 +11265,9 @@ void Smart210Test::theCardScreenRegistersTopsUpAndChecksThePin()
     QCOMPARE(window.findChild<QLabel *>("cardState")->text(), QString("Active"));
     QVERIFY(message->text().contains("registered"));
 
-    // the top-up: the price of the fuel is filled in, the total follows the weight
+    // the top-up (the Top Up button above History shows its page): the price of the fuel is filled in, the total follows the weight
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
+    QCOMPARE(window.findChild<QStackedWidget *>("cardActionPages")->currentWidget()->objectName(), QString("cardActionTopUp"));
     QLineEdit *kg = window.findChild<QLineEdit *>("topUpKgField");
     QLineEdit *price = window.findChild<QLineEdit *>("topUpPriceField");
     QCOMPARE(price->text(), QString("7.50"));
@@ -11303,52 +11298,57 @@ void Smart210Test::theCardScreenRegistersTopsUpAndChecksThePin()
     kg->clear();
     total->clear();
 
-    // the fill: more than the card holds is refused before the PIN is asked
+    // the fill (the same button, now saying Fill, brings its page back): more than the card holds is refused before the PIN is asked
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
+    QCOMPARE(window.findChild<QStackedWidget *>("cardActionPages")->currentWidget()->objectName(), QString("cardActionFill"));
     QLineEdit *fillPin = window.findChild<QLineEdit *>("fillPinField");
     QLineEdit *fillKg = window.findChild<QLineEdit *>("fillKgField");
-    QComboBox *nozzle = window.findChild<QComboBox *>("fillNozzleCombo");
-    QPushButton *start = window.findChild<QPushButton *>("fillStartButton");
-    QCOMPARE(nozzle->count(), 2);                                           // the auto nozzles of the card's fuel type
+    QPushButton *ok = window.findChild<QPushButton *>("fillOkButton");
     fillKg->setText("12");
     cards->showCard("04 a1 b2");                                            // the same card read again: what was typed stays
     QCOMPARE(fillKg->text(), QString("12"));
     QCOMPARE(panels->currentIndex(), 2);
     fillKg->setText("60");
     fillPin->setText("9999");
-    start->click();
+    ok->click();
     QVERIFY(message->text().contains("holds only 53.33 kg"));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 0);
 
     // a wrong PIN counts
     fillKg->setText("10");
     fillPin->setText("9999");
-    start->click();
+    ok->click();
     QVERIFY(message->text().contains("Wrong PIN. 4 tries left"));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 1);
     QVERIFY(window.findChild<QLabel *>("cardState")->text().contains("1 wrong PINs"));
     QCOMPARE(fillPin->text(), QString());
 
-    // the right PIN is accepted and counts the wrong ones from zero; there is no board here, so the fill cannot start
+    // the right PIN is accepted and counts the wrong ones from zero; the ticket for the 10.00 kg is made
     fillPin->setText("1234");
-    start->click();
-    QVERIFY(message->text().contains("no connection"));
+    ok->click();
+    QVERIFY(message->text().contains("is made. The card holds 43.33 kg."));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 0);
-    QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(5333));
+    QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(4333));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL AND amount_kg = 1000").toInt(), 1);
 
     // five wrong PINs lock the card; it still shows, and can still be topped up
     for (int i = 0; i < 5; ++i) {
+        fillKg->setText("5");
         fillPin->setText("9999");
-        start->click();
+        ok->click();
     }
     QCOMPARE(Cards::find(db, "04A1B2").status, QString("locked"));
     QVERIFY(message->text().contains("locked"));
     QCOMPARE(window.findChild<QLabel *>("cardState")->text(), QString("Locked (wrong PINs)"));
+    fillKg->setText("5");
     fillPin->setText("1234");
-    start->click();
+    ok->click();
     QVERIFY(message->text().contains("locked"));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 1);
+    window.findChild<QPushButton *>("cardTopUpButton")->click();
     QTest::keyClicks(kg, "5");
     window.findChild<QPushButton *>("topUpButton")->click();
-    QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("58.33"));
+    QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("48.33"));
 }
 
 void Smart210Test::theMachineConfigSavesTheCardReader()
@@ -11430,8 +11430,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 7);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle
-    QCOMPARE(Migrator::version(db), 7);
+    QCOMPARE(Migrator::bundled().size(), 8);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket
+    QCOMPARE(Migrator::version(db), 8);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
@@ -11440,7 +11440,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QCOMPARE(columnsOf(db, "supplements").join(" "), QString("id fuel_type nozzle_id card_id supply_date supplied_at mode preset_kg density out_amount_lt "
                                                              "out_amount_kg comment board_result_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "remainders").join(" "), QString("id supplement_id ticket_barcode fuel_type amount_kg remainder_date created_at printed_at synced uploaded_at comment"));
-    QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at"));
+    QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at card_id"));   // (card_id came with migration 008, so it is the last)
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));

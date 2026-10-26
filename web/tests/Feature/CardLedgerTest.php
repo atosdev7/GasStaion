@@ -227,4 +227,70 @@ class CardLedgerTest extends TestCase
         $this->as('admin')->get('/cards/' . $card->id . '/history')->assertOk();
         $this->as('admin')->get('/cards/nothing/history')->assertNotFound();
     }
+
+    // a ticket made for a card (tickets.card_id): the card paid with its kg when it was made; restricting it gives them back, lifting takes them again
+    private function cardTicket($card, $kg, $serial = 1, $status = null)
+    {
+        return \App\Models\Tickets\Ticket::forceCreate([
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '21',
+            'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => $status ?: config('ticket_statuses.sale'),
+            'sale_date' => '2026-10-04 10:00:00', 'card_id' => $card->id,
+        ]);
+    }
+
+    public function testATicketMadeForACardIsAFillEntryAndRestrictingItGivesTheKgBack()
+    {
+        $card = $this->card();
+        $this->topUp($card, 40, '2026-10-01 09:00:00');
+        $ticket = $this->cardTicket($card, 15);
+
+        $entries = $this->ledger($card);
+        $this->assertSame(['topup', 'fill'], $entries->pluck('type')->all());
+        $this->assertEquals(-15, $entries[1]->kg);
+        $this->assertSame($ticket->barcode, $entries[1]->source_id);
+        $this->assertSame('ticket ' . $ticket->barcode, $entries[1]->comment);
+        $this->assertEquals(25, CardLedger::balance($card->id));
+        $this->assertEquals(25, $card->balanceFromRecords());                       // the records agree with the ledger
+
+        // saved again (supplied): nothing is counted twice
+        $ticket->forceFill(['status' => config('ticket_statuses.supply'), 'supply_date' => '2026-10-04 11:00:00'])->save();
+        $this->assertSame(2, CardTransaction::count());
+        $this->assertEquals(25, CardLedger::balance($card->id));
+
+        // an unused ticket is restricted: a reversal gives the 15 kg back (once)
+        $other = $this->cardTicket($card, 10, 2);
+        $this->assertEquals(15, CardLedger::balance($card->id));
+        $this->as('manager')->post('/tickets/' . $other->barcode . '/restrict')->assertSessionHas('status');
+        $this->assertSame(['topup', 'fill', 'fill', 'reversal'], $this->ledger($card)->pluck('type')->all());
+        $this->assertEquals(25, CardLedger::balance($card->id));
+        $this->assertEquals(25, $card->balanceFromRecords());                       // a restricted ticket is not a fill
+        $this->assertEquals(10, CardTransaction::where('type', 'reversal')->first()->kg);
+
+        // the restriction is lifted: the ticket is sold again (not blank stock) and the card pays again, in the same entry
+        $this->post('/tickets/' . $other->barcode . '/lift-restriction')->assertSessionHas('status');
+        $this->assertSame(config('ticket_statuses.sale'), (int) $other->fresh()->status);
+        $this->assertSame(4, CardTransaction::count());
+        $this->assertEquals(0, CardTransaction::where('type', 'reversal')->first()->kg);
+        $this->assertEquals(15, CardLedger::balance($card->id));
+
+        // restricted again: the same reversal gives the kg back again
+        $this->post('/tickets/' . $other->barcode . '/restrict')->assertSessionHas('status');
+        $this->assertSame(4, CardTransaction::count());
+        $this->assertEquals(25, CardLedger::balance($card->id));
+    }
+
+    public function testTheRebuildAlsoMakesTheEntriesOfTheTickets()
+    {
+        $card = $this->card();
+        $this->topUp($card, 40, '2026-10-01 09:00:00');
+        $this->cardTicket($card, 15);
+        $this->cardTicket($card, 5, 2, config('ticket_statuses.restrict'));
+        CardTransaction::query()->delete();
+
+        CardLedger::rebuild();
+
+        $this->assertSame(['topup', 'fill', 'fill', 'reversal'], $this->ledger($card)->pluck('type')->all());
+        $this->assertEquals(25, CardLedger::balance($card->id));
+        $this->assertEquals(25, $card->balanceFromRecords());
+    }
 }

@@ -25,6 +25,7 @@ public:
 
     void printSaleTicket(const QString &saleId);
     void printRemainderTicket(const QString &barcode);
+    void printCardTicket(const QString &barcode); // a ticket made for a card (Cards::issueTicket)
     void checkPrinter();
 
     // The ticket of a spot sale as it would be printed. False and `error` when the sale is not a spot sale of this terminal.
@@ -33,7 +34,10 @@ public:
     // The remainder ticket of a supply (its 16 digits) as it would be printed. False and `error` when there is no such ticket.
     bool remainderTicketOf(const QString &barcode, TicketData *ticket, QString *error) const;
 
-    // The long title of the ticket of a sale made for this use (sale, self, other, ticket_loan, remainder).
+    // The ticket made for a card (its 16 digits) as it would be printed.
+    bool cardTicketOf(const QString &barcode, TicketData *ticket, QString *error) const;
+
+    // The long title of the ticket of a sale made for this use (sale, self, other, ticket_loan, remainder, card).
     QString titleFor(const QString &usage) const;
 
     static const int DefaultPort = 9100;

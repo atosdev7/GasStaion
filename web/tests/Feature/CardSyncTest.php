@@ -393,4 +393,75 @@ class CardSyncTest extends TestCase
         $this->push('cards', [['id' => $card->id, 'uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D', 'failed_attempts' => 0, 'status' => 'active'] + CardPin::make('1234')]);
         $this->assertTrue((bool) $card->fresh()->free_payment);
     }
+
+    // the row of a ticket made for a card, as the terminal pushes it: no sale, the card
+    private function cardTicketRow($card, $offset, $kg = '15.00', $overrides = [])
+    {
+        return $overrides + [
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $offset), 'fuel_type' => 'D', 'amount_kg' => $kg,
+            'status' => config('ticket_statuses.sale'), 'sale_id' => null, 'sale_date' => '2026-10-04 10:00:00', 'supply_date' => null, 'supplement_id' => null,
+            'card_id' => $card->id,
+        ];
+    }
+
+    public function testATicketMadeForACardIsPushedAndTheCardPaysForItEvenWhenItHoldsLess()
+    {
+        $card = Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + CardPin::make('1234'));
+        $this->push('sales', [$this->saleRow($card)]);                                    // 40 kg topped up
+        $this->assertEquals(40, $card->balance());
+
+        $row = $this->cardTicketRow($card, 1);
+        $this->assertSame([$row['barcode']], $this->push('tickets', [$row])['saved']);
+        $ticket = \App\Models\Tickets\Ticket::find($row['barcode']);
+        $this->assertSame($card->id, $ticket->card_id);
+        $this->assertNull($ticket->sale_id);
+        $this->assertSame('21', $ticket->code);
+        $this->assertEquals(25, $card->balance());                                       // the ledger has the fill
+        $this->assertSame(['topup', 'fill'], \App\Models\Cards\CardTransaction::where('card_id', $card->id)->orderBy('seq')->pluck('type')->all());
+
+        // sent again, and then as supplied: nothing is counted twice
+        $this->push('tickets', [$row]);
+        $this->push('tickets', [array_merge($row, ['status' => config('ticket_statuses.supply'), 'supply_date' => '2026-10-04 11:00:00'])]);
+        $this->assertEquals(25, $card->balance());
+        $this->assertSame(config('ticket_statuses.supply'), (int) $ticket->fresh()->status);
+
+        // the card pays with kg it does not hold: the ticket is stored (the fuel is a fact) and the staff see it among the sync problems
+        $big = $this->cardTicketRow($card, 2, '30.00');
+        $this->assertSame([$big['barcode']], $this->push('tickets', [$big])['saved']);
+        $this->assertEquals(-5, $card->balance());
+        $this->assertSame(1, \App\Models\Admin\SyncError::where('entity', 'tickets')->where('record_id', $big['barcode'])->count());
+    }
+
+    public function testATicketMadeForACardThatBreaksTheRulesIsRefused()
+    {
+        $card = Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + CardPin::make('1234'));
+        $noSale = $this->cardTicketRow($card, 1, '15.00', ['card_id' => null]);
+
+        $bad = [
+            $noSale,                                                                                 // no card and no sale: a sold ticket needs its sale
+            $this->cardTicketRow($card, 2, '15.00', ['card_id' => (string) Str::uuid()]),             // an unknown card
+            $this->cardTicketRow($card, 3, '15.00', ['fuel_type' => 'A']),                            // not the fuel type of the card
+            $this->cardTicketRow($card, 4, '15.00', ['barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + 4)]),   // not the code of a direct ticket
+            $this->cardTicketRow($card, 5, '0'),                                                      // no weight
+        ];
+        $result = $this->push('tickets', $bad);
+
+        $this->assertSame([], $result['saved']);
+        $this->assertCount(5, $result['rejected']);
+        $this->assertSame(0, \App\Models\Tickets\Ticket::count());
+        $this->assertSame(0, \App\Models\Cards\CardTransaction::count());
+    }
+
+    public function testTheTicketsAreDownloadedWithTheirCard()
+    {
+        $card = Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + CardPin::make('1234'));
+        $row = $this->cardTicketRow($card, 1);
+        $this->push('tickets', [$row]);
+        \App\Models\Tickets\Ticket::where('barcode', $row['barcode'])->update(['synced' => false]);
+        Carbon::setTestNow(Carbon::now()->addSeconds(10));
+
+        $page = $this->payload($this->get('/api/pull/tickets')->assertOk());
+
+        $this->assertSame($card->id, collect($page['rows'])->firstWhere('barcode', $row['barcode'])['card_id']);
+    }
 }

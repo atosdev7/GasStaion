@@ -4,6 +4,7 @@
 #include "Decimal.h"
 #include "Settings.h"
 #include "TicketNumbers.h"
+#include "TicketStatus.h"
 
 #include <QDateTime>
 #include <QSqlError>
@@ -312,11 +313,11 @@ bool SyncStore::storeTicket(const QJsonObject &row, bool *stored, QString *error
     // The columns the web app does not send (supply_date, supplement_id) are kept as they are.
     QSqlQuery query(db_);
     if (exists) {
-        query.prepare("UPDATE tickets SET fuel_type = ?, spec = ?, amount_kg = ?, status = ?, sale_id = ?, sale_date = ?, synced = 1 "
+        query.prepare("UPDATE tickets SET fuel_type = ?, spec = ?, amount_kg = ?, status = ?, sale_id = ?, sale_date = ?, card_id = ?, synced = 1 "
                       "WHERE barcode = ?");
     } else {
-        query.prepare("INSERT INTO tickets (fuel_type, spec, amount_kg, status, sale_id, sale_date, synced, barcode) "
-                      "VALUES (?, ?, ?, ?, ?, ?, 1, ?)");
+        query.prepare("INSERT INTO tickets (fuel_type, spec, amount_kg, status, sale_id, sale_date, card_id, synced, barcode) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)");
     }
     query.addBindValue(row.value("fuel_type").toString());
     query.addBindValue(intOrNull(row.value("spec")));
@@ -324,6 +325,7 @@ bool SyncStore::storeTicket(const QJsonObject &row, bool *stored, QString *error
     query.addBindValue(row.value("status").toInt());
     query.addBindValue(textOrNull(row.value("sale_id")));
     query.addBindValue(textOrNull(row.value("sale_date")));
+    query.addBindValue(textOrNull(row.value("card_id")));
     query.addBindValue(barcode);
 
     return run(query, error);
@@ -396,11 +398,17 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     QSqlQuery supplies(db_);
     supplies.prepare("SELECT COALESCE(SUM(out_amount_kg), 0) FROM supplements WHERE card_id = ? AND synced = 0");
     supplies.addBindValue(id);
+    QSqlQuery tickets(db_); // the tickets made for the card here that the web app has not counted yet
+    tickets.prepare(QString("SELECT COALESCE(SUM(amount_kg), 0) FROM tickets WHERE card_id = ? AND synced = 0 AND status IN (%1, %2)").arg(TicketStatus::Sale).arg(TicketStatus::Supply));
+    tickets.addBindValue(id);
     if (topUps.exec() && topUps.next()) {
         balance += topUps.value(0).toLongLong();
     }
     if (supplies.exec() && supplies.next()) {
         balance -= supplies.value(0).toLongLong();
+    }
+    if (tickets.exec() && tickets.next()) {
+        balance -= tickets.value(0).toLongLong();
     }
 
     QSqlQuery query(db_);

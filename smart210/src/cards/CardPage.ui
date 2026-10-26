@@ -121,6 +121,13 @@
            </spacer>
           </item>
           <item>
+           <widget class="QPushButton" name="cardTopUpButton">
+            <property name="text"><string>Top Up</string></property>
+            <property name="enabled"><bool>false</bool></property>
+            <property name="minimumSize"><size><width>160</width><height>44</height></size></property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="cardHistoryButton">
             <property name="text"><string>History</string></property>
             <property name="enabled"><bool>false</bool></property>
@@ -244,57 +251,95 @@
       </layout>
      </widget>
      <widget class="QWidget" name="cardPanelCard">
-      <layout class="QHBoxLayout" name="cardPanelLayout" stretch="0,1">
+      <layout class="QVBoxLayout" name="cardPanelLayout">
        <property name="leftMargin"><number>9</number></property><property name="topMargin"><number>9</number></property><property name="rightMargin"><number>9</number></property><property name="bottomMargin"><number>9</number></property>
        <property name="spacing"><number>12</number></property>
        <item>
-        <layout class="QVBoxLayout" name="cardActionsColumn">
-         <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
-         <property name="spacing"><number>6</number></property>
-         <item>
-        <widget class="QPushButton" name="cardTopUpButton">
-         <property name="text"><string>Top Up</string></property>
-         <property name="checkable"><bool>true</bool></property>
-         <property name="autoExclusive"><bool>true</bool></property>
-         <property name="minimumSize"><size><width>200</width><height>56</height></size></property>
-        </widget>
-       </item>
-         <item>
-        <widget class="QPushButton" name="cardFillAutoButton">
-         <property name="text"><string>Fill Auto</string></property>
-         <property name="checkable"><bool>true</bool></property>
-         <property name="autoExclusive"><bool>true</bool></property>
-         <property name="minimumSize"><size><width>200</width><height>56</height></size></property>
-        </widget>
-       </item>
-         <item>
-        <widget class="QPushButton" name="cardFillManualButton">
-         <property name="text"><string>Fill Manual</string></property>
-         <property name="checkable"><bool>true</bool></property>
-         <property name="autoExclusive"><bool>true</bool></property>
-         <property name="minimumSize"><size><width>200</width><height>56</height></size></property>
-        </widget>
-       </item>
-         <item>
-          <spacer name="spacerActions">
-           <property name="orientation"><enum>Qt::Vertical</enum></property>
-           <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
-           <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-       <item>
         <widget class="QStackedWidget" name="cardActionPages">
-         <widget class="QWidget" name="cardActionNone">
-          <layout class="QVBoxLayout" name="cardActionNoneLayout">
+         <widget class="QWidget" name="cardActionFill">
+          <layout class="QVBoxLayout" name="cardActionFillLayout">
            <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
            <item>
-            <widget class="QLabel" name="cardActionNoneLabel">
-             <property name="text"><string>Choose Top Up, Fill Auto or Fill Manual.</string></property>
-             <property name="wordWrap"><bool>true</bool></property>
-             <property name="alignment"><set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set></property>
+            <widget class="QGroupBox" name="fillBox">
+             <property name="title"><string>Fill</string></property>
+             <layout class="QVBoxLayout" name="fillLayout">
+              <property name="leftMargin"><number>9</number></property><property name="topMargin"><number>9</number></property><property name="rightMargin"><number>9</number></property><property name="bottomMargin"><number>9</number></property>
+              <property name="spacing"><number>6</number></property>
+              <item>
+               <layout class="QFormLayout" name="fillForm">
+                <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+                <property name="spacing"><number>6</number></property>
+                <item row="0" column="0">
+                 <widget class="QLabel" name="fillKgFieldLabel">
+                  <property name="text"><string>Weight (kg)</string></property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QLineEdit" name="fillKgField">
+                  <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="fillPinFieldLabel">
+                  <property name="text"><string>PIN</string></property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QLineEdit" name="fillPinField">
+                  <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+                  <property name="maxLength"><number>8</number></property>
+                  <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QPushButton" name="fillOkButton">
+                <property name="text"><string>OK</string></property>
+                <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
+               </widget>
+              </item>
+             </layout>
             </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="ticketBox">
+             <property name="title"><string>Last ticket</string></property>
+             <layout class="QVBoxLayout" name="ticketLayout">
+              <property name="leftMargin"><number>9</number></property><property name="topMargin"><number>9</number></property><property name="rightMargin"><number>9</number></property><property name="bottomMargin"><number>9</number></property>
+              <property name="spacing"><number>6</number></property>
+              <item>
+               <widget class="QLabel" name="ticketLabel">
+                <property name="wordWrap"><bool>true</bool></property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="ticketButtons">
+                <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+                <property name="spacing"><number>6</number></property>
+                <item>
+                 <widget class="QPushButton" name="ticketPrintButton">
+                  <property name="text"><string>Print again</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="ticketCancelButton">
+                  <property name="text"><string>Cancel ticket</string></property>
+                  <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <spacer name="spacerFill">
+             <property name="orientation"><enum>Qt::Vertical</enum></property>
+             <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
+             <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+            </spacer>
            </item>
           </layout>
          </widget>
@@ -357,175 +402,6 @@
           </item>
           <item>
            <spacer name="spacer2">
-            <property name="orientation"><enum>Qt::Vertical</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
-            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-         <widget class="QWidget" name="cardActionFillAuto">
-      <layout class="QVBoxLayout" name="cardActionFillAutoLayout">
-       <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
-       <item>
-        <widget class="QGroupBox" name="fillBox">
-         <property name="title"><string>Fill Auto</string></property>
-         <layout class="QVBoxLayout" name="fillLayout">
-          <property name="leftMargin"><number>9</number></property>
-          <property name="topMargin"><number>9</number></property>
-          <property name="rightMargin"><number>9</number></property>
-          <property name="bottomMargin"><number>9</number></property>
-          <property name="spacing"><number>6</number></property>
-          <item>
-           <layout class="QFormLayout" name="fillForm">
-            <property name="leftMargin"><number>0</number></property>
-            <property name="topMargin"><number>0</number></property>
-            <property name="rightMargin"><number>0</number></property>
-            <property name="bottomMargin"><number>0</number></property>
-            <property name="spacing"><number>6</number></property>
-            <item row="0" column="0">
-             <widget class="QLabel" name="fillKgFieldLabel">
-              <property name="text"><string>Weight (kg)</string></property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QLineEdit" name="fillKgField">
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="fillNozzleComboLabel">
-              <property name="text"><string>Nozzle</string></property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QComboBox" name="fillNozzleCombo">
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="fillNozzleStateLabel">
-              <property name="text"><string>Nozzle status</string></property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QLabel" name="fillNozzleState">
-             </widget>
-            </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="fillPinFieldLabel">
-              <property name="text"><string>PIN</string></property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QLineEdit" name="fillPinField">
-              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
-              <property name="maxLength"><number>8</number></property>
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QPushButton" name="fillStartButton">
-            <property name="text"><string>Start fill</string></property>
-            <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="spacer3">
-            <property name="orientation"><enum>Qt::Vertical</enum></property>
-            <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
-            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-         <widget class="QWidget" name="cardActionFillManual">
-      <layout class="QVBoxLayout" name="cardActionFillManualLayout">
-       <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
-       <item>
-        <widget class="QGroupBox" name="fillManualBox">
-         <property name="title"><string>Fill Manual</string></property>
-         <layout class="QVBoxLayout" name="fillManualLayout">
-          <property name="leftMargin"><number>9</number></property>
-          <property name="topMargin"><number>9</number></property>
-          <property name="rightMargin"><number>9</number></property>
-          <property name="bottomMargin"><number>9</number></property>
-          <property name="spacing"><number>6</number></property>
-          <item>
-           <widget class="QLabel" name="fillManualHint">
-            <property name="text"><string>The supplier filled at a manual nozzle: type what came out.</string></property>
-            <property name="wordWrap"><bool>true</bool></property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QFormLayout" name="fillManualForm">
-            <property name="leftMargin"><number>0</number></property>
-            <property name="topMargin"><number>0</number></property>
-            <property name="rightMargin"><number>0</number></property>
-            <property name="bottomMargin"><number>0</number></property>
-            <property name="spacing"><number>6</number></property>
-            <item row="0" column="0">
-             <widget class="QLabel" name="manualNozzleComboLabel">
-              <property name="text"><string>Nozzle</string></property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QComboBox" name="manualNozzleCombo">
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="manualKgFieldLabel">
-              <property name="text"><string>Dispensed (kg)</string></property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QLineEdit" name="manualKgField">
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-            <item row="2" column="0">
-             <widget class="QLabel" name="manualLitersFieldLabel">
-              <property name="text"><string>Litres</string></property>
-             </widget>
-            </item>
-            <item row="2" column="1">
-             <widget class="QLineEdit" name="manualLitersField">
-              <property name="readOnly"><bool>true</bool></property>
-              <property name="focusPolicy"><enum>Qt::NoFocus</enum></property>
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="manualPinFieldLabel">
-              <property name="text"><string>PIN</string></property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QLineEdit" name="manualPinField">
-              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
-              <property name="maxLength"><number>8</number></property>
-              <property name="minimumSize"><size><width>0</width><height>40</height></size></property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QPushButton" name="manualSaveButton">
-            <property name="text"><string>Save fill</string></property>
-            <property name="minimumSize"><size><width>0</width><height>56</height></size></property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="spacer4">
             <property name="orientation"><enum>Qt::Vertical</enum></property>
             <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
             <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>

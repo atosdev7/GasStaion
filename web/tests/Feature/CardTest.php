@@ -595,4 +595,32 @@ class CardTest extends TestCase
         $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => 'yesterday'])->assertSessionHasErrors('sale_date');
         $this->assertSame(2, Sale::where('sale_type', 'card')->count());
     }
+
+    public function testTheTicketsMadeForACardAreItsUseInTheSummaryAndTheHistoryRecords()
+    {
+        $card = $this->card('AA01', 'Li Wei', 'D');
+        $this->topUp($card, 100, '2026-09-20');
+        $make = function ($serial, $kg, $day, $status = null) use ($card) {
+            return Ticket::forceCreate([
+                'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '21',
+                'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => $status ?: config('ticket_statuses.sale'), 'sale_date' => $day . ' 10:00:00',
+                'card_id' => $card->id,
+            ]);
+        };
+        $make(1, 30, '2026-09-25');                                                              // before the period
+        $make(2, 20, '2026-10-06');                                                              // in it
+        $make(3, 5, '2026-10-07', config('ticket_statuses.restrict'));                           // restricted: the kg went back, it is not a use
+
+        $rows = collect($this->as('accountant')->get('/card-summary?from=2026-10-01&to=2026-10-31')->assertOk()->viewData('rows'))->keyBy(function ($row) {
+            return $row['card']->uid;
+        });
+        $this->assertEquals(['opening' => 70, 'topped_kg' => 0, 'used_kg' => 20, 'closing' => 50], collect($rows['AA01'])->only(['opening', 'topped_kg', 'used_kg', 'closing'])->all());
+
+        // the ledger and the records agree, and the history page shows both numbers
+        $this->assertEquals(50, $card->balance());
+        $this->assertEquals(50, $card->balanceFromRecords());
+        $page = $this->get('/cards/' . $card->id . '/history')->assertOk();
+        $this->assertEquals(50, $page->viewData('balance'));
+        $this->assertEquals(50, $page->viewData('recordsBalance'));
+    }
 }
