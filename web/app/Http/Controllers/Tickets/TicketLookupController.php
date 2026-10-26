@@ -8,12 +8,15 @@ use App\Models\Tickets\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+// Two tabs: the tickets printed by the press (published stock: batches, specs) and the tickets issued by a POS (the Smart210: spot sales, a card's fill, own use,
+// loans, remainders: the reserved codes). Each is a table with its own filters; the POS tab also shows how many times a ticket was printed.
 // Read-only: a table of the tickets with filters and pages, so that the situation of the tickets can be checked by a list; the Details button
 // of a ticket opens a popup with its full lifecycle (published -> sold -> supplied/restricted, plus how it was sold and, if applicable,
 // which loan it settled).
 class TicketLookupController extends Controller
 {
     const PER_PAGE = 50;
+    const POS_TYPES = ['direct', 'card', 'self', 'other', 'ticket_loan', 'remainder'];
 
     public function index(Request $request)
     {
@@ -31,6 +34,9 @@ class TicketLookupController extends Controller
 
         // the table of tickets and its filters
         $filters = $request->validate([
+            'tab' => ['nullable', Rule::in(['press', 'pos'])],
+            'type' => ['nullable', Rule::in(self::POS_TYPES)],
+            'printed' => ['nullable', Rule::in(['yes', 'no'])],
             'status' => ['nullable', Rule::in(array_values(config('ticket_statuses')))],
             'fuel_type' => ['nullable', Rule::in(array_keys(config('fuel_types')))],
             'spec' => ['nullable', Rule::in(array_keys(config('ticket_specs')))],
@@ -41,7 +47,29 @@ class TicketLookupController extends Controller
             'q' => 'nullable|string|max:16',
         ]);
 
+        $tab = ($filters['tab'] ?? 'press') === 'pos' ? 'pos' : 'press';
+        $reserved = array_values(config('ticket_reserved_codes'));
         $base = Ticket::query();
+        if ($tab === 'pos') {
+            $base->whereIn('code', $reserved);
+            if (!empty($filters['type'])) {
+                $base->where('code', config('ticket_reserved_codes.' . ($filters['type'] === 'card' ? 'direct' : $filters['type'])));
+                if ($filters['type'] === 'card') {
+                    $base->whereNotNull('card_id');
+                } elseif ($filters['type'] === 'direct') {
+                    $base->whereNull('card_id');
+                }
+            }
+            if (($filters['printed'] ?? '') === 'yes') {
+                $base->where('print_count', '>', 0);
+            } elseif (($filters['printed'] ?? '') === 'no') {
+                $base->where('print_count', 0);
+            }
+        } else {
+            $base->where(function ($q) use ($reserved) {
+                $q->whereNull('code')->orWhereNotIn('code', $reserved);
+            });
+        }
         if (isset($filters['fuel_type']) && $filters['fuel_type'] !== '') {
             $base->where('fuel_type', $filters['fuel_type']);
         }
@@ -78,6 +106,8 @@ class TicketLookupController extends Controller
             'filters' => $filters,
             'tickets' => $tickets,
             'perStatus' => $perStatus,
+            'tab' => $tab,
+            'posTypes' => self::POS_TYPES,
         ]);
     }
 }

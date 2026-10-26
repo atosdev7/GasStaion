@@ -51,6 +51,17 @@ class Ticket extends Model
     protected $keyType = 'string'; // a zero-padded 16-digit code, not a quantity — see App\Support\Tickets\Barcode
     public $incrementing = false;
 
+    // What a ticket issued by a POS is: direct (a spot sale), card (made for a card), self, other, ticket_loan or remainder; null for a press ticket.
+    public function posType()
+    {
+        $name = array_search($this->code, config('ticket_reserved_codes'), true);
+        if ($name === 'direct' && $this->card_id) {
+            return 'card';
+        }
+
+        return $name === false ? null : $name;
+    }
+
     // The batch the ticket was published in.
     public function batch()
     {

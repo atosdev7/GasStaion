@@ -65,7 +65,7 @@ class TicketRestrictController extends Controller
     private function back(Request $request, $barcode, $done, $action, $okMessage, $errorMessage)
     {
         parse_str((string) $request->input('back', ''), $filters);
-        $filters = array_intersect_key($filters, array_flip(['status', 'fuel_type', 'spec', 'batch', 'published', 'sold', 'supplied', 'q', 'page']));
+        $filters = array_intersect_key($filters, array_flip(['tab', 'type', 'printed', 'status', 'fuel_type', 'spec', 'batch', 'published', 'sold', 'supplied', 'q', 'page']));
         $redirect = redirect()->route('tickets.lookup', array_filter($filters, 'is_scalar'));
 
         if (!$done) {

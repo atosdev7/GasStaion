@@ -69,8 +69,56 @@ class TicketLookupTest extends TestCase
             ->assertSee(__('tickets.print_count'))->assertSee('2026-10-06 10:30:00');
         // a ticket that was never printed shows no line about it
         $this->as('manager')->get('/tickets/lookup?modal=1&barcode=0000021500000002')->assertOk()->assertDontSee(__('tickets.last_printed_at'));
-        // the list has a column with the count
-        $this->as('manager')->get('/tickets/lookup')->assertOk()->assertSee(__('tickets.print_count'));
+        // the list of the POS tab has a column with the count (the press tab has none)
+        $this->as('manager')->get('/tickets/lookup?tab=pos')->assertOk()->assertSee(__('tickets.print_count'));
+        $this->as('manager')->get('/tickets/lookup')->assertOk()->assertDontSee(__('tickets.print_count'));
+    }
+
+    // the two tabs: the press tickets (published stock) and the POS tickets (the reserved codes), each with its own filters
+    public function testThePageHasATabForPressTicketsAndATabForPosTickets()
+    {
+        $press = Ticket::forceCreate([
+            'barcode' => '0000006000000001', 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => 1, 'status' => config('ticket_statuses.publish'),
+        ]);
+        $make = function ($serial, $code, $extra = []) {
+            return Ticket::forceCreate($extra + [
+                'barcode' => '00000' . $code . str_pad((string) (500000000 + $serial), 9, '0', STR_PAD_LEFT), 'fuel_type' => 'D', 'spec' => null, 'code' => $code,
+                'serial' => 500000000 + $serial, 'amount_kg' => 5, 'status' => config('ticket_statuses.sale'), 'sale_date' => '2026-10-06 10:00:00',
+            ]);
+        };
+        $spot = $make(1, '21');
+        $card = $make(2, '21', ['card_id' => '11111111-1111-1111-1111-111111111111', 'print_count' => 2]);
+        $self = $make(3, '22');
+        $remainder = $make(4, '25');
+
+        // the press tab (the first) lists the press tickets only, with the two tabs on top
+        $page = $this->as('manager')->get('/tickets/lookup')->assertOk()
+            ->assertSee(__('tickets.tab_press'))->assertSee(__('tickets.tab_pos'))
+            ->assertSee($press->barcode)->assertDontSee($spot->barcode)->assertDontSee($remainder->barcode);
+        $this->assertSame('press', $page->viewData('tab'));
+
+        // the POS tab lists the tickets of the reserved codes only, with their type
+        $page = $this->as('manager')->get('/tickets/lookup?tab=pos')->assertOk()
+            ->assertSee($spot->barcode)->assertSee($card->barcode)->assertSee($self->barcode)->assertSee($remainder->barcode)->assertDontSee($press->barcode)
+            ->assertSee(__('tickets.pos_type_card'))->assertSee(__('tickets.pos_type_remainder'));
+        $this->assertSame('pos', $page->viewData('tab'));
+        $this->assertSame(4, $page->viewData('tickets')->total());
+
+        // its filters: the type (a card's ticket is not a spot sale's), printed or not
+        $barcodes = function ($query) {
+            return $this->as('manager')->get('/tickets/lookup?tab=pos&' . $query)->assertOk()->viewData('tickets')->pluck('barcode')->all();
+        };
+        $this->assertSame([$spot->barcode], $barcodes('type=direct'));
+        $this->assertSame([$card->barcode], $barcodes('type=card'));
+        $this->assertSame([$self->barcode], $barcodes('type=self'));
+        $this->assertSame([$card->barcode], $barcodes('printed=yes'));
+        $this->assertCount(3, $barcodes('printed=no'));
+        $this->as('manager')->get('/tickets/lookup?tab=pos&type=nonsense')->assertSessionHasErrors('type');
+        $this->as('manager')->get('/tickets/lookup?tab=nonsense')->assertSessionHasErrors('tab');
+
+        // a POS ticket can be restricted from its tab, and the page comes back to the tab
+        $this->post('/tickets/' . $spot->barcode . '/restrict', ['back' => 'tab=pos&type=direct'])->assertRedirect(route('tickets.lookup', ['tab' => 'pos', 'type' => 'direct']));
+        $this->assertSame(config('ticket_statuses.restrict'), (int) $spot->fresh()->status);
     }
 
     public function testLookupShowsASoldTicketWithSaleDetails()
