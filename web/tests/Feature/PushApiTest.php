@@ -702,6 +702,29 @@ class PushApiTest extends TestCase
         $this->assertTrue((bool) $ticket->synced); // the device has it already: not sent back
     }
 
+    public function testTheTerminalReportsHowManyTimesATicketWasPrintedAndTheLargerCountWins()
+    {
+        // a new ticket arrives with its prints
+        $row = $this->ticketRow($this->deviceBarcode(1), ['print_count' => 2, 'last_printed_at' => '2026-10-06 10:05:00']);
+        $this->assertSame([$row['barcode']], $this->push('tickets', [$row])['saved']);
+        $ticket = Ticket::find($row['barcode']);
+        $this->assertSame(2, (int) $ticket->print_count);
+        $this->assertSame('2026-10-06 10:05:00', (string) $ticket->last_printed_at);
+
+        // printed again after the upload: the same ticket goes up again with a larger count
+        $this->assertSame([$row['barcode']], $this->push('tickets', [array_merge($row, ['print_count' => 3, 'last_printed_at' => '2026-10-06 10:30:00'])])['saved']);
+        $ticket = Ticket::find($row['barcode']);
+        $this->assertSame(3, (int) $ticket->print_count);
+        $this->assertSame('2026-10-06 10:30:00', (string) $ticket->last_printed_at);
+
+        // an older upload (a smaller count) takes nothing away; a ticket without the fields leaves them as they are
+        $this->push('tickets', [array_merge($row, ['print_count' => 1, 'last_printed_at' => '2026-10-06 10:01:00'])]);
+        unset($row['print_count'], $row['last_printed_at']);
+        $this->push('tickets', [$row]);
+        $this->assertSame(3, (int) Ticket::find($row['barcode'])->print_count);
+        $this->assertSame('2026-10-06 10:30:00', (string) Ticket::find($row['barcode'])->last_printed_at);
+    }
+
     public function testARemainderTicketNeedsNoSale()
     {
         $row = $this->ticketRow($this->deviceBarcode(1, '25'), ['sale_id' => null, 'sale_date' => '2026-10-06 11:01:00']);

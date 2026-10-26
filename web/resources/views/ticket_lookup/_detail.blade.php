@@ -27,6 +27,12 @@
                     <th>{{ __('tickets.status') }}</th>
                     <td><span class="badge {{ $ticket->status === config('ticket_statuses.restrict') ? 'badge-danger' : 'badge-info' }}">{{ __('tickets.ticket_status_' . array_search($ticket->status, config('ticket_statuses'))) }}</span></td>
                 </tr>
+                @if ($ticket->print_count > 0)
+                    <tr>
+                        <th>{{ __('tickets.print_count') }}</th>
+                        <td>{{ $ticket->print_count }} ({{ __('tickets.last_printed_at') }}: {{ $ticket->last_printed_at }})</td>
+                    </tr>
+                @endif
             </table>
         </div>
         @can('tickets.restrict')

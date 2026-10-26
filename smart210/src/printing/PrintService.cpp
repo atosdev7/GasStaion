@@ -8,9 +8,24 @@
 #include <QVariant>
 
 PrintService::PrintService(QSqlDatabase db, const PrintOptions &options, QObject *parent)
-    : QObject(parent), db_(db), options_(options), connection_(this)
+    : QObject(parent), db_(db), options_(options), connection_(this), printing_(-1)
 {
-    connect(&connection_, SIGNAL(finished(bool,QString)), this, SIGNAL(finished(bool,QString)));
+    connect(&connection_, SIGNAL(finished(bool,QString)), this, SLOT(jobFinished(bool,QString)));
+}
+
+// The printer took the ticket: it was printed one more time (the ticket goes up again with its new count).
+void PrintService::jobFinished(bool ok, const QString &message)
+{
+    if (ok && printing_ >= 0) {
+        QSqlQuery count(db_);
+        count.prepare("UPDATE tickets SET print_count = print_count + 1, last_printed_at = ?, synced = 0 WHERE barcode = ?");
+        count.addBindValue(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+        count.addBindValue(printing_);
+        count.exec();
+    }
+    printing_ = -1;
+
+    emit finished(ok, message);
 }
 
 bool PrintService::hasPrinter() const
@@ -113,6 +128,7 @@ void PrintService::printCardTicket(const QString &barcode)
         return;
     }
 
+    printing_ = Barcode::toKey(ticket.barcode);
     Settings settings(db_);
     connection_.send(settings.value(SettingKey::PrinterHost), settings.intValue(SettingKey::PrinterPort, DefaultPort),
                      TicketRenderer::render(ticket, options_));
@@ -133,6 +149,7 @@ void PrintService::printRemainderTicket(const QString &barcode)
         return;
     }
 
+    printing_ = Barcode::toKey(ticket.barcode);
     Settings settings(db_);
     connection_.send(settings.value(SettingKey::PrinterHost), settings.intValue(SettingKey::PrinterPort, DefaultPort),
                      TicketRenderer::render(ticket, options_));
@@ -153,6 +170,7 @@ void PrintService::printSaleTicket(const QString &saleId)
         return;
     }
 
+    printing_ = Barcode::toKey(ticket.barcode);
     Settings settings(db_);
     connection_.send(settings.value(SettingKey::PrinterHost), settings.intValue(SettingKey::PrinterPort, DefaultPort),
                      TicketRenderer::render(ticket, options_));

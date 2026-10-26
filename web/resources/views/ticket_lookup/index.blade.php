@@ -46,6 +46,7 @@
                     <th>{{ __('tickets.ticket_publish_date') }}</th>
                     <th>{{ __('tickets.sold_at') }}</th>
                     <th>{{ __('tickets.supplied_at') }}</th>
+                    <th class="text-right">{{ __('tickets.print_count') }}</th>
                     <th class="text-right">{{ __('tickets.actions') }}</th>
                 </tr>
                 <tr class="filters">
@@ -77,6 +78,7 @@
                     <th><input name="published" form="ticket-filters" type="date" value="{{ $filters['published'] ?? '' }}" class="form-control form-control-sm" onchange="document.getElementById('ticket-filters').submit()"></th>
                     <th><input name="sold" form="ticket-filters" type="date" value="{{ $filters['sold'] ?? '' }}" class="form-control form-control-sm" onchange="document.getElementById('ticket-filters').submit()"></th>
                     <th><input name="supplied" form="ticket-filters" type="date" value="{{ $filters['supplied'] ?? '' }}" class="form-control form-control-sm" onchange="document.getElementById('ticket-filters').submit()"></th>
+                    <th></th>
                     <th class="text-right">
                         <button type="submit" form="ticket-filters" class="btn btn-sm btn-primary">{{ __('tickets.show') }}</button>
                         <a href="{{ route('tickets.lookup') }}" class="btn btn-sm btn-default">{{ __('tickets.clear_filters') }}</a>
@@ -93,6 +95,7 @@
                         <td>{{ $t->batch && $t->batch->date ? substr((string) $t->batch->date, 0, 10) : substr((string) $t->publish_date, 0, 10) }}</td>
                         <td>{{ substr((string) $t->sale_date, 0, 10) }}</td>
                         <td>{{ substr((string) $t->supply_date, 0, 10) }}</td>
+                        <td class="text-right">{{ $t->print_count > 0 ? $t->print_count : '' }}</td>
                         <td class="text-right">
                             <a href="{{ route('tickets.lookup', array_merge(request()->query(), ['barcode' => $t->barcode])) }}" class="btn btn-sm btn-outline-secondary ticket-detail" data-barcode="{{ $t->barcode }}">{{ __('tickets.ticket_details') }}</a>
                             @can('tickets.restrict')
@@ -115,7 +118,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
+                    <tr><td colspan="9" class="text-muted">{{ __('tickets.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

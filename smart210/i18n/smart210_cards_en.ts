@@ -177,12 +177,12 @@
         <translation type="vanished">Choose Top Up, Fill Auto or Fill Manual.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.ui" line="387"/>
+        <location filename="../src/cards/CardPage.ui" line="386"/>
         <source>Total payment</source>
         <translation>Total payment</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.ui" line="399"/>
+        <location filename="../src/cards/CardPage.ui" line="398"/>
         <source>Top up</source>
         <translation>Top up</translation>
     </message>
@@ -203,13 +203,13 @@
         <translation type="vanished">Save fill</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.ui" line="351"/>
+        <location filename="../src/cards/CardPage.ui" line="350"/>
         <source>Top up (cash)</source>
         <translation>Top up (cash)</translation>
     </message>
     <message>
         <location filename="../src/cards/CardPage.ui" line="274"/>
-        <location filename="../src/cards/CardPage.ui" line="367"/>
+        <location filename="../src/cards/CardPage.ui" line="366"/>
         <source>Weight (kg)</source>
         <translation>Weight (kg)</translation>
     </message>
@@ -230,12 +230,12 @@
     </message>
     <message>
         <location filename="../src/cards/CardPage.ui" line="328"/>
-        <location filename="../src/cards/CardPage.cpp" line="553"/>
+        <location filename="../src/cards/CardPage.cpp" line="554"/>
         <source>Cancel ticket</source>
         <translation>Cancel ticket</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.ui" line="377"/>
+        <location filename="../src/cards/CardPage.ui" line="376"/>
         <source>Price per kg</source>
         <translation>Price per kg</translation>
     </message>
@@ -382,8 +382,16 @@ The card holds %3 kg.</translation>
     <message>
         <location filename="../src/cards/CardPage.cpp" line="501"/>
         <source>%1
-%2 kg, %3</source>
+%2 kg, %3
+Printed: %4</source>
         <translation>%1
+%2 kg, %3
+Printed: %4</translation>
+    </message>
+    <message>
+        <source>%1
+%2 kg, %3</source>
+        <translation type="vanished">%1
 %2 kg, %3</translation>
     </message>
     <message>
@@ -402,24 +410,24 @@ The card holds %3 kg.</translation>
         <translation>The ticket %1.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="539"/>
+        <location filename="../src/cards/CardPage.cpp" line="540"/>
         <source>The ticket was sent to the printer.</source>
         <translation>The ticket was sent to the printer.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="539"/>
+        <location filename="../src/cards/CardPage.cpp" line="540"/>
         <source>It was not printed: %1 Print again prints it.</source>
         <translation>It was not printed: %1 Print again prints it.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="553"/>
+        <location filename="../src/cards/CardPage.cpp" line="554"/>
         <source>Cancel the ticket %1 (%2 kg)?
 The kg go back to the card.</source>
         <translation>Cancel the ticket %1 (%2 kg)?
 The kg go back to the card.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="569"/>
+        <location filename="../src/cards/CardPage.cpp" line="570"/>
         <source>The ticket %1 is cancelled: %2 kg are back on the card. The card holds %3 kg.</source>
         <translation>The ticket %1 is cancelled: %2 kg are back on the card. The card holds %3 kg.</translation>
     </message>

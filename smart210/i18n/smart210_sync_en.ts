@@ -37,50 +37,50 @@
 <context>
     <name>PrintService</name>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="29"/>
+        <location filename="../src/printing/PrintService.cpp" line="44"/>
         <source>Gas Station Self Use Ticket</source>
         <translation>Gas Station Self Use Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="32"/>
+        <location filename="../src/printing/PrintService.cpp" line="47"/>
         <source>Gas Station Other Use Ticket</source>
         <translation>Gas Station Other Use Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="35"/>
+        <location filename="../src/printing/PrintService.cpp" line="50"/>
         <source>Gas Station Ticket Loan Voucher</source>
         <translation>Gas Station Ticket Loan Voucher</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="38"/>
+        <location filename="../src/printing/PrintService.cpp" line="53"/>
         <source>Gas Station Remainder Ticket</source>
         <translation>Gas Station Remainder Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="41"/>
+        <location filename="../src/printing/PrintService.cpp" line="56"/>
         <source>Gas Station Card Fuel Ticket</source>
         <translation>Gas Station Card Fuel Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="44"/>
+        <location filename="../src/printing/PrintService.cpp" line="59"/>
         <source>Gas Station Fuel Ticket</source>
         <translation>Gas Station Fuel Ticket</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="55"/>
+        <location filename="../src/printing/PrintService.cpp" line="70"/>
         <source>There is no ticket to print for this sale.</source>
         <translation>There is no ticket to print for this sale.</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="77"/>
+        <location filename="../src/printing/PrintService.cpp" line="92"/>
         <source>There is no ticket to print.</source>
         <translation>There is no ticket to print.</translation>
     </message>
     <message>
-        <location filename="../src/printing/PrintService.cpp" line="111"/>
-        <location filename="../src/printing/PrintService.cpp" line="131"/>
-        <location filename="../src/printing/PrintService.cpp" line="151"/>
-        <location filename="../src/printing/PrintService.cpp" line="164"/>
+        <location filename="../src/printing/PrintService.cpp" line="126"/>
+        <location filename="../src/printing/PrintService.cpp" line="147"/>
+        <location filename="../src/printing/PrintService.cpp" line="168"/>
+        <location filename="../src/printing/PrintService.cpp" line="182"/>
         <source>No printer is set up. Enter its address on the Machine Config page.</source>
         <translation>No printer is set up. Enter its address on the Machine Config page.</translation>
     </message>
@@ -182,17 +182,17 @@
 <context>
     <name>Uploader</name>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="439"/>
+        <location filename="../src/sync/Uploader.cpp" line="441"/>
         <source>No server is set up.</source>
         <translation>No server is set up.</translation>
     </message>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="606"/>
+        <location filename="../src/sync/Uploader.cpp" line="608"/>
         <source>Uploaded %1 records. The server refused %2: see the list of refused records.</source>
         <translation>Uploaded %1 records. The server refused %2: see the list of refused records.</translation>
     </message>
     <message>
-        <location filename="../src/sync/Uploader.cpp" line="607"/>
+        <location filename="../src/sync/Uploader.cpp" line="609"/>
         <source>Uploaded %1 records.</source>
         <translation>Uploaded %1 records.</translation>
     </message>

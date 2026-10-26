@@ -313,11 +313,12 @@ bool SyncStore::storeTicket(const QJsonObject &row, bool *stored, QString *error
     // The columns the web app does not send (supply_date, supplement_id) are kept as they are.
     QSqlQuery query(db_);
     if (exists) {
-        query.prepare("UPDATE tickets SET fuel_type = ?, spec = ?, amount_kg = ?, status = ?, sale_id = ?, sale_date = ?, card_id = ?, synced = 1 "
+        query.prepare("UPDATE tickets SET fuel_type = ?, spec = ?, amount_kg = ?, status = ?, sale_id = ?, sale_date = ?, card_id = ?, synced = 1, "
+                      "last_printed_at = CASE WHEN ? > print_count THEN ? ELSE last_printed_at END, print_count = MAX(print_count, ?) "
                       "WHERE barcode = ?");
     } else {
-        query.prepare("INSERT INTO tickets (fuel_type, spec, amount_kg, status, sale_id, sale_date, card_id, synced, barcode) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)");
+        query.prepare("INSERT INTO tickets (fuel_type, spec, amount_kg, status, sale_id, sale_date, card_id, synced, print_count, last_printed_at, barcode) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)");
     }
     query.addBindValue(row.value("fuel_type").toString());
     query.addBindValue(intOrNull(row.value("spec")));
@@ -326,6 +327,16 @@ bool SyncStore::storeTicket(const QJsonObject &row, bool *stored, QString *error
     query.addBindValue(textOrNull(row.value("sale_id")));
     query.addBindValue(textOrNull(row.value("sale_date")));
     query.addBindValue(textOrNull(row.value("card_id")));
+    // the prints are counted here and on the web app; the larger count wins
+    const int printed = row.value("print_count").toInt();
+    if (exists) {
+        query.addBindValue(printed);
+        query.addBindValue(textOrNull(row.value("last_printed_at")));
+        query.addBindValue(printed);
+    } else {
+        query.addBindValue(printed);
+        query.addBindValue(textOrNull(row.value("last_printed_at")));
+    }
     query.addBindValue(barcode);
 
     return run(query, error);

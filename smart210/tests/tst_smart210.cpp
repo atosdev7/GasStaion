@@ -399,6 +399,8 @@ private slots:
     void aPrinterThatReportsAProblemGetsNoJob();
     void aPrinterThatDoesNotAnswerTheStatusQuestionIsSentTheJobAnyway();
     void printingSaysWhyItCannotPrint();
+    void everyPrintOfATicketIsCounted();
+    void anOldDatabaseGetsThePrintCountOfATicket();
     void thePrinterCanBeCheckedWithoutPrinting();
     void theSpotSaleScreenPrintsAtOnceAndPrintsAgainOnRequest();
     void aSaleIsKeptWhenThePrinterFailsAndCanBePrintedLater();
@@ -3425,7 +3427,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 8);                                   // the program still opens it
+    QCOMPARE(Migrator::version(db), 9);                                   // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -5749,6 +5751,24 @@ void Smart210Test::aPrinterThatDoesNotAnswerTheStatusQuestionIsSentTheJobAnyway(
     QTRY_COMPARE_WITH_TIMEOUT(printer.jobs().size(), 1, 3000);
 }
 
+// 009: a terminal database at version 8 gets the print count of a ticket and keeps its tickets
+void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
+{
+    QSqlDatabase db = openDatabase(false);
+    const QStringList all = Migrator::bundled();
+    QVERIFY(all.at(8).contains("ADD COLUMN print_count"));
+
+    QString error;
+    QVERIFY2(Migrator::apply(db, all.mid(0, 8), &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 8);
+    QVERIFY(!migratedColumnsOf(db, "tickets").contains("print_count"));
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
+
+    QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 9);
+    QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
+}
 void Smart210Test::printingSaysWhyItCannotPrint()
 {
     setUpSelling();
@@ -6850,7 +6870,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 8);
+    QCOMPARE(all.size(), 9);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -6884,7 +6904,7 @@ void Smart210Test::anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets()
     QVERIFY(!migratedColumnsOf(db, "tickets").contains("card_id"));         // the old database
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
-    QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
+    QVERIFY2(Migrator::apply(db, all.mid(0, 8), &error), qPrintable(error));
     QCOMPARE(Migrator::version(db), 8);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("card_id"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND status = 1 AND card_id IS NULL").toInt(), 1);   // the ticket is as it was
@@ -10597,6 +10617,61 @@ void Smart210Test::aSupplyRecordsTheModeAndTheDensity()
     QCOMPARE(one("SELECT COUNT(*) FROM supplements WHERE card_id IS NOT NULL").toInt(), 0);
 }
 
+// tickets.print_count / last_printed_at: one more for every ticket the printer took (the first print and each Print again), none for a print that failed
+void Smart210Test::everyPrintOfATicketIsCounted()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    FakePrinter printer;
+    QVERIFY(printer.listen());
+    Settings(db).setValue(SettingKey::PrinterHost, "127.0.0.1");
+    Settings(db).setInt(SettingKey::PrinterPort, printer.port());
+    PrintService service(db, PrintOptions());
+    service.setStatusWaitMs(200);
+    QSignalSpy spy(&service, SIGNAL(finished(bool,QString)));
+
+    // a spot sale's ticket: nothing before it is printed, then one for each print
+    const SpotSale::Result sale = SpotSale::create(db, spotInput(1050), 7, QDateTime::currentDateTime());
+    const qlonglong key = Barcode::toKey(one("SELECT printf('%016d', barcode) FROM tickets WHERE sale_id = '" + sale.saleId + "'").toString());
+    const QString where = " FROM tickets WHERE barcode = " + QString::number(key);
+    QCOMPARE(one("SELECT print_count" + where).toInt(), 0);
+    QVERIFY(one("SELECT last_printed_at" + where).isNull());
+    run("UPDATE tickets SET synced = 1 WHERE barcode = " + QString::number(key));      // (it was uploaded already)
+
+    service.printSaleTicket(sale.saleId);
+    QTRY_COMPARE_WITH_TIMEOUT(spy.size(), 1, 5000);
+    QVERIFY(spy.at(0).at(0).toBool());
+    QCOMPARE(one("SELECT print_count" + where).toInt(), 1);
+    QVERIFY(!one("SELECT last_printed_at" + where).toString().isEmpty());
+    QCOMPARE(one("SELECT synced" + where).toInt(), 0);                               // it goes up again with its count
+    service.printSaleTicket(sale.saleId);
+    QTRY_COMPARE_WITH_TIMEOUT(spy.size(), 2, 5000);
+    QCOMPARE(one("SELECT print_count" + where).toInt(), 2);
+
+    // a print that fails (nothing listens) counts nothing
+    const quint16 port = printer.port();
+    printer.close();
+    Settings(db).setInt(SettingKey::PrinterPort, port);
+    service.printSaleTicket(sale.saleId);
+    QTRY_COMPARE_WITH_TIMEOUT(spy.size(), 3, 10000);
+    QVERIFY(!spy.at(2).at(0).toBool());
+    QCOMPARE(one("SELECT print_count" + where).toInt(), 2);
+
+    // a ticket made for a card, and a remainder ticket, count their prints the same way
+    FakePrinter second;
+    QVERIFY(second.listen());
+    Settings(db).setInt(SettingKey::PrinterPort, second.port());
+    const QString card = makeCard(db, "AA01", 4000);
+    const Cards::TicketResult made = Cards::issueTicket(db, card, 1500, 7, QDateTime::currentDateTime());
+    QVERIFY(made.ok);
+    service.printCardTicket(made.barcode);
+    QTRY_COMPARE_WITH_TIMEOUT(spy.size(), 4, 5000);
+    QCOMPARE(one("SELECT print_count FROM tickets WHERE barcode = " + QString::number(Barcode::toKey(made.barcode))).toInt(), 1);
+    service.printRemainderTicket(code(3000000041));
+    QTRY_COMPARE_WITH_TIMEOUT(spy.size(), 5, 5000);
+    QCOMPARE(one("SELECT print_count FROM tickets WHERE barcode = 3000000041").toInt(), 1);
+}
+
 // Cards::issueTicket: the card pays at once and a ticket for the kg is made; Cards::cancelTicket takes an unused one back
 void Smart210Test::aFillIsATicketMadeForTheCardAndItIsCancelledWhileItWaitsForTheUpload()
 {
@@ -10678,6 +10753,7 @@ void Smart210Test::aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalan
 
     const Cards::TicketResult made = Cards::issueTicket(db, id, 1500, 7, QDateTime::currentDateTime());
     QVERIFY2(made.ok, qPrintable(made.error));
+    run("UPDATE tickets SET print_count = 2, last_printed_at = '2026-10-26 10:05:00' WHERE barcode = " + QString::number(Barcode::toKey(made.barcode)));
     QCOMPARE(Uploader::pending(db).value("tickets"), 1);
 
     // the web app does not count the ticket yet: the balance it sends keeps the 15.00 kg off
@@ -10697,6 +10773,8 @@ void Smart210Test::aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalan
     QCOMPARE(ticket.value("status").toInt(), 1);
     QCOMPARE(ticket.value("amount_kg").toString(), QString("15.00"));
     QCOMPARE(ticket.value("fuel_type").toString(), QString("D"));
+    QCOMPARE(ticket.value("print_count").toInt(), 2);                        // how many times it was printed, and when last
+    QCOMPARE(ticket.value("last_printed_at").toString(), QString("2026-10-26 10:05:00"));
     QCOMPARE(Uploader::pendingTotal(db), 0);
 
     // the web app has it now: its figure includes the ticket
@@ -10705,11 +10783,13 @@ void Smart210Test::aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalan
 
     // the ticket comes back in the download with its card (supplied now)
     const SyncStore::PageResult page = store.applyPage("tickets", rowsOf("[{'barcode':'" + made.barcode + "','fuel_type':'D','spec':null,'amount_kg':'15.00','status':2,'sale_id':null,"
-                                                                    "'sale_date':'2026-10-26 10:00:00','card_id':'" + id + "'}]"));
+                                                                    "'sale_date':'2026-10-26 10:00:00','card_id':'" + id + "','print_count':3,'last_printed_at':'2026-10-26 10:30:00'}]"));
     QVERIFY2(page.ok, qPrintable(page.error));
     const QString where = " WHERE barcode = " + QString::number(Barcode::toKey(made.barcode));
     QCOMPARE(one("SELECT card_id FROM tickets" + where).toString(), id);
     QCOMPARE(one("SELECT status FROM tickets" + where).toInt(), 2);
+    QCOMPARE(one("SELECT print_count FROM tickets" + where).toInt(), 3);          // the larger count wins: the web app counted 3, this terminal 2
+    QCOMPARE(one("SELECT last_printed_at FROM tickets" + where).toString(), QString("2026-10-26 10:30:00"));
 }
 
 // the history of a card lists the tickets made for it as fills until the web app has an entry for them
@@ -10911,6 +10991,12 @@ void Smart210Test::theCardScreenStartsOnTheFillPageWithTheTopUpButtonAboveHistor
     QVERIFY(window.findChild<QPushButton *>("cardFillAutoButton") == 0 && window.findChild<QPushButton *>("cardFillManualButton") == 0);
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillKgField"));
     QVERIFY(!window.findChild<QWidget *>("ticketBox")->isVisibleTo(cards));            // no ticket yet
+
+    // the Fill form and the last ticket are side by side, in one row of a grid so that their borders line up (the screen is not high enough for one under the other)
+    QGridLayout *fillRow = qobject_cast<QGridLayout *>(window.findChild<QWidget *>("cardActionFill")->layout());
+    QVERIFY(fillRow != 0);
+    QCOMPARE(fillRow->itemAtPosition(0, 0)->widget(), window.findChild<QWidget *>("fillBox"));
+    QCOMPARE(fillRow->itemAtPosition(0, 1)->widget(), window.findChild<QWidget *>("ticketBox"));
 
     // the button shows the Top Up page and then says Fill, which comes back
     switchButton->click();
@@ -11430,8 +11516,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 8);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket
-    QCOMPARE(Migrator::version(db), 8);
+    QCOMPARE(Migrator::bundled().size(), 9);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket
+    QCOMPARE(Migrator::version(db), 9);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
@@ -11440,7 +11526,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QCOMPARE(columnsOf(db, "supplements").join(" "), QString("id fuel_type nozzle_id card_id supply_date supplied_at mode preset_kg density out_amount_lt "
                                                              "out_amount_kg comment board_result_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "remainders").join(" "), QString("id supplement_id ticket_barcode fuel_type amount_kg remainder_date created_at printed_at synced uploaded_at comment"));
-    QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at card_id"));   // (card_id came with migration 008, so it is the last)
+    QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at card_id print_count last_printed_at"));   // (the columns of migrations 008 and 009 come last)
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));

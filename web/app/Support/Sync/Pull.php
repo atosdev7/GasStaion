@@ -92,6 +92,7 @@ class Pull
                     'spec' => $m->spec === null ? null : (int) $m->spec,
                     'amount_kg' => number_format((float) $kg, 2, '.', ''), 'status' => (int) $m->status,
                     'sale_id' => $m->sale_id, 'sale_date' => $m->sale_date, 'card_id' => $m->card_id,
+                    'print_count' => (int) $m->print_count, 'last_printed_at' => $m->last_printed_at,
                 ];
             case 'cards':
                 // the card as the web has it: the PIN hash for the Smart210 to check, the status, and the balance (what was topped up less what was supplied,

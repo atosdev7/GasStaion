@@ -54,6 +54,25 @@ class TicketLookupTest extends TestCase
             ->assertSee(__('initialize.ticket_status_publish'));
     }
 
+    public function testTheLookupShowsHowManyTimesATicketWasPrinted()
+    {
+        $ticket = Ticket::forceCreate([
+            'barcode' => '0000021500000001', 'fuel_type' => 'D', 'spec' => null, 'code' => '21', 'serial' => 500000001, 'amount_kg' => 5,
+            'status' => config('ticket_statuses.sale'), 'sale_date' => '2026-10-06 10:00:00', 'print_count' => 3, 'last_printed_at' => '2026-10-06 10:30:00',
+        ]);
+        Ticket::forceCreate([
+            'barcode' => '0000021500000002', 'fuel_type' => 'D', 'spec' => null, 'code' => '21', 'serial' => 500000002, 'amount_kg' => 5,
+            'status' => config('ticket_statuses.sale'), 'sale_date' => '2026-10-06 10:00:00',
+        ]);
+
+        $this->as('manager')->get('/tickets/lookup?modal=1&barcode=' . $ticket->barcode)->assertOk()
+            ->assertSee(__('tickets.print_count'))->assertSee('2026-10-06 10:30:00');
+        // a ticket that was never printed shows no line about it
+        $this->as('manager')->get('/tickets/lookup?modal=1&barcode=0000021500000002')->assertOk()->assertDontSee(__('tickets.last_printed_at'));
+        // the list has a column with the count
+        $this->as('manager')->get('/tickets/lookup')->assertOk()->assertSee(__('tickets.print_count'));
+    }
+
     public function testLookupShowsASoldTicketWithSaleDetails()
     {
         $sale = Sale::forceCreate([

@@ -419,6 +419,8 @@ class Push
             'supply_date' => ['nullable', self::DATETIME],
             'supplement_id' => 'nullable|uuid',
             'card_id' => ['nullable', 'uuid', Rule::exists('cards', 'id')], // a ticket made for a card (the card paid for it): it has no sale
+            'print_count' => 'nullable|integer|min:0|max:1000000', // how many times the terminal printed it, and when last
+            'last_printed_at' => ['nullable', self::DATETIME],
         ]);
         $status = (int) $d['status'];
 
@@ -472,6 +474,11 @@ class Push
             if ($current === $s['publish']) {
                 $attributes += $sale; // sold and supplied between two syncs
             }
+        }
+
+        // the prints are counted by the terminal: the larger count wins (an older upload cannot take a print away)
+        if ((int) ($d['print_count'] ?? 0) > (int) $ticket->print_count) {
+            $attributes += ['print_count' => (int) $d['print_count'], 'last_printed_at' => $d['last_printed_at'] ?? null];
         }
 
         if ($attributes) {
@@ -529,6 +536,7 @@ class Push
             'sale_id' => $d['sale_id'] ?? null, 'sale_date' => $d['sale_date'] ?? null,
             'supply_date' => $d['supply_date'] ?? null, 'supplement_id' => $d['supplement_id'] ?? null,
             'card_id' => $d['card_id'] ?? null,
+            'print_count' => (int) ($d['print_count'] ?? 0), 'last_printed_at' => $d['last_printed_at'] ?? null,
             'synced' => true,
         ]);
     }

@@ -257,9 +257,9 @@
        <item>
         <widget class="QStackedWidget" name="cardActionPages">
          <widget class="QWidget" name="cardActionFill">
-          <layout class="QVBoxLayout" name="cardActionFillLayout">
+          <layout class="QGridLayout" name="cardActionFillLayout" rowstretch="0,1" columnstretch="1,1">
            <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
-           <item>
+           <item row="0" column="0">
             <widget class="QGroupBox" name="fillBox">
              <property name="title"><string>Fill</string></property>
              <layout class="QVBoxLayout" name="fillLayout">
@@ -302,7 +302,7 @@
              </layout>
             </widget>
            </item>
-           <item>
+           <item row="0" column="1">
             <widget class="QGroupBox" name="ticketBox">
              <property name="title"><string>Last ticket</string></property>
              <layout class="QVBoxLayout" name="ticketLayout">
@@ -334,10 +334,9 @@
              </layout>
             </widget>
            </item>
-           <item>
+           <item row="1" column="0" colspan="2">
             <spacer name="spacerFill">
              <property name="orientation"><enum>Qt::Vertical</enum></property>
-             <property name="sizeType"><enum>QSizePolicy::Expanding</enum></property>
              <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
             </spacer>
            </item>

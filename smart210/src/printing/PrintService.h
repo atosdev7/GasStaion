@@ -42,14 +42,18 @@ public:
 
     static const int DefaultPort = 9100;
 
+private slots:
+    void jobFinished(bool ok, const QString &message);
+
 signals:
-    // ok: the job was handed to the printer. The text is for the cashier.
+    // ok: the job was handed to the printer. The text is for the cashier. (A ticket that was sent counts one more print: tickets.print_count.)
     void finished(bool ok, const QString &message);
 
 private:
     QSqlDatabase db_;
     PrintOptions options_;
     PrinterConnection connection_;
+    qlonglong printing_;   // the key of the ticket that is being sent, -1 when it is not a ticket
 };
 
 #endif

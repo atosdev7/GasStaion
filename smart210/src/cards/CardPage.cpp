@@ -495,10 +495,10 @@ void CardPage::showTicket()
     }
 
     QSqlQuery query(db_);
-    query.prepare("SELECT amount_kg, COALESCE(sale_date, '') FROM tickets WHERE barcode = ?");
+    query.prepare("SELECT amount_kg, COALESCE(sale_date, ''), print_count FROM tickets WHERE barcode = ?");
     query.addBindValue(Barcode::toKey(ticket_));
     if (query.exec() && query.next()) {
-        ticketLabel_->setText(tr("%1\n%2 kg, %3").arg(ticket_).arg(kg(query.value(0).toLongLong())).arg(query.value(1).toString()));
+        ticketLabel_->setText(tr("%1\n%2 kg, %3\nPrinted: %4").arg(ticket_).arg(kg(query.value(0).toLongLong())).arg(query.value(1).toString()).arg(query.value(2).toInt()));
     }
     printAgain_->setEnabled(!printing_);
 }
@@ -535,6 +535,7 @@ void CardPage::printFinished(bool ok, const QString &message)
     }
 
     printing_ = false;
+    showTicket();                                                           // (the count of prints is one more)
     printAgain_->setEnabled(!ticket_.isEmpty());
     showStatus(filled_ + "\n" + (ok ? tr("The ticket was sent to the printer.") : tr("It was not printed: %1 Print again prints it.").arg(message)), ok);
 }

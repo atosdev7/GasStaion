@@ -330,6 +330,8 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
         row.insert("supply_date", textOrNull(q, "supply_date"));
         row.insert("supplement_id", textOrNull(q, "supplement_id"));
         row.insert("card_id", textOrNull(q, "card_id")); // a ticket made for a card (the card paid for it; there is no sale)
+        row.insert("print_count", q.value("print_count").toInt());   // how many times it was printed, and when last
+        row.insert("last_printed_at", textOrNull(q, "last_printed_at"));
     }
 
     return row;
