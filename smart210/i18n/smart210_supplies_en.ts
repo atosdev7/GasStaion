@@ -84,9 +84,13 @@
         <translation>kg</translation>
     </message>
     <message>
-        <location filename="../src/supplies/ManualSupplyPage.cpp" line="113"/>
         <source>Nozzle %1 (%2)</source>
-        <translation>Nozzle %1 (%2)</translation>
+        <translation type="vanished">Nozzle %1 (%2)</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/ManualSupplyPage.cpp" line="113"/>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.cpp" line="211"/>

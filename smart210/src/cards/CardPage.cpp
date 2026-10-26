@@ -438,7 +438,7 @@ void CardPage::fillNozzles()
         for (int i = 0; i < nozzles.size(); ++i) {
             const MachineConfig::Nozzle &nozzle = nozzles.at(i);
             if (nozzle.seen() && nozzle.fuelType == card.fuelType && nozzle.mode == ModeAuto) {
-                fillNozzle_->addItem(tr("Nozzle %1").arg(nozzle.number), nozzle.number);
+                fillNozzle_->addItem(nozzle.label(), nozzle.number);
             }
         }
         const int at = fillNozzle_->findData(chosen);
@@ -455,7 +455,7 @@ void CardPage::fillNozzles()
         for (int i = 0; i < nozzles.size(); ++i) {
             const MachineConfig::Nozzle &nozzle = nozzles.at(i);
             if (nozzle.seen() && nozzle.fuelType == card.fuelType && nozzle.mode == ModeManual) {
-                manualNozzle_->addItem(tr("Nozzle %1").arg(nozzle.number), nozzle.number);
+                manualNozzle_->addItem(nozzle.label(), nozzle.number);
             }
         }
         const int at = manualNozzle_->findData(chosenManual);

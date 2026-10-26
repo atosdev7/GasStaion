@@ -27,7 +27,10 @@ public:
         qlonglong density;    // kg per litre x 10000; -1 when none
         qlonglong pulsesPerLiter; // x100; -1 when none
         QString seenAt;       // when the config was last stored (verified after a send, or read from the board); empty if never
+        QString name;         // typed on Machine Config (up to 50 characters); empty when it has none
 
+        // What the lists show for the nozzle: its name, "Nozzle <number>" while it has none.
+        QString label() const;
         bool seen() const { return !seenAt.isEmpty(); }
         bool exists() const { return id > 0; } // added on Machine Config
     };
@@ -53,6 +56,7 @@ public:
         QString newValue;
     };
 
+    static const int NameLength = 50; // the longest name of a nozzle
     static const int NozzleCount = 6; // how many nozzle boards there are: addresses 1 to NozzleCount
     static const int DefaultConverterPort = 4001;
 
@@ -73,7 +77,11 @@ public:
     // refused when there is none). Its config (mode, density, pulses per litre) is set later
     // on Machine Config: sent to the board, or read from it.
     // False, with the reason, when it is not possible. Logged.
-    bool addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why);
+    // `name` is optional (up to NameLength characters).
+    bool addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why, const QString &name = QString());
+
+    // Gives the nozzle its name (empty: none). Logged, and uploaded with the nozzle. False, with the reason, when the nozzle was not added or the name is too long.
+    bool setNozzleName(int number, const QString &name, int userId, QString *why);
 
     // Takes a nozzle away: it is not asked, shown or used any more, and the web app is told. Refused while a fill is open on it or tickets are
     // queued on it (see removeBlocker()). Its records stay.

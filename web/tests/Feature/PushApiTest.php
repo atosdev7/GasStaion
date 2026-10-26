@@ -1031,4 +1031,31 @@ class PushApiTest extends TestCase
         $this->assertStringContainsString('price above 0', $result['rejected'][0]['error']);
         $this->assertNull(Sale::find($free['id']));
         $this->assertNotNull(Sale::find($own['id']));
-    }}
+    }
+
+    public function testTheNozzleNameComesWithThePushAndIsKeptWhenNoneIsSent()
+    {
+        $tank = Tank::forceCreate(['name' => 'T2', 'fuel_type' => 'A']);
+        $device = Device::first();
+
+        $this->push('nozzles', [['number' => 2, 'name' => '  Gasoline 1  ', 'tank_id' => $tank->id, 'board_address' => 2, 'deleted' => false]]);
+        $two = Nozzle::where('device_id', $device->id)->where('number', 2)->first();
+        $this->assertSame('Gasoline 1', $two->name);                                       // trimmed
+
+        // an older terminal sends no name: it stays
+        $this->assertSame(['2'], $this->push('nozzles', [['number' => 2, 'tank_id' => $tank->id, 'board_address' => 2, 'deleted' => false]])['saved']);
+        $this->assertSame('Gasoline 1', $two->fresh()->name);
+
+        // another name replaces it; a blank one takes it away (the lists show "Nozzle 2" again)
+        $this->push('nozzles', [['number' => 2, 'name' => 'Gasoline 2', 'tank_id' => $tank->id, 'board_address' => 2, 'deleted' => false]]);
+        $this->assertSame('Gasoline 2', $two->fresh()->name);
+        $this->push('nozzles', [['number' => 2, 'name' => '  ', 'tank_id' => $tank->id, 'board_address' => 2, 'deleted' => false]]);
+        $this->assertNull($two->fresh()->name);
+        $this->assertSame('Nozzle 2', $two->fresh()->label);
+
+        // too long a name is refused (50 characters at most)
+        $result = $this->push('nozzles', [['number' => 2, 'name' => str_repeat('x', 51), 'tank_id' => $tank->id, 'board_address' => 2, 'deleted' => false]]);
+        $this->assertSame([], $result['saved']);
+        $this->assertCount(1, $result['rejected']);
+    }
+}

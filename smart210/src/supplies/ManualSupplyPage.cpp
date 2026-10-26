@@ -110,7 +110,7 @@ void ManualSupplyPage::reload()
     nozzle_->clear();
     foreach (const MachineConfig::Nozzle &n, config_->nozzles()) {
         if (n.seen() && n.mode == BoardProtocol::ModeManual) {
-            nozzle_->addItem(tr("Nozzle %1 (%2)").arg(n.number).arg(n.fuelType), n.number);
+            nozzle_->addItem(tr("%1 (%2)").arg(n.label()).arg(n.fuelType), n.number);
         }
     }
     const int at = nozzle_->findData(keep);

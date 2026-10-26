@@ -78,6 +78,7 @@ class Push
             'number' => 'required|integer|min:1|max:255',
             'tank_id' => ['required', 'integer', Rule::exists('tanks', 'id')],
             'board_address' => 'nullable|integer|min:0|max:255',
+            'name' => 'nullable|string|max:50', // the name given on the Smart210; an older terminal sends none
             'deleted' => 'required|boolean',
         ]);
 
@@ -99,6 +100,9 @@ class Push
         $nozzle->tank_id = $d['tank_id'];
         $nozzle->fuel_type = Tank::findOrFail($d['tank_id'])->fuel_type;
         $nozzle->board_address = $d['board_address'];
+        if (array_key_exists('name', $row)) {
+            $nozzle->name = isset($d['name']) && trim($d['name']) !== '' ? trim($d['name']) : null;
+        }
         $nozzle->deleted_at = null;
         $nozzle->save();
     }

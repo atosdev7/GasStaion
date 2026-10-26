@@ -2,7 +2,6 @@
 
 namespace App\Models\Fuel;
 
-use App\Models\Admin\Device;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -10,17 +9,17 @@ class Nozzle extends Model
 {
     use SoftDeletes;
 
-    /** Display label per nozzle id, e.g. "Pump 1 — #1 (Diesel)". */
+    /** The name of a nozzle as the lists show it: the name that was given on the Smart210, "Nozzle <number>" while it has none. */
+    public function getLabelAttribute()
+    {
+        return trim((string) $this->name) !== '' ? $this->name : 'Nozzle ' . $this->number;
+    }
+
+    /** Display label per nozzle id: the name of the nozzle only (not the device it belongs to). */
     public static function labels()
     {
-        $devices = Device::pluck('name', 'id');
-        $fuels = config('fuel_types');
-
-        return static::withTrashed()->orderBy('device_id')->orderBy('number')->get()->mapWithKeys(function ($nozzle) use ($devices, $fuels) {
-            $label = ($devices[$nozzle->device_id] ?? $nozzle->device_id) . ' — #' . $nozzle->number
-                . ' (' . ($fuels[$nozzle->fuel_type] ?? $nozzle->fuel_type) . ')';
-
-            return [$nozzle->id => $label];
+        return static::withTrashed()->orderBy('device_id')->orderBy('number')->get()->mapWithKeys(function ($nozzle) {
+            return [$nozzle->id => $nozzle->label];
         });
     }
 }

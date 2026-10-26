@@ -141,7 +141,7 @@ void DispensersPage::refresh()
 
         const bool running = online && (status.state == StateDispensing || status.state == StateResult);
         QStringList cells;
-        cells << QString::number(nozzle.number);
+        cells << (nozzle.name.isEmpty() ? QString::number(nozzle.number) : nozzle.name);
         if (nozzle.seen()) {
             cells << (nozzle.mode == ModeManual ? tr("Manual") : tr("Auto")) << nozzle.fuelType
                   << (nozzle.density < 0 ? QString() : Decimal::format(nozzle.density, 4));

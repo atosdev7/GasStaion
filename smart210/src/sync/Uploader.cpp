@@ -224,6 +224,7 @@ QJsonObject rowJson(QSqlDatabase db, const QString &table, QSqlQuery &q)
         row.insert("number", q.value("number").toInt());
         row.insert("tank_id", q.value("tank_id").toInt());
         row.insert("board_address", q.value("number").toInt()); // the board's address is the nozzle's number
+        row.insert("name", textOrNull(q, "name")); // typed on Machine Config; the web app shows it in its lists
         row.insert("deleted", q.value("deleted").toInt() != 0);
     } else if (table == "cards") {
         // The PIN goes as the salted hash it is kept as, never as typed. The web app takes from an existing card only its wrong tries and a lock.

@@ -34,7 +34,7 @@ namespace {
 const int LogLines = 12;
 
 // the columns of the nozzle table
-enum { ColNozzle, ColStatus, ColMode, ColFuel, ColDensity, ColPulses, ColTank, ColRemove, Columns };
+enum { ColNozzle, ColName, ColStatus, ColMode, ColFuel, ColDensity, ColPulses, ColTank, ColRemove, Columns };
 
 QString subject(const QString &what)
 {
@@ -85,11 +85,12 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     // the nozzles: what each board reported, and a form to send a change to the selected board
     table_ = ui_->nozzleTable;
     table_->setColumnCount(Columns);
-    table_->setHorizontalHeaderLabels(QStringList() << tr("Nozzle") << tr("Status") << tr("Mode") << tr("Fuel type") << tr("Density")
+    table_->setHorizontalHeaderLabels(QStringList() << tr("Nozzle") << tr("Name") << tr("Status") << tr("Mode") << tr("Fuel type") << tr("Density")
                                                     << tr("Pulses per litre") << tr("Tank") << QString());
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(ColTank, QHeaderView::Stretch);
     table_->setColumnWidth(ColNozzle, 84);
+    table_->setColumnWidth(ColName, 150);
     table_->setColumnWidth(ColStatus, 130);
     table_->setColumnWidth(ColMode, 84);
     table_->setColumnWidth(ColFuel, 116);
@@ -119,6 +120,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     fuel_ = ui_->nozzleFuel;
     density_ = ui_->nozzleDensity;
     pulses_ = ui_->nozzlePulses;
+    nozzleName_ = ui_->nozzleName;
     // the form is narrow, the table gets the rest of the tab
     mode_->setMaximumWidth(180);
     fuel_->setMaximumWidth(180);
@@ -175,6 +177,7 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(resetTimer_, SIGNAL(timeout()), this, SLOT(disarmReset()));
     connect(ui_->updateNozzleButton, SIGNAL(clicked()), this, SLOT(updateNozzle()));
     connect(ui_->readNozzlesButton, SIGNAL(clicked()), this, SLOT(readNozzles()));
+    connect(ui_->saveNozzleNameButton, SIGNAL(clicked()), this, SLOT(saveNozzleName()));
     connect(table_, SIGNAL(itemSelectionChanged()), this, SLOT(rowSelected()));
     connect(fuel_, SIGNAL(activated(int)), this, SLOT(fuelPicked()));
     connect(ui_->saveConverterPortButton, SIGNAL(clicked()), this, SLOT(saveConverterPort()));
@@ -292,7 +295,7 @@ void MachineConfigPage::fillTable()
         }
 
         QStringList cells;
-        cells << QString::number(nozzle.number) << status;
+        cells << QString::number(nozzle.number) << nozzle.name << status;
         // what the terminal holds for the nozzle (its own database), whether the board has it or not
         cells << (nozzle.mode == BoardProtocol::ModeManual ? tr("Manual") : tr("Auto")) << nozzle.fuelType
               << (nozzle.density < 0 ? QString() : Decimal::format(nozzle.density, 4))
@@ -334,12 +337,14 @@ void MachineConfigPage::fillForm(int number)
         selected_->setText(tr("Pick a nozzle in the table to change its config."));
         density_->clear();
         pulses_->clear();
+        nozzleName_->clear();
 
         return;
     }
 
     const MachineConfig::Nozzle nozzle = config_->nozzle(number);
-    selected_->setText(tr("Nozzle %1").arg(number));
+    selected_->setText(nozzle.name.isEmpty() ? tr("Nozzle %1").arg(number) : tr("Nozzle %1: %2").arg(number).arg(nozzle.name));
+    nozzleName_->setText(nozzle.name);
     mode_->setCurrentIndex(mode_->findData(nozzle.mode));
     int at = fuel_->findData(nozzle.fuelType);
     if (at < 0 && !nozzle.fuelType.isEmpty()) {
@@ -505,6 +510,28 @@ void MachineConfigPage::updateNozzle()
     }
 
     showStatus(tr("Saved. Sent to the board of nozzle %1. Waiting for it to confirm...").arg(selectedNumber_), true);
+}
+
+// Save name: only the name of the selected nozzle (it is not a part of the board's config, so the board is not asked); it goes up with the nozzle.
+void MachineConfigPage::saveNozzleName()
+{
+    if (selectedNumber_ < 1) {
+        showStatus(tr("Pick a nozzle in the table first."), false);
+
+        return;
+    }
+
+    QString why;
+    if (!config_->setNozzleName(selectedNumber_, nozzleName_->text(), session_->userId(), &why)) {
+        showStatus(why, false);
+
+        return;
+    }
+    fillTable();
+    fillForm(selectedNumber_);
+    fillLog();
+    showStatus(tr("Nozzle %1: the name was saved.").arg(selectedNumber_), true);
+    emit nozzlesEdited();
 }
 
 void MachineConfigPage::updateDone(int number)
@@ -778,7 +805,7 @@ void MachineConfigPage::addNozzlePressed()
     const int tank = ui_->addNozzleTank->itemData(ui_->addNozzleTank->currentIndex()).toInt();
 
     QString why;
-    if (!config_->addNozzle(number, fuel, tank, session_->userId(), &why)) {
+    if (!config_->addNozzle(number, fuel, tank, session_->userId(), &why, ui_->addNozzleName->text())) {
         if (tank <= 0 && !fuel.isEmpty()) {
             alert(tr("Add a nozzle"), why); // no tank holds this fuel type
         } else {
@@ -788,6 +815,7 @@ void MachineConfigPage::addNozzlePressed()
         return;
     }
     nozzles_->syncBoards(); // its board is polled from now on (its config is not read: type it and press Update, or press Read)
+    ui_->addNozzleName->clear();
     selectedNumber_ = number;
     fillTable();
     fillForm(number);

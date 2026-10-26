@@ -27,7 +27,7 @@ QList<MachineConfig::Nozzle> MachineConfig::nozzles() const
     QMap<int, Nozzle> known;
 
     QSqlQuery query(db_);
-    query.exec("SELECT n.id, n.number, n.fuel_type, COALESCE(t.name, ''), c.pulses_per_liter, n.tank_id, n.mode, n.density, COALESCE(n.seen_at, '') "
+    query.exec("SELECT n.id, n.number, n.fuel_type, COALESCE(t.name, ''), c.pulses_per_liter, n.tank_id, n.mode, n.density, COALESCE(n.seen_at, ''), COALESCE(n.name, '') "
                "FROM nozzles n LEFT JOIN tanks t ON t.id = n.tank_id LEFT JOIN nozzle_config c ON c.nozzle_id = n.id "
                "WHERE n.deleted = 0 ORDER BY n.number, n.id");
     while (query.next()) {
@@ -41,10 +41,16 @@ QList<MachineConfig::Nozzle> MachineConfig::nozzles() const
         nozzle.mode = query.value(6).toInt();
         nozzle.density = query.value(7).isNull() ? -1 : query.value(7).toLongLong();
         nozzle.seenAt = query.value(8).toString();
+        nozzle.name = query.value(9).toString();
         known.insert(nozzle.number, nozzle);
     }
 
     return known.values(); // by number
+}
+
+QString MachineConfig::Nozzle::label() const
+{
+    return name.isEmpty() ? QObject::tr("Nozzle %1").arg(number) : name;
 }
 
 MachineConfig::Nozzle MachineConfig::nozzle(int number) const
@@ -58,7 +64,7 @@ MachineConfig::Nozzle MachineConfig::nozzle(int number) const
     return Nozzle();
 }
 
-bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why)
+bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, int userId, QString *why, const QString &name)
 {
     QString reason;
     bool known = false;
@@ -71,6 +77,8 @@ bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, i
         reason = QObject::tr("Nozzle %1 is added already.").arg(number);
     } else if (!known) {
         reason = QObject::tr("Choose the fuel type of the nozzle.");
+    } else if (name.trimmed().size() > NameLength) {
+        reason = QObject::tr("The name of a nozzle is up to %1 characters.").arg(NameLength);
     }
 
     int tank = 0;
@@ -109,12 +117,13 @@ bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, i
     }
 
     QSqlQuery insert(db_);
-    insert.prepare("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, density, seen_at, synced, deleted) VALUES (?, ?, ?, ?, 0, ?, NULL, 0, 0)");
+    insert.prepare("INSERT INTO nozzles (number, tank_id, fuel_type, board_address, mode, density, seen_at, synced, deleted, name) VALUES (?, ?, ?, ?, 0, ?, NULL, 0, 0, ?)");
     insert.addBindValue(number);
     insert.addBindValue(tank);
     insert.addBindValue(fuelType);
     insert.addBindValue(number);
     insert.addBindValue(density);
+    insert.addBindValue(name.trimmed().isEmpty() ? QVariant(QVariant::String) : QVariant(name.trimmed()));
     if (!insert.exec()) {
         if (why) {
             *why = QObject::tr("The nozzle could not be saved.");
@@ -126,6 +135,41 @@ bool MachineConfig::addNozzle(int number, const QString &fuelType, int tankId, i
         Settings::setDeviceValue("nozzle_tank_" + QString::number(number), QString::number(tank));
     }
     logChange(QString("nozzle:%1").arg(number), QString(), QString("added %1").arg(fuelType), userId);
+
+    return true;
+}
+
+bool MachineConfig::setNozzleName(int number, const QString &name, int userId, QString *why)
+{
+    const Nozzle current = nozzle(number);
+    const QString wanted = name.trimmed();
+    QString reason;
+    if (!current.exists()) {
+        reason = QObject::tr("Nozzle %1 was not added.").arg(number);
+    } else if (wanted.size() > NameLength) {
+        reason = QObject::tr("The name of a nozzle is up to %1 characters.").arg(NameLength);
+    }
+
+    if (reason.isEmpty()) {
+        // (a nozzle without a tank never went up: there is nothing to tell the web app yet)
+        QSqlQuery update(db_);
+        update.prepare("UPDATE nozzles SET name = ?, synced = CASE WHEN tank_id > 0 THEN 0 ELSE synced END WHERE id = ?");
+        update.addBindValue(wanted.isEmpty() ? QVariant(QVariant::String) : QVariant(wanted));
+        update.addBindValue(current.id);
+        if (!update.exec()) {
+            reason = QObject::tr("The name could not be saved.");
+        }
+    }
+    if (!reason.isEmpty()) {
+        if (why) {
+            *why = reason;
+        }
+
+        return false;
+    }
+    if (wanted != current.name) {
+        logChange(QString("nozzle:%1").arg(number), QString("name %1").arg(current.name.isEmpty() ? QString("-") : current.name), QString("name %1").arg(wanted.isEmpty() ? QString("-") : wanted), userId);
+    }
 
     return true;
 }

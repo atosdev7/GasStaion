@@ -165,27 +165,27 @@
 <context>
     <name>NozzleConfigSync</name>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="178"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="180"/>
         <source>The board holds no config yet. Press Update to send one.</source>
         <translation>The board holds no config yet. Press Update to send one.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="180"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="182"/>
         <source>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</source>
         <translation>The board holds fuel type %1, and no tank can be taken for it: a nozzle must be connected to a tank.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="197"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="199"/>
         <source>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</source>
         <translation>The board did not keep the config as it was sent (it holds %1 %2 %3 %4).</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="198"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="200"/>
         <source>manual</source>
         <translation>manual</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="198"/>
+        <location filename="../src/dispensers/NozzleConfigSync.cpp" line="200"/>
         <source>auto</source>
         <translation>auto</translation>
     </message>
@@ -213,57 +213,61 @@
         <translation>%1 kg of %2 are to be supplied. Choose the nozzle and press OK.</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="69"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="70"/>
         <source>No converter</source>
         <translation>No converter</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="72"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="73"/>
         <source>No answer</source>
         <translation>No answer</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="75"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="76"/>
         <source>A fill is running</source>
         <translation>A fill is running</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="79"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="80"/>
         <source>Selected</source>
         <translation>Selected</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="81"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="82"/>
         <source>Ready to start</source>
         <translation>Ready to start</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="83"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="84"/>
         <source>Dispensing</source>
         <translation>Dispensing</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="85"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="86"/>
         <source>Result waiting</source>
         <translation>Result waiting</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="87"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="88"/>
         <source>Fault</source>
         <translation>Fault</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="90"/>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="91"/>
         <source>Free: choose it</source>
         <translation>Free: choose it</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="106"/>
-        <source>Nozzle %1:  %2</source>
-        <translation>Nozzle %1:  %2</translation>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="107"/>
+        <source>%1:  %2</source>
+        <translation>%1:  %2</translation>
     </message>
     <message>
-        <location filename="../src/dispensers/NozzleDialog.cpp" line="116"/>
+        <source>Nozzle %1:  %2</source>
+        <translation type="vanished">Nozzle %1:  %2</translation>
+    </message>
+    <message>
+        <location filename="../src/dispensers/NozzleDialog.cpp" line="126"/>
         <source>No nozzle of this fuel type works in auto mode.</source>
         <translation>No nozzle of this fuel type works in auto mode.</translation>
     </message>

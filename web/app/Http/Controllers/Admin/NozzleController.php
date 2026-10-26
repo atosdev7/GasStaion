@@ -22,6 +22,7 @@ class NozzleController extends CrudController
         $fuels = config('fuel_types');
 
         return [
+            'name' => ['type' => 'text'],
             'device_id' => ['type' => 'select', 'options' => Device::orderBy('name')->pluck('name', 'id')->all()],
             'number' => ['type' => 'number', 'step' => '1'],
             'fuel_type' => ['type' => 'select', 'options' => $fuels],

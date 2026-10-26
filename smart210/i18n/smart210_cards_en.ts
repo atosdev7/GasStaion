@@ -360,8 +360,6 @@ Total payment: %4 (cash)</translation>
         <translation>Topped up %1 kg for %2 (cash). The card holds %3 kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/CardPage.cpp" line="441"/>
-        <location filename="../src/cards/CardPage.cpp" line="458"/>
         <location filename="../src/cards/CardPage.cpp" line="724"/>
         <source>Nozzle %1</source>
         <translation>Nozzle %1</translation>

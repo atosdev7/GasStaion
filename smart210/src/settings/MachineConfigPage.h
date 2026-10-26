@@ -49,6 +49,7 @@ signals:
 
 private slots:
     void updateNozzle();
+    void saveNozzleName();
     void readNozzles();
     void readDone(int number);
     void readFailed(int number, const QString &message);
@@ -105,6 +106,7 @@ private:
     QComboBox *fuel_;
     QLineEdit *density_;
     QLineEdit *pulses_;
+    QLineEdit *nozzleName_;
     QLineEdit *converterPort_;
     QLineEdit *cardPort_;
     QComboBox *cardBaud_;

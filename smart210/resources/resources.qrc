@@ -22,6 +22,7 @@
         <file alias="004_card_transaction_order.sql">migrations/004_card_transaction_order.sql</file>
         <file alias="005_ticket_stock_index.sql">migrations/005_ticket_stock_index.sql</file>
         <file alias="006_card_holder_phone.sql">migrations/006_card_holder_phone.sql</file>
+        <file alias="007_nozzle_name.sql">migrations/007_nozzle_name.sql</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="sales.png">icons/sales.png</file>

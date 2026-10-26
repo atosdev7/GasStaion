@@ -237,7 +237,7 @@ void SupplyPage::refresh()
         }
 
         QStringList cells;
-        cells << QString::number(nozzle.number) << fuel
+        cells << (nozzle.name.isEmpty() ? QString::number(nozzle.number) : nozzle.name) << fuel
               << (nozzle.seen() ? (nozzle.mode == ModeManual ? tr("Manual") : tr("Auto")) : QString()) << state
               << (ticketsKg > 0 ? (ticketCount > 0 ? tr("%1 - %2").arg(kg(ticketsKg)).arg(ticketCount) : kg(ticketsKg)) : QString())
               << dispensed;

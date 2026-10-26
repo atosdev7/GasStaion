@@ -151,7 +151,7 @@ QList<ReviewData::Record> ReviewData::supplements(QSqlDatabase db, const QString
     QList<Record> list;
 
     QSqlQuery query(db);
-    query.prepare("SELECT s.id, s.supplied_at, COALESCE((SELECT number FROM nozzles WHERE id = s.nozzle_id), s.nozzle_id), s.fuel_type, "
+    query.prepare("SELECT s.id, s.supplied_at, COALESCE((SELECT COALESCE(NULLIF(name, ''), number) FROM nozzles WHERE id = s.nozzle_id), s.nozzle_id), s.fuel_type, "
                   "s.out_amount_lt, s.out_amount_kg, s.preset_kg, (s.mode = 'manual'), COALESCE(s.comment, ''), " + dateOf("s", "supplied_at", "supply_date") +
                   ", s.synced, COALESCE(e.message, '') "
                   "FROM supplements s "

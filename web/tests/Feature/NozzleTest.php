@@ -134,4 +134,34 @@ class NozzleTest extends TestCase
         $this->delete('/tanks/' . $this->tank->id)->assertRedirect('/tanks');
         $this->assertNull(Tank::find($this->tank->id));
     }
+
+    public function testTheListShowsTheNameOfTheNozzleFirst()
+    {
+        Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 7, 'name' => 'Diesel 1', 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);
+
+        $html = $this->as('manager')->get('/nozzles')->assertOk()->getContent();
+        $this->assertRegExp('/<th>Name<\/th>\s*<th>[^<]*<\/th>\s*<th>Nozzle number<\/th>/', $html);
+        $this->assertRegExp('/<td>Diesel 1<\/td>/', $html);
+    }
+
+    public function testALabelIsTheNameOfTheNozzleAndNothingElse()
+    {
+        $named = Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 7, 'name' => 'Diesel 1', 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);
+        $unnamed = Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 3, 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);
+        $blank = Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 4, 'name' => '   ', 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);
+
+        $labels = Nozzle::labels();
+        $this->assertSame('Diesel 1', $labels[$named->id]);                       // not "Pump 1 - #7 (Diesel)": no device, no number, no fuel type
+        $this->assertSame('Nozzle 3', $labels[$unnamed->id]);                     // a nozzle that has no name yet
+        $this->assertSame('Nozzle 4', $labels[$blank->id]);
+
+        // the pages that list supplies show the name, not the device
+        \App\Models\Supplements\Supplement::forceCreate([
+            'fuel_type' => 'D', 'nozzle_id' => $named->id, 'device_id' => $this->device->id, 'out_amount_lt' => 5, 'out_amount_kg' => 5, 'preset_kg' => 5,
+            'supplied_at' => '2026-09-20 08:30:00', 'supply_date' => '2026-09-20',
+        ]);
+        $html = $this->as('manager')->get('/supplements')->assertOk()->getContent();
+        $this->assertStringContainsString('Diesel 1', $html);
+        $this->assertStringNotContainsString('Pump 1', $html);
+    }
 }

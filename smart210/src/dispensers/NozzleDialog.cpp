@@ -104,7 +104,7 @@ void NozzleDialog::refresh()
         if (!info.seen() || info.fuelType != fuelType_ || info.mode != ModeAuto) {
             continue;
         }
-        QListWidgetItem *item = new QListWidgetItem(tr("Nozzle %1:  %2").arg(info.number).arg(stateText(db_, bus_, info.number)), list);
+        QListWidgetItem *item = new QListWidgetItem(tr("%1:  %2").arg(info.label()).arg(stateText(db_, bus_, info.number)), list);
         item->setData(Qt::UserRole, info.number);
         if (!isFree(db_, bus_, info.number)) {
             item->setFlags(item->flags() & ~(Qt::ItemIsEnabled | Qt::ItemIsSelectable));

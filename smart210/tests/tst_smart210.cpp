@@ -234,6 +234,9 @@ private slots:
     void aBoardAtAnAddressThatWasNotAddedIsNotAskedAndMakesNoNozzle();
     void aNewNozzleHoldsItsFuelTypeTankAndDensityAndItsConfigIsSentLater();
     void nozzlesAreAddedAndRemovedOnTheMachineConfigPage();
+    void aNozzleHasANameThatIsAddedSavedLoggedAndUploaded();
+    void theMachineConfigPageShowsTypesAndSavesTheNameOfANozzle();
+    void anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows();
     void aBoardsConfigBecomesTheNozzlesConfig();
     void theTankIsKeptOrPickedByFuelType();
     void theNozzleLineForTheLogIsInNoLanguage();
@@ -705,7 +708,7 @@ static QStringList migratedColumnsOf(QSqlDatabase db, const QString &table)
 // 006: an old terminal database (made before cards.holder_phone was in 001_initial.sql) gets the column and keeps its rows
 void Smart210Test::aMigrationAddsAColumnWhereAnOldDatabaseLacksIt()
 {
-    const QString phone = Migrator::bundled().last();
+    const QString phone = Migrator::bundled().at(5);
     QVERIFY(phone.contains("add-column-if-missing: cards holder_phone TEXT"));
 
     QSqlDatabase db = openDatabase(false);
@@ -746,7 +749,7 @@ void Smart210Test::aMigrationLeavesAColumnThatIsThereAndItsData()
 {
     QSqlDatabase db = openDatabase(false);
     QStringList scripts;
-    scripts << "CREATE TABLE cards (id TEXT, uid TEXT, holder_phone TEXT); INSERT INTO cards VALUES ('a', 'AA01', '138 0000 1111');" << Migrator::bundled().last();
+    scripts << "CREATE TABLE cards (id TEXT, uid TEXT, holder_phone TEXT); INSERT INTO cards VALUES ('a', 'AA01', '138 0000 1111');" << Migrator::bundled().at(5);
     QString error;
     QVERIFY2(Migrator::apply(db, scripts, &error), qPrintable(error));
 
@@ -3420,7 +3423,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 6);                                   // the program still opens it
+    QCOMPARE(Migrator::version(db), 7);                                   // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -6654,7 +6657,7 @@ void Smart210Test::nozzlesAreAddedAndRemovedOnTheMachineConfigPage()
     QVERIFY2(status->text().contains("Nozzle 4 was added"), qPrintable(status->text()));
     QCOMPARE(table->rowCount(), 3);
     QCOMPARE(table->item(2, 0)->text(), QString("4"));                       // by number: 1, 2, 4
-    QCOMPARE(table->item(2, 6)->text(), QString("T3"));                       // the tank chosen when adding shows before the board has reported
+    QCOMPARE(table->item(2, 7)->text(), QString("T3"));                       // the tank chosen when adding shows before the board has reported
     QCOMPARE(number->findText("4"), -1);                                     // no longer free to add
     QCOMPARE(window.findChild<QLabel *>("selectedNozzle")->text(), QString("Nozzle 4"));
     QCOMPARE(QSqlDatabase::database(connection_).exec("SELECT COUNT(*) FROM nozzles WHERE number = 4 AND tank_id = 3 AND fuel_type = 'A'").next(), true);
@@ -6662,10 +6665,10 @@ void Smart210Test::nozzlesAreAddedAndRemovedOnTheMachineConfigPage()
 
     // every row has its own Remove button; a click asks first, and No keeps the nozzle
     for (int row = 0; row < table->rowCount(); ++row) {
-        QVERIFY(qobject_cast<QPushButton *>(table->cellWidget(row, 7)) != 0);
+        QVERIFY(qobject_cast<QPushButton *>(table->cellWidget(row, 8)) != 0);
     }
     QCOMPARE(window.findChild<QPushButton *>("removeNozzleButton"), static_cast<QPushButton *>(0));   // the one button for the picked nozzle is gone
-    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(2, 7));
+    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(2, 8));
     QCOMPARE(remove->text(), QString("Remove"));
     boxAnswer_ = QMessageBox::No;
     boxText_.clear();
@@ -6690,7 +6693,151 @@ void Smart210Test::nozzlesAreAddedAndRemovedOnTheMachineConfigPage()
     QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Nozzle 4: added A -> removed"));
 
     // the rows that are left keep their own buttons
-    QCOMPARE(table->cellWidget(1, 7)->property("nozzle").toInt(), 2);
+    QCOMPARE(table->cellWidget(1, 8)->property("nozzle").toInt(), 2);
+}
+// the name of a nozzle: given when the nozzle is added or later, trimmed, at most 50 characters, logged, and uploaded with the nozzle
+void Smart210Test::aNozzleHasANameThatIsAddedSavedLoggedAndUploaded()
+{
+    configureServer();
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    MachineConfig config(db);
+    QString why;
+
+    QVERIFY2(config.addNozzle(1, "D", 0, 0, &why, "  Diesel 1  "), qPrintable(why));    // the name is trimmed
+    QVERIFY2(config.addNozzle(2, "D", 0, 0, &why), qPrintable(why));                      // a nozzle needs no name
+    QCOMPARE(config.nozzle(1).name, QString("Diesel 1"));
+    QCOMPARE(config.nozzle(1).label(), QString("Diesel 1"));
+    QCOMPARE(config.nozzle(2).name, QString());
+    QCOMPARE(config.nozzle(2).label(), QString("Nozzle 2"));                              // the number while it has no name
+    QVERIFY(!config.addNozzle(3, "D", 0, 0, &why, QString(51, 'x')));                    // up to 50 characters
+    QVERIFY2(why.contains("up to 50 characters"), qPrintable(why));
+    QVERIFY(!config.isConfigured(3));
+
+    // both went up with their names (none: null)
+    QString message;
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':['1','2'],'rejected':[]}"));
+    Uploader uploader(db);
+    QVERIFY(uploadOk(uploader, &message));
+    QJsonArray rows = QJsonDocument::fromJson(server_->requests().at(0).body).object().value("rows").toArray();
+    QCOMPARE(rows.size(), 2);
+    QCOMPARE(rows.at(0).toObject().value("number").toInt(), 1);
+    QCOMPARE(rows.at(0).toObject().value("name").toString(), QString("Diesel 1"));
+    QVERIFY(rows.at(1).toObject().contains("name"));
+    QVERIFY(rows.at(1).toObject().value("name").isNull());
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 0);
+
+    // a name given later: saved, logged, and the nozzle goes up again with it
+    QVERIFY2(config.setNozzleName(2, " Diesel 2 ", 0, &why), qPrintable(why));
+    QCOMPARE(config.nozzle(2).name, QString("Diesel 2"));
+    QCOMPARE(Uploader::pending(db).value("nozzles"), 1);
+    QCOMPARE(one("SELECT synced FROM nozzles WHERE number = 2").toInt(), 0);
+    QVERIFY(config.setNozzleName(2, "Diesel 2", 0, &why));                                // the same name again: nothing to say
+    server_->reply("/api/push/nozzles", 200, q("{'status':'ok','saved':['2'],'rejected':[]}"));
+    QVERIFY(uploadOk(uploader, &message));
+    rows = QJsonDocument::fromJson(server_->requests().at(1).body).object().value("rows").toArray();
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows.at(0).toObject().value("name").toString(), QString("Diesel 2"));
+
+    // the name is taken away with an empty one; a name that is too long and a nozzle that was not added are refused
+    QVERIFY(config.setNozzleName(2, "   ", 0, &why));
+    QCOMPARE(config.nozzle(2).label(), QString("Nozzle 2"));
+    QVERIFY(!config.setNozzleName(2, QString(51, 'y'), 0, &why));
+    QVERIFY2(why.contains("up to 50 characters"), qPrintable(why));
+    QCOMPARE(config.nozzle(2).name, QString());
+    QVERIFY(!config.setNozzleName(5, "Nowhere", 0, &why));
+    QVERIFY2(why.contains("was not added"), qPrintable(why));
+}
+
+// Machine Config: a Name column, a Name field with Save name for the picked nozzle, and a Name field of Add a nozzle
+void Smart210Test::theMachineConfigPageShowsTypesAndSavesTheNameOfANozzle()
+{
+    setUpLoggedInTerminalWithAPin();                                         // nozzles 1 and 2 (diesel) were added; tank T1 holds diesel
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+
+    QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
+    QLineEdit *name = window.findChild<QLineEdit *>("nozzleName");
+    QPushButton *save = window.findChild<QPushButton *>("saveNozzleNameButton");
+    QLabel *selected = window.findChild<QLabel *>("selectedNozzle");
+    QLabel *status = window.findChild<QLabel *>("machineStatus");
+    QVERIFY(table != 0 && name != 0 && save != 0 && selected != 0);
+    QCOMPARE(table->horizontalHeaderItem(0)->text(), QString("Nozzle"));
+    QCOMPARE(table->horizontalHeaderItem(1)->text(), QString("Name"));      // the Name column comes right after the number
+    QCOMPARE(table->item(0, 1)->text(), QString());                          // no name yet
+    QCOMPARE(name->maxLength(), 50);
+
+    // pick a nozzle, type its name, Save name: the table, the label of the form and the change log show it; the web app is told
+    table->selectRow(0);
+    QCOMPARE(selected->text(), QString("Nozzle 1"));
+    name->setText("  Diesel 1 ");
+    save->click();
+    QVERIFY2(status->text().contains("Nozzle 1: the name was saved"), qPrintable(status->text()));
+    QCOMPARE(table->item(0, 1)->text(), QString("Diesel 1"));
+    QCOMPARE(selected->text(), QString("Nozzle 1: Diesel 1"));
+    QCOMPARE(name->text(), QString("Diesel 1"));
+    QCOMPARE(one("SELECT name FROM nozzles WHERE number = 1").toString(), QString("Diesel 1"));
+    QCOMPARE(one("SELECT synced FROM nozzles WHERE number = 1").toInt(), 0);
+    QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Nozzle 1: name - -> name Diesel 1"));
+    QCOMPARE(table->item(1, 1)->text(), QString());                          // the other nozzle is untouched
+
+    // an empty name takes it away
+    name->clear();
+    save->click();
+    QCOMPARE(table->item(0, 1)->text(), QString());
+    QCOMPARE(selected->text(), QString("Nozzle 1"));
+
+    // Add a nozzle with a name
+    QComboBox *number = window.findChild<QComboBox *>("addNozzleNumber");
+    QLineEdit *addName = window.findChild<QLineEdit *>("addNozzleName");
+    QVERIFY(addName != 0);
+    QCOMPARE(addName->maxLength(), 50);
+    number->setCurrentIndex(number->findText("3"));
+    QComboBox *addFuel = window.findChild<QComboBox *>("addNozzleFuel");
+    addFuel->setCurrentIndex(addFuel->findData("D"));
+    addFuel->activated(addFuel->currentIndex());                             // the tank of diesel follows
+    addName->setText("Diesel 3");
+    window.findChild<QPushButton *>("addNozzleButton")->click();
+    QVERIFY2(status->text().contains("Nozzle 3 was added"), qPrintable(status->text()));
+    QCOMPARE(table->rowCount(), 3);
+    QCOMPARE(table->item(2, 0)->text(), QString("3"));
+    QCOMPARE(table->item(2, 1)->text(), QString("Diesel 3"));
+    QCOMPARE(selected->text(), QString("Nozzle 3: Diesel 3"));
+    QCOMPARE(addName->text(), QString());                                    // ready for the next nozzle
+}
+
+// 007: a terminal database that is at version 6 (the cards table has its phone number, the nozzles have no name) gets the column and keeps its rows
+void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
+{
+    QSqlDatabase db = openDatabase(false);
+    const QStringList all = Migrator::bundled();
+    QCOMPARE(all.size(), 7);
+    QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
+
+    QString error;
+    QVERIFY2(Migrator::apply(db, all.mid(0, 6), &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 6);
+    QVERIFY(!migratedColumnsOf(db, "nozzles").contains("name"));            // the old database
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    run("INSERT INTO nozzles (id, number, tank_id, fuel_type, board_address, synced, deleted, mode, density, seen_at) VALUES (10, 1, 1, 'D', 1, 1, 0, 0, 8300, '2026-10-08 09:00:00')");
+
+    QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
+    QCOMPARE(Migrator::version(db), 7);
+    QVERIFY(migratedColumnsOf(db, "nozzles").contains("name"));
+    QCOMPARE(one("SELECT COUNT(*) FROM nozzles WHERE number = 1 AND fuel_type = 'D' AND density = 8300 AND name IS NULL").toInt(), 1);   // the nozzle is as it was, without a name
+
+    MachineConfig config(db);
+    QCOMPARE(config.nozzle(1).label(), QString("Nozzle 1"));
+    QVERIFY(config.setNozzleName(1, "Diesel 1", 0, &error));
+    QCOMPARE(config.nozzle(1).label(), QString("Diesel 1"));
 }
 void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndAnAddNeedsATank()
 {
@@ -6707,7 +6854,7 @@ void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndA
     QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
     QLabel *status = window.findChild<QLabel *>("machineStatus");
     QPushButton *update = window.findChild<QPushButton *>("updateNozzleButton");
-    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(0, 7));
+    QPushButton *remove = qobject_cast<QPushButton *>(table->cellWidget(0, 8));
     table->selectRow(0);
     window.findChild<QLineEdit *>("nozzlePulses")->setText("1500");
     boxAnswer_ = QMessageBox::Ok;
@@ -6718,7 +6865,7 @@ void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndA
     QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
     update->click();
     QVERIFY2(boxText_.contains("Tickets are queued on nozzle 1"), qPrintable(boxText_));
-    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));                // not saved
+    QCOMPARE(table->item(0, 6)->text(), QString("1200.00"));                // not saved
     QVERIFY(status->text().contains("Tickets are queued"));
     boxText_.clear();
     QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
@@ -6733,7 +6880,7 @@ void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndA
     QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
     update->click();
     QVERIFY2(boxText_.contains("A fill is open on nozzle 1"), qPrintable(boxText_));
-    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));
+    QCOMPARE(table->item(0, 6)->text(), QString("1200.00"));
     boxText_.clear();
     QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
     remove->click();
@@ -6744,7 +6891,7 @@ void Smart210Test::aNozzleWithAFillOrQueuedTicketsIsNeitherUpdatedNorRemovedAndA
     SupplyQueue::end(QSqlDatabase::database(connection_), 1);
     update->click();
     QVERIFY2(status->text().startsWith("Saved."), qPrintable(status->text()));
-    QCOMPARE(table->item(0, 5)->text(), QString("1500.00"));
+    QCOMPARE(table->item(0, 6)->text(), QString("1500.00"));
 
     // an Add needs a tank: no tank holds this fuel type, so it is refused with a box
     QComboBox *fuel = window.findChild<QComboBox *>("addNozzleFuel");
@@ -6777,7 +6924,7 @@ void Smart210Test::aNozzleWithoutATankIsReportedWhenMachineConfigOpens()
 
     QLabel *status = window.findChild<QLabel *>("machineStatus");
     QVERIFY2(status->text().contains("Nozzle(s) 2 have no tank"), qPrintable(status->text()));
-    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(1, 6)->text(), QString("(no tank)"));
+    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(1, 7)->text(), QString("(no tank)"));
 }
 
 void Smart210Test::aBoardsConfigBecomesTheNozzlesConfig()
@@ -7441,13 +7588,13 @@ void Smart210Test::theNozzleTableShowsTheBoardsAndTheirStatus()
     QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
     QCOMPARE(table->rowCount(), 2);                                // the two nozzles that were added, not six boards
     QCOMPARE(table->item(0, 0)->text(), QString("1"));
-    QCOMPARE(table->item(0, 1)->text(), QString("No converter")); // nothing is connected in this test
-    QCOMPARE(table->item(0, 2)->text(), QString("Auto"));
-    QCOMPARE(table->item(0, 3)->text(), QString("D"));
-    QCOMPARE(table->item(0, 4)->text(), QString("0.8300"));
-    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));
-    QCOMPARE(table->item(0, 6)->text(), QString("T1"));
-    QCOMPARE(table->item(1, 5)->text(), QString("1234.50"));
+    QCOMPARE(table->item(0, 2)->text(), QString("No converter")); // nothing is connected in this test
+    QCOMPARE(table->item(0, 3)->text(), QString("Auto"));
+    QCOMPARE(table->item(0, 4)->text(), QString("D"));
+    QCOMPARE(table->item(0, 5)->text(), QString("0.8300"));
+    QCOMPARE(table->item(0, 6)->text(), QString("1200.00"));
+    QCOMPARE(table->item(0, 7)->text(), QString("T1"));
+    QCOMPARE(table->item(1, 6)->text(), QString("1234.50"));
     QCOMPARE(table->item(1, 0)->text(), QString("2"));
 
     // picking a nozzle fills the form: neither the table nor the form changes its width (the text of the label above the form is not what sizes it)
@@ -7497,7 +7644,7 @@ void Smart210Test::aBadConfigIsCheckedBeforeItIsSent()
     window.findChild<QLineEdit *>("nozzlePulses")->setText("1234.5");
     send->click(); // good values, but no board answers: they are saved here all the same
     QVERIFY2(status->text().startsWith("Saved.") && status->text().contains("was not updated"), qPrintable(status->text()));
-    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(0, 5)->text(), QString("1234.50"));
+    QCOMPARE(window.findChild<QTableWidget *>("nozzleTable")->item(0, 6)->text(), QString("1234.50"));
     QCOMPARE(changes().recentChanges(100).size(), 1);
 }
 
@@ -7526,10 +7673,10 @@ void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
     window.findChild<QPushButton *>("pinOkButton")->click();
     QCOMPARE(window.currentPage(), QString("machine"));
     QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 1)->text(), QString("Online"), 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(table->item(1, 1)->text(), QString("Online"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 2)->text(), QString("Online"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(table->item(1, 2)->text(), QString("Online"), 5000);
     QCOMPARE(table->rowCount(), 2);                            // only the nozzles that were added: a board 3 that answered would make no row
-    QCOMPARE(table->item(0, 5)->text(), QString("1200.00"));  // the terminal's own value: the board (1000.00) is not read by itself
+    QCOMPARE(table->item(0, 6)->text(), QString("1200.00"));  // the terminal's own value: the board (1000.00) is not read by itself
 
     table->selectRow(0);
     QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1200.00"));
@@ -7541,9 +7688,9 @@ void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
     QTRY_COMPARE_WITH_TIMEOUT(boards.board(1).config.pulsesX100, quint32(123450), 5000);
     QCOMPARE(boards.board(1).config.mode, int(BoardProtocol::ModeManual));
     QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("Verified"), 5000);
-    QCOMPARE(table->item(0, 2)->text(), QString("Manual"));
-    QCOMPARE(table->item(0, 5)->text(), QString("1234.50"));
-    QCOMPARE(table->item(0, 6)->text(), QString("T1"));                // the nozzle keeps its tank
+    QCOMPARE(table->item(0, 3)->text(), QString("Manual"));
+    QCOMPARE(table->item(0, 6)->text(), QString("1234.50"));
+    QCOMPARE(table->item(0, 7)->text(), QString("T1"));                // the nozzle keeps its tank
     QListWidget *log = window.findChild<QListWidget *>("changeLog");
     QVERIFY(log->count() >= 1);
     QVERIFY(log->item(0)->text().contains("Cash One"));
@@ -7556,7 +7703,7 @@ void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
     window.findChild<QPushButton *>("updateNozzleButton")->click();
     QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("did not keep"), 5000);
     QVERIFY(window.findChild<QLabel *>("machineStatus")->text().contains("saved here"));
-    QCOMPARE(table->item(0, 5)->text(), QString("999.00"));     // saved in the terminal's database all the same
+    QCOMPARE(table->item(0, 6)->text(), QString("999.00"));     // saved in the terminal's database all the same
     QCOMPARE(Settings(QSqlDatabase::database(connection_)).value(SettingKey::NozzlesNotOnBoard), QString("1")); // and marked: the board has not confirmed it
     boards.board(1).keepsNoConfig = false;
 
@@ -7565,7 +7712,7 @@ void Smart210Test::aChangeIsSentToTheBoardAndShownWhenItConfirms()
     window.findChild<QPushButton *>("readNozzlesButton")->click();
     QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QLabel *>("machineStatus")->text().contains("was read from its board and saved"), 5000);
     QCOMPARE(window.findChild<QLineEdit *>("nozzlePulses")->text(), QString("1500.00"));
-    QCOMPARE(table->item(0, 5)->text(), QString("1500.00"));
+    QCOMPARE(table->item(0, 6)->text(), QString("1500.00"));
     QCOMPARE(Settings(QSqlDatabase::database(connection_)).value(SettingKey::NozzlesNotOnBoard), QString()); // the terminal holds what the board holds again
 }
 
@@ -11254,8 +11401,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 6);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases)
-    QCOMPARE(Migrator::version(db), 6);
+    QCOMPARE(Migrator::bundled().size(), 7);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle
+    QCOMPARE(Migrator::version(db), 7);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
@@ -11267,7 +11414,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
-    QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted"));
+    QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));
     QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("nozzle_number card_id preset_kg result_id started_at"));
     QCOMPARE(columnsOf(db, "checkouts").join(" "), QString("id date mode user_id performed_at records"));
 
