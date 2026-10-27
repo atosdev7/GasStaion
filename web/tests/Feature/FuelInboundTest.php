@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Fuel\FuelInbound;
 use App\Support\Dashboard\TankLevels;
+use App\Support\Fuel\DefaultCost;
 use App\Models\Fuel\Tank;
 use App\Models\Admin\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,81 +45,79 @@ class FuelInboundTest extends TestCase
         ]);
     }
 
-    public function testFirstInboundOfAFuelTypeBecomesDefault()
+    // the default cost is a value of its own (App\Support\Fuel\DefaultCost): the first cost of a fuel type, or the button of a record, sets it
+    public function testFirstInboundOfAFuelTypeSetsTheDefaultCost()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1000')->assertRedirect('/inbound');
 
         $row = FuelInbound::first();
-        $this->assertTrue($row->is_default);
         $this->assertSame($this->diesel, $row->fuel_type); // taken from the tank
-        $this->assertEquals(6.1, FuelInbound::defaultCost($this->diesel));
+        $this->assertEquals(6.1, DefaultCost::get($this->diesel));
+        $this->assertTrue(DefaultCost::is($this->diesel, '6.1'));
+        $this->assertSame('6.1000', \App\Models\Admin\Setting::find('default_cost_D')->value);
     }
 
-    public function testLaterInboundKeepsTheDefaultUnlessAskedToChange()
+    public function testLaterInboundKeepsTheDefaultCostUnlessAskedToChange()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
         $this->inbound($this->tankD, '6.5');
 
-        $this->assertEquals(6.1, FuelInbound::defaultCost($this->diesel));
+        $this->assertEquals(6.1, DefaultCost::get($this->diesel));
 
         $this->inbound($this->tankD, '6.9', ['is_default' => 1]);
-        $this->assertEquals(6.9, FuelInbound::defaultCost($this->diesel));
-        $this->assertSame(1, FuelInbound::where('fuel_type', $this->diesel)->where('is_default', true)->count());
+        $this->assertEquals(6.9, DefaultCost::get($this->diesel));
+        $this->assertSame(3, FuelInbound::count());                                       // the records are not changed by it
     }
 
-    public function testTheDefaultKeepsItsPeriodSoAnOldSaleFindsItsCost()
+    public function testTheDefaultCostIsCopiedAndSoItDoesNotFollowTheRecordItCameFrom()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
-        $first = FuelInbound::first();
-        $first->forceFill(['default_from' => '2026-09-20 08:00:00'])->save();
-
-        $this->inbound($this->tankD, '6.9', ['is_default' => 1]);
-
-        $first = $first->fresh();
+        $this->inbound($this->tankD, '6.9');
         $second = FuelInbound::where('cost', 6.9)->first();
-        $this->assertFalse($first->is_default);
-        $this->assertNotNull($first->default_until);
-        $this->assertNotNull($second->default_from);
-        $this->assertNull($second->default_until);
-        $this->assertEquals(6.1, FuelInbound::costAt($this->diesel, '2026-09-25 10:00:00'));
-        $this->assertEquals(6.9, FuelInbound::costAt($this->diesel, now()->addMinute()));
 
-        // choosing the one that is the default already changes nothing
-        $stamp = $second->default_from;
-        $this->post('/inbound/' . $second->id . '/default')->assertRedirect('/inbound');
-        $this->assertEquals($stamp, $second->fresh()->default_from);
-        $this->assertNull($second->fresh()->default_until);
+        $this->post('/inbound/' . $second->id . '/default')->assertRedirect('/inbound')->assertSessionHas('status');
+        $this->assertStringContainsString('6.9000', session('status'));
+        $this->assertEquals(6.9, DefaultCost::get($this->diesel));
+
+        // the record is changed, even deleted: the default stays what it was copied as
+        $this->put('/inbound/' . $second->id, ['tank_id' => $this->tankD->id, 'inbound_date' => '2026-09-20', 'amount_kg' => '10000', 'cost' => '7.5'])->assertRedirect('/inbound');
+        $this->assertEquals(6.9, DefaultCost::get($this->diesel));
+        $this->delete('/inbound/' . $second->id)->assertRedirect('/inbound');
+        $this->assertEquals(6.9, DefaultCost::get($this->diesel));
+        $this->assertFalse(DefaultCost::is($this->diesel, '7.5'));
     }
 
-    public function testDefaultIsPerFuelType()
+    public function testDefaultCostIsPerFuelType()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
         $this->inbound($this->tankG, '7.2');
 
-        $this->assertEquals(6.1, FuelInbound::defaultCost($this->diesel));
-        $this->assertEquals(7.2, FuelInbound::defaultCost($this->gas));
+        $this->assertEquals(6.1, DefaultCost::get($this->diesel));
+        $this->assertEquals(7.2, DefaultCost::get($this->gas));
     }
 
-    public function testMakeDefaultMovesTheFlag()
+    public function testMakeDefaultCostChangesTheCostOfTheFuelTypeOnly()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
+        $this->inbound($this->tankG, '7.2');
         $this->inbound($this->tankD, '6.5');
         $second = FuelInbound::where('cost', 6.5)->first();
 
         $this->post('/inbound/' . $second->id . '/default')->assertRedirect('/inbound');
 
-        $this->assertEquals(6.5, FuelInbound::defaultCost($this->diesel));
-        $this->assertSame(1, FuelInbound::where('is_default', true)->count());
+        $this->assertEquals(6.5, DefaultCost::get($this->diesel));
+        $this->assertEquals(7.2, DefaultCost::get($this->gas));
     }
 
     public function testNoDefaultCostWhenNothingWasReceived()
     {
-        $this->assertNull(FuelInbound::defaultCost($this->diesel));
+        $this->assertNull(DefaultCost::get($this->diesel));
+        $this->assertFalse(DefaultCost::is($this->diesel, 6));
     }
 
     public function testValidation()
@@ -171,8 +170,7 @@ class FuelInboundTest extends TestCase
         $this->assertSame('corrected', $row->note);
         $this->assertSame('2026-09-22', substr((string) $row->inbound_date, 0, 10));
         $this->assertEquals(8000, TankLevels::all()->firstWhere('tank.id', $this->tankD->id)->inbound);
-        $this->assertTrue($row->is_default); // which record is the default is not changed here
-        $this->assertEquals(6.5, FuelInbound::defaultCost($this->diesel));
+        $this->assertEquals(6.1, DefaultCost::get($this->diesel)); // the default cost is a value of its own: a change of the record does not change it
     }
 
     public function testEditOffersAndAcceptsOnlyTanksOfTheSameFuel()
@@ -224,26 +222,28 @@ class FuelInboundTest extends TestCase
         $this->get('/inbound')->assertOk()->assertDontSee('6.5000');
     }
 
-    public function testTheDefaultIsNotDeletedWhileOthersOfItsFuelExist()
+    public function testAnyRecordCanBeDeletedEvenOneWhoseCostIsTheDefaultCost()
     {
         $this->as('manager');
         $this->inbound($this->tankD, '6.1');
         $this->inbound($this->tankD, '6.5');
-        $default = FuelInbound::where('is_default', true)->first();
+        $first = FuelInbound::where('cost', 6.1)->first();
 
-        $this->delete('/inbound/' . $default->id)->assertRedirect('/inbound')->assertSessionHasErrors('inbound');
-        $this->assertNotNull(FuelInbound::find($default->id));
+        $this->delete('/inbound/' . $first->id)->assertRedirect('/inbound')->assertSessionHasNoErrors();
+        $this->assertNull(FuelInbound::find($first->id));
+        $this->assertEquals(6.1, DefaultCost::get($this->diesel));                         // the default cost is not a flag of the record
+    }
 
-        // another record is made the default, then the old one can go
-        $other = FuelInbound::where('id', '<>', $default->id)->first();
-        $this->post('/inbound/' . $other->id . '/default');
-        $this->delete('/inbound/' . $default->id)->assertRedirect('/inbound')->assertSessionHasNoErrors();
-        $this->assertNull(FuelInbound::find($default->id));
-        $this->assertEquals($other->cost, FuelInbound::defaultCost($this->diesel));
+    public function testTheListShowsTheDefaultBadgeOnTheRecordsWhoseCostIsTheDefaultCost()
+    {
+        $this->as('manager');
+        $this->inbound($this->tankD, '6.1');
+        $this->inbound($this->tankD, '6.5');
+        $this->inbound($this->tankD, '6.1000', ['inbound_date' => '2026-09-21']);          // the same cost as the default: shown as default too
 
-        // the only record of a fuel type, even the default, can be deleted
-        $this->delete('/inbound/' . $other->id)->assertRedirect('/inbound')->assertSessionHasNoErrors();
-        $this->assertNull(FuelInbound::defaultCost($this->diesel));
+        $html = $this->get('/inbound')->assertOk()->getContent();
+        $this->assertSame(2, substr_count($html, '<span class="badge badge-success">Default</span>'));
+        $this->assertSame(1, substr_count($html, 'Make default cost</button>'));              // only the record that is not the default one has the button
     }
 
     public function testTheListHasAnActionsColumnForTheManagerAndTheAccountantOnly()
@@ -339,7 +339,7 @@ class FuelInboundTest extends TestCase
         $this->as('manager');
         for ($i = 1; $i <= 52; $i++) {
             FuelInbound::forceCreate([
-                'tank_id' => $this->tankD->id, 'fuel_type' => $this->diesel, 'amount_kg' => 100, 'cost' => 6, 'is_default' => false,
+                'tank_id' => $this->tankD->id, 'fuel_type' => $this->diesel, 'amount_kg' => 100, 'cost' => 6,
                 'inbound_date' => '2026-09-' . str_pad((string) (($i % 28) + 1), 2, '0', STR_PAD_LEFT), 'from_name' => 'Acme', 'user_id' => 1,
             ]);
         }

@@ -19,6 +19,15 @@
                     </select>
                     @error('tank_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
+                @if ($costChoices !== null)
+                    {{-- the cost of the layer the fuel is taken from: one of the costs of the fuel in the tank, or none (the oldest fuel goes first) --}}
+                    <div class="form-group">
+                        <label for="f_cost">{{ __('fuel.cost') }}</label>
+                        <select id="f_cost" name="cost" class="form-control @error('cost') is-invalid @enderror"></select>
+                        <small class="form-text text-muted">{{ __('fuel.outbound_cost_hint') }}</small>
+                        @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+                @endif
                 <div class="form-group">
                     <label for="f_outbound_date">{{ __('fuel.outbound_date') }}</label>
                     <input id="f_outbound_date" name="outbound_date" type="date" value="{{ old('outbound_date', $outbound->outbound_date ?: date('Y-m-d')) }}" class="form-control @error('outbound_date') is-invalid @enderror">
@@ -47,3 +56,34 @@
         </form>
     </div>
 @endsection
+
+@if ($costChoices !== null)
+    @push('scripts')
+    <script>
+    $(function () {
+        // the cost field lists the costs of the fuel in the chosen tank (and a first entry for none: the oldest fuel goes first)
+        var costChoices = @json($costChoices);
+        var current = @json(old('cost', $outbound->cost));
+        var tank = $('#f_tank_id');
+        var cost = $('#f_cost');
+        var costTank = null;
+        function fillCostList() {
+            var keep = costTank === tank.val() && cost.val() !== '' ? cost.val() : (costTank === null && current !== null && current !== '' ? String(current) : '');
+            costTank = tank.val();
+            var list = costChoices[tank.val()] || [];
+            cost.empty().append($('<option>').val('').text('-'));
+            var chosen = null;
+            $.each(list, function (i, c) {
+                var text = Number(c.cost).toFixed(4) + (c.kg > 0 ? '  (' + Number(c.kg).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kg)' : '') + (c.default ? '  *' : '');
+                var option = $('<option>').val(c.cost).text(text);
+                cost.append(option);
+                if (keep !== '' && Number(c.cost) === Number(keep)) chosen = option;
+            });
+            (chosen || cost.find('option').first()).prop('selected', true);
+        }
+        tank.on('change', fillCostList);
+        fillCostList();
+    });
+    </script>
+    @endpush
+@endif

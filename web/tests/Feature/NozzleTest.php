@@ -135,6 +135,38 @@ class NozzleTest extends TestCase
         $this->assertNull(Tank::find($this->tank->id));
     }
 
+    // a tank with a balance, a fuel inbound or an outbound keeps its fuel type and is not deleted (its stock is made of those records)
+    public function testATankWithRecordsKeepsItsFuelTypeAndIsNotDeleted()
+    {
+        $tank = \App\Models\Fuel\Tank::forceCreate(['name' => 'T9', 'fuel_type' => 'D']);
+        $this->as('admin');
+
+        // a tank with no records can change and go
+        $this->put('/tanks/' . $tank->id, ['name' => 'T9', 'fuel_type' => 'A', 'capacity_kg' => ''])->assertSessionHasNoErrors();
+        $this->assertSame('A', $tank->fresh()->fuel_type);
+
+        foreach ([
+            function () use ($tank) { \App\Models\Fuel\TankBalance::create(['tank_id' => $tank->id, 'balance' => 10, 'cost' => 1, 'balance_date' => '2026-10-01']); },
+            function () use ($tank) { \App\Models\Fuel\TankBalance::query()->delete(); \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'A', 'amount_kg' => 5, 'cost' => 1, 'inbound_date' => '2026-10-01', 'user_id' => 1]); },
+            function () use ($tank) {
+                \App\Models\Fuel\FuelInbound::query()->forceDelete();
+                $row = new \App\Models\Fuel\FuelOutbound;
+                $row->forceFill(['tank_id' => $tank->id, 'outbound_date' => '2026-10-01', 'amount_kg' => 2, 'user_id' => 1])->save();
+            },
+        ] as $make) {
+            $make();
+            $this->put('/tanks/' . $tank->id, ['name' => 'T9', 'fuel_type' => 'D', 'capacity_kg' => ''])->assertSessionHasErrors('fuel_type');
+            $this->assertSame('A', $tank->fresh()->fuel_type);
+            $this->put('/tanks/' . $tank->id, ['name' => 'T9 renamed', 'fuel_type' => 'A', 'capacity_kg' => '900'])->assertSessionHasNoErrors();   // name and capacity can change
+            $this->delete('/tanks/' . $tank->id)->assertRedirect('/tanks')->assertSessionHas('error');
+            $this->assertNotNull(\App\Models\Fuel\Tank::find($tank->id));
+        }
+
+        \App\Models\Fuel\FuelOutbound::query()->forceDelete();
+        $this->delete('/tanks/' . $tank->id)->assertRedirect('/tanks');
+        $this->assertNull(\App\Models\Fuel\Tank::find($tank->id));
+    }
+
     public function testTheListShowsTheNameOfTheNozzleFirst()
     {
         Nozzle::forceCreate(['device_id' => $this->device->id, 'number' => 7, 'name' => 'Diesel 1', 'tank_id' => $this->tank->id, 'fuel_type' => 'D']);

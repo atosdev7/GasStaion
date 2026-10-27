@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Sales\Sale;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
+use App\Support\Tickets\LegacyTickets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,7 @@ class TicketRestrictController extends Controller
     public function restrict(Request $request, $barcode)
     {
         $restricted = DB::transaction(function () use ($barcode) {
+            LegacyTickets::ensure($barcode);       // a ticket sold before go-live has no row until it is used: restricting it makes the row, so it can never be used
             $ticket = Ticket::lockForUpdate()->findOrFail($barcode);
 
             if (!in_array($ticket->status, [config('ticket_statuses.publish'), config('ticket_statuses.sale')], true)) {

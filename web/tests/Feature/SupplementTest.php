@@ -154,10 +154,10 @@ class SupplementTest extends TestCase
         $html = $this->as('manager')->get('/supplements')->assertOk()->getContent();
         $head = substr($html, strpos($html, '<thead>'), strpos($html, '<tr class="filters">') - strpos($html, '<thead>'));
         preg_match_all('/<th[^>]*>\s*([^<]*?)\s*<\/th>/', $head, $m);
-        $this->assertSame(['Supply date', 'Nozzle', 'Mode', 'Tickets total (kg)', 'Density (kg/L)', 'Out amount (kg / L)', 'Remainder', 'Actions'], array_map('html_entity_decode', $m[1]));
+        $this->assertSame(['Supply date', 'Nozzle', 'Mode', 'Tickets total (kg)', 'Density (kg/L)', 'Cost per kg', 'Out amount (kg / L)', 'Remainder', 'Actions'], array_map('html_entity_decode', $m[1]));
 
-        // the row: the day of the supply, the nozzle, the mode, what the tickets cover, kg / litres dispensed, the remainder ticket, the actions
-        $this->assertRegExp('/<tr>\s*<td>2026-09-20<\/td>\s*<td>[^<]*<\/td>\s*<td><span class="badge badge-info">Auto<\/span><\/td>\s*<td class="text-right">5\.00<\/td>\s*<td class="text-right">0\.89<\/td>\s*<td class="text-right">4\.00 kg \/ 4\.49 L<\/td>.*?<td class="text-nowrap text-right">\s*.*?supplement-actions/s', $html);
+        // the row: the day of the supply, the nozzle, the mode, what the tickets cover, the density, the cost (a user who may see costs), kg / litres dispensed, the remainder ticket, the actions
+        $this->assertRegExp('/<tr>\s*<td>2026-09-20<\/td>\s*<td>[^<]*<\/td>\s*<td><span class="badge badge-info">Auto<\/span><\/td>\s*<td class="text-right">5\.00<\/td>\s*<td class="text-right">0\.89<\/td>\s*<td class="text-right">-<\/td>\s*<td class="text-right">4\.00 kg \/ 4\.49 L<\/td>.*?<td class="text-nowrap text-right">\s*.*?supplement-actions/s', $html);
         $this->assertStringNotContainsString('<th>Supplied at</th>', $html);
     }
 
@@ -223,10 +223,11 @@ class SupplementTest extends TestCase
 
     public function testTheFieldsOfASupplyAreInTheOrderItIsRead()
     {
-        // the columns of the table (card_id: the card a supply was made with, none for tickets): its day, nozzle, mode, the preset, the density, the litres and the kg that came out, then the rest
+        // the columns of the table (card_id: the card a supply was made with, none for tickets): its day, nozzle, mode, the preset, the density, the litres and the kg that came out,
+        // the cost per kg of that fuel, then the rest
         $columns = \Illuminate\Support\Facades\Schema::getColumnListing('supplements');
-        $this->assertSame(['id', 'fuel_type', 'nozzle_id', 'device_id', 'card_id', 'supply_date', 'supplied_at', 'mode', 'preset_kg', 'density', 'out_amount_lt', 'out_amount_kg', 'comment'],
-            array_slice($columns, 0, 13));
+        $this->assertSame(['id', 'fuel_type', 'nozzle_id', 'device_id', 'card_id', 'supply_date', 'supplied_at', 'mode', 'preset_kg', 'density', 'out_amount_lt', 'out_amount_kg', 'cost', 'comment'],
+            array_slice($columns, 0, 14));
         $this->assertNotContains('manual_reading', $columns);
 
         // and the form follows it: when, nozzle, mode, the tickets (the preset), the density, the litres
@@ -973,6 +974,79 @@ class SupplementTest extends TestCase
         $this->assertSame('2026-09-19', (string) $remainder->fresh()->remainder_date);
         $this->assertSame('2026-09-19 22:00:00', (string) $remainder->fresh()->created_at);
         $this->assertSame('2026-09-19 22:00:00', (string) Ticket::find($remainder->ticket_barcode)->sale_date);
+    }
+
+    // ---- the cost of a supply: the fuel is taken from the layer of its cost in the tank ----
+
+    private function tankWithLayers($nozzle)
+    {
+        \App\Models\Fuel\TankBalance::create(['tank_id' => $nozzle->tank_id, 'balance' => 400, 'cost' => 6, 'balance_date' => '2026-10-01']);
+        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $nozzle->tank_id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 9, 'inbound_date' => '2026-10-05', 'user_id' => 1]);
+        \App\Support\Fuel\DefaultCost::set('D', 9);
+    }
+
+    private function layersOf($nozzle)
+    {
+        $layers = \App\Support\Fuel\TankCostLayers::forTank($nozzle->tank_id);
+
+        return collect($layers)->mapWithKeys(function ($layer) {
+            return [number_format($layer['cost'], 4, '.', '') => $layer['kg']];
+        })->all();
+    }
+
+    public function testASupplyHasTheCostItWasChosenWithAndTheFuelComesFromThatLayer()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $this->tankWithLayers($nozzle);
+
+        // the form lists the costs of the fuel in the tank of each nozzle, with the default cost marked
+        $page = $this->as('admin')->get('/supplements/create')->assertOk();
+        $this->assertSame([9.0, 6.0], array_column($page->viewData('costChoices')[$nozzle->id], 'cost'));
+        $this->assertStringContainsString('<select id="f_cost" name="cost"', $page->getContent());
+
+        $this->supply($this->soldTicket(1, 0)->barcode, $nozzle, 5, ['cost' => '6'])->assertSessionHasNoErrors();      // 5 kg from the layer of 6.00
+        $supplement = Supplement::first();
+        $this->assertEquals(6, $supplement->cost);
+        $this->assertEquals(6, \App\Models\Fuel\FuelOutbound::first()->cost);                                              // the outbound row carries it
+        $this->assertEquals(['6.0000' => 395.0, '9.0000' => 100.0], $this->layersOf($nozzle));
+
+        // no cost chosen: the default cost, because the tank has fuel at it
+        $this->supply($this->soldTicket(2, 0)->barcode, $nozzle, 5)->assertSessionHasNoErrors();
+        $this->assertEquals(9, Supplement::orderBy('created_at', 'desc')->orderBy('id')->get()->firstWhere('cost', 9)->cost);
+        $this->assertEquals(['6.0000' => 395.0, '9.0000' => 95.0], $this->layersOf($nozzle));
+
+        // a default cost the tank has no fuel at is not used by itself: the supply has none and takes the oldest fuel first
+        \App\Support\Fuel\DefaultCost::set('D', 7.5);
+        $this->supply($this->soldTicket(3, 0)->barcode, $nozzle, 5)->assertSessionHasNoErrors();
+        $none = Supplement::whereNull('cost')->first();
+        $this->assertNotNull($none);
+        $this->assertEquals(['6.0000' => 390.0, '9.0000' => 95.0], $this->layersOf($nozzle));
+    }
+
+    public function testTheCostOfASupplyIsChangedByTheAccountantBeforeConfirmingAndTheLayersFollow()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $this->tankWithLayers($nozzle);
+        $this->supply($this->soldTicket(1, 0)->barcode, $nozzle, 5, ['cost' => '6'])->assertSessionHasNoErrors();
+        $supplement = Supplement::first();
+
+        $page = $this->as('accountant')->get('/supplements/' . $supplement->id . '/edit')->assertOk();
+        $this->assertStringContainsString('<select id="f_cost" name="cost"', $page->getContent());
+        $this->assertSame([9.0, 6.0], array_column($page->viewData('costChoices'), 'cost'));
+
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'wrong layer', 'cost' => '9'])->assertSessionHasNoErrors();
+        $this->assertEquals(9, $supplement->fresh()->cost);
+        $this->assertEquals(9, \App\Models\Fuel\FuelOutbound::first()->cost);                                              // the outbound follows
+        $this->assertEquals(['6.0000' => 400.0, '9.0000' => 95.0], $this->layersOf($nozzle));
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'x', 'cost' => '-1'])->assertSessionHasErrors('cost');
+        $this->put('/supplements/' . $supplement->id, ['comment' => 'no cost sent'])->assertSessionHasNoErrors();
+        $this->assertEquals(9, $supplement->fresh()->cost);                                                                // none sent: it stays
+
+        // the list and the detail show it to a user who may see costs
+        $this->get('/supplements')->assertOk()->assertSee('Cost per kg')->assertSee('9.0000');
+        $this->get('/supplements/' . $supplement->id . '?modal=1')->assertOk()->assertSee('9.0000');
     }
 
     public function testTheTimeOfASupplyCannotBeInTheFuture()

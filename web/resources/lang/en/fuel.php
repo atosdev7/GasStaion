@@ -4,10 +4,10 @@ return [
     'confirmed_locked' => 'This record is confirmed and cannot be changed or deleted. A manager can take the confirmation back.',
     // Fuel inbound
     'default' => 'Default',
-    'make_default' => 'Make default',
-    'default_hint' => 'The default cost pre-fills the cost field on sales forms for this fuel type. The first inbound of a fuel type is the default automatically.',
+    'make_default' => 'Make default cost',
+    'default_hint' => 'The default cost is the cost a sale of this fuel type starts with (a user can choose another cost on the sale). It is a value of its own: the button copies the cost of a record into it. The first cost of a fuel type is the default automatically.',
+    'default_cost_set' => 'The default cost is now :cost.',
     'inbound_delete_confirm' => 'Delete this fuel inbound record? The tank stock goes down by its amount.',
-    'inbound_default_delete' => 'The default record of a fuel type cannot be deleted while other records of that fuel type exist. Make another record the default first.',
     'inbound_tank_fuel' => 'Choose a tank that holds the same fuel type as this record.',
     'inbound_cost_hint' => 'Sales that were already made keep the cost they were made with.',
 
@@ -20,6 +20,7 @@ return [
     'kind_supply' => 'Supply',
     'kind_by_hand' => 'By hand',
     'to_name' => 'To',
+    'outbound_cost_hint' => 'The fuel is taken from the layer of this cost in the tank. With none (-), the oldest fuel goes first. * is the default cost.',
     'outbound_created' => 'The outbound was added.',
     'outbound_saved' => 'The outbound was saved.',
     'outbound_deleted' => 'The outbound was deleted.',
@@ -28,7 +29,7 @@ return [
     'supplies' => 'Supplies',
 
     // Fuel inbound
-    'is_default' => 'Default cost for sales',
+    'is_default' => 'Make this cost the default cost',
 
     // Field labels
     'fuel_type' => 'Fuel type',
@@ -72,9 +73,10 @@ return [
     'stock_total' => 'Total',
     'stock_left' => 'Left (kg)',
     'stock_received' => 'Received (kg)',
-    'stock_unknown' => 'Earlier stock (no inbound left to say what it cost)',
+    'stock_unknown' => 'Earlier stock (no cost known)',
     'stock_empty' => 'The tanks hold none of this fuel.',
     'stock_opening' => 'Opening (kg)',
+    'stock_opening_badge' => 'Tank balance',
     'stock_in' => 'Inbound (kg)',
     'stock_out' => 'Outbound (kg)',
     'clear_filters' => 'Clear',

@@ -926,8 +926,8 @@ class SaleTest extends TestCase
     private function defaultCost($cost)
     {
         $tank = \App\Models\Fuel\Tank::first() ?: \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => $this->diesel]);
-        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => $this->diesel, 'amount_kg' => 1000, 'cost' => $cost, 'is_default' => true,
-            'default_from' => '2020-01-01 00:00:00', 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => $this->diesel, 'amount_kg' => 1000, 'cost' => $cost, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        \App\Support\Fuel\DefaultCost::set($this->diesel, $cost);
     }
 
     public function testTheCostFieldIsOnTheSaleFormsOfAdminManagerAndAccountantOnly()
@@ -938,17 +938,17 @@ class SaleTest extends TestCase
             foreach (['admin', 'manager', 'accountant'] as $role) {
                 $html = $this->as($role)->get($form)->assertOk()->getContent();
                 $this->assertStringContainsString('name="cost"', $html, "$role $form");
-                if ($form === '/spot-sales/create') { // (the ticket form offers the fuel types that have tickets published)
-                    $this->assertStringContainsString('data-cost="6.5000"', $html, "$role $form");   // pre-filled with the default of the fuel type
-                }
+                // the cost is a list of the costs of the fuel in the tanks, with the default cost of the fuel type marked
+                $this->assertStringContainsString('<select id="f_cost" name="cost"', $html, "$role $form");
+                $this->assertStringContainsString('"cost":6.5,"kg":1000,"default":true', $html, "$role $form");
             }
             if ($form === '/spot-sales/create') {
                 continue; // (the assistant has no spot sales)
             }
             $html = $this->as('assistant')->get($form)->assertOk()->getContent();
             $this->assertStringNotContainsString('name="cost"', $html, "assistant $form");
-            $this->assertStringNotContainsString('data-cost="', $html, "assistant $form");       // not even in the page source
-            $this->assertStringNotContainsString('6.5000', $html, "assistant $form");
+            $this->assertStringNotContainsString('"default":true', $html, "assistant $form");   // not even in the page source
+            $this->assertStringNotContainsString('6.5', $html, "assistant $form");
         }
         $this->as('cashier')->get('/ticket-sales/create')->assertForbidden();
     }

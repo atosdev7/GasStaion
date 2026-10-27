@@ -21,6 +21,15 @@
                     </select>
                     @error('nozzle_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
+                @if ($costChoices !== null)
+                    {{-- the cost per kg: one of the costs of the fuel in the tank of the nozzle (the list follows the nozzle), the default cost of the fuel type chosen to begin with; the fuel is taken from the layer of this cost --}}
+                    <div class="form-group">
+                        <label for="f_cost">{{ __('supplements.cost') }}</label>
+                        <select id="f_cost" name="cost" class="form-control @error('cost') is-invalid @enderror"></select>
+                        <small class="form-text text-muted">{{ __('supplements.cost_hint') }}</small>
+                        @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+                @endif
                 <div class="form-group">
                     <label for="f_mode">{{ __('supplements.mode') }}</label>
                     <select id="f_mode" name="mode" class="form-control @error('mode') is-invalid @enderror">
@@ -68,6 +77,30 @@ $(function () {
 
     density.on('input', function () { touched = true; });
     // the density of the nozzle's fuel type is filled in when a nozzle is chosen, until the density is typed by hand
+    // the cost field lists the costs of the fuel in the tank of the nozzle; the default cost is chosen unless the user chose another that the tank has
+    var costChoices = @json($costChoices);
+    var oldCost = @json(old('cost'));
+    var cost = $('#f_cost');
+    var costNozzle = null;
+    function fillCostList() {
+        if (!cost.length) return;
+        var keep = costNozzle === nozzle.val() && cost.val() !== '' ? cost.val() : (costNozzle === null && oldCost !== null ? String(oldCost) : '');
+        costNozzle = nozzle.val();
+        var list = (costChoices && costChoices[nozzle.val()]) || [];
+        cost.empty();
+        var chosen = null, fallback = null;
+        $.each(list, function (i, c) {
+            var text = Number(c.cost).toFixed(4) + (c.kg > 0 ? '  (' + Number(c.kg).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kg)' : '') + (c.default ? '  *' : '');
+            var option = $('<option>').val(c.cost).text(text);
+            cost.append(option);
+            if (keep !== '' && Number(c.cost) === Number(keep)) chosen = option;
+            if (c['default']) fallback = option;
+        });
+        if (!list.length) cost.append($('<option>').val('').text('-'));
+        (chosen || fallback || cost.find('option').first()).prop('selected', true);
+    }
+    nozzle.on('change', fillCostList);
+    fillCostList();
     nozzle.on('change', function () {
         var d = densities[nozzle.val()];
         if (!touched) {

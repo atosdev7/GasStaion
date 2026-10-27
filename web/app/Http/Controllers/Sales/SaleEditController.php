@@ -11,11 +11,13 @@ use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
+use App\Support\Fuel\CostChoices;
 use App\Support\Sales\SaleAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 // Editing a sale that was entered with a wrong date, comment or receipt: only those three can be changed; the weight, the price, the payment,
 // the tickets and the card balance stay as they were entered (a wrong sale is deleted and entered again, a sale made right is returned). A
@@ -52,7 +54,15 @@ class SaleEditController extends Controller
             'fuels' => config('fuel_types'),
             'items' => SaleItem::where('sale_id', $sale->id)->orderBy('id')->get(),
             'back' => $back,
+            'costChoices' => $this->costEditable($sale) ? CostChoices::forFuel($sale->fuel_type, $sale->cost) : null,
         ]);
+    }
+
+    // The cost of a sale of fuel can be chosen again (from the costs of the fuel in the tanks) by a user who may see costs; a top-up of a card has none, and a
+    // return keeps the cost of the sale it takes back.
+    private function costEditable(Sale $sale)
+    {
+        return auth()->user() && auth()->user()->can('costs.view') && $sale->sale_type !== 'card' && !$sale->isReturn();
     }
 
     public function update(Request $request, $id)
@@ -66,21 +76,45 @@ class SaleEditController extends Controller
 
         // (the limit of backdate_days is for a day the sale is moved to: a sale that is old already keeps its day when only the comment changes)
         $moving = substr((string) $sale->sale_date, 0, 10) !== (string) $request->input('sale_date');
-        $data = $request->validate([
+        $rules = [
             'sale_date' => $moving ? SaleAccess::dateRules($request->user(), ['required']) : 'required|date_format:Y-m-d|before_or_equal:today',
             'comment' => 'nullable|string|max:255',
             'receipt' => 'nullable|boolean',
-        ], SaleAccess::dateMessages());
+        ];
+        $costEditable = $this->costEditable($sale);
+        if ($costEditable) {
+            $rules['cost'] = 'nullable|numeric|min:0|max:9999999';
+        }
+        $data = $request->validate($rules, SaleAccess::dateMessages());
 
-        $before = '#' . $sale->id . ' ' . $sale->sale_type . ' ' . $sale->sale_date . ' / ' . $sale->comment . ' / receipt ' . (int) $sale->receipt;
+        $before = '#' . $sale->id . ' ' . $sale->sale_type . ' ' . $sale->sale_date . ' / ' . $sale->comment . ' / receipt ' . (int) $sale->receipt . ' / cost ' . $sale->cost;
         $moved = substr((string) $sale->sale_date, 0, 10) !== $data['sale_date'];
 
-        DB::transaction(function () use ($sale, $data, $moved) {
+        // A return takes back a sale, so it cannot be dated before that sale, and a sale cannot be moved to a day after its first return.
+        if ($moved) {
+            if ($sale->isReturn()) {
+                $original = Sale::withTrashed()->find($sale->reverses_sale_id);
+                if ($original && $data['sale_date'] < substr((string) $original->sale_date, 0, 10)) {
+                    throw ValidationException::withMessages(['sale_date' => __('sale_edit.before_original', ['date' => substr((string) $original->sale_date, 0, 10)])]);
+                }
+            } else {
+                $firstReturn = Sale::where('reverses_sale_id', $sale->id)->min('sale_date');
+                if ($firstReturn && $data['sale_date'] > substr((string) $firstReturn, 0, 10)) {
+                    throw ValidationException::withMessages(['sale_date' => __('sale_edit.after_return', ['date' => substr((string) $firstReturn, 0, 10)])]);
+                }
+            }
+        }
+
+        DB::transaction(function () use ($sale, $data, $moved, $costEditable) {
             $sale->forceFill([
                 'sale_date' => $data['sale_date'],
                 'comment' => isset($data['comment']) && $data['comment'] !== '' ? $data['comment'] : null,
                 'receipt' => !empty($data['receipt']),
-            ])->save();
+            ]);
+            if ($costEditable && array_key_exists('cost', $data) && $data['cost'] !== null) {
+                $sale->cost = $data['cost'];
+            }
+            $sale->save();
 
             if ($moved) {
                 // the tickets it sold and a ticket loan it made keep the moment of the sale: they move to the new day, at the same time of day
@@ -92,7 +126,7 @@ class SaleEditController extends Controller
             }
         });
 
-        Audit::log('sale_edit', $before . ' -> ' . $data['sale_date'] . ' / ' . ($data['comment'] ?? '') . ' / receipt ' . (int) !empty($data['receipt']));
+        Audit::log('sale_edit', $before . ' -> ' . $data['sale_date'] . ' / ' . ($data['comment'] ?? '') . ' / receipt ' . (int) !empty($data['receipt']) . ' / cost ' . $sale->cost);
 
         $message = __('sale_edit.saved');
         if ($moved) {

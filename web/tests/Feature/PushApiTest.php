@@ -45,8 +45,9 @@ class PushApiTest extends TestCase
         $this->nozzle = Nozzle::forceCreate(['device_id' => Device::first()->id, 'number' => 1, 'tank_id' => $tank->id, 'fuel_type' => 'D']);
         FuelInbound::forceCreate([
             'tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 1000, 'cost' => 2.5, 'inbound_date' => '2026-10-01',
-            'user_id' => 1, 'is_default' => true,
+            'user_id' => 1,
         ]);
+        \App\Support\Fuel\DefaultCost::set('D', 2.5);
     }
 
     private function payload($response)
@@ -427,22 +428,49 @@ class PushApiTest extends TestCase
         $this->assertSame(1, SyncError::where('record_id', $poison['id'])->count());
     }
 
-    public function testASaleTakesTheCostThatWasTheDefaultWhenItWasMade()
+    // there is no history of default costs: a sale a terminal uploads takes the default cost of its fuel type as it is when it arrives, and the accountant can change it
+    // on the sale before confirming
+    public function testASaleATerminalUploadsTakesTheDefaultCostOfItsFuelType()
     {
-        $old = FuelInbound::first();
-        $old->forceFill(['default_from' => '2026-10-01 00:00:00', 'default_until' => '2026-10-08 08:00:00', 'is_default' => false])->save();
-        FuelInbound::forceCreate([
-            'tank_id' => $old->tank_id, 'fuel_type' => 'D', 'amount_kg' => 1000, 'cost' => 3.0, 'inbound_date' => '2026-10-08',
-            'user_id' => 1, 'is_default' => true, 'default_from' => '2026-10-08 08:00:00',
-        ]);
-        $before = $this->sale(['sale_date' => '2026-10-07']);
-        $after = $this->sale(['sale_date' => '2026-10-08']);
+        $first = $this->sale(['sale_date' => '2026-10-07']);
+        $this->push('sales', [$first]);
+        $this->assertEquals(2.5, Sale::find($first['id'])->cost);
 
-        // both arrive on the 10th, after the default changed
-        $this->push('sales', [$before, $after]);
+        \App\Support\Fuel\DefaultCost::set('D', 3.0);
+        $second = $this->sale(['sale_date' => '2026-10-08']);
+        $this->push('sales', [$second]);
+        $this->assertEquals(3.0, Sale::find($second['id'])->cost);
+        $this->assertEquals(2.5, Sale::find($first['id'])->cost);              // the sale keeps the cost it was made with
 
-        $this->assertEquals(2.5, Sale::find($before['id'])->cost);
-        $this->assertEquals(3.0, Sale::find($after['id'])->cost);
+        // a fuel type with no default cost: the sale has none
+        \App\Models\Admin\Setting::where('key', 'default_cost_D')->delete();
+        $third = $this->sale(['sale_date' => '2026-10-09']);
+        $this->push('sales', [$third]);
+        $this->assertNull(Sale::find($third['id'])->cost);
+    }
+
+    // a terminal cannot choose a cost: a new supply has the default cost of the fuel type when its tank has fuel at that cost, otherwise none; a supply uploaded again keeps its cost
+    public function testASupplyATerminalUploadsHasTheDefaultCostWhenTheTankHasFuelAtIt()
+    {
+        $first = $this->supplement();
+        $this->push('supplements', [$first]);
+        $this->assertEquals(2.5, Supplement::find($first['id'])->cost);                                 // the tank has 1000 kg at 2.50: the default cost
+        $this->assertEquals(2.5, \App\Models\Fuel\FuelOutbound::where('supplement_id', $first['id'])->value('cost'));
+
+        \App\Support\Fuel\DefaultCost::set('D', 3.0);                                                   // a cost the tank has no fuel at
+        $second = $this->supplement();
+        $this->push('supplements', [$second]);
+        $this->assertNull(Supplement::find($second['id'])->cost);                                       // none: the oldest fuel goes first
+        $this->assertNull(\App\Models\Fuel\FuelOutbound::where('supplement_id', $second['id'])->value('cost'));
+
+        // uploaded again: the cost stays what it was
+        \App\Support\Fuel\DefaultCost::set('D', 2.5);
+        $this->push('supplements', [$second]);
+        $this->assertNull(Supplement::find($second['id'])->cost);
+        \App\Models\Admin\Setting::where('key', 'default_cost_D')->delete();
+        $third = $this->supplement();
+        $this->push('supplements', [$third]);
+        $this->assertNull(Supplement::find($third['id'])->cost);                                        // no default cost: none
     }
 
     public function testARowTheDeviceKeepsRetryingIsLoggedOnceAndCounted()

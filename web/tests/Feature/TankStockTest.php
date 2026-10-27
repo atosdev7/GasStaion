@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admin\Device;
 use App\Models\Admin\User;
 use App\Models\Fuel\FuelInbound;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Nozzle;
 use App\Models\Fuel\Tank;
 use App\Models\Supplements\Supplement;
@@ -44,10 +44,14 @@ class TankStockTest extends TestCase
 
     private function inbound($tank, $kg, $cost, $date, $default = false)
     {
-        return FuelInbound::forceCreate([
-            'tank_id' => $tank->id, 'fuel_type' => $tank->fuel_type, 'amount_kg' => $kg, 'cost' => $cost, 'inbound_date' => $date,
-            'is_default' => $default, 'user_id' => 1,
+        $inbound = FuelInbound::forceCreate([
+            'tank_id' => $tank->id, 'fuel_type' => $tank->fuel_type, 'amount_kg' => $kg, 'cost' => $cost, 'inbound_date' => $date, 'user_id' => 1,
         ]);
+        if ($default) {
+            \App\Support\Fuel\DefaultCost::set($tank->fuel_type, $cost);      // the button of the record: the default cost is the cost of this one
+        }
+
+        return $inbound;
     }
 
     private function supply($nozzle, $kg)
@@ -60,7 +64,7 @@ class TankStockTest extends TestCase
 
     public function testTheBalanceOfAFuelTypeIsCostedByTheNewestInboundsFirst()
     {
-        InitialTankBalance::create(['tank_id' => $this->diesel->id, 'amount_kg' => 1000]);
+        TankBalance::create(['tank_id' => $this->diesel->id, 'balance' => 1000]);
         $this->inbound($this->diesel, 5000, 6.0, '2026-10-01');
         $this->inbound($this->diesel, 3000, 7.0, '2026-10-05', true);
         $this->supply($this->dieselNozzle, 4000);                          // 1000 + 8000 - 4000 = 5000 kg in the tank
@@ -79,9 +83,41 @@ class TankStockTest extends TestCase
         $this->assertEquals(7.0, $fuel['default_cost']);                   // what a sale is costed at now
     }
 
+    // a supply takes its fuel from the layer of its cost, so the stock is known per cost; one with no cost takes the oldest fuel first
+    public function testASupplyTakesItsFuelFromTheLayerOfItsCost()
+    {
+        $this->inbound($this->diesel, 1000, 6.0, '2026-10-01');
+        $this->inbound($this->diesel, 1000, 7.0, '2026-10-05');
+        $withCost = function ($kg, $cost) {
+            $supply = $this->supply($this->dieselNozzle, $kg);
+            $supply->forceFill(['cost' => $cost])->save();
+        };
+        $withCost(300, 7.0);                                              // from the newer layer
+        $withCost(200, 6.0);
+
+        $fuel = TankStockSummary::build()['fuels']['D'];
+        $this->assertSame(1500.0, $fuel['balance']);
+        $layers = array_column($fuel['layers'], 'kg', 'cost');
+        $this->assertEquals([7.0 => 700.0, 6.0 => 800.0], $layers);       // oldest-first would have emptied the cheaper one
+        $this->assertSame(0.0, $fuel['unknown_kg']);
+        $this->assertSame(700 * 7.0 + 800 * 6.0, $fuel['value']);
+
+        // one with no cost takes the oldest fuel first
+        $this->supply($this->dieselNozzle, 500);
+        $fuel = TankStockSummary::build()['fuels']['D'];
+        $this->assertEquals([7.0 => 700.0, 6.0 => 300.0], array_column($fuel['layers'], 'kg', 'cost'));
+
+        // more left at a cost than came in at it: that layer is below zero, and the stock is right in total
+        $withCost(400, 8.0);
+        $fuel = TankStockSummary::build()['fuels']['D'];
+        $this->assertSame(600.0, $fuel['balance']);
+        $this->assertEquals([7.0 => 700.0, 6.0 => 300.0, 8.0 => -400.0], array_column($fuel['layers'], 'kg', 'cost'));
+        $this->assertSame(600.0, $fuel['valued_kg']);
+    }
+
     public function testWhatTheInboundsDoNotCoverHasNoKnownCostAndIsNotValued()
     {
-        InitialTankBalance::create(['tank_id' => $this->gasoline->id, 'amount_kg' => 500]);
+        TankBalance::create(['tank_id' => $this->gasoline->id, 'balance' => 500]);
         $this->inbound($this->gasoline, 1000, 8.0, '2026-10-02', true);
         $this->supply($this->gasolineNozzle, 200);                         // 500 + 1000 - 200 = 1300 kg: 1000 at 8.00 and 300 of the opening stock
 
@@ -100,12 +136,12 @@ class TankStockTest extends TestCase
         $this->assertSame([], $fuel['layers']);
         $this->assertSame(300.0, $fuel['unknown_kg']);
         $this->assertNull($fuel['average']);
-        $this->assertNull($fuel['default_cost']);
+        $this->assertEquals(8.0, $fuel['default_cost']);                   // the default cost is a value of its own: the inbound it was copied from is gone, it is not
     }
 
     public function testThePageShowsTheFuelTypesTheLayersAndTheTanks()
     {
-        InitialTankBalance::create(['tank_id' => $this->diesel->id, 'amount_kg' => 1000]);
+        TankBalance::create(['tank_id' => $this->diesel->id, 'balance' => 1000]);
         $this->inbound($this->diesel, 5000, 6.0, '2026-10-01');
         $this->inbound($this->diesel, 3000, 7.0, '2026-10-05', true);
         $this->inbound($this->gasoline, 1000, 8.0, '2026-10-02', true);

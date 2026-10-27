@@ -60,6 +60,8 @@ return [
     'amount_kg' => 'Weight (kg)',
     'kg' => 'kg',
     'comment' => 'Comment',
+    'cost' => 'Cost per kg',
+    'cost_hint' => 'The fuel of a supply is taken from the layer of its cost in the tank: choose one of the costs of the fuel that is in the tank (* is the default cost). A supply a terminal uploads has the default cost when the tank has fuel at that cost; the accountant can change it before confirming.',
     'barcode' => 'Barcode',
     'nozzle_id' => 'Nozzle',
     'supplied_at' => 'Supplied at',

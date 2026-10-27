@@ -23,7 +23,9 @@ int Purger::purge(QSqlDatabase db, int days, const QDateTime &now)
                << "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND supplied_at < ?"
                << "DELETE FROM remainders WHERE synced = 1 AND created_at < ?"
                << "DELETE FROM ticket_loan_settlements WHERE synced = 1 AND settled_at < ?"
-               << QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND COALESCE(supply_date, sale_date) < ?")
+               // (not the tickets of the old publishes: with no row they would count as sold on paper before go-live, so a used one would be accepted again)
+               << QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND COALESCE(supply_date, sale_date) < ? "
+                          "AND NOT EXISTS (SELECT 1 FROM ticket_legacy l WHERE tickets.barcode BETWEEN l.lo AND l.hi)")
                       .arg(TicketStatus::Supply).arg(TicketStatus::Restrict);
 
     int removed = 0;
@@ -111,7 +113,8 @@ int Purger::removeConfirmed(QSqlDatabase db, const QStringList &saleIds, const Q
 
     db.transaction();
     // the finished tickets and the printed remainders of the supplies go before the supplies (they are found through them)
-    removed += run(db, QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND supplement_id IN (%3)").arg(TicketStatus::Supply).arg(TicketStatus::Restrict).arg("%1"), supplementIds);
+    removed += run(db, QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND supplement_id IN (%3) "
+                               "AND NOT EXISTS (SELECT 1 FROM ticket_legacy l WHERE tickets.barcode BETWEEN l.lo AND l.hi)").arg(TicketStatus::Supply).arg(TicketStatus::Restrict).arg("%1"), supplementIds);
     removed += run(db, "DELETE FROM remainders WHERE synced = 1 AND printed_at IS NOT NULL AND supplement_id IN (%1)", supplementIds);
     removed += run(db, "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND id IN (%1)", supplementIds);
     removed += run(db, "DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE synced = 1 AND card_id IS NULL AND sale_type <> 'card' AND id IN (%1))", saleIds);

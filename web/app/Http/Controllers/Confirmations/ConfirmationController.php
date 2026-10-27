@@ -139,7 +139,7 @@ class ConfirmationController extends Controller
     public function index(Request $request)
     {
         $page = $this->page($request);
-        $sales = Sale::with('items')->where('sale_date', $page['date'])->orderBy('created_at')->get();
+        $sales = Sale::with(['items', 'returnedTickets'])->where('sale_date', $page['date'])->orderBy('created_at')->get();
 
         return view('confirmation.index', $page + [
             'sales' => $sales,
@@ -157,7 +157,7 @@ class ConfirmationController extends Controller
             'block' => 'required|in:ticket,spot,card,others',
         ]);
 
-        $sales = Sale::with('items')->where('sale_date', $data['date'])->orderBy('created_at')->get();
+        $sales = Sale::with(['items', 'returnedTickets'])->where('sale_date', $data['date'])->orderBy('created_at')->get();
         $group = $this->saleBlocks($sales)[$data['block']];
         $title = $data['block'] === 'others' ? __('confirm.tab_others') : __('menu.' . $data['block'] . '_sales');
 
@@ -439,7 +439,7 @@ class ConfirmationController extends Controller
 
     private function summary($date)
     {
-        $sales = Sale::with('items')->where('sale_date', $date)->get();
+        $sales = Sale::with(['items', 'returnedTickets'])->where('sale_date', $date)->get();
         $supplements = Supplement::with('remainder')->where('supply_date', $date)->orderBy('supplied_at')->get();
         $tickets = Ticket::whereIn('supplement_id', $supplements->pluck('id'))->get();
         $made = Remainder::where('remainder_date', $date)->get();

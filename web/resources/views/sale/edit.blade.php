@@ -29,6 +29,23 @@
                     <input id="f_sale_date" name="sale_date" type="date" max="{{ date('Y-m-d') }}" value="{{ old('sale_date', substr((string) $sale->sale_date, 0, 10)) }}" class="form-control @error('sale_date') is-invalid @enderror" style="max-width: 220px">
                     @error('sale_date') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                 </div>
+                @if ($costChoices !== null)
+                    {{-- the cost per kg of the sale: one of the costs of the fuel in the tanks (and the one the sale has), for a user who may see costs --}}
+                    <div class="form-group">
+                        <label for="f_cost">{{ __('sales.cost') }}</label>
+                        <select id="f_cost" name="cost" class="form-control @error('cost') is-invalid @enderror" style="max-width: 320px">
+                            @foreach ($costChoices as $choice)
+                                <option value="{{ $choice['cost'] }}" {{ abs((float) old('cost', $sale->cost !== null ? $sale->cost : -1) - $choice['cost']) < 0.00005 ? 'selected' : '' }}>
+                                    {{ number_format($choice['cost'], 4) }}{{ $choice['kg'] > 0 ? '  (' . number_format($choice['kg'], 2) . ' ' . __('sales.kg') . ')' : '' }}{{ $choice['default'] ? '  *' : '' }}
+                                </option>
+                            @endforeach
+                            @if ($sale->cost === null)
+                                <option value="" selected>-</option>
+                            @endif
+                        </select>
+                        @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+                @endif
                 <div class="form-group">
                     <label for="f_comment">{{ __('sales.comment') }}</label>
                     <input id="f_comment" name="comment" type="text" maxlength="255" value="{{ old('comment', $sale->comment) }}" class="form-control @error('comment') is-invalid @enderror">

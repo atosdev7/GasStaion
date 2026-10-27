@@ -36,9 +36,15 @@
                     </div>
                     <div class="col-md-6">
                         <h6>{{ __('admin.backup_tank_carry') }}</h6>
-                        <table class="table table-sm">
-                            @forelse ($carry as $tankId => $kg)
-                                <tr><td>{{ $tanks[$tankId] ?? $tankId }}</td><td class="text-right">{{ number_format($kg, 2) }} {{ __('admin.kg') }}</td></tr>
+                        <table class="table table-sm" id="backup-tank-balances">
+                            @forelse ($balancesAfter as $tankId => $rows)
+                                @foreach ($rows as $row)
+                                    <tr>
+                                        <td>{{ $tanks[$tankId] ?? $tankId }}</td>
+                                        <td class="text-right">{{ $row['cost'] !== null ? number_format($row['cost'], 4) : '-' }}</td>
+                                        <td class="text-right">{{ number_format($row['balance'], 2) }} {{ __('admin.kg') }}</td>
+                                    </tr>
+                                @endforeach
                             @empty
                                 <tr><td class="text-muted">-</td></tr>
                             @endforelse

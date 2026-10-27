@@ -19,6 +19,9 @@
             @endif
             <tr><th>{{ __('supplements.preset_kg') }}</th><td>{{ number_format($supplement->preset_kg, 2) }} {{ __('supplements.kg') }}</td></tr>
             <tr><th>{{ __('supplements.density') }}</th><td>{{ $supplement->density !== null ? rtrim(rtrim(number_format($supplement->density, 4, '.', ''), '0'), '.') : '-' }}</td></tr>
+            @can('costs.view')
+                <tr><th>{{ __('supplements.cost') }}</th><td>{{ $supplement->cost !== null ? number_format($supplement->cost, 4) : '-' }}</td></tr>
+            @endcan
             <tr><th>{{ __('supplements.out_amount') }}</th><td>{{ number_format($supplement->out_amount_kg, 2) }} {{ __('supplements.kg') }} / {{ number_format($supplement->out_amount_lt, 2) }} {{ __('supplements.liter') }}</td></tr>
             <tr>
                 <th>{{ __('supplements.remainder') }}</th>

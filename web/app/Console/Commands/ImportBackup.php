@@ -21,7 +21,8 @@ class ImportBackup extends Command
     const BATCH = 500;
 
     // table => a column that older exports still hold and the table does not have any more
-    const RETIRED = ['supplements' => ['user_id', 'manual_reading']];
+    // (the default cost is a setting of its own now: the flag and the period of a fuel inbound are gone)
+    const RETIRED = ['supplements' => ['user_id', 'manual_reading'], 'fuel_inbounds' => ['is_default', 'default_from', 'default_until']];
 
     public function handle()
     {
@@ -50,11 +51,12 @@ class ImportBackup extends Command
 
         DB::transaction(function () use ($zip, $manifest, $local) {
             foreach (array_keys($manifest['rows']) as $table) {
-                if (!in_array($table, $local, true)) {
+                $file = $table;
+                if (!in_array($table, $local, true) || $table === 'tank_balances') {      // (the tank balances are never imported: this server's are entered by hand)
                     $this->warn("Skipped $table: no such table here.");
                     continue;
                 }
-                $n = $this->mergeTable($table, $zip->getStream($table . '.jsonl'));
+                $n = $this->mergeTable($table, $zip->getStream($file . '.jsonl'));
                 $this->line("$table: $n rows");
             }
             // an export made before the outbounds existed has supplies without rows (the merge raises no model events)

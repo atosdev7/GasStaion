@@ -14,7 +14,7 @@ use App\Models\Admin\User;
 use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Models\Fuel\FuelInbound;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Nozzle;
 use App\Models\Sales\Customer;
 use App\Models\Sales\Sale;
@@ -291,7 +291,7 @@ ok(strpos($reportText, 'Total ') !== false && preg_match('/Total \d+ ' . preg_qu
 
 section('the tank');
 $levels = TankLevels::all()->first();
-$expected = money(InitialTankBalance::sum('amount_kg') + FuelInbound::sum('amount_kg') - Supplement::sum('out_amount_kg'));
+$expected = money(TankBalance::sum('balance') + FuelInbound::sum('amount_kg') - Supplement::sum('out_amount_kg'));
 ok($levels && abs($levels->current - $expected) < 0.005, 'the tank holds opening + inbound - supplied = ' . number_format($expected, 2) . ' (' . ($levels ? number_format($levels->current, 2) : '-') . ')');
 $tankBefore = $levels ? money($levels->current) : null;
 

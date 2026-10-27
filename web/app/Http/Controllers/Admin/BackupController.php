@@ -25,6 +25,7 @@ class BackupController extends Controller
             'preview' => $upTo ? BackupRun::preview($upTo) : null,
             'blockers' => $upTo ? BackupRun::blockers($upTo) : [],
             'carry' => $upTo ? BackupRun::tankCarryForward($upTo) : null,
+            'balancesAfter' => $upTo ? BackupRun::tankBalancesAfter($upTo) : [],      // what the tanks get as balances, one row per cost
             'tanks' => Tank::withTrashed()->pluck('name', 'id'),
         ]);
     }

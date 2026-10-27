@@ -63,6 +63,7 @@ class FuelOutbound extends Model
             'supplement_id' => $supplement->id,
             'outbound_date' => $supplement->supply_day,
             'amount_kg' => $supplement->out_amount_kg,
+            'cost' => $supplement->cost,           // the fuel comes from the layer of this cost (null: the oldest fuel first)
             'deleted_at' => null,
         ])->save();
     }

@@ -116,6 +116,41 @@ class SaleEditTest extends TestCase
         $this->assertSame('2026-09-29 14:35:10', (string) Ticket::find($ticket->barcode)->sale_date);
     }
 
+    // "choose the cost during create or update": the cost of a sale is one of the costs of the fuel in the tanks (and the one the sale has), for a user who may see costs
+    public function testTheCostOfASaleIsChosenFromTheCostsOfTheFuelInTheTanks()
+    {
+        $tank = \App\Models\Fuel\Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
+        \App\Models\Fuel\TankBalance::create(['tank_id' => $tank->id, 'balance' => 400, 'cost' => 6, 'balance_date' => '2026-10-01']);
+        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 9, 'inbound_date' => '2026-10-05', 'user_id' => 1]);
+        \App\Support\Fuel\DefaultCost::set('D', 9);
+        $sale = $this->sale('2026-10-01', ['cost' => 5.25]);                         // a cost that is not in the tanks any more
+
+        $page = $this->as('accountant')->get('/ticket-sales/' . $sale->id . '/edit')->assertOk();
+        $this->assertSame([9.0, 6.0, 5.25], array_column($page->viewData('costChoices'), 'cost'));
+        $html = $page->getContent();
+        $this->assertStringContainsString('<select id="f_cost" name="cost"', $html);
+        $this->assertRegExp('/<option value="5.25" selected>/', $html);                // the cost the sale has is the chosen one
+
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-01', 'cost' => '6'])->assertSessionHasNoErrors();
+        $this->assertEquals(6, $sale->fresh()->cost);
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-01', 'cost' => '', 'comment' => 'x'])->assertSessionHasNoErrors();
+        $this->assertEquals(6, $sale->fresh()->cost);                                  // no cost sent: it stays
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-01', 'cost' => '-1'])->assertSessionHasErrors('cost');
+
+        // a user who may not see costs has no cost field, and what is sent is not taken
+        $ticketSale = $this->sale('2026-10-01', ['sale_type' => 'ticket', 'cost' => 7]);
+        $html = $this->as('assistant')->get('/ticket-sales/' . $ticketSale->id . '/edit')->assertOk()->getContent();
+        $this->assertStringNotContainsString('name="cost"', $html);
+        $this->put('/ticket-sales/' . $ticketSale->id, ['sale_date' => '2026-10-01', 'cost' => '1'])->assertSessionHasNoErrors();
+        $this->assertEquals(7, $ticketSale->fresh()->cost);
+
+        // a top-up of a card has no cost, and a return keeps the cost of its sale
+        $topUp = $this->cardSale('2026-10-01');
+        $this->as('manager')->get('/ticket-sales/' . $topUp->id . '/edit')->assertOk()->assertDontSee('name="cost"', false);
+        $return = $this->sale('2026-10-02', ['cost' => 5, 'reverses_sale_id' => $sale->id]);
+        $this->get('/ticket-sales/' . $return->id . '/edit')->assertOk()->assertDontSee('name="cost"', false);
+    }
+
     public function testTheEditIsValidated()
     {
         $sale = $this->sale('2026-10-01');

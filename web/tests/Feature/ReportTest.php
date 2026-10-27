@@ -7,7 +7,7 @@ use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Nozzle;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
@@ -180,7 +180,7 @@ class ReportTest extends TestCase
     public function testTankStockIsOpeningPlusInboundMinusSupplied()
     {
         $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => 2000]);
-        InitialTankBalance::create(['tank_id' => $tank->id, 'amount_kg' => 1000]);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 1000]);
         FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 500, 'cost' => 1, 'inbound_date' => '2026-09-02', 'user_id' => 1]);
         $this->supplement($this->nozzle($tank), 100);
 

@@ -207,6 +207,52 @@ class SaleReturnTest extends TestCase
         $this->assertEquals(0, Sale::where('id', $sale->id)->orWhere('reverses_sale_id', $sale->id)->sum('paid_amount'));
     }
 
+    public function testTheTicketsOfAReturnAreSubtractedFromTheCountsOfTheDay()
+    {
+        $this->publishTickets(10);
+        $sale = $this->sell(4);
+        $this->giveBack($sale, $this->barcodes($sale, 3))->assertSessionHasNoErrors();      // 3 of the 4 come back
+        $return = $this->returnRows($sale)->first();
+
+        $loaded = Sale::with(['items', 'returnedTickets'])->whereIn('id', [$sale->id, $return->id])->get()->keyBy('id');
+        $this->assertSame(4, $loaded[$sale->id]->ticketsOfSpec(0));
+        $this->assertSame(-3, $loaded[$return->id]->ticketsOfSpec(0));
+        $this->assertSame(0, $loaded[$return->id]->ticketsOfSpec(1));                        // another spec: none
+
+        // the day shows the net: 1 ticket of 5 kg is left, as the kg say
+        $summary = $this->as('accountant')->get('/confirmations/summary?date=' . today()->toDateString())->assertOk()->viewData('summary');
+        $this->assertSame(1, $summary['salesBy']['ticket']['D']['specs'][0]);
+        $this->assertEquals(5, $summary['salesBy']['ticket']['D']['kg']);
+        $page = $this->get('/confirmations?date=' . today()->toDateString())->assertOk()->getContent();
+        $this->assertStringContainsString('text-right">-3</td>', $page);
+    }
+
+    public function testAReturnIsNotDatedBeforeItsSaleAndTheSaleIsNotMovedAfterItsReturn()
+    {
+        config(['sales.backdate_days' => 100000]);
+        $this->publishTickets(10);
+        $sale = $this->sell(4);
+        $sale->forceFill(['sale_date' => '2026-10-01'])->save();
+        $this->giveBack($sale, $this->barcodes($sale, 1))->assertSessionHasNoErrors();
+        $return = $this->returnRows($sale)->first();                                         // dated today
+
+        $this->as('manager')->put('/ticket-sales/' . $return->id, ['sale_date' => '2026-09-30'])->assertSessionHasErrors('sale_date');
+        $this->assertSame(__('sale_edit.before_original', ['date' => '2026-10-01']), session('errors')->first('sale_date'));
+        $this->put('/ticket-sales/' . $return->id, ['sale_date' => '2026-10-05'])->assertSessionHasNoErrors();
+        $this->assertSame('2026-10-05', substr((string) $return->fresh()->sale_date, 0, 10));
+        $this->put('/ticket-sales/' . $return->id, ['sale_date' => '2026-10-01'])->assertSessionHasNoErrors();      // the day of the sale itself is fine
+        $this->put('/ticket-sales/' . $return->id, ['sale_date' => '2026-10-05'])->assertSessionHasNoErrors();
+
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-06'])->assertSessionHasErrors('sale_date');
+        $this->assertSame(__('sale_edit.after_return', ['date' => '2026-10-05']), session('errors')->first('sale_date'));
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-10-05'])->assertSessionHasNoErrors();         // the same day is fine
+        $this->put('/ticket-sales/' . $sale->id, ['sale_date' => '2026-09-25'])->assertSessionHasNoErrors();         // earlier is fine
+        $this->assertSame('2026-09-25', substr((string) $sale->fresh()->sale_date, 0, 10));
+
+        // a comment changed on a return whose own date stays does not touch the rule
+        $this->put('/ticket-sales/' . $return->id, ['sale_date' => '2026-10-05', 'comment' => 'wrong ticket'])->assertSessionHasNoErrors();
+    }
+
     public function testAConfirmedSaleCanBeReturned()
     {
         $this->publishTickets(5);

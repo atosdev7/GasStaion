@@ -80,6 +80,7 @@ SOURCES += \
     ../src/sync/SyncClient.cpp \
     ../src/sync/SyncStore.cpp \
     ../src/sales/TicketNumbers.cpp \
+    ../src/sales/TicketLegacy.cpp \
     ../src/printing/TicketRenderer.cpp \
     ../src/sales/TicketSale.cpp \
     ../src/sales/TicketSalePage.cpp \
@@ -163,6 +164,7 @@ HEADERS += \
     ../src/sync/SyncStore.h \
     ../src/core/TicketStatus.h \
     ../src/sales/TicketNumbers.h \
+    ../src/sales/TicketLegacy.h \
     ../src/printing/TicketRenderer.h \
     ../src/sales/TicketSale.h \
     ../src/sales/TicketSalePage.h \

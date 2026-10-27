@@ -13,6 +13,8 @@ use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Models\Admin\User;
 use App\Support\Admin\Audit;
+use App\Support\Fuel\CostChoices;
+use App\Support\Fuel\DefaultCost;
 use App\Support\Tickets\Barcode;
 use App\Support\Sales\SaleAccess;
 use App\Support\Sales\SaleDeletion;
@@ -162,6 +164,7 @@ class SaleController extends Controller
             'customers' => Customer::orderBy('name')->pluck('name', 'id'),
             'prices' => FuelType::pluck('price', 'fuel_type'),
             'costs' => $this->defaultCosts(),
+            'costChoices' => $this->costChoices(),
         ]);
     }
 
@@ -173,6 +176,7 @@ class SaleController extends Controller
             'defaultCustomer' => Customer::individual()->id, // a buyer who pays cash and needs no name
             'prices' => FuelType::pluck('price', 'fuel_type'),
             'costs' => $this->defaultCosts(),
+            'costChoices' => $this->costChoices(),
         ]);
     }
 
@@ -441,15 +445,15 @@ class SaleController extends Controller
         return $date === today()->toDateString() ? now() : Carbon::parse($date . ' ' . now()->format('H:i:s'));
     }
 
-    // The cost per kg of a sale: the cost the form showed (the default cost of the fuel type, which a user who may see costs can change), or, for a user
-    // who may not (the assistant), the default cost of the fuel type at the time of the sale. Nothing sent by such a user is taken.
+    // The cost per kg of a sale: the cost chosen on the form (a list of the costs of the fuel in the tanks, starting with the default cost of the fuel type) by a user who
+    // may see costs, or, for a user who may not (the assistant), the default cost of the fuel type. Nothing sent by such a user is taken.
     private function costOf(array $data, $fuelType, $soldAt)
     {
         if (auth()->user() && auth()->user()->can('costs.view') && isset($data['cost']) && $data['cost'] !== '') {
             return $data['cost'];
         }
 
-        return FuelInbound::costAt($fuelType, $soldAt);
+        return DefaultCost::get($fuelType);
     }
 
     // A total no sale can have: nearly always a price or a weight typed wrong, said on the price field.
@@ -500,8 +504,14 @@ class SaleController extends Controller
     private function defaultCosts()
     {
         return collect(array_keys(config('fuel_types')))->mapWithKeys(function ($fuelType) {
-            return [$fuelType => FuelInbound::defaultCost($fuelType)];
+            return [$fuelType => DefaultCost::get($fuelType)];
         });
+    }
+
+    // The costs the cost field of the form lists: those of the fuel in the tanks now, per fuel type (only for a user who may see costs).
+    private function costChoices()
+    {
+        return auth()->user() && auth()->user()->can('costs.view') ? CostChoices::all() : [];
     }
 
     // The first 7 digits (sign and code) of the barcodes of every fuel type and spec, [fuel][spec] => '8676103': the form shows the start and

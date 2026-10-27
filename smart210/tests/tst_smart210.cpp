@@ -49,6 +49,7 @@
 #include "ConfirmDialog.h"
 #include "CardReader.h"
 #include "Cards.h"
+#include "TicketLegacy.h"
 #include "TicketNumbers.h"
 #include "BoardProtocol.h"
 #include "Decimal.h"
@@ -322,6 +323,8 @@ private slots:
     void theDaysBackOfAManualSupplyAreSetOnMachineConfig();
     void scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded();
     void aTicketTypedInGoesToTheQueueLikeAScannedOne();
+    void aTicketSoldOnPaperBeforeGoLiveIsMadeWhenItIsUsed();
+    void theConfigDownloadBringsTheRangesOfTheOldPublishes();
     void theEnterTicketBoxOfTheSessionsTabTypesTicketsIn();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
@@ -3431,7 +3434,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 9);                                   // the program still opens it
+    QCOMPARE(Migrator::version(db), 10);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -5828,7 +5831,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 9);
+    QCOMPARE(Migrator::version(db), 10);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -6933,7 +6936,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 9);
+    QCOMPARE(all.size(), 10);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -9590,6 +9593,98 @@ void Smart210Test::scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded()
 }
 
 // A barcode that cannot be scanned is typed in: the 11 digits after the station sign, or all 16; the same checks as a scan
+// The press tickets published before the go-live date have no rows, only the ranges of their publishes (TicketLegacy): a ticket with no row inside a range is
+// a ticket sold on paper before go-live, made when it is scanned; one with a row follows its row; one outside the ranges is not known.
+void Smart210Test::aTicketSoldOnPaperBeforeGoLiveIsMadeWhenItIsUsed()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000150), "D", now).error.contains("not known"));        // no ranges yet
+
+    QString error;
+    QVERIFY2(TicketLegacy::replace(db, "00000", QJsonDocument::fromJson(q("[{'code':'03','from':100,'to':199,'fuel_type':'D','spec':0,'kg':'15.00','date':'2026-09-20'}]")).array(), &error),
+             qPrintable(error));
+    QCOMPARE(countRows("ticket_legacy"), 1);
+    QVERIFY(TicketLegacy::isOld(db, 3000000150));
+    QVERIFY(!TicketLegacy::isOld(db, 3000000099));
+    QVERIFY(!TicketLegacy::isOld(db, 3000000200));
+
+    // outside the ranges: still not known, and no row is made
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000099), "D", now).error.contains("not known"));
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000200), "D", now).error.contains("not known"));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode IN (3000000099, 3000000200)").toInt(), 0);
+
+    // inside: its row is made, sold on the day of the publish, the weight of its spec, counted as uploaded (the web app makes the same row when the use is reported)
+    QVERIFY2(SupplyQueue::add(db, 1, code(3000000150), "D", now).ok, "inside a range");
+    QSqlQuery row(db);
+    QVERIFY(row.exec("SELECT status, amount_kg, sale_date, synced, spec, fuel_type FROM tickets WHERE barcode = 3000000150") && row.next());
+    QCOMPARE(row.value(0).toInt(), int(TicketStatus::Sale));
+    QCOMPARE(row.value(1).toLongLong(), qlonglong(1500));
+    QCOMPARE(row.value(2).toString(), QString("2026-09-20 00:00:00"));
+    QCOMPARE(row.value(3).toInt(), 1);
+    QCOMPARE(row.value(4).toInt(), 0);
+    QCOMPARE(row.value(5).toString(), QString("D"));
+    QCOMPARE(Uploader::pending(db).value("tickets"), 0);                                                // nothing to upload for a ticket that is only scanned
+
+    // a ticket in a range that has a row follows its row (one still in the stock room was never sold)
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000160, 'D', 0, 1500, 0, 1)");
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000160), "D", now).error.contains("never sold"));
+
+    // the loan screen takes it too
+    const LoanSettlement::Scan scan = LoanSettlement::scan(db, code(3000000170), "D");
+    QVERIFY2(scan.ok, qPrintable(scan.error));
+    QCOMPARE(scan.kgX100, qlonglong(1500));
+
+    // the fill: the ticket is supplied and waits for the upload (the web app makes its row from that report)
+    QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
+    SupplyRecord::Reading reading;
+    reading.resultId = 1;
+    reading.dispensedX100 = 1500;
+    reading.litersX100 = 1800;
+    reading.reason = BoardProtocol::ReasonPresetReached;
+    const SupplyRecord::Outcome outcome = SupplyRecord::record(db, 1, reading, now);
+    QVERIFY2(outcome.ok, qPrintable(outcome.error));
+    QCOMPARE(one("SELECT status FROM tickets WHERE barcode = 3000000150").toInt(), int(TicketStatus::Supply));
+    QCOMPARE(one("SELECT synced FROM tickets WHERE barcode = 3000000150").toInt(), 0);
+    QCOMPARE(Uploader::pending(db).value("tickets"), 1);
+
+    // finished and uploaded long ago, the purger still keeps its row: with no row it would count as sold on paper again and be accepted a second time
+    run("UPDATE tickets SET synced = 1, sale_date = '2026-09-01 09:00:00', supply_date = '2026-09-01 10:00:00' WHERE barcode = 3000000150");
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, sale_date, supply_date, synced) VALUES (3000000021, 'D', 500, 2, '2026-09-01 09:00:00', '2026-09-01 10:00:00', 1)");
+    Purger::purge(db, 3, QDateTime(QDate(2026, 10, 7), QTime(12, 0, 0)));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000150").toInt(), 1);
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000021").toInt(), 0);                // an ordinary finished ticket goes
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000150), "D", now).error.contains("already used"));
+}
+
+void Smart210Test::theConfigDownloadBringsTheRangesOfTheOldPublishes()
+{
+    QSqlDatabase db = openDatabase();
+    QJsonObject config = configObject();
+    config.insert("ticket_sign", "00007");
+    config.insert("ticket_legacy", QJsonDocument::fromJson(q("[{'code':'06','from':1,'to':150,'fuel_type':'D','spec':0,'kg':'5.00','date':'2026-09-20'},"
+                                                              "{'code':'02','from':1,'to':20000,'fuel_type':'D','spec':2,'kg':'15.00','date':'2026-09-21'}]")).array());
+    QString error;
+
+    QVERIFY2(SyncStore(db).applyConfig(config, &error), qPrintable(error));
+
+    QCOMPARE(countRows("ticket_legacy"), 2);
+    QVERIFY(TicketLegacy::isOld(db, 706000000001LL));       // sign 00007, code 06, serial 1
+    QVERIFY(TicketLegacy::isOld(db, 706000000150LL));
+    QVERIFY(!TicketLegacy::isOld(db, 706000000151LL));
+    QVERIFY(TicketLegacy::isOld(db, 702000020000LL));
+    QCOMPARE(one("SELECT kg FROM ticket_legacy WHERE spec = 2").toInt(), 1500);
+
+    // a server that sends none of it leaves them; one that sends an empty list takes them away (a go-live date that was removed)
+    QVERIFY(SyncStore(db).applyConfig(configObject(), &error));
+    QCOMPARE(countRows("ticket_legacy"), 2);
+    config.insert("ticket_legacy", QJsonArray());
+    QVERIFY(SyncStore(db).applyConfig(config, &error));
+    QCOMPARE(countRows("ticket_legacy"), 0);
+}
+
 void Smart210Test::aTicketTypedInGoesToTheQueueLikeAScannedOne()
 {
     setUpSupplying();
@@ -11677,8 +11772,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 9);                                // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket
-    QCOMPARE(Migrator::version(db), 9);
+    QCOMPARE(Migrator::bundled().size(), 10);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes
+    QCOMPARE(Migrator::version(db), 10);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables

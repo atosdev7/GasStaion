@@ -47,10 +47,12 @@ return [
     'confirmation_summary' => 'Summary',
     'init_debts' => 'Debts',
     'ticket_summary' => 'Summary Tickets',
+    'ticket_bulk' => 'Bulk Update',
     'ticket_lookup' => 'Ticket Lookup',
     'sync' => 'Sync Status',
     'reports' => 'Reports',
     'backup' => 'Backup',
     'audit' => 'Audit Log',
     'init_remainders' => 'Remainder tickets',
+    'go_live' => 'Go-live',
 ];

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\Tank;
 use App\Support\Admin\Audit;
+use App\Support\Fuel\DefaultCost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -39,6 +40,9 @@ class FuelInboundController extends Controller
             'filters' => $filters,
             'tanks' => Tank::pluck('name', 'id'),
             'fuels' => config('fuel_types'),
+            'defaults' => collect(array_keys(config('fuel_types')))->mapWithKeys(function ($fuelType) {
+                return [$fuelType => DefaultCost::get($fuelType)];
+            }),
         ]);
     }
 
@@ -64,32 +68,30 @@ class FuelInboundController extends Controller
         $tank = Tank::findOrFail($data['tank_id']);
 
         $inbound = DB::transaction(function () use ($data, $tank, $request) {
-            // The first inbound of a fuel type becomes its default automatically.
-            $hasDefault = FuelInbound::where('fuel_type', $tank->fuel_type)->where('is_default', true)->exists();
-            $makeDefault = $request->boolean('is_default') || !$hasDefault;
-
             $inbound = new FuelInbound;
             $inbound->forceFill([
                 'tank_id' => $tank->id,
                 'fuel_type' => $tank->fuel_type,
                 'amount_kg' => $data['amount_kg'],
                 'cost' => $data['cost'],
-                'is_default' => false,
                 'inbound_date' => $data['inbound_date'],
                 'from_name' => $data['from_name'] ?? null,
                 'note' => $data['note'] ?? null,
                 'user_id' => auth()->id(),
-            ]);
-            if ($makeDefault) {
-                $inbound->becomeDefault();
+            ])->save();
+
+            // The default cost of the fuel type: this cost when the box is checked; the first cost of a fuel type is its default without it.
+            if ($request->boolean('is_default')) {
+                DefaultCost::set($tank->fuel_type, $inbound->cost);
+            } else {
+                DefaultCost::setIfNone($tank->fuel_type, $inbound->cost);
             }
-            $inbound->save();
 
             return $inbound;
         });
 
         Audit::log('inbound_create', '#' . $inbound->id . ' tank ' . $tank->name . ', ' . $inbound->amount_kg . ' kg, cost ' . $inbound->cost
-            . ($inbound->is_default ? ', default' : ''));
+            . (DefaultCost::is($tank->fuel_type, $inbound->cost) ? ', default cost' : ''));
 
         return redirect()->route('inbound.index')->with('status', __('fuel.created'));
     }
@@ -154,30 +156,21 @@ class FuelInboundController extends Controller
             return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.confirmed_locked')]);
         }
 
-        if ($inbound->is_default && FuelInbound::where('fuel_type', $inbound->fuel_type)->where('id', '<>', $inbound->id)->exists()) {
-            return redirect()->route('inbound.index')->withErrors(['inbound' => __('fuel.inbound_default_delete')]);
-        }
-
         $inbound->delete();
         Audit::log('inbound_delete', '#' . $inbound->id . ' ' . $inbound->inbound_date . ', tank ' . $inbound->tank_id . ', ' . $inbound->amount_kg . ' kg');
 
         return redirect()->route('inbound.index')->with('status', __('fuel.deleted'));
     }
 
-    // Make this inbound's cost the default for its fuel type (only one default per fuel type).
+    // The default cost of the fuel type becomes the cost of this inbound (it is copied: the inbound is not changed, and a later change of it does not change the default).
     public function makeDefault($id)
     {
         $inbound = FuelInbound::findOrFail($id);
 
-        DB::transaction(function () use ($inbound) {
-            if (!$inbound->is_default) {
-                $inbound->becomeDefault();
-                $inbound->save();
-            }
-        });
+        DefaultCost::set($inbound->fuel_type, $inbound->cost);
 
-        Audit::log('inbound_default', '#' . $inbound->id . ' cost ' . $inbound->cost);
+        Audit::log('inbound_default', '#' . $inbound->id . ' ' . $inbound->fuel_type . ' cost ' . $inbound->cost);
 
-        return redirect()->route('inbound.index')->with('status', __('fuel.saved'));
+        return redirect()->route('inbound.index')->with('status', __('fuel.default_cost_set', ['cost' => number_format($inbound->cost, 4)]));
     }
 }

@@ -1,6 +1,7 @@
 #include "SupplyQueue.h"
 
 #include "Barcode.h"
+#include "TicketLegacy.h"
 #include "TicketStatus.h"
 
 #include <QObject>
@@ -17,6 +18,8 @@ SupplyQueue::Scan SupplyQueue::check(QSqlDatabase db, const QString &barcodeText
 
         return scan;
     }
+
+    TicketLegacy::ensure(db, key); // a ticket sold on paper before go-live has no row until it is used here
 
     QSqlQuery query(db);
     query.prepare("SELECT fuel_type, amount_kg, status FROM tickets WHERE barcode = ?");

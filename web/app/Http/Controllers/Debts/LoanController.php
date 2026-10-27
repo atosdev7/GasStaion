@@ -172,6 +172,7 @@ class LoanController extends Controller
 
         $settlement = DB::transaction(function () use ($data) {
             $loan = TicketLoan::lockForUpdate()->findOrFail($data['loan_id']);
+            \App\Support\Tickets\LegacyTickets::ensure($data['ticket_barcode']);       // a ticket sold before go-live has no row until it is used
 
             // Only a ticket the customer actually holds (already sold, not blank stock, not
             // already used) can be surrendered — otherwise anyone could settle a loan with an

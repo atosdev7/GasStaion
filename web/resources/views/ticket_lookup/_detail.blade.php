@@ -1,4 +1,7 @@
-@if (!$ticket)
+@if (!$ticket && !empty($legacy))
+    {{-- no row, but inside a publish dated before go-live: sold on paper before go-live, and nothing on this system says it was used --}}
+    <div class="alert alert-info">{{ __('tickets.ticket_legacy', ['publish' => $legacy->id, 'date' => substr((string) $legacy->date, 0, 10), 'start' => $legacy->start_serial, 'end' => $legacy->end_serial]) }}</div>
+@elseif (!$ticket)
     <div class="alert alert-warning">{{ __('tickets.ticket_not_found') }}</div>
 @else
     <div class="card">

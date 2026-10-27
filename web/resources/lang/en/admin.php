@@ -4,6 +4,8 @@ return [
     // Users, devices, fuel types, tanks, nozzles
     'nozzles_read_only' => 'The nozzles are managed on the Smart210 (Machine Config) and appear here when it reports them. They cannot be added, changed or removed here.',
     'tank_fuel_locked' => 'The fuel type cannot be changed while nozzle(s) :nozzles draw from this tank. Only its name and capacity can change.',
+    'tank_has_records' => 'The tank :tank cannot be deleted: it has balances, fuel inbounds or fuel outbounds, and its stock is made of them.',
+    'tank_fuel_has_records' => 'The fuel type cannot be changed: the tank has balances, fuel inbounds or fuel outbounds of this fuel type.',
     'tank_has_nozzles' => 'The tank :tank cannot be deleted: nozzle(s) :nozzles draw from it. Remove them on the Smart210 first.',
     'density_hint' => 'Weight per litre, e.g. for converting between an LPG ticket\'s kg and a litre-based tank/report. Leave blank if not needed.',
     'password_hint' => 'Leave blank to keep the current password. It is also the Smart210 login password.',
@@ -17,7 +19,7 @@ return [
     'backup_kept_hint' => 'Debts, payments, ticket loans and settlements are never removed, and neither is anything not yet checked out. The latest possible date is yesterday.',
     'backup_daily_hint' => 'A full database copy is also saved every night at 02:00 and kept for :days days.',
     'backup_will_clear' => 'Exports all data, then permanently removes these rows up to :date',
-    'backup_tank_carry' => 'Tank stock carried forward (inbound minus supplied in the removed rows, still counted in tank levels)',
+    'backup_tank_carry' => 'Tank balances after the backup, one row per cost (what is left of the inbounds and outbounds that are removed: the oldest fuel goes first; it is still counted in tank levels)',
     'backup_run' => 'Export and clear',
     'backup_confirm' => 'Export all data and permanently remove the rows shown? A safety copy of the database is made first.',
     'backup_done' => 'Backup finished: :file',

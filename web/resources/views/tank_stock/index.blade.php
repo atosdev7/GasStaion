@@ -70,7 +70,7 @@
                     <tbody>
                     @foreach ($fuel['layers'] as $layer)
                         <tr>
-                            <td>{{ $layer['inbound_date'] }} @if ($layer['is_default'])<span class="badge badge-success">{{ __('fuel.default') }}</span>@endif</td>
+                            <td>{{ $layer['inbound_date'] }} @if ($layer['is_default'])<span class="badge badge-success">{{ __('fuel.default') }}</span>@endif @if (!empty($layer['from_balance']))<span class="badge badge-secondary">{{ __('fuel.stock_opening_badge') }}</span>@endif</td>
                             <td class="text-right">{{ number_format($layer['cost'], 4) }}</td>
                             <td class="text-right">{{ number_format($layer['kg'], 2) }}</td>
                             <td class="text-right text-muted">{{ number_format($layer['of'], 2) }}</td>

@@ -405,7 +405,7 @@ if (stage('verify')) {
     ok($badDebt === 0, 'no debt is bigger than the unpaid amount of its sale');
     // tanks
     foreach (rows('SELECT id, name FROM tanks') as $tank) {
-        $opening = money(one('SELECT COALESCE(amount_kg, 0) FROM initial_tank_balances WHERE tank_id = ?', [$tank['id']]));
+        $opening = money(one('SELECT COALESCE(balance, 0) FROM tank_balances WHERE tank_id = ?', [$tank['id']]));
         $in = money(one('SELECT COALESCE(SUM(amount_kg), 0) FROM fuel_inbounds WHERE tank_id = ? AND deleted_at IS NULL', [$tank['id']]));
         $out = money(one('SELECT COALESCE(SUM(s.out_amount_kg), 0) FROM supplements s JOIN nozzles n ON n.id = s.nozzle_id WHERE n.tank_id = ? AND s.deleted_at IS NULL', [$tank['id']]));
         echo '  ' . $tank['name'] . ': ' . number_format($opening, 2) . ' + ' . number_format($in, 2) . ' - ' . number_format($out, 2) . ' = ' . number_format($opening + $in - $out, 2) . " kg\n";

@@ -3,6 +3,7 @@
 #include "Barcode.h"
 #include "Decimal.h"
 #include "Settings.h"
+#include "TicketLegacy.h"
 #include "TicketNumbers.h"
 #include "TicketStatus.h"
 
@@ -150,6 +151,12 @@ bool SyncStore::applyConfig(const QJsonObject &config, QString *error)
         const QJsonObject typeDigits = posCodes.value("type").toObject();
         foreach (const QString &type, typeDigits.keys()) {
             ok = ok && settings.setValue(TicketNumbers::typeDigitSetting(type), typeDigits.value(type).toString());
+        }
+        // the ranges of the press tickets published before go-live and sold on paper (older servers do not send them: then they stay as they were)
+        if (ok && config.contains("ticket_legacy")) {
+            QString legacyError;
+            ok = TicketLegacy::replace(db_, config.contains("ticket_sign") ? config.value("ticket_sign").toString() : settings.value(SettingKey::TicketSign),
+                                       config.value("ticket_legacy").toArray(), &legacyError);
         }
         const QJsonObject floors = config.value("ticket_serial_floor").toObject();
         foreach (const QString &code, floors.keys()) {

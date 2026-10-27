@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Sales\Customer;
 use App\Models\Tickets\Ticket;
 use App\Support\Tickets\Barcode;
+use App\Support\Tickets\LegacyTickets;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -25,8 +26,11 @@ class TicketLookupController extends Controller
         // The detail of one ticket is shown in a popup: the popup asks for this page with modal=1 and gets the detail alone. The page itself
         // opens the popup for a barcode of its address (a link from another screen, or the page after an action).
         if ($barcode !== '' && $request->query('modal')) {
+            $ticket = Ticket::with(['batch', 'sale', 'loanSettlement.loan', 'supplement.nozzle', 'supplement.device'])->find($barcode);
+
             return view('ticket_lookup._detail', [
-                'ticket' => Ticket::with(['batch', 'sale', 'loanSettlement.loan', 'supplement.nozzle', 'supplement.device'])->find($barcode),
+                'ticket' => $ticket,
+                'legacy' => $ticket ? null : LegacyTickets::publishFor($barcode),         // the lookup only looks: the row of such a ticket is made when it is used
                 'customers' => Customer::pluck('name', 'id'),
                 'fuels' => config('fuel_types'),
                 'back' => (string) $request->query('back', ''),

@@ -8,12 +8,15 @@ use App\Models\Debts\DebtPayment;
 use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelOutbound;
+use App\Models\Fuel\TankBalance;
 use App\Models\Sales\Sale;
 use App\Models\Sales\SaleItem;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Models\Tickets\TicketInbound;
 use App\Models\Tickets\TicketPublish;
+use App\Support\Fuel\TankCostLayers;
+use App\Support\Tickets\LegacyTickets;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Artisan;
@@ -32,11 +35,13 @@ use ZipArchive;
 // inbounds and publishes of those days (they are not cleared, but the day is not finished until they are confirmed), and while a
 // terminal has not uploaded since the end of that business day (it may still hold records of those days that the web does not know yet).
 // The net kg each tank loses from the cleared inbound/supplied rows is recorded on the backup row
-// (see TankLevels), so live tank stock doesn't change and initial_tank_balances stays the go-live value.
+// (see TankLevels), so live tank stock does not change and tank_balances stays the go-live value.
 class BackupRun
 {
     // Not exported: framework tables and the live server's own backup history.
-    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups'];
+    // tank_balances: the backup server has every fuel inbound and outbound from the live start, so it needs no balances (the ones a backup wrote are those rows summed up, and
+    // it would count them twice); the opening balances of the tanks are entered there once by hand.
+    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups', 'tank_balances'];
 
     /** Rows that a backup up to $upTo would clear, per table (soft-deleted rows included). */
     public static function preview($upTo)
@@ -125,6 +130,54 @@ class BackupRun
         return $result;
     }
 
+    /**
+     * What each tank holds after a backup up to $upTo, as tank balances, one row per cost (TankCostLayers): the balances the tank has now and the fuel inbounds the backup
+     * clears are what came in; the outbounds it clears (the supplies, and the ones by hand) take their fuel from the layer of their cost, and one with no cost takes the
+     * oldest fuel first. Only the tanks that have rows to clear are in it. A cost that more left at than came in at is a row with a negative balance, so the level of the
+     * tank stays right.
+     *
+     * @return array tank id => list of ['cost', 'balance', 'balance_date', 'note'] (cost null: not known)
+     */
+    public static function tankBalancesAfter($upTo)
+    {
+        $inbounds = FuelInbound::where('inbound_date', '<=', $upTo)->orderBy('inbound_date')->orderBy('id')->get()->groupBy('tank_id');
+        $outs = static::outboundsUpTo($upTo)->whereNull('deleted_at')->selectRaw('tank_id, cost, SUM(amount_kg) AS kg')->groupBy('tank_id', 'cost')->get()->groupBy('tank_id');
+
+        $plan = [];
+        foreach ($inbounds->keys()->merge($outs->keys())->unique() as $tankId) {
+            // what is in: the balances the tank has now and the inbounds the backup clears
+            $entries = [];
+            foreach (TankBalance::where('tank_id', $tankId)->orderBy('balance_date')->orderBy('id')->get() as $row) {
+                $entries[] = ['cost' => $row->cost === null ? null : round((float) $row->cost, 4), 'kg' => (float) $row->balance,
+                    'date' => $row->balance_date ? substr((string) $row->balance_date, 0, 10) : '', 'note' => $row->note, 'balance' => true];
+            }
+            foreach ($inbounds->get($tankId, collect()) as $inbound) {
+                $entries[] = ['cost' => round((float) $inbound->cost, 4), 'kg' => (float) $inbound->amount_kg, 'date' => substr((string) $inbound->inbound_date, 0, 10), 'note' => null, 'balance' => false];
+            }
+
+            // what is out: the outbounds the backup clears, each from the layer of its cost; one with no cost takes the oldest fuel first
+            $assigned = [];
+            $unassigned = 0.0;
+            foreach ($outs->get($tankId, collect()) as $row) {
+                if ($row->cost === null) {
+                    $unassigned += (float) $row->kg;
+                } else {
+                    $assigned[TankCostLayers::key($row->cost)] = ($assigned[TankCostLayers::key($row->cost)] ?? 0) + (float) $row->kg;
+                }
+            }
+
+            // what is left, one row per cost (a cost that more left at than came in at is a row below zero)
+            $plan[$tankId] = array_map(function ($layer) use ($upTo) {
+                $notes = $layer['notes'];
+                array_unshift($notes, 'balance after the backup up to ' . $upTo);
+
+                return ['cost' => $layer['cost'], 'balance' => $layer['kg'], 'balance_date' => $layer['date'] ?: $upTo, 'note' => mb_substr(implode('; ', $notes), 0, 255)];
+            }, TankCostLayers::layers($entries, $assigned, $unassigned));
+        }
+
+        return $plan;
+    }
+
     // Sync answers "busy" while a backup runs, so a Smart210 never waits on the backup's row locks. The flag lives in the
     // cache because the backup holds those locks inside a transaction nobody else can see into; the expiry is a safety
     // net in case the process dies mid-run.
@@ -172,6 +225,7 @@ class BackupRun
                     $cleared[$table] = $query->lockForUpdate()->count();
                 }
                 $carry = static::tankCarryForward($upTo);
+                $balances = static::tankBalancesAfter($upTo);      // before the rows are gone
 
                 static::export($file, $upTo);
 
@@ -183,6 +237,14 @@ class BackupRun
                 $backup->forceFill([
                     'up_to_date' => $upTo, 'file' => $file, 'cleared' => $cleared, 'tank_carry' => $carry, 'user_id' => $userId,
                 ])->save();
+
+                // what the cleared inbounds and outbounds leave becomes the balances of the tanks, one row per cost (they replace the rows the tank had)
+                foreach ($balances as $tankId => $rows) {
+                    TankBalance::where('tank_id', $tankId)->delete();
+                    foreach ($rows as $row) {
+                        TankBalance::forceCreate($row + ['tank_id' => $tankId, 'source' => TankBalance::BACKUP, 'backup_id' => $backup->id, 'user_id' => $userId]);
+                    }
+                }
 
                 return $backup;
             });
@@ -230,10 +292,21 @@ class BackupRun
             'fuel_outbounds' => static::outboundsUpTo($upTo),
             'supplements' => $byCheckout(Supplement::class, 'supply_date')->whereNull('card_id'),
             'fuel_inbounds' => FuelInbound::withTrashed()->where('inbound_date', '<=', $upTo),
-            'tickets' => Ticket::where(function ($q) use ($endOfDay) {
-                $q->where('status', config('ticket_statuses.supply'))->where('supply_date', '<', $endOfDay);
-            })->orWhere(function ($q) use ($endOfDay) {
-                $q->where('status', config('ticket_statuses.restrict'))->where('updated_at', '<', $endOfDay);
+            'tickets' => Ticket::where(function ($used) use ($endOfDay) {
+                $used->where(function ($q) use ($endOfDay) {
+                    $q->where('status', config('ticket_statuses.supply'))->where('supply_date', '<', $endOfDay);
+                })->orWhere(function ($q) use ($endOfDay) {
+                    $q->where('status', config('ticket_statuses.restrict'))->where('updated_at', '<', $endOfDay);
+                });
+            })->where(function ($q) {
+                // The used or restricted tickets of a publish dated before go-live stay: a ticket with no row counts as sold on paper before go-live (see
+                // LegacyTickets), so clearing the row of a used one would make it usable again.
+                $goLive = LegacyTickets::goLive();
+                if ($goLive !== null) {
+                    $q->whereNull('publish_id')->orWhereNotIn('publish_id', TicketPublish::where('date', '<', $goLive)->select('id'));
+                } else {
+                    $q->whereRaw('1 = 1');
+                }
             }),
         ];
     }

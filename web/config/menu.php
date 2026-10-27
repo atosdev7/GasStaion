@@ -28,6 +28,7 @@ return [
             ['label' => 'ticket_publish', 'route' => 'ticket-publish.index', 'permission' => 'ticket_stock.view'],
             ['label' => 'ticket_lookup',  'route' => 'tickets.lookup',       'permission' => 'tickets.lookup'],
             ['label' => 'ticket_summary', 'route' => 'ticket-summary.index', 'permission' => 'ticket_stock.view'],
+            ['label' => 'ticket_bulk',    'route' => 'ticket-bulk.index',    'permission' => 'balances.manage'],
         ],
     ],
     [
@@ -99,6 +100,7 @@ return [
             ['label' => 'fuel',    'route' => 'fuel.index',    'permission' => 'fuel.view'],
             ['label' => 'tanks',   'route' => 'tanks.index',   'permission' => 'fuel.view'],
             ['label' => 'nozzles', 'route' => 'nozzles.index', 'permission' => 'fuel.view'],
+            ['label' => 'go_live', 'route' => 'balances.golive', 'permission' => 'balances.manage'],
             ['label' => 'sync',    'route' => 'sync.index',    'permission' => 'sync.view'],
             ['label' => 'backup',  'route' => 'backup.index',  'permission' => 'backup.manage'],
             ['label' => 'audit',   'route' => 'audit.index',   'permission' => 'audit.view'],

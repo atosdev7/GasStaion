@@ -7,6 +7,7 @@ use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\Nozzle;
 use App\Models\Fuel\Tank;
 use App\Support\Admin\Audit;
+use App\Support\Fuel\CostChoices;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -58,9 +59,17 @@ class OutboundController extends Controller
         ]);
     }
 
+    private function canSeeCosts()
+    {
+        return auth()->user() && auth()->user()->can('costs.view');
+    }
+
     public function create()
     {
-        return view('outbound.form', ['outbound' => new FuelOutbound, 'tanks' => Tank::orderBy('name')->pluck('name', 'id')]);
+        return view('outbound.form', [
+            'outbound' => new FuelOutbound, 'tanks' => Tank::orderBy('name')->pluck('name', 'id'),
+            'costChoices' => $this->canSeeCosts() ? CostChoices::byTank() : null,      // the costs of the fuel in each tank
+        ]);
     }
 
     public function store(Request $request)
@@ -82,7 +91,12 @@ class OutboundController extends Controller
             return redirect()->route('outbound.index')->withErrors(['outbound' => __('fuel.confirmed_locked')]);
         }
 
-        return view('outbound.form', ['outbound' => $outbound, 'tanks' => Tank::orderBy('name')->pluck('name', 'id')]);
+        $choices = $this->canSeeCosts() ? CostChoices::byTank() : null;
+        if ($choices !== null && $outbound->cost !== null && isset($choices[$outbound->tank_id])) {
+            $choices[$outbound->tank_id] = CostChoices::forTank($outbound->tank_id, $outbound->cost);      // the cost it has is listed even when the tank has none at it now
+        }
+
+        return view('outbound.form', ['outbound' => $outbound, 'tanks' => Tank::orderBy('name')->pluck('name', 'id'), 'costChoices' => $choices]);
     }
 
     public function update(Request $request, $id)
@@ -123,14 +137,24 @@ class OutboundController extends Controller
         return $outbound;
     }
 
+    // The cost is the cost of the layer the fuel is taken from (a user who may see costs chooses it); with none, the oldest fuel goes first.
     private function validated(Request $request)
     {
-        return $request->validate([
+        $rules = [
             'tank_id' => 'required|integer|exists:tanks,id,deleted_at,NULL',
             'outbound_date' => 'required|date',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'to_name' => 'nullable|string|max:100',
             'note' => 'nullable|string|max:255',
-        ]);
+        ];
+        if ($this->canSeeCosts()) {
+            $rules['cost'] = 'nullable|numeric|min:0|max:9999999';
+        }
+        $data = $request->validate($rules);
+        if ($this->canSeeCosts()) {
+            $data['cost'] = isset($data['cost']) && $data['cost'] !== '' ? $data['cost'] : null;
+        }
+
+        return $data;
     }
 }

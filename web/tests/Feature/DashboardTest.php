@@ -7,7 +7,7 @@ use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Nozzle;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
@@ -46,7 +46,7 @@ class DashboardTest extends TestCase
             'customer_id' => $customer->id, 'debt_id' => $debt->id, 'amount' => 30, 'payment_method' => 'cash', 'paid_date' => today(), 'user_id' => 1,
         ]);
         $tank = Tank::forceCreate(['name' => 'Low Tank', 'fuel_type' => 'D', 'capacity_kg' => 1000]);
-        InitialTankBalance::create(['tank_id' => $tank->id, 'amount_kg' => 150]);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 150]);
 
         $response = $this->as('manager')->get('/')->assertOk()
             ->assertSee(__('report.low_tank', ['tank' => 'Low Tank', 'kg' => '150.00']));
@@ -128,7 +128,7 @@ class DashboardTest extends TestCase
     {
         $nozzle = $this->nozzle();
         $tank = Tank::first();
-        InitialTankBalance::create(['tank_id' => $tank->id, 'amount_kg' => 100]);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 100]);
         $d3 = today()->subDays(3)->toDateString();
         $d1 = today()->subDay()->toDateString();
         FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 500, 'cost' => 1, 'inbound_date' => $d3, 'user_id' => 1]);

@@ -68,6 +68,12 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::post('tickets/{barcode}/lift-restriction', 'Tickets\TicketRestrictController@lift')->name('tickets.lift-restriction');
         });
 
+        // changes or deletes many tickets at once, for the go-live (the manager and the accountant, like the opening balances)
+        Route::middleware('can:balances.manage')->group(function () {
+            Route::get('ticket-bulk', 'Tickets\TicketBulkController@index')->name('ticket-bulk.index');
+            Route::post('ticket-bulk', 'Tickets\TicketBulkController@run')->name('ticket-bulk.run');
+        });
+
         Route::get('ticket-publish', 'Tickets\TicketPublishController@index')->name('ticket-publish.index')->middleware('can:ticket_stock.view');
         Route::get('ticket-publish/{id}', 'Tickets\TicketPublishController@show')->name('ticket-publish.show')->where('id', '[0-9]+')->middleware('can:ticket_stock.view');
         Route::middleware('can:ticket_stock.manage')->group(function () {
@@ -177,12 +183,18 @@ Route::middleware(SetLocale::class)->group(function () {
 
         Route::middleware('can:balances.manage')->group(function () {
             Route::redirect('balances', '/balances/tanks')->name('balances.index');   // the old single page
+            Route::get('balances/go-live', 'Initialize\BalanceController@goLive')->name('balances.golive');
+            Route::post('balances/go-live', 'Initialize\BalanceController@saveGoLive')->name('balances.golive.save');
             Route::get('balances/tanks', 'Initialize\BalanceController@tanks')->name('balances.tanks.index');
             Route::get('balances/debts', 'Initialize\BalanceController@debts')->name('balances.debts.index');
             Route::get('balances/loans', 'Initialize\BalanceController@loans')->name('balances.loans.index');
             Route::get('balances/remainders', 'Initialize\BalanceController@remainders')->name('balances.remainders.index');
             Route::post('balances/remainders', 'Initialize\BalanceController@storeRemainder')->name('balances.remainders.store');
-            Route::post('balances/tanks', 'Initialize\BalanceController@saveTanks')->name('balances.tanks');
+            Route::post('balances/tanks', 'Initialize\BalanceController@storeTank')->name('balances.tanks.store');
+            Route::get('balances/tanks/{id}/edit', 'Initialize\BalanceController@editTank')->name('balances.tanks.edit')->where('id', '[0-9]+');
+            Route::post('balances/tanks/{id}/default', 'Initialize\BalanceController@makeDefaultTank')->name('balances.tanks.default')->where('id', '[0-9]+');
+            Route::put('balances/tanks/{id}', 'Initialize\BalanceController@updateTank')->name('balances.tanks.update')->where('id', '[0-9]+');
+            Route::delete('balances/tanks/{id}', 'Initialize\BalanceController@destroyTank')->name('balances.tanks.destroy')->where('id', '[0-9]+');
             Route::post('balances/debts', 'Initialize\BalanceController@storeDebt')->name('balances.debts.store');
             Route::delete('balances/debts/{id}', 'Initialize\BalanceController@destroyDebt')->name('balances.debts.destroy');
             Route::post('balances/loans', 'Initialize\BalanceController@storeLoan')->name('balances.loans.store');

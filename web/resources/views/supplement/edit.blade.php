@@ -63,6 +63,24 @@
                     </div>
                 @endif
 
+                @if ($costChoices !== null)
+                    {{-- the cost per kg: one of the costs of the fuel in the tank the supply took its fuel from (and the one it has); the fuel is taken from the layer of this cost --}}
+                    <div class="form-group">
+                        <label for="f_cost">{{ __('supplements.cost') }}</label>
+                        <select id="f_cost" name="cost" class="form-control @error('cost') is-invalid @enderror" style="max-width: 320px">
+                            @foreach ($costChoices as $choice)
+                                <option value="{{ $choice['cost'] }}" {{ abs((float) old('cost', $supplement->cost !== null ? $supplement->cost : -1) - $choice['cost']) < 0.00005 ? 'selected' : '' }}>
+                                    {{ number_format($choice['cost'], 4) }}{{ $choice['kg'] > 0 ? '  (' . number_format($choice['kg'], 2) . ' ' . __('supplements.kg') . ')' : '' }}{{ $choice['default'] ? '  *' : '' }}
+                                </option>
+                            @endforeach
+                            @if ($supplement->cost === null)
+                                <option value="" selected>-</option>
+                            @endif
+                        </select>
+                        <small class="form-text text-muted">{{ __('supplements.cost_hint') }}</small>
+                        @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+                @endif
                 <div class="form-group">
                     <label for="f_comment">{{ __('supplements.comment') }}</label>
                     <input id="f_comment" name="comment" type="text" maxlength="255" value="{{ old('comment', $supplement->comment) }}" class="form-control @error('comment') is-invalid @enderror">

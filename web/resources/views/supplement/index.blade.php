@@ -86,6 +86,9 @@
                     <th>{{ __('supplements.mode') }}</th>
                     <th class="text-right">{{ __('supplements.preset_kg') }}</th>
                     <th class="text-right">{{ __('supplements.density') }}</th>
+                    @can('costs.view')
+                        <th class="text-right">{{ __('supplements.cost') }}</th>
+                    @endcan
                     <th class="text-right">{{ __('supplements.out_amount') }}</th>
                     <th>{{ __('supplements.remainder') }}</th>
                     <th class="text-right">{{ __('supplements.actions') }}</th>
@@ -108,7 +111,7 @@
                             @endforeach
                         </select>
                     </th>
-                    <th colspan="4"></th>
+                    <th colspan="{{ auth()->user()->can('costs.view') ? 5 : 4 }}"></th>
                     <th class="text-right">
                         <button type="submit" form="supplement-filters" class="btn btn-sm btn-primary">{{ __('supplements.show') }}</button>
                         <a href="{{ route('supplements.index') }}" class="btn btn-sm btn-default">{{ __('supplements.clear_filters') }}</a>
@@ -123,6 +126,9 @@
                         <td><span class="badge {{ $supplement->mode === 'manual' ? 'badge-warning' : 'badge-info' }}">{{ __('supplements.mode_' . $supplement->mode) }}</span></td>
                         <td class="text-right">{{ number_format($supplement->preset_kg, 2) }}</td>
                         <td class="text-right">{{ $supplement->density !== null ? rtrim(rtrim(number_format($supplement->density, 4, '.', ''), '0'), '.') : '-' }}</td>
+                        @can('costs.view')
+                            <td class="text-right">{{ $supplement->cost !== null ? number_format($supplement->cost, 4) : '-' }}</td>
+                        @endcan
                         <td class="text-right">{{ number_format($supplement->out_amount_kg, 2) }} {{ __('supplements.kg') }} / {{ number_format($supplement->out_amount_lt, 2) }} {{ __('supplements.liter') }}</td>
                         <td>
                             @if ($supplement->remainder)
@@ -156,7 +162,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-muted">{{ __('supplements.no_data') }}</td></tr>
+                    <tr><td colspan="9" class="text-muted">{{ __('supplements.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

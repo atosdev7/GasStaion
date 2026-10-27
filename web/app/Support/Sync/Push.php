@@ -235,7 +235,7 @@ class Push
         if (!$sale->exists) {
             // The cost is the web's to fill, from the inbound that was the default when the sale was made (it may arrive days later);
             // the device never knows it.
-            $sale->cost = FuelInbound::costAt($d['fuel_type'], $d['sale_date'] . ' 23:59:59');
+            $sale->cost = \App\Support\Fuel\DefaultCost::get($d['fuel_type']);      // the default cost of the fuel type; the accountant can change it on the sale before confirming
         }
 
         self::store($sale, $d, ['synced' => true]);
@@ -317,8 +317,15 @@ class Push
             }
         }
 
+        // The cost of a new supply is the default cost of the fuel type when the tank has fuel at that cost (the terminal cannot choose); the accountant changes it before
+        // confirming. A supply that is uploaded again keeps its cost.
+        $extra = ['device_id' => $device->id, 'synced' => true];
+        if (!$supplement->exists) {
+            $extra['cost'] = \App\Support\Fuel\CostChoices::costForNewSupply($nozzle->tank_id);
+        }
+
         // Whichever device is calling is the one that dispensed it.
-        self::store($supplement, $d, ['device_id' => $device->id, 'synced' => true]);
+        self::store($supplement, $d, $extra);
 
         if ($overdrawn) {
             SyncError::record($device->id, 'supplements', $d['id'], json_encode($d), $overdrawn);
@@ -433,6 +440,9 @@ class Push
         }
 
         $ticket = Ticket::find($d['barcode']);
+        if (!$ticket && \App\Support\Tickets\LegacyTickets::ensure($d['barcode'])) {
+            $ticket = Ticket::find($d['barcode']);        // sold before go-live: its row is made now, and the report goes on like for any sold ticket
+        }
         if (!$ticket) {
             self::createDeviceTicket($d, $status);
             // The card paid with kg it did not have (a top-up deleted, a clock that was wrong): the ticket is stored, as fuel that was poured is a fact, and the staff see

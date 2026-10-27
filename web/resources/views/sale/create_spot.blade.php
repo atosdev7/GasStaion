@@ -24,7 +24,7 @@
                         <label for="f_fuel_type">{{ __('sales.fuel_type') }}</label>
                         <select id="f_fuel_type" name="fuel_type" class="form-control @error('fuel_type') is-invalid @enderror">
                             @foreach ($fuels as $key => $name)
-                                <option value="{{ $key }}" data-price="{{ $prices[$key] ?? 0 }}" @can('costs.view') data-cost="{{ $costs[$key] ?? '' }}" @endcan
+                                <option value="{{ $key }}" data-price="{{ $prices[$key] ?? 0 }}"
                                         {{ old('fuel_type') === $key ? 'selected' : '' }}>
                                     {{ $name }}
                                 </option>
@@ -33,10 +33,10 @@
                         @error('fuel_type') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
                     @can('costs.view')
-                        {{-- the cost is filled with the default of the fuel type; the assistant never sees it (the server sets it) --}}
+                        {{-- the cost is one of the costs of the fuel in the tanks (the list follows the fuel type), starting with the default cost of the fuel type; the assistant never sees it (the server sets it) --}}
                         <div class="form-group col-md-4">
                             <label for="f_cost">{{ __('sales.cost') }}</label>
-                            <input id="f_cost" name="cost" type="number" step="0.0001" min="0" value="{{ old('cost') }}" class="form-control @error('cost') is-invalid @enderror">
+                            <select id="f_cost" name="cost" class="form-control @error('cost') is-invalid @enderror"></select>
                             @error('cost') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         </div>
                     @endcan
@@ -159,7 +159,38 @@
         var opt = fuelType.options[fuelType.selectedIndex];
         if (!opt) return;
         if (!price.value) price.value = opt.getAttribute('data-price') || '';
-        if (cost && !cost.value) cost.value = opt.getAttribute('data-cost') || '';
+        fillCostList();
+    }
+
+    // The cost field lists the costs of the fuel in the tanks for the chosen fuel type; the default cost of the fuel type is chosen unless the user chose another.
+    var costChoices = @json($costChoices);
+    var oldCost = @json(old('cost'));
+    var costFuel = null;
+    function fillCostList() {
+        if (!cost) return;
+        // what was chosen stays while the fuel type stays (after a failed save: what was sent)
+        var keep = costFuel === fuelType.value && cost.value !== '' ? cost.value : (costFuel === null && oldCost !== null ? String(oldCost) : '');
+        costFuel = fuelType.value;
+        var list = costChoices[fuelType.value] || [];
+        cost.innerHTML = '';
+        var chosen = null, fallback = null;
+        for (var i = 0; i < list.length; i++) {
+            var option = document.createElement('option');
+            option.value = list[i].cost;
+            option.textContent = Number(list[i].cost).toFixed(4) + (list[i].kg > 0 ? '  (' + Number(list[i].kg).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kg)' : '')
+                + (list[i].default ? '  *' : '');
+            cost.appendChild(option);
+            if (keep !== '' && Number(list[i].cost) === Number(keep)) chosen = option;
+            if (list[i].default) fallback = option;
+        }
+        if (!list.length) {
+            var none = document.createElement('option');
+            none.value = '';
+            none.textContent = '-';
+            cost.appendChild(none);
+        }
+        var pick = chosen || fallback || cost.options[0];
+        if (pick) pick.selected = true;
     }
 
     // only a sale has a paid and an unpaid amount

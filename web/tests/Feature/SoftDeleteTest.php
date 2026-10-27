@@ -122,7 +122,7 @@ class SoftDeleteTest extends TestCase
 
         $inbound = FuelInbound::forceCreate([
             'tank_id' => $tank->id, 'fuel_type' => $f->fuel_type, 'amount_kg' => 100, 'cost' => 6,
-            'is_default' => true, 'inbound_date' => '2026-09-20', 'user_id' => 1,
+            'inbound_date' => '2026-09-20', 'user_id' => 1,
         ]);
         $ticketInbound = TicketInbound::forceCreate([
             'fuel_type' => $f->fuel_type, 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-09-20', 'user_id' => 1,

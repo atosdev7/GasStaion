@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\CrudController;
+use App\Models\Fuel\FuelInbound;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\Nozzle;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Tank;
 use Illuminate\Validation\Rule;
 
@@ -33,7 +36,18 @@ class TankController extends CrudController
             return redirect()->route('tanks.index')->with('error', __('admin.tank_has_nozzles', ['tank' => $tank->name, 'nozzles' => implode(', ', $numbers)]));
         }
 
+        if ($this->hasRecords($tank->id)) {
+            return redirect()->route('tanks.index')->with('error', __('admin.tank_has_records', ['tank' => $tank->name]));
+        }
+
         return parent::destroy($id);
+    }
+
+    // Does the tank have a balance, a fuel inbound or a fuel outbound (a supply's included)? Their fuel type and their stock are the tank's, so such a tank is neither
+    // deleted nor given another fuel type.
+    private function hasRecords($tankId)
+    {
+        return TankBalance::where('tank_id', $tankId)->exists() || FuelInbound::where('tank_id', $tankId)->exists() || FuelOutbound::where('tank_id', $tankId)->exists();
     }
 
     protected function rules($tank)
@@ -46,6 +60,8 @@ class TankController extends CrudController
                     $numbers = Nozzle::where('tank_id', $tank->getKey())->orderBy('device_id')->orderBy('number')->pluck('number')->all();
                     if ($numbers) {
                         $fail(__('admin.tank_fuel_locked', ['nozzles' => implode(', ', $numbers)]));
+                    } elseif ($this->hasRecords($tank->getKey())) {
+                        $fail(__('admin.tank_fuel_has_records'));
                     }
                 }
             }],

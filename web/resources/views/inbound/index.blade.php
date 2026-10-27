@@ -30,7 +30,7 @@
                     <th>{{ __('fuel.fuel_type') }}</th>
                     <th class="text-right">{{ __('fuel.amount_kg') }}</th>
                     <th class="text-right">{{ __('fuel.cost') }}</th>
-                    <th>{{ __('fuel.is_default') }}</th>
+                    <th>{{ __('fuel.default') }}</th>
                     <th>{{ __('fuel.note') }}</th>
                     @can('inbound.manage')
                         <th class="text-right" style="width: 1%">{{ __('fuel.actions') }}</th>
@@ -59,6 +59,8 @@
                 </thead>
                 <tbody>
                 @forelse ($rows as $row)
+                    {{-- the default cost is a value of its own: a row whose cost is that value is the default one --}}
+                    @php($isDefault = ($defaults[$row->fuel_type] ?? null) !== null && abs($defaults[$row->fuel_type] - round((float) $row->cost, 4)) < 0.00005)
                     <tr>
                         <td>{{ $row->inbound_date }}</td>
                         <td>{{ $row->from_name }}</td>
@@ -66,11 +68,11 @@
                         <td>{{ $fuels[$row->fuel_type] ?? $row->fuel_type }}</td>
                         <td class="text-right">{{ number_format($row->amount_kg, 2) }}</td>
                         <td class="text-right">{{ number_format($row->cost, 4) }}</td>
-                        <td>@if ($row->is_default)<span class="badge badge-success">{{ __('fuel.default') }}</span>@endif</td>
+                        <td>@if ($isDefault)<span class="badge badge-success">{{ __('fuel.default') }}</span>@endif</td>
                         <td>{{ $row->note }}</td>
                         @can('inbound.manage')
                             <td class="text-right">
-                                @unless ($row->is_default)
+                                @unless ($isDefault)
                                     <form method="POST" action="{{ route('inbound.default', $row->id) }}" class="d-inline">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-outline-secondary">{{ __('fuel.make_default') }}</button>

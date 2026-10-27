@@ -199,6 +199,32 @@ class OutboundTest extends TestCase
         $this->assertSame(0, FuelOutbound::withTrashed()->count());
     }
 
+    // an outbound by hand can take its fuel from the layer of a cost (a user who may see costs chooses it); with none, the oldest fuel goes first
+    public function testAnOutboundByHandCanHaveTheCostOfTheLayerItTakesItsFuelFrom()
+    {
+        \App\Models\Fuel\TankBalance::create(['tank_id' => $this->tankA->id, 'balance' => 400, 'cost' => 6, 'balance_date' => '2026-09-01']);
+        FuelInbound::forceCreate(['tank_id' => $this->tankA->id, 'fuel_type' => $this->tankA->fuel_type, 'amount_kg' => 100, 'cost' => 9, 'inbound_date' => '2026-09-05', 'user_id' => 1]);
+
+        $page = $this->as('accountant')->get('/outbound/create')->assertOk();
+        $this->assertSame([9.0, 6.0], array_column($page->viewData('costChoices')[$this->tankA->id], 'cost'));
+        $this->assertStringContainsString('<select id="f_cost" name="cost"', $page->getContent());
+
+        $good = ['tank_id' => $this->tankA->id, 'outbound_date' => '2026-09-10', 'amount_kg' => 25, 'to_name' => 'sample'];
+        $this->post('/outbound', ['cost' => '9'] + $good)->assertSessionHasNoErrors();
+        $this->post('/outbound', $good)->assertSessionHasNoErrors();                                  // none: the oldest fuel first
+        $this->post('/outbound', ['cost' => '-1'] + $good)->assertSessionHasErrors('cost');
+        $rows = FuelOutbound::orderBy('id')->get();
+        $this->assertEquals(9, $rows[0]->cost);
+        $this->assertNull($rows[1]->cost);
+        $layers = collect(\App\Support\Fuel\TankCostLayers::forTank($this->tankA->id))->mapWithKeys(function ($l) { return [number_format($l['cost'], 4, '.', '') => $l['kg']]; })->all();
+        $this->assertEquals(['6.0000' => 375.0, '9.0000' => 75.0], $layers);
+
+        // changed: the cost can be chosen again; the list shows it
+        $this->put('/outbound/' . $rows[1]->id, ['cost' => '6'] + $good)->assertSessionHasNoErrors();
+        $this->assertEquals(6, $rows[1]->fresh()->cost);
+        $this->get('/outbound' . self::PERIOD)->assertOk()->assertSee('Cost per kg')->assertSee('9.0000');
+    }
+
     public function testTheTankOfASupplyStaysWhenTheNozzleIsConnectedToAnotherTankLater()
     {
         $supply = $this->supply($this->nozzleA, 10, '2026-09-10 10:00:00');
@@ -304,7 +330,7 @@ class OutboundTest extends TestCase
 
     public function testDeletedRecordsHaveNoEffectOnTheStockAndItsSummary()
     {
-        $inbound = FuelInbound::forceCreate(['tank_id' => $this->tankA->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 5, 'is_default' => true, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        $inbound = FuelInbound::forceCreate(['tank_id' => $this->tankA->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 5, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
         $gone = FuelInbound::forceCreate(['tank_id' => $this->tankA->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'cost' => 9, 'inbound_date' => '2026-09-02', 'user_id' => 1]);
         $supply = $this->supply($this->nozzleA, 10, '2026-09-10 10:00:00');
         $hand = new FuelOutbound;

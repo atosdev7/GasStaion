@@ -7,30 +7,74 @@ use App\Http\Controllers\Debts\DebtController;
 use App\Models\Sales\Customer;
 use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Supplements\Remainder;
 use App\Models\Fuel\Tank;
 use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Models\Debts\TicketLoanSettlement;
+use App\Models\Admin\Setting;
+use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
+use App\Support\Dashboard\TankLevels;
+use App\Support\Fuel\DefaultCost;
+use App\Support\Tickets\LegacyTickets;
 use App\Support\Supplements\RemainderMaker;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
-// Opening balances at go-live: tank stock (initial_tank_balances), and each customer's opening debt
+// Opening balances at go-live: tank stock (tank_balances), and each customer's opening debt
 // or ticket loan, stored as ordinary debts / ticket_loans rows with no sale so payments and loan
 // settlements apply to them unchanged. "No sale" is what marks a row as an opening balance.
 class BalanceController extends Controller
 {
     // The three pages of the Initialize menu: the stock of each tank, the debts and the ticket loans each customer brings at go-live.
+    // The day the system goes live. The press tickets published before it and sold on paper have no rows of their own (see LegacyTickets): they are made when
+    // such a ticket is used. The date can be changed, since the range follows it, but a ticket whose row was made keeps what it was made with.
+    public function goLive()
+    {
+        $date = LegacyTickets::goLive();
+
+        return view('balance.golive', [
+            'goLive' => $date,
+            'oldPublishes' => $date ? TicketPublish::where('date', '<', $date)->count() : 0,
+            'madeRows' => $date ? Ticket::whereIn('publish_id', TicketPublish::where('date', '<', $date)->select('id'))->count() : 0,
+        ]);
+    }
+
+    public function saveGoLive(Request $request)
+    {
+        $data = $request->validate(['go_live_date' => 'required|date_format:Y-m-d']);
+
+        $before = LegacyTickets::goLive();
+        Setting::updateOrCreate(['key' => LegacyTickets::SETTING], ['value' => $data['go_live_date']]);
+        Audit::log('go_live_date', ($before ?: '-') . ' -> ' . $data['go_live_date']);
+
+        return redirect()->route('balances.golive')->with('status', __('initialize.go_live_saved'));
+    }
+
+    // The balances of the tanks, like the list of the fuel inbounds: a row for every cost a tank holds (entered here, or left by a backup), and under it the
+    // summary of each tank.
     public function tanks()
     {
         return view('balance.tanks', [
-            'tanks' => Tank::orderBy('name')->get(),
-            'tankBalances' => InitialTankBalance::pluck('amount_kg', 'tank_id'),
+            'tanks' => Tank::orderBy('name')->pluck('name', 'id'),
+            'balances' => TankBalance::orderBy('tank_id')->orderBy('balance_date')->orderBy('id')->get(),
             'fuels' => config('fuel_types'),
+            // the summary of each tank: its balances, what came in and went out since, what it holds now (TankLevels)
+            'levels' => TankLevels::all(),
+            'defaults' => collect(array_keys(config('fuel_types')))->mapWithKeys(function ($fuelType) {
+                return [$fuelType => DefaultCost::get($fuelType)];
+            }),
         ]);
+    }
+
+    public function editTank($id)
+    {
+        $row = TankBalance::findOrFail($id);
+
+        return view('balance.tank_edit', ['row' => $row, 'tanks' => Tank::orderBy('name')->pluck('name', 'id'), 'fuels' => config('fuel_types')]);
     }
 
     public function debts()
@@ -82,28 +126,136 @@ class BalanceController extends Controller
         ]));
     }
 
-    public function saveTanks(Request $request)
+    // Fuel a tank holds at one cost, entered like a fuel inbound: the tank (its fuel type is kept on the row), the cost per kg, the balance (kg), the day it counts from
+    // and a note. A tank can have several, one for each cost. The cost is the cost of the sales until the first fuel inbound is entered.
+    public function storeTank(Request $request)
     {
-        $tanks = Tank::pluck('name', 'id');
-        $data = $request->validate([
-            'tanks' => 'array',
-            'tanks.*' => 'nullable|numeric|min:0|max:99999999',
-        ]);
+        $data = $this->tankFields($request);
+        $tank = Tank::findOrFail($data['tank_id']);
 
-        foreach ($data['tanks'] ?? [] as $tankId => $amountKg) {
-            if (!$tanks->has($tankId)) {
-                continue;
-            }
-            if ($amountKg === null || $amountKg === '') {
-                InitialTankBalance::where('tank_id', $tankId)->delete();
-            } else {
-                InitialTankBalance::updateOrCreate(['tank_id' => $tankId], ['amount_kg' => $amountKg]);
-            }
+        // A tank has one row for each cost: a balance of a cost the tank already has is added to that row.
+        $same = $this->sameCost($data['tank_id'], $data['cost']);
+        // the default cost of the fuel type: this cost when the box is checked; the first cost of a fuel type is its default without it
+        if ($request->boolean('is_default')) {
+            DefaultCost::set($tank->fuel_type, $data['cost']);
+        } else {
+            DefaultCost::setIfNone($tank->fuel_type, $data['cost']);
+        }
+        if ($same) {
+            $this->addTo($same, $data['balance'], $data['balance_date'], $data['note']);
+            Audit::log('tank_balance_add', '#' . $same->id . ' tank ' . $tank->name . ', +' . $data['balance'] . ' kg at cost ' . $same->cost . ', now ' . $same->balance . ' kg');
+
+            return redirect()->route('balances.tanks.index')->with('status', __('initialize.tank_balance_added_to', [
+                'kg' => number_format($data['balance'], 2), 'cost' => number_format($same->cost, 4), 'now' => number_format($same->balance, 2),
+            ]));
         }
 
-        Audit::log('opening_tank_balances', InitialTankBalance::pluck('amount_kg', 'tank_id')->toJson());
+        $row = TankBalance::create($data + ['fuel_type' => $tank->fuel_type, 'source' => TankBalance::MANUAL, 'user_id' => auth()->id()]);
+
+        Audit::log('tank_balance_create', '#' . $row->id . ' tank ' . $tank->name . ', ' . $row->balance . ' kg, cost ' . $row->cost . ', ' . substr((string) $row->balance_date, 0, 10));
 
         return redirect()->route('balances.tanks.index')->with('status', __('initialize.saved'));
+    }
+
+    // The row of this tank that has this cost, if there is one (the oldest, when an older entry left two).
+    private function sameCost($tankId, $cost, $exceptId = null)
+    {
+        $query = TankBalance::where('tank_id', $tankId)->whereRaw('ROUND(cost, 4) = ?', [round((float) $cost, 4)])->orderBy('id');
+        if ($exceptId) {
+            $query->where('id', '<>', $exceptId);
+        }
+
+        return $query->first();
+    }
+
+    // Puts a balance of the same cost into a row: the kg are added, the day is the newest, and a new comment is added to the comment it has.
+    private function addTo(TankBalance $row, $balance, $date, $note)
+    {
+        $have = $row->balance_date ? substr((string) $row->balance_date, 0, 10) : '';
+        $notes = array_filter([$row->note, $note], function ($text) {
+            return $text !== null && trim($text) !== '';
+        });
+        $notes = array_values(array_unique($notes));
+
+        $row->forceFill([
+            'balance' => round((float) $row->balance + (float) $balance, 2),
+            'balance_date' => max($have, $date),
+            'note' => $notes ? mb_substr(implode('; ', $notes), 0, 255) : null,
+            'user_id' => auth()->id(),
+        ])->save();
+    }
+
+    // A row entered by hand is changed as a whole. A row a backup made is what is left of the removed inbounds and outbounds, so its tank, balance and day stay; its
+    // cost (one that the backups did not know, from before the costs) and its note can be written.
+    public function updateTank(Request $request, $id)
+    {
+        $row = TankBalance::findOrFail($id);
+        $before = $row->tank_id . ' ' . $row->balance . ' kg, cost ' . $row->cost . ', ' . substr((string) $row->balance_date, 0, 10) . ', ' . $row->note;
+
+        if ($row->isManual()) {
+            $data = $this->tankFields($request);
+            // changed to a cost the tank already has: the balance goes into that row, and this one is gone (a tank has one row for each cost)
+            $same = $this->sameCost($data['tank_id'], $data['cost'], $row->id);
+            if ($same) {
+                $this->addTo($same, $data['balance'], $data['balance_date'], $data['note']);
+                $row->delete();
+                Audit::log('tank_balance_update', '#' . $row->id . ': ' . $before . ' -> added to #' . $same->id . ', now ' . $same->balance . ' kg at cost ' . $same->cost);
+
+                return redirect()->route('balances.tanks.index')->with('status', __('initialize.tank_balance_added_to', [
+                    'kg' => number_format($data['balance'], 2), 'cost' => number_format($same->cost, 4), 'now' => number_format($same->balance, 2),
+                ]));
+            }
+            $row->forceFill($data)->save();
+        } else {
+            $data = $request->validate(['cost' => 'required|numeric|min:0|max:999999', 'note' => 'nullable|string|max:255']);
+            $row->forceFill(['cost' => $data['cost'], 'note' => isset($data['note']) && trim($data['note']) !== '' ? trim($data['note']) : null])->save();
+        }
+
+        Audit::log('tank_balance_update', '#' . $row->id . ': ' . $before . ' -> ' . $row->tank_id . ' ' . $row->balance . ' kg, cost ' . $row->cost . ', ' . substr((string) $row->balance_date, 0, 10) . ', ' . $row->note);
+
+        return redirect()->route('balances.tanks.index')->with('status', __('initialize.saved'));
+    }
+
+    // The default cost of the fuel type becomes the cost of this balance (copied: the row is not changed).
+    public function makeDefaultTank($id)
+    {
+        $row = TankBalance::findOrFail($id);
+        if ($row->cost === null) {
+            return redirect()->route('balances.tanks.index')->withErrors(['balance' => __('initialize.tank_balance_no_cost')]);
+        }
+
+        DefaultCost::set($row->fuel_type, $row->cost);
+        Audit::log('tank_balance_default', '#' . $row->id . ' ' . $row->fuel_type . ' cost ' . $row->cost);
+
+        return redirect()->route('balances.tanks.index')->with('status', __('fuel.default_cost_set', ['cost' => number_format($row->cost, 4)]));
+    }
+
+    // Only a row entered by hand: the others are the stock a backup left, and the tank levels count them.
+    public function destroyTank($id)
+    {
+        $row = TankBalance::findOrFail($id);
+        if (!$row->isManual()) {
+            return redirect()->route('balances.tanks.index')->withErrors(['balance' => __('initialize.tank_balance_from_backup')]);
+        }
+
+        $row->delete();
+        Audit::log('tank_balance_delete', '#' . $row->id . ' tank ' . $row->tank_id . ', ' . $row->balance . ' kg, cost ' . $row->cost);
+
+        return redirect()->route('balances.tanks.index')->with('status', __('initialize.deleted'));
+    }
+
+    private function tankFields(Request $request)
+    {
+        $data = $request->validate([
+            'tank_id' => ['required', Rule::exists('tanks', 'id')->whereNull('deleted_at')],
+            'cost' => 'required|numeric|min:0|max:999999',
+            'balance' => 'required|numeric|min:0|max:99999999',
+            'balance_date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'note' => 'nullable|string|max:255',
+        ]);
+        $data['note'] = isset($data['note']) && trim($data['note']) !== '' ? trim($data['note']) : null;
+
+        return $data;
     }
 
     public function storeDebt(Request $request)

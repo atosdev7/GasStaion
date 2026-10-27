@@ -91,6 +91,9 @@
                     <th>{{ __('fuel.to_name') }}</th>
                     <th class="text-right">{{ __('fuel.liters') }}</th>
                     <th class="text-right">{{ __('fuel.amount_kg') }}</th>
+                    @can('costs.view')
+                        <th class="text-right">{{ __('fuel.cost') }}</th>
+                    @endcan
                     <th>{{ __('fuel.note') }}</th>
                     @can('outbound.manage')
                         <th class="text-right" style="width: 1%">{{ __('fuel.actions') }}</th>
@@ -108,6 +111,9 @@
                         <td>{{ $row->to_name }}</td>
                         <td class="text-right">{{ $row->supplement ? number_format($row->supplement->out_amount_lt, 2) : '' }}</td>
                         <td class="text-right">{{ number_format($row->amount_kg, 2) }}</td>
+                        @can('costs.view')
+                            <td class="text-right">{{ $row->cost !== null ? number_format($row->cost, 4) : '-' }}</td>
+                        @endcan
                         <td>{{ $row->note }}</td>
                         @can('outbound.manage')
                             <td class="text-right">

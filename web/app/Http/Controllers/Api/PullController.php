@@ -54,6 +54,9 @@ class PullController extends Controller
             'ticket_serial_floor' => $floors,
             // Tickets the device mints itself (a POS code) are numbered above this; the web app uses the range below.
             'ticket_serial_base' => (int) config('ticket_serial.device_base'),
+            // The press tickets published before go-live and sold on paper have no rows: a ticket with no row on the terminal whose serial is inside one of
+            // these ranges is a ticket sold before go-live (it is made when it is used). Empty until the go-live date is set.
+            'ticket_legacy' => \App\Support\Tickets\LegacyTickets::ranges(),
             'fuel_types' => $fuelTypes,
             'tanks' => TankLevels::all()->map(function ($r) {
                 return [

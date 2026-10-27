@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Supplements;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Reports\ReportController;
 use App\Models\Cards\Card;
+use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\FuelType;
 use App\Models\Fuel\Nozzle;
 use App\Models\Supplements\Remainder;
@@ -12,8 +13,10 @@ use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
 use App\Support\Cards\CardLedger;
+use App\Support\Fuel\CostChoices;
 use App\Support\Supplements\RemainderMaker;
 use App\Support\Supplements\SupplementDeletion;
+use App\Support\Tickets\LegacyTickets;
 use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -89,7 +92,14 @@ class SupplementController extends Controller
                 return optional(FuelType::find($fuelType))->density;
             }),
             'modes' => Supplement::MODES,
+            // the costs a supply can be made at: those of the fuel in the tank of each nozzle (for a user who may see costs)
+            'costChoices' => $this->canSeeCosts() ? CostChoices::byNozzle() : null,
         ]);
+    }
+
+    private function canSeeCosts()
+    {
+        return auth()->user() && auth()->user()->can('costs.view');
     }
 
     public function store(Request $request)
@@ -107,9 +117,12 @@ class SupplementController extends Controller
             'supplied_at' => ['required', 'date', 'before_or_equal:now'], // a supply has happened already
             'density' => 'nullable|numeric|min:0.0001|max:9999.9999', // kg per litre; the density of the fuel type when it is not sent
             'mode' => ['nullable', Rule::in(Supplement::MODES)], // auto when it is not sent
+            'cost' => 'nullable|numeric|min:0|max:9999999', // the cost per kg: one of the costs of the fuel in the tank; the default cost when it is not sent
         ], ['supplied_at.before_or_equal' => __('supplements.supplied_in_future')]);
 
         $result = DB::transaction(function () use ($data) {
+            LegacyTickets::ensure($data['ticket_barcodes']);       // a ticket sold before go-live has no row until it is used
+
             // Only tickets the customer actually holds (sold, not blank stock, not already used or restricted) can be
             // supplied against, the same rule as a loan settlement. All of them or none.
             $tickets = Ticket::whereIn('barcode', $data['ticket_barcodes'])
@@ -159,6 +172,7 @@ class SupplementController extends Controller
                 'out_amount_lt' => $data['out_amount_lt'],
                 'density' => $density,
                 'out_amount_kg' => $amountKg,
+                'cost' => $this->canSeeCosts() && isset($data['cost']) && $data['cost'] !== '' ? $data['cost'] : CostChoices::costForNewSupply($nozzle->tank_id),
                 'preset_kg' => $presetKg,
                 'mode' => isset($data['mode']) ? $data['mode'] : 'auto',
                 'supplied_at' => $suppliedAt,
@@ -219,7 +233,17 @@ class SupplementController extends Controller
             'nozzleOptions' => collect($labels)->only($sameFuel),
             'litresFixed' => $supplement->remainder !== null || $supplement->card_id !== null,
             'fuels' => config('fuel_types'),
+            // the cost per kg of the supply: one of the costs of the fuel in the tank it takes its fuel from (and the one it has), for a user who may see costs
+            'costChoices' => $this->canSeeCosts() ? CostChoices::forTank($this->tankOf($supplement), $supplement->cost) : null,
         ]);
+    }
+
+    // The tank a supply took its fuel from: the one of its outbound row, otherwise the one of its nozzle.
+    private function tankOf(Supplement $supplement)
+    {
+        $tankId = FuelOutbound::withTrashed()->where('supplement_id', $supplement->id)->value('tank_id');
+
+        return $tankId ?: optional(Nozzle::withTrashed()->find($supplement->nozzle_id))->tank_id;
     }
 
     public function update(Request $request, $id)
@@ -231,6 +255,9 @@ class SupplementController extends Controller
 
         $full = $request->user()->can('supplements.manage');
         $rules = ['comment' => 'nullable|string|max:255'];
+        if ($this->canSeeCosts()) {
+            $rules['cost'] = 'nullable|numeric|min:0|max:9999999';       // the cost per kg is chosen again by whoever may see costs (the accountant, before confirming)
+        }
         if ($full) {
             $rules += [
                 'nozzle_id' => ['required', Rule::exists('nozzles', 'id')->whereNull('deleted_at')],
@@ -244,6 +271,9 @@ class SupplementController extends Controller
         $before = $supplement->supplied_at . ' ' . $supplement->mode . ' ' . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id
             . ' / ' . $supplement->comment;
         $changes = ['comment' => isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null];
+        if (isset($data['cost']) && $data['cost'] !== null) {
+            $changes['cost'] = $data['cost'];
+        }
 
         if ($full) {
             $nozzle = Nozzle::findOrFail($data['nozzle_id']);
@@ -285,7 +315,7 @@ class SupplementController extends Controller
             }
         });
         Audit::log($full ? 'supplement_edit' : 'supplement_comment', '#' . $supplement->id . ': ' . $before . ' -> ' . $supplement->supplied_at . ' ' . $supplement->mode . ' '
-            . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id . ' / ' . $supplement->comment);
+            . $supplement->out_amount_lt . 'L / ' . $supplement->out_amount_kg . 'kg nozzle ' . $supplement->nozzle_id . ' / ' . $supplement->comment . ' / cost ' . $supplement->cost);
 
         return redirect()->route('supplements.index')->with('status', $remainder
             ? __('supplements.saved_with_remainder', ['barcode' => $remainder->ticket_barcode, 'left' => number_format($remainder->amount_kg, 2, '.', '')])

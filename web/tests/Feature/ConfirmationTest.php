@@ -984,7 +984,7 @@ class ConfirmationTest extends TestCase
 
     public function testAConfirmedFuelInboundOrOutboundCannotBeChangedOrDeletedUntilAManagerTakesTheConfirmationBack()
     {
-        $inbound = $this->fuelInbound('2026-10-01', ['is_default' => false]);
+        $inbound = $this->fuelInbound('2026-10-01');
         $outbound = $this->fuelOutbound('2026-10-01');
         $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'fuel', 'fuel_inbounds' => [$inbound->id], 'fuel_outbounds' => [$outbound->id]]);
         $this->assertNotNull($inbound->fresh()->confirmed_at);

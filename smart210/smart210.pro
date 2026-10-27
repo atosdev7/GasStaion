@@ -78,6 +78,7 @@ SOURCES += \
     src/supplies/ManualSupplyPage.cpp \
     src/remainders/RemainderTicketsPage.cpp \
     src/sales/TicketNumbers.cpp \
+    src/sales/TicketLegacy.cpp \
     src/printing/TicketRenderer.cpp \
     src/sales/TicketSale.cpp \
     src/sales/TicketSalePage.cpp \
@@ -156,6 +157,7 @@ HEADERS += \
     src/supplies/ManualSupplyPage.h \
     src/remainders/RemainderTicketsPage.h \
     src/sales/TicketNumbers.h \
+    src/sales/TicketLegacy.h \
     src/printing/TicketRenderer.h \
     src/sales/TicketSale.h \
     src/sales/TicketSalePage.h \

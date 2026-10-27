@@ -8,7 +8,7 @@ use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
-use App\Models\Fuel\InitialTankBalance;
+use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Nozzle;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
@@ -108,7 +108,7 @@ class BackupTest extends TestCase
         $this->sale('2026-09-20');       // after the cut-off
         $this->sale('2026-09-12')->delete(); // soft-deleted, still cleared
 
-        InitialTankBalance::create(['tank_id' => $this->tank->id, 'amount_kg' => 1000]);
+        TankBalance::create(['tank_id' => $this->tank->id, 'balance' => 1000]);
         $this->inbound(500, '2026-09-05');
         $this->inbound(300, '2026-09-20');
         $this->supplement(100, '2026-09-10');
@@ -180,7 +180,18 @@ class BackupTest extends TestCase
         $this->assertSame(1, FuelInbound::count());
         $this->assertSame(['0000006000000003', '0000006000000004'], Ticket::orderBy('barcode')->pluck('barcode')->all());
 
-        $this->assertEquals(1000, InitialTankBalance::where('tank_id', $this->tank->id)->value('amount_kg')); // go-live value untouched
+        // the cleared inbound (500 at 1.00) and outbound (100) went into the balances of the tank, one row per cost; the oldest fuel goes first, which is the 1000
+        // the tank started with (no cost): 900 of it and the 500 are left
+        $rows = TankBalance::where('tank_id', $this->tank->id)->get();
+        $this->assertCount(2, $rows);
+        $none = $rows->first(function ($row) { return $row->cost === null; });
+        $this->assertEquals(900, $none->balance);
+        $this->assertSame('backup', $none->source);
+        $this->assertSame(Backup::first()->id, (int) $none->backup_id);
+        $priced = $rows->first(function ($row) { return $row->cost !== null; });
+        $this->assertEquals(1, $priced->cost);
+        $this->assertEquals(500, $priced->balance);
+        $this->assertSame('2026-09-05', substr((string) $priced->balance_date, 0, 10));
         $this->assertEquals($before, TankLevels::all()->first()->current);
 
         $this->assertSame(1, Debt::count());
@@ -197,7 +208,7 @@ class BackupTest extends TestCase
         $manifest = json_decode($zip->getFromName('manifest.json'), true);
         $this->assertSame(3, $manifest['rows']['sales']); // exported before clearing; the deleted sale is not backed up
         $this->assertCount(3, array_filter(explode("\n", $zip->getFromName('sales.jsonl'))));
-        $this->assertStringContainsString('"amount_kg":"1000.00"', $zip->getFromName('initial_tank_balances.jsonl'));
+        $this->assertFalse($zip->getFromName('tank_balances.jsonl'));              // (the backup server enters its own opening balances)
         $this->assertFalse($zip->getFromName('backups.jsonl'));
         $zip->close();
     }
@@ -230,6 +241,99 @@ class BackupTest extends TestCase
         $this->assertCount(5, array_filter(explode("\n", $zip->getFromName('fuel_outbounds.jsonl'))));  // everything is exported before it is cleared
         $zip->close();
     }
+    // what the cleared fuel inbounds and outbounds leave is written to tank_balances, one row per cost: the supplies take the oldest fuel first
+    public function testTheClearedInboundsAndOutboundsBecomeTheBalancesOfTheTankPerCost()
+    {
+        TankBalance::create(['tank_id' => $this->tank->id, 'balance' => 200, 'cost' => 5, 'balance_date' => '2026-09-01']);
+        foreach ([[300, 6, '2026-09-05'], [400, 7, '2026-09-08'], [100, 6, '2026-09-09'], [50, 8, '2026-09-20']] as $in) {
+            FuelInbound::forceCreate([
+                'tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => $in[0], 'cost' => $in[1], 'inbound_date' => $in[2], 'user_id' => 1,
+                'confirmed_at' => now(), 'confirmed_by' => 1,
+            ]);
+        }
+        $this->supplement(450, '2026-09-10');                                      // cleared: 200 at 5.00 and 250 of the 300 at 6.00
+        $this->supplement(30, '2026-09-20');                                       // after the cut-off: stays
+        $before = TankLevels::all()->first()->current;                             // 200 + 850 - 480
+
+        $preview = $this->as('admin')->get('/backup?up_to=' . self::UP_TO)->assertOk()->viewData('balancesAfter');
+        $this->assertEquals([['cost' => 6.0, 'balance' => 150.0, 'balance_date' => '2026-09-09'], ['cost' => 7.0, 'balance' => 400.0, 'balance_date' => '2026-09-08']],
+            array_map(function ($row) { return array_intersect_key($row, array_flip(['cost', 'balance', 'balance_date'])); }, $preview[$this->tank->id]));
+
+        $this->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup')->assertSessionHas('status');
+
+        $rows = TankBalance::where('tank_id', $this->tank->id)->orderBy('cost')->get();
+        $this->assertCount(2, $rows);                                              // the 200 at 5.00 is used up and gone; the two lots at 6.00 are one row
+        $this->assertEquals([6, 150], [$rows[0]->cost, $rows[0]->balance]);
+        $this->assertEquals([7, 400], [$rows[1]->cost, $rows[1]->balance]);
+        $this->assertSame('2026-09-09', substr((string) $rows[0]->balance_date, 0, 10));
+        $this->assertStringContainsString('balance after the backup up to ' . self::UP_TO, $rows[0]->note);
+        $this->assertSame('D', $rows[0]->fuel_type);
+        $this->assertSame(1, FuelInbound::count());                                // only the one after the cut-off is left
+        $this->assertEquals($before, TankLevels::all()->first()->current);         // the tank holds what it held
+
+        // the stock is valued by what is left: the inbound after the cut-off first, then the balances, newest first
+        $fuel = \App\Support\Fuel\TankStockSummary::build()['fuels']['D'];
+        $this->assertEquals(570, $fuel['balance']);                                // 150 + 400 + 50 - 30
+        $this->assertSame(0.0, $fuel['unknown_kg']);
+        $this->assertEquals(8 * 50 + 6 * 150 + 7 * 370, $fuel['value']);           // 50 at 8.00, then the balances newest first: 150 at 6.00 (09-09) and 370 of the 400 at 7.00 (09-08)
+    }
+
+    // the supplies and the outbounds by hand that are cleared take their fuel from the layer of their cost
+    public function testTheClearedOutboundsTakeTheirFuelFromTheLayerOfTheirCost()
+    {
+        TankBalance::create(['tank_id' => $this->tank->id, 'balance' => 200, 'cost' => 5, 'balance_date' => '2026-09-01']);
+        foreach ([[300, 6, '2026-09-05'], [400, 7, '2026-09-08']] as $in) {
+            FuelInbound::forceCreate([
+                'tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => $in[0], 'cost' => $in[1], 'inbound_date' => $in[2], 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1,
+            ]);
+        }
+        $this->supplement(150, '2026-09-10')->forceFill(['cost' => 6])->save();         // from the layer of 6.00
+        $this->supplement(100, '2026-09-11')->forceFill(['cost' => 7])->save();
+        $this->supplement(120, '2026-09-12');                                            // no cost: the oldest fuel first (the 200 at 5.00)
+        $this->supplement(20, '2026-09-13')->forceFill(['cost' => 8])->save();           // a cost the tank never had: a row below zero
+        $byHand = new \App\Models\Fuel\FuelOutbound;
+        $byHand->forceFill(['tank_id' => $this->tank->id, 'outbound_date' => '2026-09-14', 'amount_kg' => 10, 'cost' => 7, 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1])->save();
+        $before = TankLevels::all()->first()->current;                                   // 200 + 700 - 400
+
+        $this->as('admin')->post('/backup', ['up_to' => '2026-09-15'])->assertRedirect('/backup')->assertSessionHas('status');
+
+        $rows = TankBalance::where('tank_id', $this->tank->id)->orderBy('cost')->get()->keyBy(function ($row) {
+            return number_format($row->cost, 4, '.', '');
+        });
+        $this->assertEquals(['5.0000' => 80, '6.0000' => 150, '7.0000' => 290, '8.0000' => -20], $rows->map(function ($row) { return (float) $row->balance; })->all());
+        $this->assertEquals($before, TankLevels::all()->first()->current);
+    }
+
+    public function testFuelThatLeftMoreThanTheRecordsSayIsANegativeBalanceAndTheLevelStays()
+    {
+        $other = \App\Models\Fuel\Tank::forceCreate(['name' => 'T2', 'fuel_type' => 'D']);
+        $nozzle = \App\Models\Fuel\Nozzle::forceCreate(['device_id' => $this->nozzle->device_id, 'number' => 2, 'tank_id' => $other->id, 'fuel_type' => 'D']);
+        FuelInbound::forceCreate(['tank_id' => $other->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 4, 'inbound_date' => '2026-09-05', 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1]);
+        Supplement::forceCreate([
+            'fuel_type' => 'D', 'nozzle_id' => $nozzle->id, 'device_id' => $nozzle->device_id, 'out_amount_lt' => 130, 'out_amount_kg' => 130, 'preset_kg' => 130,
+            'supplied_at' => '2026-09-10 11:00:00', 'supply_date' => '2026-09-10', 'confirmed_at' => now(), 'confirmed_by' => 1,
+        ]);
+        $before = TankLevels::all()->firstWhere('tank.id', $other->id)->current;                // -30
+        $this->assertEquals(-30, $before);
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertRedirect('/backup')->assertSessionHas('status');
+
+        $rows = TankBalance::where('tank_id', $other->id)->get();
+        $this->assertCount(1, $rows);
+        $this->assertEquals(-30, $rows[0]->balance);
+        $this->assertNull($rows[0]->cost);                                                       // it left with no cost: no cost is known for what is missing
+        $this->assertEquals($before, TankLevels::all()->firstWhere('tank.id', $other->id)->current);
+
+        // a second backup finds the negative row and takes it from the layers it gets: nothing is lost or counted twice
+        FuelInbound::forceCreate(['tank_id' => $other->id, 'fuel_type' => 'D', 'amount_kg' => 80, 'cost' => 5, 'inbound_date' => '2026-09-12', 'user_id' => 1, 'confirmed_at' => now(), 'confirmed_by' => 1]);
+        $this->assertEquals(50, TankLevels::all()->firstWhere('tank.id', $other->id)->current);
+        $this->post('/backup', ['up_to' => '2026-09-14'])->assertRedirect('/backup')->assertSessionHas('status');
+        $rows = TankBalance::where('tank_id', $other->id)->get();
+        $this->assertCount(1, $rows);
+        $this->assertEquals([5, 50], [$rows[0]->cost, $rows[0]->balance]);
+        $this->assertEquals(50, TankLevels::all()->firstWhere('tank.id', $other->id)->current);
+    }
+
     public function testDeletedSalesAndWhatWasCancelledWithThemAreNotExported()
     {
         $kept = $this->sale('2026-09-10');
@@ -425,8 +529,26 @@ class BackupTest extends TestCase
         config(['backup.is_backup_server' => true]);
         $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
         Backup::query()->delete();
+        // (this test is one database, the backup server is another: the tank balances are not in the export, the server has the inbounds and outbounds themselves and its
+        // opening balance of the tank is entered there once by hand)
+        \App\Models\Fuel\TankBalance::query()->delete();
+        \App\Models\Fuel\TankBalance::create(['tank_id' => $this->tank->id, 'balance' => 1000, 'cost' => null, 'balance_date' => '2026-09-01']);
 
         $this->assertEquals($before, TankLevels::all()->first()->current);
+    }
+
+    public function testTheTankBalancesAreNeverInTheExport()
+    {
+        $this->scenario();
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHas('status');
+        $this->assertSame(2, \App\Models\Fuel\TankBalance::where('source', 'backup')->count());
+
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open(storage_path('app/backups/test-exports/' . Backup::first()->file)));
+        $this->assertFalse($zip->getFromName('tank_balances.jsonl'));              // neither the one entered by hand nor the ones the backup wrote
+        $manifest = json_decode($zip->getFromName('manifest.json'), true);
+        $zip->close();
+        $this->assertArrayNotHasKey('tank_balances', $manifest['rows']);
     }
 
     public function testClearingIsRefusedOnTheBackupServer()
@@ -521,6 +643,53 @@ class BackupTest extends TestCase
         $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
 
         $this->assertSame('2026-10-01', substr((string) Sale::find('11111111-1111-1111-1111-111111111111')->sale_date, 0, 10));
+    }
+
+    // tank balances in an export (an older one has them) are not imported: the backup server's opening balances are entered by hand
+    public function testTankBalancesInAnExportAreNotImported()
+    {
+        $tank = \App\Models\Fuel\Tank::forceCreate(['name' => 'T9', 'fuel_type' => 'D']);
+        $dir = storage_path('app/backups/test-exports');
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        $file = $dir . '/old-tank-export.zip';
+        $zip = new \ZipArchive;
+        $zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        foreach (['initial_tank_balances', 'tank_balances'] as $name) {
+            $zip->addFromString($name . '.jsonl', json_encode([
+                'id' => 1, 'tank_id' => $tank->id, 'balance' => '750.00', 'created_at' => '2026-10-01 10:00:00', 'updated_at' => '2026-10-01 10:00:00',
+            ]) . "\n");
+        }
+        $zip->addFromString('manifest.json', json_encode(['rows' => ['initial_tank_balances' => 1, 'tank_balances' => 1], 'up_to_date' => '2026-10-01']));
+        $zip->close();
+
+        config(['backup.is_backup_server' => true]);
+        $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
+
+        $this->assertSame(0, \App\Models\Fuel\TankBalance::count());
+    }
+
+    public function testAnExportOfFuelInboundsMadeWhenTheyHadTheDefaultFlagStillImports()
+    {
+        $dir = storage_path('app/backups/test-exports');
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        $file = $dir . '/old-inbound-export.zip';
+        $zip = new \ZipArchive;
+        $zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString('fuel_inbounds.jsonl', json_encode([
+            'id' => 77, 'tank_id' => $this->tank->id, 'fuel_type' => 'D', 'amount_kg' => '500.00', 'cost' => '6.5000', 'is_default' => 1, 'default_from' => '2026-09-01 08:00:00',
+            'default_until' => null, 'inbound_date' => '2026-09-01', 'user_id' => 1, 'created_at' => '2026-09-01 08:00:00', 'updated_at' => '2026-09-01 08:00:00',
+        ]) . "\n");
+        $zip->addFromString('manifest.json', json_encode(['rows' => ['fuel_inbounds' => 1], 'up_to_date' => '2026-09-01']));
+        $zip->close();
+
+        config(['backup.is_backup_server' => true]);
+        $this->artisan('backup:import', ['file' => $file])->assertExitCode(0);
+
+        $this->assertEquals(500, FuelInbound::find(77)->amount_kg);
     }
 
     public function testAnExportWithTheUserOfASupplyStillImports()
