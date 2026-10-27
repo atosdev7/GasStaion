@@ -20,6 +20,7 @@
 @endsection
 
 @section('content')
+    @includeWhen($route === 'devices', 'partials.pos_tabs')
     @if (session('status'))
         <div class="alert alert-success">{{ session('status') }}</div>
     @endif

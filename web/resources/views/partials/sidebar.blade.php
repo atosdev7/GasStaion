@@ -1,18 +1,30 @@
 <nav class="mt-2">
     <ul class="nav nav-pills nav-sidebar nav-child-indent flex-column" data-widget="treeview" role="menu" data-accordion="false">
+        @php
+            // a page that is an item of the menu itself (in any group) keeps only that item current; the prefix rule below is for pages that are not
+            $exact = false;
+            foreach (config('menu') as $any) {
+                foreach ($any['items'] as $item) {
+                    if ((is_null($item['permission']) || auth()->user()->can($item['permission'])) && Route::has($item['route']) && (request()->routeIs($item['route']) || (!empty($item['also']) && request()->routeIs(...$item['also'])))) {
+                        $exact = true;
+                    }
+                }
+            }
+        @endphp
         @foreach (config('menu') as $group)
             @php
                 $items = array_values(array_filter($group['items'], function ($item) {
-                    return is_null($item['permission']) || auth()->user()->can($item['permission']);
+                    return (is_null($item['permission']) || auth()->user()->can($item['permission'])) && (empty($item['unless']) || !auth()->user()->can($item['unless']));
                 }));
-                $exact = count(array_filter($items, function ($item) {
-                    return Route::has($item['route']) && request()->routeIs($item['route']);
-                })) > 0;
                 $isActive = function ($item) use ($exact) {
                     if (!Route::has($item['route'])) {
                         return false;
                     }
                     if (request()->routeIs($item['route'])) {
+                        return true;
+                    }
+                    // other pages that belong to this item (the sync status is a tab of POS)
+                    if (!empty($item['also']) && request()->routeIs(...$item['also'])) {
                         return true;
                     }
                     // a page of the same section (an edit or detail page) keeps its menu item current, unless a sibling is the page itself

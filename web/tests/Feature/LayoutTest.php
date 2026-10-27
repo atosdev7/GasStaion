@@ -100,6 +100,31 @@ class LayoutTest extends TestCase
             ->assertDontSee(__('menu.backup'));
     }
 
+    // an item of another group on a page of the same section (Go-live is a balances page too) does not light the items of Initialize
+    public function testOnlyTheItemOfThePageIsCurrentWhenAnotherGroupSharesItsRoutePrefix()
+    {
+        $html = $this->login('manager')->get('/balances/go-live')->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'menu-open'));                                             // Config for Admin only
+        $this->assertSame(1, preg_match_all('/<a href="[^"]*"\s+class="nav-link active">\s*<i class="far fa-circle nav-icon"><\/i>/', $html));   // and one item in it
+        $this->assertRegExp('#href="' . preg_quote(url('/balances/go-live'), '#') . '"\s+class="nav-link active"#', $html);
+    }
+
+    // the sync status is a tab of the POS item: the item stays current on its page, and the tabs are on both pages
+    public function testTheSyncStatusIsATabOfPos()
+    {
+        $html = $this->login('manager')->get('/sync')->assertOk()->getContent();
+        $this->assertRegExp('#href="' . preg_quote(url('/devices'), '#') . '"\s+class="nav-link active"#', $html);
+        $this->assertStringContainsString('id="pos-tabs"', $html);
+        $this->assertStringNotContainsString('<p>Sync Status</p>', $html);                                  // no menu item of its own any more
+        $this->get('/devices')->assertOk()->assertSee('id="pos-tabs"', false)->assertSee(__('menu.sync'));
+
+        // a user who may see the sync status but not the devices has the POS item lead to it
+        $html = $this->login('accountant')->get('/')->assertOk()->getContent();
+        $this->assertStringContainsString('href="' . url('/sync') . '"', $html);
+        $this->assertStringNotContainsString('href="' . url('/devices') . '"', $html);
+        $this->get('/sync')->assertOk()->assertSee('POS');
+    }
+
     public function testActiveGroupIsOpenOnItsPage()
     {
         // On /fuel the "Config for Admin" group is open; on the dashboard nothing is.

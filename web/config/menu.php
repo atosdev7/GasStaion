@@ -102,12 +102,13 @@ return [
     [
         'label' => 'group_admin', 'icon' => 'fa-cogs',
         'items' => [
-            ['label' => 'devices', 'route' => 'devices.index', 'permission' => 'devices.view'],
             ['label' => 'fuel',    'route' => 'fuel.index',    'permission' => 'fuel.view'],
             ['label' => 'tanks',   'route' => 'tanks.index',   'permission' => 'fuel.view'],
+            // POS: the Smart210 devices and, as the next tab, their sync status (a user who may see the sync status but not the devices goes straight to it)
+            ['label' => 'devices', 'route' => 'devices.index', 'permission' => 'devices.view', 'also' => ['sync.*']],
+            ['label' => 'devices', 'route' => 'sync.index', 'permission' => 'sync.view', 'unless' => 'devices.view'],
             ['label' => 'nozzles', 'route' => 'nozzles.index', 'permission' => 'fuel.view'],
             ['label' => 'go_live', 'route' => 'balances.golive', 'permission' => 'balances.manage'],
-            ['label' => 'sync',    'route' => 'sync.index',    'permission' => 'sync.view'],
             ['label' => 'backup',  'route' => 'backup.index',  'permission' => 'backup.manage'],
             ['label' => 'audit',   'route' => 'audit.index',   'permission' => 'audit.view'],
         ],

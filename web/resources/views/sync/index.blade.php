@@ -3,6 +3,7 @@
 @section('title', __('menu.sync'))
 
 @section('content')
+    @include('partials.pos_tabs')
     @if (session('status'))
         <div class="alert alert-success">{{ session('status') }}</div>
     @endif
