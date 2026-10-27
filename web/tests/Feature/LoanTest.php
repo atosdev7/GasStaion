@@ -172,7 +172,7 @@ class LoanTest extends TestCase
         ]);
         $this->soldTicket('0000000000000001');
 
-        $this->as('manager')->get('/loans/create')->assertForbidden(); // view only
+        $this->as('cashier')->get('/loans/create')->assertForbidden(); // view only
         $this->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001'])->assertForbidden();
 
         $this->as('accountant')->get('/loans/create')->assertOk();
@@ -306,7 +306,7 @@ class LoanTest extends TestCase
         $this->as('accountant')->post('/loans', ['loan_id' => $loan->id, 'ticket_barcode' => '0000000000000001']);
         $settlement = TicketLoanSettlement::first();
 
-        foreach (['manager', 'cashier'] as $role) {
+        foreach (['cashier'] as $role) {
             $this->as($role)->post('/loans/settlements/' . $settlement->id . '/reverse')->assertForbidden();
         }
         $this->assertSame(1, TicketLoanSettlement::count());
@@ -347,7 +347,7 @@ class LoanTest extends TestCase
         $this->assertStringContainsString(route('loans.show', $done->id), $html);
         $this->assertStringContainsString(route('loans.create', ['loan_id' => $open->id]), $html);
         $this->assertStringNotContainsString(route('loans.create', ['loan_id' => $done->id]), $html);
-        $this->assertStringNotContainsString('loan_id=' . $open->id, $this->as('manager')->get('/loans')->getContent());         // the manager only looks
+        $this->assertStringNotContainsString('loan_id=' . $open->id, $this->as('cashier')->get('/loans')->getContent());         // the cashier only looks
         $this->assertStringContainsString(route('loans.show', $open->id), $this->get('/loans')->getContent());
 
         // Settle opens the form with that loan chosen
@@ -472,6 +472,6 @@ class LoanTest extends TestCase
         $this->assertSame(config('ticket_statuses.supply'), Ticket::find($confirmed->ticket_barcode)->status);
 
         // those who only view have no window
-        $this->as('manager')->get('/loans?tab=settlements')->assertOk()->assertDontSee('id="reverse-modal"');
+        $this->as('cashier')->get('/loans?tab=settlements')->assertOk()->assertDontSee('id="reverse-modal"');
     }
 }

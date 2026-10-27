@@ -166,9 +166,9 @@ class DebtTest extends TestCase
 
     public function testRecordPaymentPermissions()
     {
-        $this->as('manager')->get('/payments/create')->assertForbidden(); // view only
-        $this->recordPayment()->assertForbidden();
         $this->as('cashier')->get('/payments/create')->assertForbidden();
+        $this->recordPayment()->assertForbidden();
+        $this->as('manager')->get('/payments/create')->assertOk();         // the manager can do everything the accountant and the assistant can
 
         $this->as('accountant')->get('/payments/create')->assertOk();
         $this->recordPayment()->assertRedirect('/payments');
@@ -319,12 +319,12 @@ class DebtTest extends TestCase
         $settled = $this->debtOf('2026-10-01', $this->customer, 'D', 'cash', 20);
         DebtPayment::forceCreate(['customer_id' => $this->customer->id, 'debt_id' => $settled->id, 'amount' => 20, 'payment_method' => 'cash', 'paid_date' => '2026-10-02', 'user_id' => 1]);
 
-        // Settle is in the drop-down of an open debt, for those who record payments; a settled debt has none; the manager only looks
+        // Settle is in the drop-down of an open debt, for those who record payments; a settled debt has none
         $html = $this->as('accountant')->get('/payments')->assertOk()->getContent();
         $this->assertStringContainsString('href="' . route('payments.create', ['debt_id' => $debt->id]) . '"', $html);
         $this->assertStringNotContainsString('debt_id=' . $settled->id, $html);
         $this->as('assistant')->get('/payments')->assertSee('debt_id=' . $debt->id);
-        $this->as('manager')->get('/payments')->assertOk()->assertDontSee('debt_id=');
+        $this->as('manager')->get('/payments')->assertOk()->assertSee('debt_id=' . $debt->id);
 
         // the form: the customer, the debt, its balance and its payment method are filled in
         $form = $this->as('accountant')->get('/payments/create?debt_id=' . $debt->id)->assertOk()->getContent();
@@ -468,11 +468,10 @@ class DebtTest extends TestCase
     {
         $debt = $this->debtOf('2026-10-01', $this->customer, 'D', 'bank', 100);
         $payment = $this->paymentOn($debt);
-        foreach (['manager', 'cashier'] as $role) {
+        foreach (['cashier'] as $role) {
             $this->as($role)->get('/payments/' . $payment->id . '/edit')->assertForbidden();
             $this->put('/payments/' . $payment->id, ['amount' => 1])->assertForbidden();
         }
-        $this->as('manager')->get('/payments')->assertOk()->assertDontSee(route('payments.edit', $payment->id));
         $this->assertEquals(30, $payment->fresh()->amount);
     }
 
@@ -661,7 +660,7 @@ class DebtTest extends TestCase
             'customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 40, 'payment_method' => 'bank', 'paid_date' => today()->toDateString(), 'user_id' => 1,
         ]);
 
-        foreach (['manager', 'cashier'] as $role) {
+        foreach (['cashier'] as $role) {
             $this->as($role)->post('/payments/' . $payment->id . '/reverse')->assertForbidden();
         }
         $this->assertSame(1, DebtPayment::count());
@@ -724,9 +723,6 @@ class DebtTest extends TestCase
         $this->assertStringContainsString('Do you really want to reverse this payment?', $html);
         $this->assertRegExp('/id="reverse-note" name="note" maxlength="200" autocomplete="off"/', $html);                 // the reason is asked there
         $this->assertSame(1, substr_count($html, 'name="note"') - 1);                                                     // (one more is the filter of the notes): none in the rows
-
-        // those who only view have no window
-        $this->as('manager')->get('/payments?tab=payments')->assertOk()->assertDontSee('id="reverse-modal"');
     }
 
     public function testThePaymentHasAViewAndTheReversalBadgesLinkToIt()

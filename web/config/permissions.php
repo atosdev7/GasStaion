@@ -21,7 +21,7 @@ return [
             'sales.backdate',      // dates a sale further back than config('sales.backdate_days') (the admin has everything)
             'ticket_stock.manage',
             'ticket_sales.manage',
-            'payments.view',
+            'payments.manage',     // records and reverses debt payments (the manager can do everything the accountant and the assistant can)
             'tickets.restrict',
             'tickets.lookup',
             'balances.manage',
@@ -38,7 +38,7 @@ return [
             'audit.view',
             'supplements.view',
             'supplements.comment', // looks at the supplies and writes the comment of one (the supplies are made on the Smart210; only the admin creates, changes and deletes them here)
-            'loans.view',
+            'loans.manage',        // settles the ticket loans and reverses a settlement
             'cards.manage',        // unlock, block / unblock a lost card, reset a PIN
             'cards.topup',         // top up an existing card on the web
             'cards.free',          // set a registered card as a free payment card (top-ups with a price of 0), or take that away (the manager and the admin)
