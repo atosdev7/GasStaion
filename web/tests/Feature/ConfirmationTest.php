@@ -1162,6 +1162,49 @@ class ConfirmationTest extends TestCase
         $this->assertStringContainsString('the business day is not over', session('status'));
     }
 
+    public function testTheOverviewListsTheSuppliesWhoseTicketsAndRemaindersDoNotAgree()
+    {
+        $serial = 0;
+        $supply = function ($preset, $out, $ticketKg, $remainderKg = null) use (&$serial) {
+            $supplement = $this->supplement('2026-10-01', ['preset_kg' => $preset, 'out_amount_kg' => $out, 'out_amount_lt' => $out, 'supplied_at' => '2026-10-01 1' . $serial . ':00:00']);
+            ++$serial;
+            \App\Models\Tickets\Ticket::forceCreate([
+                'barcode' => sprintf('0000006%09d', $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '06', 'serial' => $serial, 'amount_kg' => $ticketKg,
+                'status' => 2, 'supplement_id' => $supplement->id,
+            ]);
+            if ($remainderKg !== null) {
+                \App\Models\Supplements\Remainder::forceCreate([
+                    'supplement_id' => $supplement->id, 'ticket_barcode' => sprintf('0000029%09d', $serial), 'fuel_type' => 'D', 'amount_kg' => $remainderKg,
+                    'remainder_date' => '2026-10-01', 'created_at' => '2026-10-01 12:00:00',
+                ]);
+            }
+
+            return $supplement;
+        };
+        $supply(5, 5, 5);                  // agrees
+        $supply(5, 3, 5, 2);               // agrees: 2 kg left, a remainder of 2 kg
+        $supply(5, 4.97, 5);               // 0.03 kg left: the station keeps it
+        $short = $supply(10, 10, 5);       // the tickets add up to 5 kg but the preset is 10
+        $lost = $supply(5, 3, 5);          // 2 kg left and nowhere
+        $wrong = $supply(5, 3, 5, 1);      // 2 kg left but the remainder is 1 kg
+        $this->supplement('2026-10-01');   // no tickets at all: has its own note, not listed here
+        $twice = $supply(5, 3, 5, 2);
+        \App\Models\Supplements\Remainder::forceCreate([
+            'supplement_id' => $twice->id, 'ticket_barcode' => '0000029000009999', 'fuel_type' => 'D', 'amount_kg' => 2, 'remainder_date' => '2026-10-01', 'created_at' => '2026-10-01 12:30:00',
+        ]);
+
+        $found = $this->as('accountant')->get('/confirmations/overview?date=2026-10-01')->assertOk()->viewData('warnings')['supplyChecks'];
+        $this->assertEqualsCanonicalizing([$short->id, $lost->id, $wrong->id, $twice->id], array_column($found, 'id'));
+        $html = $this->get('/confirmations/overview?date=2026-10-01')->getContent();
+        $this->assertStringContainsString('Supplies of this date whose figures do not agree', $html);
+        $this->assertStringContainsString('the tickets add up to 5.00 kg but the supply was preset to 10.00 kg', $html);
+        $this->assertStringContainsString('2.00 kg of the tickets was not dispensed but the remainder is 0.00 kg', $html);
+        $this->assertStringContainsString('2.00 kg of the tickets was not dispensed but the remainder is 1.00 kg', $html);
+        $this->assertStringContainsString('2 remainders came out of this one supply', $html);
+
+        $this->get('/confirmations/overview?date=2026-10-02')->assertDontSee('whose figures do not agree');
+    }
+
     public function testTheOverviewCountsTheTicketsIssuedOnTheDateAndNotSuppliedByKind()
     {
         $ticket = function ($barcode, $code, $status, $saleDate) {

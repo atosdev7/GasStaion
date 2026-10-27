@@ -13,6 +13,7 @@ use App\Models\Tickets\Ticket;
 // model events of Sale and Supplement, so every way a record is made (the Smart210's push, a top-up on the web, a hand entry) is covered, and the
 // same record never counts twice (type + source_id is unique). A deleted top-up or fill is not removed from the ledger: a reversal entry undoes
 // it. The balance of a card is the sum of its ledger; the records it came from may be deleted or cleared and the ledger still holds the history.
+// A fifth kind of entry is the refund: the unused part of a card's ticket that a supply gave back (see refund()).
 class CardLedger
 {
     // The top-up of a card sale: made once, updated when the sale's weight or price changes.
@@ -78,6 +79,66 @@ class CardLedger
             $reversal->forceFill(['kg' => $restricted ? $kg : 0.0, 'comment' => $restricted ? 'ticket restricted' : 'restriction lifted'])->save();
         }
         self::recompute($ticket->card_id);
+    }
+
+    // The card pays for a ticket in full, so when less fuel came out than the ticket held, the unused part goes back to the card, not to the customer as
+    // a paper remainder ticket. This is the [card id, kg] of that part for a supply, or null when it has none: the supply is deleted, was made with a card
+    // directly (it took only what came out), already has a remainder, used a ticket that no card paid for (or tickets of several cards), or left no more
+    // than the tolerance (0.05 kg, the same as the terminal: the station keeps it).
+    public static function refund(Supplement $supplement)
+    {
+        $paid = self::paidByCard($supplement);
+        if (!$paid || $supplement->remainder()->exists()) {
+            return null;
+        }
+        $left = round($paid[1] - (float) $supplement->out_amount_kg, 2);
+
+        return $left > 0.05 ? [$paid[0], $left] : null;
+    }
+
+    // [card id, kg] of the tickets of a supply when all of them are tickets one card paid for (the unused part of such a supply is the card's, never a
+    // remainder ticket); null for a deleted supply, one made with a card directly, or one with other tickets (or none).
+    public static function paidByCard(Supplement $supplement)
+    {
+        if ($supplement->trashed() || $supplement->card_id) {
+            return null;
+        }
+
+        $tickets = Ticket::where('supplement_id', $supplement->id)->get(['card_id', 'spec', 'amount_kg']);
+        $cards = $tickets->pluck('card_id')->unique()->values();
+        if ($tickets->isEmpty() || $cards->count() !== 1 || $cards[0] === null) {
+            return null;
+        }
+
+        $kg = 0.0;
+        foreach ($tickets as $ticket) {
+            $kg += $ticket->spec !== null ? (float) config('ticket_specs.' . $ticket->spec) : (float) $ticket->amount_kg;
+        }
+
+        return [$cards[0], $kg];
+    }
+
+    // The entry of that refund (type refund, source_id the supply): made when the supply has one, changed when the litres change, and set to 0 when the supply
+    // is deleted or no longer qualifies (it keeps its place so the terminals get the change, like the entry of a restricted ticket).
+    public static function syncRefund(Supplement $supplement)
+    {
+        $refund = self::refund($supplement);
+        $entry = CardTransaction::where('type', 'refund')->where('source_id', $supplement->id)->first();
+        if (!$refund && !$entry) {
+            return;
+        }
+
+        $kg = $refund ? $refund[1] : 0.0;
+        if ($entry && round((float) $entry->kg, 2) === round($kg, 2)) {
+            return;
+        }
+        $entry = $entry ?: new CardTransaction;
+        $entry->forceFill([
+            'type' => 'refund', 'source_id' => $supplement->id, 'card_id' => $refund ? $refund[0] : $entry->card_id, 'kg' => $kg,
+            'occurred_at' => $supplement->supplied_at ?: now(), 'comment' => 'unused part of the ticket',
+        ]);
+        $entry->save();
+        self::recompute($entry->card_id);
     }
 
     // The sale of a top-up was deleted: an entry that takes its kg back (once).

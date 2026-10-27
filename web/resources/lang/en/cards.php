@@ -68,10 +68,11 @@ return [
     'entry_topup' => 'Top-up',
     'entry_fill' => 'Fill',
     'entry_reversal' => 'Reversal (deleted)',
+    'entry_refund' => 'Refund (unused part of a ticket)',
     'kg_in_out' => 'kg in / out',
     'balance_after' => 'Balance after (kg)',
     'ledger_differs' => 'The ledger says :ledger kg, the top-up and supply records that still exist add up to :records kg. The ledger is the balance; the difference means a top-up or a supply was removed for good.',
-    'history_hint' => 'Every top-up and fill of the card in the order they happened, with the balance after each. An entry is never deleted: a deleted top-up or fill stays and is undone by a reversal.',
+    'history_hint' => 'Every top-up and fill of the card in the order they happened, with the balance after each. An entry is never deleted: a deleted top-up or fill stays and is undone by a reversal. When a supply uses less than the tickets the card paid for, the unused part comes back as a refund.',
 
     // Field labels
     'fuel_type' => 'Fuel type',

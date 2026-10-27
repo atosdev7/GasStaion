@@ -42,6 +42,8 @@ return [
     'nozzle_fuel_type_mismatch' => 'That ticket\'s fuel type doesn\'t match the nozzle\'s.',
     'density_not_configured' => 'This fuel type has no density configured yet, so litres can\'t be converted to kg.',
     'supplied' => 'Supplied :kg kg.',
+    'supplied_with_refund' => 'Supplied :kg kg. The unused :left kg of the ticket went back to the card :card.',
+    'remainder_goes_to_card' => 'The tickets of this supply were paid for by a card: the unused part goes back to the card, not into a remainder ticket.',
     'supplied_with_remainder' => 'Supplied :kg kg. Remainder ticket :barcode for :left kg was created.',
     'supplied_more_than_tickets' => 'That is more than the tickets cover (:preset kg).',
     'tickets_not_suppliable' => 'These barcodes aren\'t sold tickets that can be supplied (already used, restricted, never sold, or don\'t exist): :barcodes',

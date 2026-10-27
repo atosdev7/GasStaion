@@ -20,6 +20,7 @@ use App\Models\Tickets\TicketInbound;
 use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
 use App\Support\Admin\BackupRun;
+use App\Support\Cards\CardLedger;
 use App\Support\Reports\ReportSheets;
 use App\Support\Sales\SaleDeletion;
 use App\Support\Reports\XlsxWriter;
@@ -317,9 +318,49 @@ class ConfirmationController extends Controller
             'noTickets' => Supplement::where('supply_date', $date)->whereNull('card_id')->whereDoesntHave('tickets')->count(),
             'deleted' => $page['deletedSales'],
             'unusedTickets' => $this->unusedTickets($date),
+            'supplyChecks' => $this->supplyChecks($date),
         ];
 
         return view('confirmation.overview', $page + ['areas' => $areas, 'warnings' => $warnings]);
+    }
+
+    // The supplies of the date whose figures do not agree, each as ['id', 'text']. A supply is a fact (the fuel came out), so none of this is refused on upload; it is
+    // shown here for the accountant to look at before confirming:
+    // - the tickets of the supply do not add up to its preset (a ticket has not been uploaded yet, or a wrong one is on it)
+    // - more than one remainder came out of it, or the remainder is not what was left of the tickets (the same 0.05 kg tolerance as the terminal), or what was left
+    //   is nowhere (no remainder, and not given back to a card)
+    private function supplyChecks($date)
+    {
+        $nozzles = Nozzle::labels();
+        $kgOf = function ($ticket) {
+            return $ticket->spec !== null ? (float) config('ticket_specs.' . $ticket->spec) : (float) $ticket->amount_kg;
+        };
+        $supplements = Supplement::with(['tickets', 'remainder'])->where('supply_date', $date)->whereNull('card_id')->orderBy('supplied_at')->get();
+        $remainderCount = Remainder::whereIn('supplement_id', $supplements->pluck('id'))->selectRaw('supplement_id, COUNT(*) AS n')->groupBy('supplement_id')->pluck('n', 'supplement_id');
+
+        $found = [];
+        foreach ($supplements as $supplement) {
+            if ($supplement->tickets->isEmpty()) {
+                continue;        // a supply without tickets has its own note (noTickets)
+            }
+            $name = substr((string) $supplement->supplied_at, 11, 5) . ' ' . ($nozzles[$supplement->nozzle_id] ?? $supplement->nozzle_id);
+            $tickets = round($supplement->tickets->sum($kgOf), 2);
+            $preset = round((float) $supplement->preset_kg, 2);
+            if (abs($tickets - $preset) > 0.005) {
+                $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_tickets', ['supply' => $name, 'tickets' => number_format($tickets, 2), 'preset' => number_format($preset, 2)])];
+            }
+
+            $left = round($tickets - (float) $supplement->out_amount_kg, 2);
+            $remainder = $supplement->remainder ? round((float) $supplement->remainder->amount_kg, 2) : 0.0;
+            $given = CardLedger::paidByCard($supplement) !== null;        // the unused part of a card's ticket is the card's
+            if (($remainderCount[$supplement->id] ?? 0) > 1) {
+                $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainders', ['supply' => $name, 'count' => $remainderCount[$supplement->id]])];
+            } elseif (!$given && abs($left - $remainder) > 0.05 && ($remainder > 0 || $left > 0.05)) {
+                $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainder', ['supply' => $name, 'left' => number_format($left, 2), 'remainder' => number_format($remainder, 2)])];
+            }
+        }
+
+        return $found;
     }
 
     // The tickets a POS issued on the date (a spot sale, self use, other use, ticket loan or a card) that nobody has supplied yet, by kind. Nothing of them is

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Admin\Device;
 use App\Models\Fuel\FuelType;
 use App\Models\Fuel\Nozzle;
+use App\Models\Sales\Sale;
 use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
 use App\Models\Fuel\Tank;
@@ -861,6 +862,117 @@ class SupplementTest extends TestCase
         $this->assertSame(config('ticket_statuses.sale'), (int) Ticket::find($remainder->ticket_barcode)->status);
         $this->assertNull(Ticket::find($remainder->ticket_barcode)->supplement_id);
         $this->assertNull($remainder->fresh()->complete_date);
+    }
+
+    // a ticket made for a card (tickets.card_id), sold: the card paid for it when it was made
+    private function cardTicket($card, $kg, $serial = 1)
+    {
+        return Ticket::forceCreate([
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '25',
+            'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => config('ticket_statuses.sale'),
+            'sale_date' => '2026-09-20 07:00:00', 'card_id' => $card->id,
+        ]);
+    }
+
+    private function cardWith40Kg()
+    {
+        $card = \App\Models\Cards\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + \App\Support\Cards\CardPin::make('1234'));
+        Sale::forceCreate([
+            'card_id' => $card->id, 'sale_type' => 'card', 'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 40, 'payment_method' => 'cash', 'total_amount' => 80, 'paid_amount' => 80,
+            'unpaid_amount' => 0, 'usage' => 'sale', 'sale_date' => '2026-09-19', 'user_id' => 1, 'created_at' => '2026-09-19 09:00:00', 'updated_at' => '2026-09-19 09:00:00',
+        ]);
+
+        return $card;
+    }
+
+    public function testTheUnusedPartOfACardsTicketGoesBackToTheCardNotIntoARemainderTicket()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $card = $this->cardWith40Kg();
+        $ticket = $this->cardTicket($card, 15);
+        $this->assertEquals(25, $card->balance());                                  // 40 topped up, 15 paid for the ticket
+
+        $this->supply($ticket->barcode, $nozzle, 10)->assertSessionHasNoErrors();   // 10 kg out of the 15
+        $this->assertStringContainsString('The unused 5.00 kg of the ticket went back to the card', session('status'));
+        $this->assertSame(0, Remainder::count());                                    // no paper ticket
+        $this->assertSame(1, Ticket::count());
+        $supplement = Supplement::first();
+        $refund = \App\Models\Cards\CardTransaction::where('type', 'refund')->first();
+        $this->assertSame($supplement->id, $refund->source_id);
+        $this->assertSame($card->id, $refund->card_id);
+        $this->assertEquals(5, $refund->kg);
+        $this->assertEquals(30, $card->fresh()->balance());
+        $this->assertEquals(30, $card->fresh()->balanceFromRecords());               // the records agree with the ledger
+
+        // the litres change: the refund follows (and no remainder ticket is made by the edit)
+        $form = ['nozzle_id' => $nozzle->id, 'supplied_at' => '2026-09-20 08:30:00', 'mode' => 'auto'];
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 12] + $form)->assertSessionHasNoErrors();
+        $this->assertEquals(3, $refund->fresh()->kg);
+        $this->assertEquals(28, $card->fresh()->balance());
+        $this->assertSame(0, Remainder::count());
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 15] + $form)->assertSessionHasNoErrors();      // all of it used
+        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->assertEquals(25, $card->fresh()->balance());
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 14.97] + $form)->assertSessionHasNoErrors();   // 0.03 kg left: the station keeps it
+        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->assertSame(0, Remainder::count());
+
+        // a remainder cannot be made by hand for it, and the form does not offer it
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 10] + $form);
+        $this->get('/remainders/create')->assertViewHas('supplies', function ($supplies) {
+            return $supplies->isEmpty();
+        });
+        $this->post('/remainders', ['supplement_id' => $supplement->id, 'amount_kg' => 1])->assertSessionHasErrors('supplement_id');
+        $this->assertSame(0, Remainder::count());
+
+        // the supply is deleted: the ticket is sold again and the refund is taken back
+        $this->delete('/supplements/' . $supplement->id)->assertSessionHasNoErrors();
+        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->assertEquals(25, $card->fresh()->balance());
+        $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->fresh()->status);
+    }
+
+    public function testTheUnusedPartGoesBackToTheCardOnlyWhenTheCardPaidForAllTheTickets()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $card = $this->cardWith40Kg();
+        $paid = $this->cardTicket($card, 5, 1);
+        $press = $this->soldTicket(1, 0);                                            // 5 kg paid by somebody else
+
+        $this->supply([$paid->barcode, $press->barcode], $nozzle, 8)->assertSessionHasNoErrors();
+        $this->assertSame(0, \App\Models\Cards\CardTransaction::where('type', 'refund')->count());
+        $this->assertSame(1, Remainder::count());                                    // 2 kg: an ordinary remainder ticket, as before
+        $this->assertEquals(35, $card->fresh()->balance());
+    }
+
+    public function testTheTimeOfASupplyChangedByTheAdminMovesItsTicketsAndItsRemainderWithIt()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+        $first = $this->soldTicket(1, 0);                                            // 5 kg
+        $this->supply($first->barcode, $nozzle, 3)->assertSessionHasNoErrors();      // 3 kg out: a remainder of 2 kg on 2026-09-20
+        $remainder = Remainder::first();
+        $made = Ticket::find($remainder->ticket_barcode);
+        $this->assertSame('2026-09-20 08:30:00', (string) $made->sale_date);          // the remainder ticket is sold when the supply was made, not when it was entered
+
+        $second = $this->supply($remainder->ticket_barcode, $nozzle, 2, ['supplied_at' => '2026-09-20 09:00:00']);
+        $usedUp = Supplement::where('supplied_at', '2026-09-20 09:00:00')->first();
+        $this->assertSame('2026-09-20', substr((string) $remainder->fresh()->complete_date, 0, 10));
+
+        // the first supply was really made the day before, the second the day after
+        $form = ['nozzle_id' => $nozzle->id, 'mode' => 'auto'];
+        $this->put('/supplements/' . $usedUp->id, ['out_amount_lt' => 2, 'supplied_at' => '2026-09-22 10:00:00'] + $form)->assertSessionHasNoErrors();
+        $this->assertSame('2026-09-22', substr((string) $remainder->fresh()->complete_date, 0, 10));
+        $this->assertSame('2026-09-22 10:00:00', (string) Ticket::find($remainder->ticket_barcode)->supply_date);
+
+        $firstSupply = Supplement::whereKeyNot($usedUp->id)->first();
+        $this->put('/supplements/' . $firstSupply->id, ['out_amount_lt' => 3, 'supplied_at' => '2026-09-19 22:00:00'] + $form)->assertSessionHasNoErrors();
+        $this->assertSame('2026-09-19 22:00:00', (string) $first->fresh()->supply_date);
+        $this->assertSame('2026-09-19', (string) $remainder->fresh()->remainder_date);
+        $this->assertSame('2026-09-19 22:00:00', (string) $remainder->fresh()->created_at);
+        $this->assertSame('2026-09-19 22:00:00', (string) Ticket::find($remainder->ticket_barcode)->sale_date);
     }
 
     public function testTheTimeOfASupplyCannotBeInTheFuture()

@@ -5,6 +5,7 @@ namespace App\Support\Supplements;
 use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
+use App\Support\Cards\CardLedger;
 use App\Support\Tickets\Barcode;
 use App\Support\Tickets\SerialCounter;
 
@@ -15,7 +16,7 @@ class RemainderMaker
     // The kg a supply may still return as a remainder: what its tickets covered and was not dispensed, when it has no remainder yet.
     public static function room(Supplement $supplement)
     {
-        if ($supplement->remainder()->exists()) {
+        if ($supplement->remainder()->exists() || CardLedger::paidByCard($supplement)) {      // the unused part of a card's ticket goes back to the card
             return 0.0;
         }
 
@@ -43,7 +44,7 @@ class RemainderMaker
         Ticket::forceCreate([
             'barcode' => $barcode, 'fuel_type' => $fuelType, 'spec' => null,
             'code' => $code, 'serial' => $serial, 'amount_kg' => $leftKg,
-            'status' => config('ticket_statuses.sale'), 'sale_date' => now(), 'synced' => false,
+            'status' => config('ticket_statuses.sale'), 'sale_date' => $createdAt, 'synced' => false,
         ]);
 
         return Remainder::forceCreate([

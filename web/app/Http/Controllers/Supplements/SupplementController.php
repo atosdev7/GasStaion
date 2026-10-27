@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Supplements;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Reports\ReportController;
+use App\Models\Cards\Card;
 use App\Models\Fuel\FuelType;
 use App\Models\Fuel\Nozzle;
 use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
+use App\Support\Cards\CardLedger;
 use App\Support\Supplements\RemainderMaker;
 use App\Support\Supplements\SupplementDeletion;
 use App\Support\Tickets\SerialCounter;
@@ -171,16 +173,25 @@ class SupplementController extends Controller
                 ])->save();
             }
 
-            return [$supplement, $this->returnRemainder($supplement, $presetKg - $amountKg), $tickets->count()];
+            // the unused part of the tickets a card paid for goes back to the card (the ledger made the entry when the tickets joined the supply)
+            $refund = CardLedger::refund($supplement);
+
+            return [$supplement, CardLedger::paidByCard($supplement) ? null : $this->returnRemainder($supplement, $presetKg - $amountKg), $tickets->count(), $refund];
         });
 
-        list($supplement, $remainder, $ticketCount) = $result;
+        list($supplement, $remainder, $ticketCount, $refund) = $result;
 
         Audit::log('supplement', '#' . $supplement->id . ' ' . $supplement->mode . ' ' . $ticketCount . ' tickets, ' . $supplement->out_amount_lt . 'L / '
             . $supplement->out_amount_kg . 'kg of ' . $supplement->preset_kg . 'kg'
-            . ($remainder ? ', remainder ' . $remainder->ticket_barcode . ' ' . $remainder->amount_kg . 'kg' : ''));
+            . ($remainder ? ', remainder ' . $remainder->ticket_barcode . ' ' . $remainder->amount_kg . 'kg' : '')
+            . ($refund ? ', ' . number_format($refund[1], 2, '.', '') . 'kg back to card ' . $refund[0] : ''));
 
         $kg = number_format($supplement->out_amount_kg, 2, '.', '');
+        if ($refund) {
+            return redirect()->route('supplements.index')->with('status', __('supplements.supplied_with_refund', [
+                'kg' => $kg, 'left' => number_format($refund[1], 2, '.', ''), 'card' => optional(Card::withTrashed()->find($refund[0]))->label,
+            ]));
+        }
 
         return redirect()->route('supplements.index')->with('status', $remainder
             ? __('supplements.supplied_with_remainder', [
@@ -259,13 +270,18 @@ class SupplementController extends Controller
             }
         }
 
-        // Less fuel than the tickets cover is never lost: what is left comes back as a remainder ticket, as when the supply was made.
+        // Less fuel than the tickets cover is never lost: what is left comes back as a remainder ticket, as when the supply was made (to the card, when a card
+        // paid for the tickets: the ledger makes that entry when the supply is saved).
         $remainder = null;
         DB::transaction(function () use ($supplement, $changes, &$remainder) {
+            $moved = isset($changes['supplied_at']) && $changes['supplied_at']->format('Y-m-d H:i:s') !== substr((string) $supplement->supplied_at, 0, 19);
             $supplement->forceFill($changes)->save();
             $left = round($supplement->preset_kg - $supplement->out_amount_kg, 2);
-            if (isset($changes['out_amount_kg']) && $left > 0 && !$supplement->remainder) {
+            if (isset($changes['out_amount_kg']) && $left > 0 && !$supplement->remainder && !CardLedger::paidByCard($supplement)) {
                 $remainder = RemainderMaker::make($supplement, $left, $supplement->supplied_at, $supplement->supply_date);
+            }
+            if ($moved) {
+                $this->moveDates($supplement);
             }
         });
         Audit::log($full ? 'supplement_edit' : 'supplement_comment', '#' . $supplement->id . ': ' . $before . ' -> ' . $supplement->supplied_at . ' ' . $supplement->mode . ' '
@@ -274,6 +290,28 @@ class SupplementController extends Controller
         return redirect()->route('supplements.index')->with('status', $remainder
             ? __('supplements.saved_with_remainder', ['barcode' => $remainder->ticket_barcode, 'left' => number_format($remainder->amount_kg, 2, '.', '')])
             : __('supplements.saved'));
+    }
+
+    // The supply moved to another time: what follows it moves with it. The tickets it used were supplied at that moment (and a remainder ticket among
+    // them was completed on that day), and the remainder it made was made at that moment and on that day.
+    private function moveDates(Supplement $supplement)
+    {
+        $day = substr((string) $supplement->supplied_at, 0, 10);
+        foreach (Ticket::where('supplement_id', $supplement->id)->get() as $ticket) {
+            $ticket->forceFill(['supply_date' => $supplement->supplied_at])->save();
+            foreach (Remainder::where('ticket_barcode', $ticket->barcode)->whereNotNull('complete_date')->get() as $used) {
+                $used->forceFill(['complete_date' => $day])->save();
+            }
+        }
+
+        $remainder = Remainder::where('supplement_id', $supplement->id)->first();
+        if ($remainder) {
+            $remainder->forceFill(['created_at' => $supplement->supplied_at, 'remainder_date' => $supplement->supply_date])->save();
+            $made = Ticket::find($remainder->ticket_barcode);
+            if ($made) {
+                $made->forceFill(['sale_date' => $supplement->supplied_at])->save();
+            }
+        }
     }
 
     // The admin deletes a supply made wrong (see SupplementDeletion).

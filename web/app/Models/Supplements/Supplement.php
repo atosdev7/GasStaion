@@ -32,10 +32,12 @@ class Supplement extends Model
 
         static::saved(function (Supplement $supplement) {
             CardLedger::syncSupplement($supplement);
+            CardLedger::syncRefund($supplement);       // the unused part of a card's ticket goes back to the card
             FuelOutbound::syncSupplement($supplement); // the fuel that left the tank
         });
         static::deleted(function (Supplement $supplement) {
             CardLedger::reverseSupplement($supplement);
+            CardLedger::syncRefund($supplement);
             if ($supplement->isForceDeleting()) {
                 FuelOutbound::dropSupplement($supplement);
             } else {

@@ -9,6 +9,7 @@ use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Support\Admin\Audit;
+use App\Support\Cards\CardLedger;
 use App\Support\Supplements\RemainderMaker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,11 @@ class RemainderController extends Controller
     // The supplies that can still give a remainder (their tickets covered more than was dispensed and they have none yet), newest first.
     private function supplies()
     {
-        return Supplement::with('nozzle')->doesntHave('remainder')->whereRaw('preset_kg - out_amount_kg >= 0.01')->orderByDesc('supplied_at')->limit(500)->get();
+        // (not the supplies of tickets a card paid for: their unused part goes back to the card)
+        return Supplement::with('nozzle')->doesntHave('remainder')->whereRaw('preset_kg - out_amount_kg >= 0.01')->orderByDesc('supplied_at')->limit(500)->get()
+            ->filter(function ($supplement) {
+                return RemainderMaker::room($supplement) >= 0.01;
+            })->values();
     }
 
     public function create()
@@ -49,6 +54,9 @@ class RemainderController extends Controller
             $room = RemainderMaker::room($supplement);
             if ($supplement->remainder()->exists()) {
                 throw ValidationException::withMessages(['supplement_id' => __('supplements.remainder_exists')]);
+            }
+            if (CardLedger::paidByCard($supplement)) {
+                throw ValidationException::withMessages(['supplement_id' => __('supplements.remainder_goes_to_card')]);
             }
             if ((float) $data['amount_kg'] > $room + 0.0001) {
                 throw ValidationException::withMessages(['amount_kg' => __('supplements.remainder_too_much', ['kg' => number_format($room, 2)])]);

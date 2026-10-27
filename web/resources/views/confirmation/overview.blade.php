@@ -64,6 +64,23 @@
                 @php($any = true)
                 <div class="alert alert-warning overview-no-tickets">{{ __('confirm.overview_no_tickets', ['count' => $warnings['noTickets']]) }}</div>
             @endif
+            @if ($warnings['supplyChecks'])
+                @php($any = true)
+                <div class="alert alert-warning overview-supply-checks">
+                    {{ __('confirm.overview_supply_checks') }}
+                    <ul class="mb-0">
+                        @foreach ($warnings['supplyChecks'] as $check)
+                            <li>
+                                @can('supplements.view')
+                                    <a href="{{ route('supplements.show', $check['id']) }}">{{ $check['text'] }}</a>
+                                @else
+                                    {{ $check['text'] }}
+                                @endcan
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
             @if ($warnings['unusedTickets'])
                 @php($any = true)
                 <div class="alert alert-info overview-unused-tickets">

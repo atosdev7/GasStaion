@@ -54,7 +54,9 @@ class Card extends Model
         $out = (float) Supplement::where('card_id', $this->id)->sum('out_amount_kg')
             + (float) \App\Models\Tickets\Ticket::where('card_id', $this->id)->where('status', '<>', config('ticket_statuses.restrict'))->sum('amount_kg');   // the tickets made for it
 
-        return round($in - $out, 2);
+        $refunded = (float) CardTransaction::where('card_id', $this->id)->where('type', 'refund')->sum('kg');      // the unused parts of its tickets a supply gave back
+
+        return round($in - $out + $refunded, 2);
     }
 
     public function transactions()

@@ -293,4 +293,36 @@ class CardLedgerTest extends TestCase
         $this->assertEquals(25, CardLedger::balance($card->id));
         $this->assertEquals(25, $card->balanceFromRecords());
     }
+
+    // the supply a terminal uploads: the supply first, then its tickets (they name the supply); an older terminal also makes a remainder ticket of the unused part
+    public function testTheUnusedPartOfACardsTicketIsARefundWhenTheTicketJoinsTheSupplyAndNoneWhenARemainderExists()
+    {
+        $card = $this->card();
+        $this->topUp($card, 40, '2026-10-01 09:00:00');
+        $ticket = $this->cardTicket($card, 15);
+        $supply = Supplement::forceCreate([
+            'fuel_type' => 'D', 'nozzle_id' => 1, 'preset_kg' => 15, 'out_amount_lt' => 10, 'out_amount_kg' => 10, 'supplied_at' => '2026-10-04 11:00:00', 'supply_date' => '2026-10-04',
+        ]);
+        $this->assertSame(0, CardTransaction::where('type', 'refund')->count());          // no ticket on it yet
+
+        $ticket->forceFill(['status' => config('ticket_statuses.supply'), 'supplement_id' => $supply->id])->save();
+        $refund = CardTransaction::where('type', 'refund')->first();
+        $this->assertEquals(5, $refund->kg);
+        $this->assertEquals(30, CardLedger::balance($card->id));
+        $this->assertSame('2026-10-04 11:00:00', (string) $refund->occurred_at);
+
+        // the ticket leaves the supply again (it was deleted): the refund goes to 0
+        $ticket->forceFill(['status' => config('ticket_statuses.sale'), 'supplement_id' => null])->save();
+        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->assertEquals(25, CardLedger::balance($card->id));
+
+        // an older terminal made a remainder ticket of it: the card gets nothing back
+        $ticket->forceFill(['status' => config('ticket_statuses.supply'), 'supplement_id' => $supply->id])->save();
+        $this->assertEquals(5, $refund->fresh()->kg);
+        \App\Models\Supplements\Remainder::forceCreate([
+            'supplement_id' => $supply->id, 'ticket_barcode' => '0000029500000001', 'fuel_type' => 'D', 'amount_kg' => 5, 'remainder_date' => '2026-10-04', 'created_at' => '2026-10-04 11:00:00',
+        ]);
+        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->assertEquals(25, CardLedger::balance($card->id));
+    }
 }

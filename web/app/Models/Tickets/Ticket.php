@@ -31,6 +31,19 @@ class Ticket extends Model
             }
         });
 
+        // a ticket that joins a supply or leaves it (the supply is deleted) changes what the supply gives back to a card
+        static::saved(function (Ticket $ticket) {
+            if (!$ticket->wasChanged('supplement_id')) {
+                return;
+            }
+            foreach (array_unique(array_filter([$ticket->supplement_id, $ticket->getOriginal('supplement_id')])) as $id) {
+                $supplement = Supplement::withTrashed()->find($id);
+                if ($supplement) {
+                    CardLedger::syncRefund($supplement);
+                }
+            }
+        });
+
         static::saved(function (Ticket $ticket) {
             if (!$ticket->wasChanged('status')) {
                 return;
