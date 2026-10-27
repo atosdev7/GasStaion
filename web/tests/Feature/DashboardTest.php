@@ -168,4 +168,81 @@ class DashboardTest extends TestCase
     {
         $this->as('cashier')->get('/')->assertOk()->assertDontSee('dash-compare')->assertDontSee('dash-tanks');
     }
+
+    // sold kg are sales of fuel: own use and given-away fuel are shown apart, and fuel on ticket loan is not a sale
+    public function testSoldKgAreSalesOfFuelOnly()
+    {
+        $today = today()->toDateString();
+        $this->sale('ticket', 30, $today);
+        $self = $this->sale('spot', 8, $today);
+        $self->forceFill(['usage' => 'self'])->save();
+        $other = $this->sale('spot', 6, $today);
+        $other->forceFill(['usage' => 'other'])->save();
+        $this->sale('spot', 25, $today)->forceFill(['usage' => 'ticket_loan'])->save();
+
+        $compare = DashboardData::compare();
+        $this->assertEquals(30, $compare->today->kg);
+        $this->assertEquals(14, $compare->today->own);
+
+        $response = $this->as('manager')->get('/')->assertOk()->assertSee('14.00 kg own use and given away');
+        $this->assertEquals(60, $response->viewData('todayTotal'));
+        $this->assertSame(1, $response->viewData('todaySales'));
+        $this->assertEquals(30, collect(DashboardData::salesByDay())->keyBy('day')[$today]->ticket);
+    }
+
+    // a day is confirmed on the dashboard only when the fuel stock, the ticket stock and the debt records of the day are confirmed too
+    public function testADayIsConfirmedOnlyWhenEveryAreaOfItIs()
+    {
+        $nozzle = $this->nozzle();
+        $day = today()->subDay()->toDateString();
+        $this->sale('ticket', 5, $day, true);
+        $this->supplement($nozzle, 5, $day, true);
+        $this->assertSame('confirmed', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);
+
+        $tank = Tank::first();
+        $inbound = FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 1, 'inbound_date' => $day, 'user_id' => 1]);
+        $this->assertSame('open', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);      // the fuel inbound is not confirmed
+        $inbound->forceFill(['confirmed_at' => now()])->save();
+        $this->assertSame('confirmed', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);
+
+        $publish = TicketPublish::forceCreate(['fuel_type' => 'D', 'spec' => 1, 'code' => '07', 'start_serial' => 1, 'end_serial' => 5, 'count' => 5, 'date' => $day, 'user_id' => 1]);
+        $this->assertSame('open', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);      // nor the ticket publish
+        $publish->forceFill(['confirmed_at' => now()])->save();
+
+        $customer = Customer::forceCreate(['name' => 'ACME']);
+        $payment = DebtPayment::forceCreate(['customer_id' => $customer->id, 'amount' => 10, 'payment_method' => 'cash', 'paid_date' => $day, 'user_id' => 1]);
+        $this->assertSame('open', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);      // nor the debt payment
+        $payment->forceFill(['confirmed_at' => now()])->save();
+        $this->assertSame('confirmed', collect(DashboardData::salesByDay())->keyBy('day')[$day]->status);
+    }
+
+    // what is owed counts every payment, also one that is not tied to a debt (as the Debts Summary does)
+    public function testOpenDebtCountsThePaymentsNotTiedToADebt()
+    {
+        $customer = Customer::forceCreate(['name' => 'ACME']);
+        $debt = Debt::forceCreate(['customer_id' => $customer->id, 'amount' => 100, 'payment_method' => 'cash', 'user_id' => 1]);
+        DebtPayment::forceCreate(['customer_id' => $customer->id, 'debt_id' => $debt->id, 'amount' => 30, 'payment_method' => 'cash', 'paid_date' => today(), 'user_id' => 1]);
+        DebtPayment::forceCreate(['customer_id' => $customer->id, 'amount' => 20, 'payment_method' => 'cash', 'paid_date' => today(), 'user_id' => 1]);
+
+        $this->assertEquals(50, $this->as('manager')->get('/')->assertOk()->viewData('openDebt'));
+    }
+
+    // the fuel to order: free fuel and the days it lasts, red when it is short
+    public function testTheHomePageShowsTheFuelToOrder()
+    {
+        $nozzle = $this->nozzle();
+        TankBalance::create(['tank_id' => Tank::first()->id, 'balance' => 1000]);
+        $this->supplement($nozzle, 300, today()->subDays(2)->toDateString());      // 300 kg in the last 30 days: 10 kg a day
+
+        $page = $this->as('manager')->get('/')->assertOk()->assertSee('dash-ordering', false)->assertSee('Fuel to order');
+        $row = $page->viewData('ordering')['D'];
+        $this->assertEquals(700, $row->free);
+        $this->assertEquals(70, round($row->cover[30]));
+        $this->assertStringNotContainsString('text-danger font-weight-bold', $page->getContent());
+
+        $this->supplement($nozzle, 6000, today()->subDay()->toDateString());      // a fast pace: the free fuel runs out in a few days
+        $this->get('/')->assertOk()->assertSee('text-danger font-weight-bold', false);
+
+        $this->as('cashier')->get('/')->assertOk()->assertDontSee('dash-ordering', false);
+    }
 }

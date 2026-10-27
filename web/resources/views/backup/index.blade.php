@@ -19,6 +19,7 @@
             </form>
             <small class="form-text text-muted">{{ __('admin.backup_kept_hint') }}</small>
             <small class="form-text text-muted">{{ __('admin.backup_daily_hint', ['days' => config('backup.keep_days')]) }}</small>
+            <small class="form-text text-muted">{{ __('admin.backup_dashboard_hint', ['days' => App\Support\Dashboard\DashboardData::DAYS]) }}</small>
         </div>
     </div>
 

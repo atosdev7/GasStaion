@@ -1,7 +1,7 @@
 {{-- Today against yesterday: kg sold, amount, and kg supplied against kg sold. --}}
 @php
     $tiles = [
-        ['label' => __('dashboard.dash_sold_kg'), 'now' => $compare->today->kg, 'before' => $compare->yesterday->kg, 'change' => $compare->kgChange, 'unit' => __('dashboard.kg')],
+        ['label' => __('dashboard.dash_sold_kg'), 'now' => $compare->today->kg, 'before' => $compare->yesterday->kg, 'change' => $compare->kgChange, 'unit' => __('dashboard.kg'), 'own' => $compare->today->own],
         ['label' => __('dashboard.dash_sales_amount'), 'now' => $compare->today->amount, 'before' => $compare->yesterday->amount, 'change' => $compare->amountChange, 'unit' => ''],
         ['label' => __('dashboard.dash_supplied_kg'), 'now' => $compare->today->supplied, 'before' => $compare->yesterday->supplied, 'change' => $compare->suppliedChange, 'unit' => __('dashboard.kg')],
     ];
@@ -15,6 +15,9 @@
                 <div class="col-md-3 col-6 mb-2">
                     <div class="text-muted">{{ $tile['label'] }}</div>
                     <div class="h4 mb-0">{{ number_format($tile['now'], 2) }} {{ $tile['unit'] }}</div>
+                    @if (!empty($tile['own']))
+                        <div class="small text-muted">{{ __('dashboard.dash_own_use', ['kg' => number_format($tile['own'], 2)]) }}</div>
+                    @endif
                     <div class="small">
                         @if ($tile['change'] === null)
                             <span class="text-muted">&ndash;</span>

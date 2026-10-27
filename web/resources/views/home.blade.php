@@ -55,6 +55,7 @@
         </div>
 
         @include('dashboard._compare')
+        @include('dashboard._ordering')
 
         <div class="row">
             <div class="col-xl-6">@include('dashboard._tank_stock')</div>

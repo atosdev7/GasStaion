@@ -2,6 +2,8 @@
 
 namespace App\Support\Dashboard;
 
+use App\Models\Debts\DebtPayment;
+use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelOutbound;
 use App\Models\Sales\Sale;
@@ -26,14 +28,15 @@ class DashboardData
         return $days;
     }
 
-    // Kg sold, the amount and the kg supplied on a day: [kg, amount, supplied].
+    // Kg sold (sales of fuel only), the amount, the kg supplied and the kg of own use and given-away fuel on a day: [kg, amount, supplied, own].
     public static function day($date)
     {
-        $sales = Sale::where('sale_date', $date);
+        $sales = Sale::where('sale_date', $date)->where('usage', 'sale');
 
         return (object) [
             'kg' => (float) (clone $sales)->sum('amount_kg'),
             'amount' => (float) (clone $sales)->sum('total_amount'),
+            'own' => (float) Sale::where('sale_date', $date)->whereIn('usage', ['self', 'other'])->sum('amount_kg'),
             'supplied' => (float) Supplement::whereRaw('COALESCE(supply_date, DATE(supplied_at)) = ?', [$date])->sum('out_amount_kg'),
         ];
     }
@@ -57,7 +60,8 @@ class DashboardData
     }
 
     // Per day of the last DAYS days: kg of ticket, spot and card sales (a return takes its kg off), and the confirmation status of the day:
-    // 'confirmed' (everything of the day is confirmed), 'open' (some of it is not) or 'none' (nothing recorded).
+    // 'confirmed' (everything of the day is confirmed: sales, supplies, ticket stock, fuel stock and debt records, as the Daily Confirmation wants), 'open' (some of it
+    // is not) or 'none' (nothing recorded).
     public static function salesByDay()
     {
         $days = self::days();
@@ -66,7 +70,7 @@ class DashboardData
             $rows[$day] = (object) ['day' => $day, 'ticket' => 0.0, 'spot' => 0.0, 'card' => 0.0, 'status' => 'none'];
         }
 
-        $sales = Sale::whereBetween('sale_date', [$days[0], end($days)])
+        $sales = Sale::whereBetween('sale_date', [$days[0], end($days)])->where('usage', 'sale')
             ->selectRaw('sale_date AS d, sale_type, SUM(amount_kg) AS kg')->groupBy('sale_date', 'sale_type')->get();
         foreach ($sales as $row) {
             if (isset($rows[$row->d]) && in_array($row->sale_type, ['ticket', 'spot', 'card'], true)) {
@@ -78,12 +82,20 @@ class DashboardData
         $open = [];
         $add = function ($query, $column) use (&$count, &$open) {
             foreach ($query->selectRaw("$column AS d, COUNT(*) AS n, SUM(confirmed_at IS NULL) AS open")->groupBy($column)->get() as $r) {
-                $count[$r->d] = ($count[$r->d] ?? 0) + (int) $r->n;
-                $open[$r->d] = ($open[$r->d] ?? 0) + (int) $r->open;
+                $d = substr((string) $r->d, 0, 10);
+                $count[$d] = ($count[$d] ?? 0) + (int) $r->n;
+                $open[$d] = ($open[$d] ?? 0) + (int) $r->open;
             }
         };
         $add(Sale::whereBetween('sale_date', [$days[0], end($days)]), 'sale_date');
         $add(Supplement::whereBetween('supply_date', [$days[0], end($days)]), 'supply_date');
+        $range = [$days[0], end($days)];
+        $add(TicketInbound::whereBetween('inbound_date', $range), 'inbound_date');
+        $add(TicketPublish::whereBetween('date', $range), 'date');
+        $add(DebtPayment::whereBetween('paid_date', $range), 'paid_date');
+        $add(TicketLoanSettlement::whereBetween('date', $range), 'date');
+        $add(FuelInbound::whereBetween('inbound_date', $range), 'inbound_date');
+        $add(FuelOutbound::whereNull('supplement_id')->whereBetween('outbound_date', $range), 'outbound_date');
         foreach ($days as $day) {
             if (!empty($count[$day])) {
                 $rows[$day]->status = empty($open[$day]) ? 'confirmed' : 'open';

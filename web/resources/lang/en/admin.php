@@ -4,6 +4,7 @@ return [
     // Users, devices, fuel types, tanks, nozzles
     'nozzles_read_only' => 'The nozzles are managed on the Smart210 (Machine Config) and appear here when it reports them. They cannot be added, changed or removed here.',
     'tank_capacity_below_stock' => 'Saved, but the capacity of :tank (:capacity kg) is below the fuel it holds now (:stock kg): check the capacity and the tank balances.',
+    'backup_dashboard_hint' => 'The charts of the dashboard read the records of the last :days days: a backup up to a later date takes those days out of them. Back up to a date at least :days days back to keep them.',
     'fuel_in_use' => 'The fuel type :fuel cannot be deleted: a tank or a nozzle uses it.',
     'fuel_key_locked' => 'The fuel type of a row cannot be changed: everything else stores it. Delete the row and add another instead.',
     'tank_fuel_locked' => 'The fuel type cannot be changed while nozzle(s) :nozzles draw from this tank. Only its name and capacity can change.',
