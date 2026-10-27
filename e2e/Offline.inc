@@ -333,10 +333,11 @@ static int offlineScenario(Terminal &t, const QString &factsFile, const QString 
         Settings seedSettings(QSqlDatabase::database("seed"));
         seedSettings.setValue(SettingKey::TicketSign, "00000");
         seedSettings.setValue(SettingKey::TicketSerialBase, "500000000");
-        seedSettings.setValue("reserved_code_direct", "21");
-        seedSettings.setValue("reserved_code_self", "22");
-        seedSettings.setValue("reserved_code_other", "23");
-        seedSettings.setValue("reserved_code_ticket_loan", "24");
+        seedSettings.setValue("ticket_fuel_digit_D", "2");          // the code of a ticket: the first digit is the fuel type (2 diesel), the second the kind
+        seedSettings.setValue("ticket_type_digit_direct", "1");
+        seedSettings.setValue("ticket_type_digit_self", "2");
+        seedSettings.setValue("ticket_type_digit_other", "3");
+        seedSettings.setValue("ticket_type_digit_ticket_loan", "4");
         Database::close("seed");
 
         int worst = 0;

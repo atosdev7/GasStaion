@@ -364,7 +364,7 @@ Cards::TicketResult Cards::issueTicket(QSqlDatabase db, const QString &cardId, q
     }
 
     QString error;
-    const qlonglong barcode = TicketNumbers::next(db, "direct", &error);
+    const qlonglong barcode = TicketNumbers::next(db, "card", card.fuelType, &error);
     if (barcode < 0) {
         db.rollback();
         result.error = error;

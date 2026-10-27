@@ -28,7 +28,7 @@ static int basicScenario(Terminal &t, const QString &factsFile)
     check(t.one("SELECT COUNT(*) FROM tickets WHERE status = 0").toInt() == 15, "15 tickets in stock came down");
     check(t.one("SELECT COUNT(*) FROM tickets WHERE status = 1").toInt() == 14, "14 tickets sold on the web came down");
     check(t.one("SELECT COUNT(*) FROM ticket_loans").toInt() == 1, "the loan made on the web came down");
-    check(TicketNumbers::available(t.db(), "remainder") && TicketNumbers::available(t.db(), "direct"), "the ticket numbers are known");
+    check(TicketNumbers::available(t.db(), "remainder", "D") && TicketNumbers::available(t.db(), "direct", "D") && TicketNumbers::available(t.db(), "card", "A"), "the ticket numbers are known");
     t.userId = t.one("SELECT id FROM users WHERE username = 'cash'").toInt();
     const int acme = t.customer("ACME");
     const int beta = t.customer("Beta Ltd");

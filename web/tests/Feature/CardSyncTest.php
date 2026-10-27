@@ -398,7 +398,7 @@ class CardSyncTest extends TestCase
     private function cardTicketRow($card, $offset, $kg = '15.00', $overrides = [])
     {
         return $overrides + [
-            'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $offset), 'fuel_type' => 'D', 'amount_kg' => $kg,
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + $offset), 'fuel_type' => 'D', 'amount_kg' => $kg,
             'status' => config('ticket_statuses.sale'), 'sale_id' => null, 'sale_date' => '2026-10-04 10:00:00', 'supply_date' => null, 'supplement_id' => null,
             'card_id' => $card->id,
         ];
@@ -415,7 +415,7 @@ class CardSyncTest extends TestCase
         $ticket = \App\Models\Tickets\Ticket::find($row['barcode']);
         $this->assertSame($card->id, $ticket->card_id);
         $this->assertNull($ticket->sale_id);
-        $this->assertSame('21', $ticket->code);
+        $this->assertSame('25', $ticket->code);
         $this->assertEquals(25, $card->balance());                                       // the ledger has the fill
         $this->assertSame(['topup', 'fill'], \App\Models\Cards\CardTransaction::where('card_id', $card->id)->orderBy('seq')->pluck('type')->all());
 
@@ -441,7 +441,7 @@ class CardSyncTest extends TestCase
             $noSale,                                                                                 // no card and no sale: a sold ticket needs its sale
             $this->cardTicketRow($card, 2, '15.00', ['card_id' => (string) Str::uuid()]),             // an unknown card
             $this->cardTicketRow($card, 3, '15.00', ['fuel_type' => 'A']),                            // not the fuel type of the card
-            $this->cardTicketRow($card, 4, '15.00', ['barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + 4)]),   // not the code of a direct ticket
+            $this->cardTicketRow($card, 4, '15.00', ['barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + 4)]),   // not a card code
             $this->cardTicketRow($card, 5, '0'),                                                      // no weight
         ];
         $result = $this->push('tickets', $bad);

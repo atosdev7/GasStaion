@@ -293,7 +293,7 @@ class SupplementTest extends TestCase
         $this->assertSame('D', $ticket->fuel_type);
         $this->assertEquals(1.5, $ticket->amount_kg);
         $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->status);          // already sold, to be used for a supply
-        $this->assertSame(config('ticket_reserved_codes.remainder'), $ticket->code);
+        $this->assertSame(\App\Support\Tickets\Barcode::posCode('remainder', $ticket->fuel_type), $ticket->code);
         $this->assertFalse((bool) $ticket->synced);                                         // the Smart210 gets it with its next download
         $this->get('/remainders')->assertOk()->assertSee($remainder->ticket_barcode)->assertSee('short pour, customer waited')->assertSee('Remainder ticket ' . $remainder->ticket_barcode . ' of 1.50 kg added.');
         $this->post('/remainders', ['supplement_id' => $short->id, 'amount_kg' => '1', 'comment' => str_repeat('x', 256)])->assertSessionHasErrors('comment');
@@ -465,7 +465,7 @@ class SupplementTest extends TestCase
         $this->assertNull($remainder->complete_date);                                // not used up yet
 
         $ticket = Ticket::find($remainder->ticket_barcode);
-        $this->assertSame('25', $ticket->code); // the reserved remainder code
+        $this->assertSame('29', $ticket->code); // the remainder code of diesel (first digit the fuel type, second 9)
         $this->assertSame(1, (int) $ticket->serial);
         $this->assertEquals(3, $ticket->amount_kg);
         $this->assertNull($ticket->spec);
@@ -485,7 +485,7 @@ class SupplementTest extends TestCase
         $this->supply($this->soldTicket(1, 0)->barcode, $nozzle, 4);
         $this->supply($this->soldTicket(2, 0)->barcode, $nozzle, 3);
 
-        $this->assertSame([1, 2], Ticket::where('code', '25')->orderBy('serial')->pluck('serial')->map(function ($s) {
+        $this->assertSame([1, 2], Ticket::where('code', '29')->orderBy('serial')->pluck('serial')->map(function ($s) {
             return (int) $s;
         })->all());
     }

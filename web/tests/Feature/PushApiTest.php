@@ -725,9 +725,29 @@ class PushApiTest extends TestCase
         $this->assertSame('2026-10-06 10:30:00', (string) Ticket::find($row['barcode'])->last_printed_at);
     }
 
+    // the code of a ticket the terminal makes says its fuel type and its kind: the fuel digit must be the ticket's own
+    public function testTheCodeOfATicketTheTerminalMakesMustMatchItsFuelType()
+    {
+        $rows = [
+            $this->ticketRow($this->deviceBarcode(1, '11')),                                                 // gasoline code on a diesel ticket
+            $this->ticketRow($this->deviceBarcode(2, '21'), ['fuel_type' => 'A']),                           // diesel code on a gasoline ticket
+            $this->ticketRow($this->deviceBarcode(3, '11'), ['fuel_type' => 'A']),                           // right: a gasoline spot sale
+            $this->ticketRow($this->deviceBarcode(4, '22')),                                                 // right: diesel self use
+            $this->ticketRow($this->deviceBarcode(5, '15'), ['fuel_type' => 'A', 'sale_id' => null]),        // a card code without a card
+        ];
+
+        $result = $this->push('tickets', $rows);
+
+        $this->assertSame([$rows[2]['barcode'], $rows[3]['barcode']], $result['saved']);
+        $this->assertCount(3, $result['rejected']);
+        $this->assertSame('11', Ticket::find($rows[2]['barcode'])->code);
+        $this->assertSame('gasoline', strtolower(config('fuel_types.' . Ticket::find($rows[2]['barcode'])->fuel_type)));
+        $this->assertSame('self', Ticket::find($rows[3]['barcode'])->posType());
+    }
+
     public function testARemainderTicketNeedsNoSale()
     {
-        $row = $this->ticketRow($this->deviceBarcode(1, '25'), ['sale_id' => null, 'sale_date' => '2026-10-06 11:01:00']);
+        $row = $this->ticketRow($this->deviceBarcode(1, '29'), ['sale_id' => null, 'sale_date' => '2026-10-06 11:01:00']);
 
         $this->assertSame([$row['barcode']], $this->push('tickets', [$row])['saved']);
         $this->assertNull(Ticket::find($row['barcode'])->sale_id);

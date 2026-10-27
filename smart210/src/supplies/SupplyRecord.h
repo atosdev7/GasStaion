@@ -9,7 +9,7 @@
 // Recording what a nozzle dispensed. A supplement is one supply event: the fuel that came out, and the tickets that paid for it.
 //
 //   auto mode    the supplier's tickets are the nozzle's queue (SupplyQueue). They all go to the supplement (supplied); when less came out
-//                than the tickets cover, the rest is a remainder: a new ticket (reserved code "remainder", sold, to be printed) and a
+//                than the tickets cover, the rest is a remainder: a new ticket (a remainder code of the fuel type, e.g. 29 for diesel; sold, to be printed) and a
 //                remainders row. A fill that ended at the preset, within the tolerance of it, leaves no remainder.
 //                When the tickets of the queue no longer hold up (a download changed one) or more came out than they cover, the supplement is saved
 //                without tickets: nothing waits for them.

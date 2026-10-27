@@ -78,7 +78,7 @@ SpotSale::Result SpotSale::create(QSqlDatabase db, const Input &in, int userId, 
     }
 
     QString error;
-    const qlonglong barcode = TicketNumbers::next(db, "direct", &error);
+    const qlonglong barcode = TicketNumbers::next(db, TicketNumbers::typeOfUsage(in.usage), in.fuelType, &error);
     if (barcode < 0) {
         db.rollback();
 

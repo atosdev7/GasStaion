@@ -154,7 +154,7 @@ class PullApiTest extends TestCase
         $this->assertSame('ok', $x['status']);
         $this->assertSame(500000000, $x['ticket_serial_base']);
         $this->assertSame('00000', $x['ticket_sign']); // the sign of the tests (TICKET_SIGN in phpunit.xml)
-        $this->assertSame(['direct' => '21', 'self' => '22', 'other' => '23', 'ticket_loan' => '24', 'remainder' => '25'], $x['reserved_codes']);
+        $this->assertSame(['fuel' => ['A' => '1', 'D' => '2'], 'type' => ['direct' => '1', 'self' => '2', 'other' => '3', 'ticket_loan' => '4', 'card' => '5', 'remainder' => '9']], $x['pos_codes']);
         $this->assertSame(500000000, $x['ticket_serial_floor']['21']); // nothing minted yet: the floor is the base itself
         $fuels = array_column($x['fuel_types'], null, 'fuel_type');
         $this->assertSame('Diesel', $fuels['D']['name']);

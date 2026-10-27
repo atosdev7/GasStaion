@@ -5,6 +5,7 @@ namespace App\Models\Tickets;
 use App\Models\Concerns\ResetsSynced;
 use App\Models\Debts\TicketLoanSettlement;
 use App\Support\Cards\CardLedger;
+use App\Support\Tickets\Barcode;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Remainder;
 use App\Models\Supplements\Supplement;
@@ -51,15 +52,10 @@ class Ticket extends Model
     protected $keyType = 'string'; // a zero-padded 16-digit code, not a quantity — see App\Support\Tickets\Barcode
     public $incrementing = false;
 
-    // What a ticket issued by a POS is: direct (a spot sale), card (made for a card), self, other, ticket_loan or remainder; null for a press ticket.
+    // What a ticket issued by a POS is (the second digit of its code): direct (a spot sale), self, other, ticket_loan, card (made for a card) or remainder; null for a press ticket.
     public function posType()
     {
-        $name = array_search($this->code, config('ticket_reserved_codes'), true);
-        if ($name === 'direct' && $this->card_id) {
-            return 'card';
-        }
-
-        return $name === false ? null : $name;
+        return Barcode::posType($this->code);
     }
 
     // The batch the ticket was published in.

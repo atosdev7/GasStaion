@@ -87,9 +87,9 @@ class TicketLookupTest extends TestCase
             ]);
         };
         $spot = $make(1, '21');
-        $card = $make(2, '21', ['card_id' => '11111111-1111-1111-1111-111111111111', 'print_count' => 2]);
+        $card = $make(2, '25', ['card_id' => '11111111-1111-1111-1111-111111111111', 'print_count' => 2]);
         $self = $make(3, '22');
-        $remainder = $make(4, '25');
+        $remainder = $make(4, '29');
 
         // the press tab (the first) lists the press tickets only, with the two tabs on top
         $page = $this->as('manager')->get('/tickets/lookup')->assertOk()

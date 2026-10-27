@@ -209,7 +209,7 @@ class BalanceTest extends TestCase
         $this->assertSame('2026-01-05', substr((string) $remainder->remainder_date, 0, 10));
         $ticket = \App\Models\Tickets\Ticket::find($remainder->ticket_barcode);
         $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->status);       // already sold, ready to be supplied
-        $this->assertSame(config('ticket_reserved_codes.remainder'), $ticket->code);
+        $this->assertSame(\App\Support\Tickets\Barcode::posCode('remainder', $ticket->fuel_type), $ticket->code);
         $this->assertEquals(3.5, $ticket->amount_kg);
         $this->assertFalse((bool) $ticket->synced);                                      // the Smart210 pulls it
 

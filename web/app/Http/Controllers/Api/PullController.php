@@ -13,6 +13,7 @@ use App\Support\Admin\Audit;
 use App\Support\Sync\Pull;
 use App\Support\Sync\ServerTime;
 use App\Support\Dashboard\TankLevels;
+use App\Support\Tickets\Barcode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -39,18 +40,19 @@ class PullController extends Controller
         // The highest serial the web app already holds for each reserved code in the Smart210 range, so a device whose database
         // started empty (a replaced board) never numbers a new ticket with one that exists.
         $floors = [];
-        foreach (config('ticket_reserved_codes') as $code) {
+        foreach (Barcode::posCodes() as $code) {
             $floors[$code] = (int) (Ticket::where('code', $code)->where('serial', '>', config('ticket_serial.device_base'))->max('serial')
                 ?: config('ticket_serial.device_base'));
         }
 
         return Api::response(ServerTime::fields() + [
             'status' => 'ok',
-            // What the device needs to write a ticket barcode of its own: the business sign (5 digits) and the reserved codes.
+            // What the device needs to write a ticket barcode of its own: the business sign (5 digits) and the digits of the code: the first is the fuel type,
+            // the second the kind of the ticket (config/ticket_pos_codes.php).
             'ticket_sign' => sprintf('%05d', config('ticket_sign')),
-            'reserved_codes' => config('ticket_reserved_codes'),
+            'pos_codes' => config('ticket_pos_codes'),
             'ticket_serial_floor' => $floors,
-            // Tickets the device mints itself (reserved codes 21-25) are numbered above this; the web app uses the range below.
+            // Tickets the device mints itself (a POS code) are numbered above this; the web app uses the range below.
             'ticket_serial_base' => (int) config('ticket_serial.device_base'),
             'fuel_types' => $fuelTypes,
             'tanks' => TankLevels::all()->map(function ($r) {

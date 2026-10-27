@@ -232,7 +232,7 @@ class CardLedgerTest extends TestCase
     private function cardTicket($card, $kg, $serial = 1, $status = null)
     {
         return \App\Models\Tickets\Ticket::forceCreate([
-            'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '21',
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '25',
             'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => $status ?: config('ticket_statuses.sale'),
             'sale_date' => '2026-10-04 10:00:00', 'card_id' => $card->id,
         ]);

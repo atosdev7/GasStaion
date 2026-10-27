@@ -13,6 +13,8 @@
 #include <QBrush>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLineEdit>
+#include <QRegExpValidator>
 #include <QSqlQuery>
 #include <QTableWidget>
 #include <QTimer>
@@ -100,6 +102,10 @@ SupplyPage::SupplyPage(QSqlDatabase db, BoardBus *bus, MachineConfig *config, Su
     queueTotal_ = ui_->supplyQueueTotal;
     current_ = ui_->supplyCurrent;
     message_ = ui_->supplyMessage;
+    ticketField_ = ui_->supplyTicketField;
+    ticketField_->setValidator(new QRegExpValidator(QRegExp("[0-9 -]*"), this));
+    connect(ticketField_, SIGNAL(returnPressed()), this, SLOT(ticketEntered()));
+    connect(ui_->supplyTicketButton, SIGNAL(clicked()), this, SLOT(ticketEntered()));
 
     timer_ = new QTimer(this);
     timer_->setInterval(RefreshMs);
@@ -332,6 +338,28 @@ void SupplyPage::showMessage(const QString &text, bool good)
 {
     Theme::setState(message_, good ? "ok" : "error");
     message_->setText(text);
+}
+
+// A ticket typed in: it is added like a scanned one, to the nozzle whose tickets the table shows (the one that was tapped, else the one the supplier chose);
+// a nozzle that is not the chosen one yet is chosen first, as the supplier's select key does. What was typed goes when it was added, and stays (to be
+// corrected) when it was refused.
+void SupplyPage::ticketEntered()
+{
+    if (ticketField_->text().trimmed().isEmpty()) {
+        return;
+    }
+    const int nozzle = viewedNozzle();
+    QString why;
+    if (nozzle > 0 && selection_->current() != nozzle && !selection_->select(nozzle, &why)) {
+        showMessage(why, false);
+        ticketField_->setFocus();
+
+        return;
+    }
+    if (session_->typed(ticketField_->text())) {
+        ticketField_->clear();
+    }
+    ticketField_->setFocus();
 }
 
 void SupplyPage::sessionMessage(const QString &text, bool good)

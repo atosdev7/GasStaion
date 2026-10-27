@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tickets;
 use App\Http\Controllers\Controller;
 use App\Models\Sales\Customer;
 use App\Models\Tickets\Ticket;
+use App\Support\Tickets\Barcode;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -48,17 +49,15 @@ class TicketLookupController extends Controller
         ]);
 
         $tab = ($filters['tab'] ?? 'press') === 'pos' ? 'pos' : 'press';
-        $reserved = array_values(config('ticket_reserved_codes'));
+        $reserved = Barcode::posCodes();
         $base = Ticket::query();
         if ($tab === 'pos') {
             $base->whereIn('code', $reserved);
             if (!empty($filters['type'])) {
-                $base->where('code', config('ticket_reserved_codes.' . ($filters['type'] === 'card' ? 'direct' : $filters['type'])));
-                if ($filters['type'] === 'card') {
-                    $base->whereNotNull('card_id');
-                } elseif ($filters['type'] === 'direct') {
-                    $base->whereNull('card_id');
-                }
+                // the kind of a POS ticket is the second digit of its code
+                $base->whereIn('code', array_filter($reserved, function ($code) use ($filters) {
+                    return $code[1] === config('ticket_pos_codes.type.' . $filters['type']);
+                }));
             }
             if (($filters['printed'] ?? '') === 'yes') {
                 $base->where('print_count', '>', 0);

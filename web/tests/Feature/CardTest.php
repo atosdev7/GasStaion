@@ -602,7 +602,7 @@ class CardTest extends TestCase
         $this->topUp($card, 100, '2026-09-20');
         $make = function ($serial, $kg, $day, $status = null) use ($card) {
             return Ticket::forceCreate([
-                'barcode' => \App\Support\Tickets\Barcode::makeReserved('21', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '21',
+                'barcode' => \App\Support\Tickets\Barcode::makeReserved('25', config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => '25',
                 'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => $status ?: config('ticket_statuses.sale'), 'sale_date' => $day . ' 10:00:00',
                 'card_id' => $card->id,
             ]);

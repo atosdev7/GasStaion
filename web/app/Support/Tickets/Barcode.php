@@ -10,9 +10,9 @@ namespace App\Support\Tickets;
  * The sign is one fixed constant for the whole business (config/ticket_sign.php), never per-ticket.
  * The code is a fixed, arbitrary 2-digit number per (fuel type, spec), assigned once at business
  * setup (config/ticket_codes.php) — not derived from the fuel type or spec by any formula.
- * Codes 21-25 are reserved for tickets the Smart210 creates itself (direct/self/other/ticket_loan/
- * remainder); codeFor() refuses to hand out a configured code in that range, since it can never be
- * a valid business (fuel type, spec) code.
+ * A ticket a POS issues itself (the Smart210, or a sale entered on the web app) has a code of its own (config/ticket_pos_codes.php): the first digit is the fuel type
+ * (1 gasoline, 2 diesel), the second the kind of the ticket (1 spot sale, 2 self use, 3 other use, 4 ticket loan, 5 card, 9 remainder), and its serial counts per code.
+ * Those are called reserved codes here; codeFor() refuses to hand out one, since it can never be a press code.
  */
 class Barcode
 {
@@ -39,8 +39,7 @@ class Barcode
         return sprintf('%05d%2s%09d', config('ticket_sign'), $code, $serial);
     }
 
-    // For a reserved-code ticket (see config/ticket_reserved_codes.php) — the code is the fixed
-    // reserved number itself, not derived from a fuel type/spec.
+    // For a ticket a POS issued: `$code` is its code (see posCode()), not derived from a spec.
     public static function makeReserved($code, $serial)
     {
         return sprintf('%05d%2s%09d', config('ticket_sign'), $code, $serial);
@@ -53,9 +52,55 @@ class Barcode
         return ['sign' => substr($s, 0, 5), 'code' => substr($s, 5, 2), 'serial' => (int) substr($s, 7)];
     }
 
-    // Only meaningful for the Smart210's own numeric codes (21-25); codeFor() never returns one.
+    // The code of a ticket a POS issues: `$type` is direct (spot sale), self, other, ticket_loan, card or remainder; null when the fuel type or the kind is unknown.
+    public static function posCode($type, $fuelType)
+    {
+        $fuel = config('ticket_pos_codes.fuel.' . $fuelType);
+        $kind = config('ticket_pos_codes.type.' . $type);
+
+        return $fuel === null || $kind === null ? null : $fuel . $kind;
+    }
+
+    // Every code a POS ticket can have (fuel type x kind).
+    public static function posCodes()
+    {
+        $codes = [];
+        foreach (config('ticket_pos_codes.fuel') as $fuel) {
+            foreach (config('ticket_pos_codes.type') as $kind) {
+                $codes[] = $fuel . $kind;
+            }
+        }
+
+        return $codes;
+    }
+
+    // Is this the code of a ticket a POS issues (not a press ticket)? codeFor() never returns one.
     public static function isReservedCode($code)
     {
-        return (int) $code >= 21 && (int) $code <= 25;
+        $code = (string) $code;
+
+        return strlen($code) === 2 && in_array($code[0], config('ticket_pos_codes.fuel'), true) && in_array($code[1], config('ticket_pos_codes.type'), true);
+    }
+
+    // What a POS ticket is (direct, self, other, ticket_loan, card, remainder), or null for a press ticket.
+    public static function posType($code)
+    {
+        if (!self::isReservedCode($code)) {
+            return null;
+        }
+        $kind = array_search(((string) $code)[1], config('ticket_pos_codes.type'), true);
+
+        return $kind === false ? null : $kind;
+    }
+
+    // The fuel type letter of a POS ticket's code, or null for a press ticket.
+    public static function posFuel($code)
+    {
+        if (!self::isReservedCode($code)) {
+            return null;
+        }
+        $fuel = array_search(((string) $code)[0], config('ticket_pos_codes.fuel'), true);
+
+        return $fuel === false ? null : $fuel;
     }
 }

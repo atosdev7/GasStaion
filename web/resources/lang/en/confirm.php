@@ -27,6 +27,7 @@ return [
     'overview_silent' => 'These terminals have not uploaded since this business day ended (:time), so they may still hold records of it: :devices.',
     'overview_no_cost' => ':count sales of this date have no cost.',
     'overview_no_tickets' => ':count supplies of this date have no tickets and no card.',
+    'overview_unused_tickets' => 'Tickets issued on this date that nobody has supplied yet:',
     'overview_deleted' => ':count deleted sales of this date will be erased for good when the sales are confirmed.',
     'overview_all_done' => 'Everything of this date is confirmed.',
     'money_title' => 'Money of the day',
@@ -82,6 +83,8 @@ return [
     'will_erase' => ':count deleted sales of this date will be erased for good when you confirm.',
     'erased' => 'Erased :count deleted sales.',
     'backup_queued' => 'The day is fully confirmed: a backup of the database is being made.',
+    'backup_day_open' => 'No backup yet: the business day is not over (it ends :time).',
+    'backup_terminals' => 'No backup yet: these terminals have not uploaded since the business day ended: :devices.',
     'confirmed' => 'Confirmed',
 
     // Field labels

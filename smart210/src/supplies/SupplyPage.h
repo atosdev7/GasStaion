@@ -11,6 +11,7 @@
 class BoardBus;
 class MachineConfig;
 class QLabel;
+class QLineEdit;
 class QTableWidget;
 class QTimer;
 class SupplySelection;
@@ -25,7 +26,9 @@ class SupplyPage;
 // fill runs; Done: the fill ended and was recorded, shown for 10 seconds; else the live state of the board: free, selected, no answer, ...), the
 // tickets (kg - count) and the weight dispensed so far. Clicking a nozzle shows its queued tickets in the table below (barcode, fuel type,
 // amount); it does not choose the nozzle at the dispenser: the supplier does that with the select key and scans the tickets (SupplySession),
-// and clears the queue with the clear key of the dispenser. Without a click the table shows the nozzle the supplier chose last.
+// and clears the queue with the clear key of the dispenser. Without a click the table shows the nozzle the supplier chose last. A ticket whose barcode
+// cannot be scanned is typed in the **Enter ticket** box (11 or 16 digits, then Enter): it goes through the same checks to the queue of the nozzle the table shows
+// (the one that was clicked, else the chosen one), which is chosen first when it is not the chosen one yet.
 class SupplyPage : public QWidget
 {
     Q_OBJECT
@@ -41,6 +44,7 @@ public:
 
 private slots:
     void rowClicked(int row);
+    void ticketEntered();
     void sessionMessage(const QString &text, bool good);
     void supplyRecorded(int nozzle, const QString &supplementId);
     void refresh();
@@ -72,6 +76,7 @@ private:
     QLabel *queueTotal_;
     QLabel *current_;
     QLabel *message_;
+    QLineEdit *ticketField_;
     QTimer *timer_;
     QList<DoneFill> done_;
     QString shown_;   // what the tickets table shows now (drawn again only when it changed)

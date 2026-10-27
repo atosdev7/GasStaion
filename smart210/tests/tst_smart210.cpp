@@ -49,6 +49,7 @@
 #include "ConfirmDialog.h"
 #include "CardReader.h"
 #include "Cards.h"
+#include "TicketNumbers.h"
 #include "BoardProtocol.h"
 #include "Decimal.h"
 #include "InputDevices.h"
@@ -320,6 +321,8 @@ private slots:
     void theLitresOfAManualSupplyAreWorkedOutAndItsTimeIsLimited();
     void theDaysBackOfAManualSupplyAreSetOnMachineConfig();
     void scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded();
+    void aTicketTypedInGoesToTheQueueLikeAScannedOne();
+    void theEnterTicketBoxOfTheSessionsTabTypesTicketsIn();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
     void aManualModeFillIsNotWorkedWithAtAll();
@@ -345,6 +348,7 @@ private slots:
     void ticketNumbersNeverRepeatEvenAfterAPurgeOrOnANewBoard();
     void aSpotSaleThatIsNotAllowedWritesNothing();
     void withoutTheTicketNumbersFromTheServerNothingIsSold();
+    void theCodeOfATicketIsTheFuelTypeAndTheKindAndTheSerialCountsPerCode();
     void theConfigDownloadBringsTheTicketNumbering();
     void aSpotSaleCanBeUploadedAsItIs();
     void theSpotSaleScreenCalculatesBothWaysAndSaves();
@@ -3795,6 +3799,18 @@ void Smart210Test::withNothingWaitingTheUploadButtonIsOff()
 
 // ---- spot sale ----
 
+// The digits of the code of a ticket this terminal makes, as the config download brings them: the first is the fuel type, the second the kind.
+static void setTicketCodes(Settings &settings)
+{
+    settings.setValue("ticket_fuel_digit_A", "1");
+    settings.setValue("ticket_fuel_digit_D", "2");
+    settings.setValue("ticket_type_digit_direct", "1");
+    settings.setValue("ticket_type_digit_self", "2");
+    settings.setValue("ticket_type_digit_other", "3");
+    settings.setValue("ticket_type_digit_ticket_loan", "4");
+    settings.setValue("ticket_type_digit_card", "5");
+    settings.setValue("ticket_type_digit_remainder", "9");
+}
 void Smart210Test::setUpSelling()
 {
     QSqlDatabase db = openDatabase();
@@ -3804,7 +3820,7 @@ void Smart210Test::setUpSelling()
     run("INSERT OR REPLACE INTO customers (id, name, phone, is_self, deleted) VALUES (3, 'Gone Ltd', NULL, 0, 1)");
     Settings settings(db);
     settings.setValue(SettingKey::TicketSign, "00000");
-    settings.setValue("reserved_code_direct", "21");
+    setTicketCodes(settings);
     settings.setValue(SettingKey::TicketSerialBase, "500000000");
 }
 
@@ -3985,6 +4001,48 @@ void Smart210Test::aSpotSaleThatIsNotAllowedWritesNothing()
     QCOMPARE(SpotSale::create(db, saleInput(1050), 7, now).barcode, QString("0000021500000001")); // and no number was used up
 }
 
+// The code of a ticket this terminal makes: the first digit is the fuel type (1 gasoline, 2 diesel), the second the kind (1 spot sale, 2 self use, 3 other use,
+// 4 ticket loan, 5 card, 9 remainder); every code has its own serial
+void Smart210Test::theCodeOfATicketIsTheFuelTypeAndTheKindAndTheSerialCountsPerCode()
+{
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    QString error;
+
+    QCOMPARE(TicketNumbers::code(db, "direct", "D"), QString("21"));
+    QCOMPARE(TicketNumbers::code(db, "direct", "A"), QString("11"));
+    QCOMPARE(TicketNumbers::code(db, "self", "D"), QString("22"));
+    QCOMPARE(TicketNumbers::code(db, "other", "A"), QString("13"));
+    QCOMPARE(TicketNumbers::code(db, "ticket_loan", "D"), QString("24"));
+    QCOMPARE(TicketNumbers::code(db, "card", "A"), QString("15"));
+    QCOMPARE(TicketNumbers::code(db, "remainder", "D"), QString("29"));
+    QVERIFY(TicketNumbers::code(db, "direct", "X").isEmpty());          // a fuel type with no digit
+    QVERIFY(TicketNumbers::code(db, "nonsense", "D").isEmpty());        // a kind with no digit
+    QVERIFY(TicketNumbers::available(db, "card", "A"));
+    QVERIFY(!TicketNumbers::available(db, "card", "X"));
+    QCOMPARE(TicketNumbers::typeOfUsage("sale"), QString("direct"));
+    QCOMPARE(TicketNumbers::typeOfUsage("self"), QString("self"));
+    QCOMPARE(TicketNumbers::typeOfUsage("other"), QString("other"));
+    QCOMPARE(TicketNumbers::typeOfUsage("ticket_loan"), QString("ticket_loan"));
+
+    // the first number of each code is above the base; the next one of the same code follows it, and another code has its own count
+    QCOMPARE(TicketNumbers::next(db, "direct", "D", &error), 21500000001LL);
+    QCOMPARE(TicketNumbers::next(db, "direct", "D", &error), 21500000002LL);
+    QCOMPARE(TicketNumbers::next(db, "direct", "A", &error), 11500000001LL);
+    QCOMPARE(TicketNumbers::next(db, "card", "A", &error), 15500000001LL);
+    QCOMPARE(TicketNumbers::next(db, "remainder", "D", &error), 29500000001LL);
+    QCOMPARE(TicketNumbers::next(db, "self", "D", &error), 22500000001LL);
+    QCOMPARE(Barcode::fromKey(15500000001LL), QString("0000015500000001"));
+
+    // what the web app holds for a code counts for that code only
+    Settings(db).setValue("serial_floor_15", "500000010");
+    QCOMPARE(TicketNumbers::next(db, "card", "A", &error), 15500000011LL);
+    QCOMPARE(TicketNumbers::next(db, "direct", "A", &error), 11500000002LL);
+
+    // no digit: no number
+    QCOMPARE(TicketNumbers::next(db, "direct", "X", &error), -1LL);
+    QVERIFY(error.contains("not known"));
+}
 void Smart210Test::withoutTheTicketNumbersFromTheServerNothingIsSold()
 {
     setUpSelling();
@@ -4002,7 +4060,7 @@ void Smart210Test::theConfigDownloadBringsTheTicketNumbering()
     QSqlDatabase db = openDatabase();
     QJsonObject config = configObject();
     config.insert("ticket_sign", "00007");
-    config.insert("reserved_codes", QJsonDocument::fromJson(q("{'direct':'21','self':'22','other':'23','ticket_loan':'24','remainder':'25'}")).object());
+    config.insert("pos_codes", QJsonDocument::fromJson(q("{'fuel':{'A':'1','D':'2'},'type':{'direct':'1','self':'2','other':'3','ticket_loan':'4','card':'5','remainder':'9'}}")).object());
     config.insert("ticket_serial_floor", QJsonDocument::fromJson(q("{'21':500000012,'22':500000000}")).object());
     QString error;
 
@@ -4010,8 +4068,13 @@ void Smart210Test::theConfigDownloadBringsTheTicketNumbering()
 
     Settings settings(db);
     QCOMPARE(settings.value(SettingKey::TicketSign), QString("00007")); // leading zeros kept
-    QCOMPARE(settings.value("reserved_code_direct"), QString("21"));
-    QCOMPARE(settings.value("reserved_code_remainder"), QString("25"));
+    QCOMPARE(settings.value("ticket_fuel_digit_A"), QString("1"));
+    QCOMPARE(settings.value("ticket_fuel_digit_D"), QString("2"));
+    QCOMPARE(settings.value("ticket_type_digit_direct"), QString("1"));
+    QCOMPARE(settings.value("ticket_type_digit_card"), QString("5"));
+    QCOMPARE(settings.value("ticket_type_digit_remainder"), QString("9"));
+    QCOMPARE(TicketNumbers::code(db, "card", "A"), QString("15"));
+    QCOMPARE(TicketNumbers::code(db, "remainder", "D"), QString("29"));
     QCOMPARE(settings.value("serial_floor_21"), QString("500000012"));
 
     // a server that sends none of it leaves what the terminal already has
@@ -9026,7 +9089,6 @@ void Smart210Test::setUpSupplying()
 {
     setUpSelling();
     QSqlDatabase db = QSqlDatabase::database(connection_);
-    Settings(db).setValue("reserved_code_remainder", "25");
     Settings(db).setInt(SettingKey::ManualSupplyDays, 100000);   // (the tests type in supplies of fixed days; the limit has its own test)
     addUser(7, "Cash One", "secret1");
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
@@ -9098,7 +9160,7 @@ void Smart210Test::anAutoFillTakesItsTicketsAndTheRestBecomesARemainder()
     QVERIFY2(outcome.ok, qPrintable(outcome.error));
     QCOMPARE(outcome.tickets, 2);
     QCOMPARE(outcome.remainderKgX100, qlonglong(500));
-    QCOMPARE(outcome.remainderBarcode, QString("0000025500000001")); // sign 00000, reserved code 25, the first serial above the web app's
+    QCOMPARE(outcome.remainderBarcode, QString("0000029500000001")); // sign 00000, the diesel remainder code 29, the first serial above the web app's
     const QString id = outcome.supplementId;
     QCOMPARE(one("SELECT out_amount_kg FROM supplements WHERE id = '" + id + "'").toInt(), 3000);
     QCOMPARE(one("SELECT preset_kg FROM supplements WHERE id = '" + id + "'").toInt(), 3500);   // what the tickets cover
@@ -9112,17 +9174,17 @@ void Smart210Test::anAutoFillTakesItsTicketsAndTheRestBecomesARemainder()
     // the two tickets are supplied under the supplement
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id = '" + id + "' AND status = 2 AND synced = 0 AND supply_date = '2026-10-09 10:00:00'").toInt(), 2);
     // the rest: a remainder row, and a new ticket that is sold, belongs to no sale and has the reserved code
-    QCOMPARE(one("SELECT amount_kg FROM remainders WHERE supplement_id = '" + id + "' AND ticket_barcode = 25500000001").toInt(), 500);
-    QCOMPARE(one("SELECT status FROM tickets WHERE barcode = 25500000001").toInt(), int(TicketStatus::Sale));
-    QVERIFY(one("SELECT sale_id FROM tickets WHERE barcode = 25500000001").isNull());
-    QCOMPARE(one("SELECT sale_date FROM tickets WHERE barcode = 25500000001").toString(), QString("2026-10-09 10:00:00"));
-    QCOMPARE(one("SELECT amount_kg FROM tickets WHERE barcode = 25500000001").toInt(), 500);
-    QCOMPARE(one("SELECT synced FROM tickets WHERE barcode = 25500000001").toInt(), 0);
+    QCOMPARE(one("SELECT amount_kg FROM remainders WHERE supplement_id = '" + id + "' AND ticket_barcode = 29500000001").toInt(), 500);
+    QCOMPARE(one("SELECT status FROM tickets WHERE barcode = 29500000001").toInt(), int(TicketStatus::Sale));
+    QVERIFY(one("SELECT sale_id FROM tickets WHERE barcode = 29500000001").isNull());
+    QCOMPARE(one("SELECT sale_date FROM tickets WHERE barcode = 29500000001").toString(), QString("2026-10-09 10:00:00"));
+    QCOMPARE(one("SELECT amount_kg FROM tickets WHERE barcode = 29500000001").toInt(), 500);
+    QCOMPARE(one("SELECT synced FROM tickets WHERE barcode = 29500000001").toInt(), 0);
 
     // the queue and the session are gone; the remainder ticket is a new sold ticket and can be queued again
     QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
     QVERIFY(!SupplyQueue::session(db, 1).exists);
-    QVERIFY(SupplyQueue::add(db, 1, code(25500000001), "D", now).ok);
+    QVERIFY(SupplyQueue::add(db, 1, code(29500000001), "D", now).ok);
 
     // all of it waits for the upload: the supplement, its remainder and the three tickets
     const QMap<QString, int> pending = Uploader::pending(db);
@@ -9527,6 +9589,102 @@ void Smart210Test::scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded()
     QCOMPARE(Uploader::pending(db).value("tickets"), 2);
 }
 
+// A barcode that cannot be scanned is typed in: the 11 digits after the station sign, or all 16; the same checks as a scan
+void Smart210Test::aTicketTypedInGoesToTheQueueLikeAScannedOne()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QSignalSpy messages(&bench.supply, SIGNAL(message(QString,bool)));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1) && bench.bus.isOnline(2), 3000);
+
+    // no nozzle is chosen: nowhere to go
+    QVERIFY(!bench.supply.typed("03000000041"));
+    QVERIFY(messages.last().at(0).toString().contains("Choose a nozzle first"));
+    QVERIFY(bench.selection.select(1));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.selection.current() == 1 && bench.selection.isSelected(1), 3000);
+
+    // what is not a ticket number
+    foreach (const QString &bad, QStringList() << "123" << "030000000411" << "0300000004a" << "0000003000000041000") {
+        QVERIFY2(!bench.supply.typed(bad), qPrintable(bad));
+        QVERIFY2(messages.last().at(0).toString().contains("Type the 11 digits"), qPrintable(bad));
+    }
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
+
+    // the 11 digits (the code and the serial; spaces and dashes are ignored), then the 16 digits of another ticket
+    QVERIFY2(bench.supply.typed(" 030 0000-0041 "), qPrintable(messages.last().at(0).toString()));
+    QVERIFY(messages.last().at(1).toBool());
+    QVERIFY(messages.last().at(0).toString().contains("15.00 kg"));
+    QVERIFY(bench.supply.typed("0000003000000042"));
+    QVERIFY(messages.last().at(0).toString().contains("Together 35.00 kg"));
+    QCOMPARE(SupplyQueue::totalX100(db, 1), qlonglong(3500));
+
+    // the checks of a scan: a ticket that is in the queue already, of another fuel type, never sold, not a ticket of this station
+    QVERIFY(!bench.supply.typed("03000000041"));
+    QVERIFY(messages.last().at(0).toString().contains("already in the queue"));
+    QVERIFY(!bench.supply.typed("03000000044"));
+    QVERIFY(messages.last().at(0).toString().contains("another fuel type"));
+    QVERIFY(!bench.supply.typed("03000000045"));
+    QVERIFY(messages.last().at(0).toString().contains("never sold"));
+    QVERIFY(!bench.supply.typed("03000000099"));
+    QVERIFY(messages.last().at(0).toString().contains("not known"));
+    QCOMPARE(SupplyQueue::totalX100(db, 1), qlonglong(3500));
+
+    // the sign of another station: the 16 digits are looked up as they are (not known here); without a sign the 11 digits cannot be completed
+    QVERIFY(!bench.supply.typed("1234503000000041"));
+    QVERIFY(messages.last().at(0).toString().contains("not known"));
+    Settings(db).setValue(SettingKey::TicketSign, "");
+    QVERIFY(!bench.supply.typed("03000000043"));
+    QVERIFY(messages.last().at(0).toString().contains("sign of the station is not known"));
+    QVERIFY(bench.supply.typed("0000003000000043"));
+}
+
+// the box on the Sessions tab: Enter (or Add) types the number in; it is cleared when the ticket was added and kept when it was refused
+void Smart210Test::theEnterTicketBoxOfTheSessionsTabTypesTicketsIn()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
+    SupplyPage page(db, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    QLineEdit *field = page.findChild<QLineEdit *>("supplyTicketField");
+    QPushButton *add = page.findChild<QPushButton *>("supplyTicketButton");
+    QLabel *message = page.findChild<QLabel *>("supplyMessage");
+    QVERIFY(field != 0 && add != 0 && message != 0);
+    QVERIFY(field->placeholderText().contains("11 or 16 digits"));
+
+    // no nozzle chosen: refused, the digits stay to be sent again
+    field->setText("03000000041");
+    QTest::keyClick(field, Qt::Key_Return);
+    QVERIFY(message->text().contains("Choose a nozzle first"));
+    QCOMPARE(field->text(), QString("03000000041"));
+
+    // a nozzle that is tapped in the table is the one the ticket is for: it is chosen (its board beeps) and the ticket joins its queue
+    QMetaObject::invokeMethod(&page, "rowClicked", Q_ARG(int, 0));
+    QTest::keyClick(field, Qt::Key_Return);                                  // Enter
+    QCOMPARE(bench.selection.current(), 1);
+    QVERIFY2(message->text().contains("ticket added, 15.00 kg"), qPrintable(message->text()));
+    QCOMPARE(field->text(), QString());
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);
+
+    field->setText("03000000042");
+    add->click();                                                            // the Add button does the same
+    QVERIFY(message->text().contains("Together 35.00 kg"));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 2);
+
+    // letters cannot be typed; a number that is wrong stays in the box
+    QTest::keyClicks(field, "03a0b00");
+    QCOMPARE(field->text(), QString("030" "00"));
+    field->setText("123");
+    QTest::keyClick(field, Qt::Key_Return);
+    QVERIFY(message->text().contains("Type the 11 digits"));
+    QCOMPARE(field->text(), QString("123"));
+}
+
 void Smart210Test::aResultIsRecordedWhileNobodyIsLoggedIn()
 {
     // the fill code needs no user: a result is saved even when the session has ended meanwhile (the web disabled the cashier, for example)
@@ -9578,11 +9736,11 @@ void Smart210Test::aStoppedFillMakesARemainderTicket()
     bench.boards.simulator().stopFill(1);   // the supplier stops it
 
     QTRY_COMPARE_WITH_TIMEOUT(remainders.size(), 1, 5000);
-    QCOMPARE(remainders.at(0).at(0).toString(), QString("0000025500000001"));
+    QCOMPARE(remainders.at(0).at(0).toString(), QString("0000029500000001"));
     QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 500);
     QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 3500);
     QCOMPARE(one("SELECT amount_kg FROM remainders").toInt(), 3000);   // 30.00 kg come back as a ticket
-    QCOMPARE(one("SELECT amount_kg FROM tickets WHERE barcode = 25500000001").toInt(), 3000);
+    QCOMPARE(one("SELECT amount_kg FROM tickets WHERE barcode = 29500000001").toInt(), 3000);
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE status = 2 AND supplement_id IS NOT NULL").toInt(), 2);   // both scanned tickets are used up
     QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
 
@@ -9678,7 +9836,10 @@ void Smart210Test::theSupplierWorksAtTheDispenserAndTheSessionsTabFollowsTheFill
     QTest::qWait(300);
     QSqlDatabase db = QSqlDatabase::database(connection_);
     Settings(db).setValue(SettingKey::TicketSign, "00000");
-    Settings(db).setValue("reserved_code_remainder", "25");
+    {
+        Settings settings(db);
+        setTicketCodes(settings);
+    }
     Settings(db).setValue(SettingKey::TicketSerialBase, "500000000");
     run("INSERT OR REPLACE INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
     run("INSERT OR REPLACE INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000042, 'D', 0, 2000, 1, 1)");
@@ -9932,12 +10093,12 @@ void Smart210Test::theRemainderTicketsScreenPrintsATicketAgain()
     QSqlDatabase db = QSqlDatabase::database(connection_);
     run("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, mode, supplied_at, synced) "
         "VALUES ('sup-r', 'D', 20, 600, 500, 3500, 'auto', '2026-10-09 09:30:00', 0)");
-    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_date, synced) VALUES (25500000001, 'D', NULL, 3000, 1, '2026-10-09 09:30:00', 0)");
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_date, synced) VALUES (29500000001, 'D', NULL, 3000, 1, '2026-10-09 09:30:00', 0)");
     run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, synced) "
-        "VALUES ('rem-r', 'sup-r', 25500000001, 'D', 3000, '2026-10-09 09:30:00', 0)");
-    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_date, synced) VALUES (25500000002, 'D', NULL, 500, 2, '2026-10-09 09:00:00', 0)"); // used already
+        "VALUES ('rem-r', 'sup-r', 29500000001, 'D', 3000, '2026-10-09 09:30:00', 0)");
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_date, synced) VALUES (29500000002, 'D', NULL, 500, 2, '2026-10-09 09:00:00', 0)"); // used already
     run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, synced) "
-        "VALUES ('rem-u', 'sup-r', 25500000002, 'D', 500, '2026-10-09 09:00:00', 0)");
+        "VALUES ('rem-u', 'sup-r', 29500000002, 'D', 500, '2026-10-09 09:00:00', 0)");
     FakePrinter printer;
     QVERIFY(printer.listen());
     printer.goodStatus();
@@ -9957,7 +10118,7 @@ void Smart210Test::theRemainderTicketsScreenPrintsATicketAgain()
     QPushButton *print = window.findChild<QPushButton *>("remainderPrintButton");
     QLabel *status = window.findChild<QLabel *>("remainderStatus");
     QCOMPARE(table->rowCount(), 2);
-    QCOMPARE(table->item(0, 4)->text(), QString("0000025500000001"));      // newest first
+    QCOMPARE(table->item(0, 4)->text(), QString("0000029500000001"));      // newest first
     QCOMPARE(table->item(0, 3)->text(), QString("30.00"));
     QCOMPARE(table->item(0, 2)->text(), QString("D"));
     QCOMPARE(table->item(0, 1)->text(), QString("2"));
@@ -9971,7 +10132,7 @@ void Smart210Test::theRemainderTicketsScreenPrintsATicketAgain()
     print->click();
     QTRY_COMPARE_WITH_TIMEOUT(printer.jobs().size(), 1, 5000);
     QVERIFY(printer.jobs().at(0).startsWith(QByteArray("\x1B\x40", 2)));
-    QVERIFY(printer.jobs().at(0).contains(EscPos::barcode128C("0000025500000001", 3, 80)));
+    QVERIFY(printer.jobs().at(0).contains(EscPos::barcode128C("0000029500000001", 3, 80)));
     QTRY_VERIFY_WITH_TIMEOUT(status->text().contains("was sent to the printer"), 5000);
     QCOMPARE(table->item(0, 5)->text(), QString("Printed"));
     QVERIFY(!one("SELECT printed_at FROM remainders WHERE id = 'rem-r'").isNull());
@@ -10700,7 +10861,7 @@ void Smart210Test::aFillIsATicketMadeForTheCardAndItIsCancelledWhileItWaitsForTh
     QCOMPARE(made.kgX100, qlonglong(1500));
     QCOMPARE(made.balanceX100, qlonglong(2500));
     QCOMPARE(made.barcode.size(), 16);
-    QCOMPARE(made.barcode.mid(5, 2), QString("21"));                        // the code of a ticket this terminal makes
+    QCOMPARE(made.barcode.mid(5, 2), QString("25"));                        // a card code: the first digit is the fuel type (diesel 2), the second the kind (card 5)
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + card + "' AND amount_kg = 1500 AND status = 1 AND sale_id IS NULL AND fuel_type = 'D' AND synced = 0").toInt(), 1);
     QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2500));
     QCOMPARE(Cards::lastTicket(db, card), made.barcode);
@@ -11067,7 +11228,7 @@ void Smart210Test::theFillPageMakesATicketForTheCardAndPrintsIt()
     QVERIFY2(message->text().contains("is made. The card holds 40.00 kg."), qPrintable(message->text()));
     QCOMPARE(one(cardTickets).toInt(), 1);
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "' AND amount_kg = 1000 AND status = 1 AND sale_id IS NULL AND synced = 0 AND fuel_type = 'D' "
-                 "AND substr(printf('%016d', barcode), 6, 2) = '21'").toInt(), 1);
+                 "AND substr(printf('%016d', barcode), 6, 2) = '25'").toInt(), 1);
     QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(4000));
     QCOMPARE(Cards::find(db, "04A1B2").failedAttempts, 0);
     QCOMPARE(window.findChild<QLabel *>("cardBalance")->text(), QString("40.00"));
@@ -11579,8 +11740,10 @@ void Smart210Test::grabAllScreens()
     QSqlDatabase db = QSqlDatabase::database(connection_);
     run("INSERT OR REPLACE INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 800, 7400)");
     Settings(db).setValue(SettingKey::TicketSign, "00000");
-    Settings(db).setValue("reserved_code_direct", "21");
-    Settings(db).setValue("reserved_code_remainder", "25");
+    {
+        Settings settings(db);
+        setTicketCodes(settings);
+    }
     Settings(db).setValue(SettingKey::TicketSerialBase, "500000000");
     for (int i = 0; i < 12; ++i) {
         run(QString("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (%1, 'D', %2, %3, 0, 1)")

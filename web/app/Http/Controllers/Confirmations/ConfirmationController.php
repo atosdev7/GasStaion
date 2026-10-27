@@ -23,6 +23,7 @@ use App\Support\Admin\BackupRun;
 use App\Support\Reports\ReportSheets;
 use App\Support\Sales\SaleDeletion;
 use App\Support\Reports\XlsxWriter;
+use App\Support\Tickets\Barcode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -315,10 +316,33 @@ class ConfirmationController extends Controller
             'noCost' => Sale::where('sale_date', $date)->whereNull('cost')->whereNull('reverses_sale_id')->whereIn('sale_type', ['ticket', 'spot'])->count(),
             'noTickets' => Supplement::where('supply_date', $date)->whereNull('card_id')->whereDoesntHave('tickets')->count(),
             'deleted' => $page['deletedSales'],
+            'unusedTickets' => $this->unusedTickets($date),
         ];
 
         return view('confirmation.overview', $page + ['areas' => $areas, 'warnings' => $warnings]);
     }
+
+    // The tickets a POS issued on the date (a spot sale, self use, other use, ticket loan or a card) that nobody has supplied yet, by kind. Nothing of them is
+    // left to confirm (the sale or the card top-up is), but a card has paid for such a ticket, so the accountant should see them. A remainder ticket is left
+    // out: it waits for its supply by design.
+    private function unusedTickets($date)
+    {
+        $counts = Ticket::whereIn('code', Barcode::posCodes())->where('status', config('ticket_statuses.sale'))
+            ->where('sale_date', '>=', $date . ' 00:00:00')->where('sale_date', '<=', $date . ' 23:59:59')
+            ->selectRaw('code, COUNT(*) AS n')->groupBy('code')->pluck('n', 'code');
+
+        $kinds = [];
+        foreach (['direct', 'card', 'self', 'other', 'ticket_loan'] as $type) {
+            foreach ($counts as $code => $n) {
+                if (Barcode::posType($code) === $type) {
+                    $kinds[$type] = ($kinds[$type] ?? 0) + (int) $n;
+                }
+            }
+        }
+
+        return $kinds;
+    }
+
     // Summary: the figures of the whole date.
     public function summaryPage(Request $request)
     {
@@ -396,21 +420,23 @@ class ConfirmationController extends Controller
 
             return $sale->usage !== 'sale' ? 'others' : ($sale->sale_type === 'ticket' ? 'ticket' : 'spot');
         };
-        $reserved = config('ticket_reserved_codes');
-        $ticketKind = function ($ticket) use ($reserved) {
-            $code = (string) $ticket->code;
-            if ($code === $reserved['direct']) {
-                return 'spot';
-            }
-            if ($code === $reserved['remainder']) {
-                return 'remainder';
+        // what a ticket is, from its code (a POS ticket: the second digit; a press ticket: a ticket of the stock)
+        $ticketKind = function ($ticket) {
+            switch (Barcode::posType($ticket->code)) {
+                case 'direct':
+                    return 'spot';
+                case 'remainder':
+                    return 'remainder';
+                case 'self':
+                    return 'self';
+                case 'card':
+                    return 'card';
+                case 'other':
+                case 'ticket_loan':
+                    return 'others';
             }
 
-            if ($code === $reserved['self']) {
-                return 'self';
-            }
-
-            return in_array($code, [$reserved['other'], $reserved['ticket_loan']], true) ? 'others' : 'ticket';
+            return 'ticket';
         };
         $kgOf = function ($ticket) {
             return $ticket->spec !== null ? (float) config('ticket_specs.' . $ticket->spec) : (float) $ticket->amount_kg;
@@ -576,10 +602,18 @@ class ConfirmationController extends Controller
             $message .= ' ' . __('confirm.erased', ['count' => $erased]);
         }
 
-        // The day is finished when nothing of it is left to confirm: the database is dumped, after the response, as it stands now.
+        // The day is finished when nothing of it is left to confirm: the database is dumped, after the response, as it stands now. Not before the business day is
+        // over and every terminal has uploaded since: one that has not may still hold records of the day, which would reach the web app after the dump.
         if (config('backup.dump_on_confirmation') && ($sales || $supplements || $inbounds || $publishes || $payments || $fuelInbounds || $fuelOutbounds || $settlements) && $this->dayIsFullyConfirmed($data['date'])) {
-            RunBackupDump::dispatchAfterResponse('confirmed ' . $data['date']);
-            $message .= ' ' . __('confirm.backup_queued');
+            list($silent, $dayEnds) = BackupRun::silentDevices($data['date']);
+            if ($dayEnds->isFuture()) {
+                $message .= ' ' . __('confirm.backup_day_open', ['time' => $dayEnds->format('Y-m-d H:i')]);
+            } elseif ($silent->isNotEmpty()) {
+                $message .= ' ' . __('confirm.backup_terminals', ['devices' => $silent->implode(', ')]);
+            } else {
+                RunBackupDump::dispatchAfterResponse('confirmed ' . $data['date']);
+                $message .= ' ' . __('confirm.backup_queued');
+            }
         }
 
         $url = route(['sales' => 'confirmations.index', 'supplements' => 'confirmations.supplements', 'tickets' => 'confirmations.tickets', 'fuel' => 'confirmations.fuel', 'debts' => 'confirmations.debts'][$from], ['date' => $data['date']]);

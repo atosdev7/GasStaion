@@ -75,6 +75,46 @@ bool SupplySession::add(int nozzle, const QString &barcode, QString *why)
     return false;
 }
 
+bool SupplySession::typed(const QString &text)
+{
+    QString digits;
+    for (int i = 0; i < text.size(); ++i) {
+        const QChar c = text.at(i);
+        if (c.isDigit() && c.unicode() < 128) {
+            digits.append(c);
+        } else if (!c.isSpace() && c != '-') {
+            digits = "x";                       // anything else is not part of a ticket number
+            break;
+        }
+    }
+
+    QString barcode;
+    if (digits.size() == Barcode::Length && Barcode::isValid(digits)) {
+        barcode = digits;
+    } else if (digits.size() == Barcode::Length - SignLength && Barcode::isValid(QString(SignLength, '0') + digits)) {
+        const QString sign = Settings(db_).value(SettingKey::TicketSign);
+        if (sign.size() != SignLength) {
+            emit message(tr("The sign of the station is not known yet: type all 16 digits of the ticket."), false);
+
+            return false;
+        }
+        barcode = sign + digits;
+    } else {
+        emit message(tr("Type the 11 digits after the station sign (the code and the serial), or all 16 digits of the ticket."), false);
+
+        return false;
+    }
+
+    QString why;
+    if (!add(selection_->current(), barcode, &why)) {
+        emit message(why, false);
+
+        return false;
+    }
+
+    return true;
+}
+
 void SupplySession::scanned(const QString &barcode)
 {
     QString why;

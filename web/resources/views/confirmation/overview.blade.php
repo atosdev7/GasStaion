@@ -64,6 +64,19 @@
                 @php($any = true)
                 <div class="alert alert-warning overview-no-tickets">{{ __('confirm.overview_no_tickets', ['count' => $warnings['noTickets']]) }}</div>
             @endif
+            @if ($warnings['unusedTickets'])
+                @php($any = true)
+                <div class="alert alert-info overview-unused-tickets">
+                    {{ __('confirm.overview_unused_tickets') }}
+                    @foreach ($warnings['unusedTickets'] as $type => $count)
+                        @can('tickets.lookup')
+                            <a href="{{ route('tickets.lookup', ['tab' => 'pos', 'type' => $type, 'status' => config('ticket_statuses.sale'), 'sold' => $date]) }}">{{ __('tickets.pos_type_' . $type) }}: {{ $count }}</a>@unless ($loop->last), @endunless
+                        @else
+                            {{ __('tickets.pos_type_' . $type) }}: {{ $count }}@unless ($loop->last), @endunless
+                        @endcan
+                    @endforeach
+                </div>
+            @endif
             @if ($warnings['deleted'])
                 @php($any = true)
                 <div class="alert alert-info overview-deleted">{{ __('confirm.overview_deleted', ['count' => $warnings['deleted']]) }}</div>

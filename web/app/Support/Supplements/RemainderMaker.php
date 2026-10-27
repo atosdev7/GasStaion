@@ -36,7 +36,7 @@ class RemainderMaker
 
     private static function create($supplementId, $fuelType, $leftKg, $createdAt, $date, $comment = null)
     {
-        $code = config('ticket_reserved_codes.remainder');
+        $code = Barcode::posCode('remainder', $fuelType);
         $serial = SerialCounter::next($code);
         $barcode = Barcode::makeReserved($code, $serial);
 

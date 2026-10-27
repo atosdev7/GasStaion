@@ -6,24 +6,43 @@
 #include <QSqlQuery>
 #include <QVariant>
 
-QString TicketNumbers::codeSetting(const QString &name)
+QString TicketNumbers::fuelDigitSetting(const QString &fuelType)
 {
-    return "reserved_code_" + name;
+    return "ticket_fuel_digit_" + fuelType;
 }
 
-bool TicketNumbers::available(QSqlDatabase db, const QString &codeName)
+QString TicketNumbers::typeDigitSetting(const QString &type)
+{
+    return "ticket_type_digit_" + type;
+}
+
+QString TicketNumbers::typeOfUsage(const QString &usage)
+{
+    return usage == "sale" ? QString("direct") : usage;
+}
+
+QString TicketNumbers::code(QSqlDatabase db, const QString &type, const QString &fuelType)
+{
+    Settings settings(db);
+    const QString fuel = settings.value(fuelDigitSetting(fuelType));
+    const QString kind = settings.value(typeDigitSetting(type));
+
+    return fuel.size() == 1 && kind.size() == 1 ? fuel + kind : QString();
+}
+
+bool TicketNumbers::available(QSqlDatabase db, const QString &type, const QString &fuelType)
 {
     Settings settings(db);
 
-    return settings.value(SettingKey::TicketSign).size() == 5 && settings.value(codeSetting(codeName)).size() == 2
+    return settings.value(SettingKey::TicketSign).size() == 5 && code(db, type, fuelType).size() == 2
         && settings.value(SettingKey::TicketSerialBase).toLongLong() > 0;
 }
 
-qlonglong TicketNumbers::next(QSqlDatabase db, const QString &codeName, QString *error)
+qlonglong TicketNumbers::next(QSqlDatabase db, const QString &type, const QString &fuelType, QString *error)
 {
     Settings settings(db);
     const QString sign = settings.value(SettingKey::TicketSign);
-    const QString code = settings.value(codeSetting(codeName));
+    const QString code = TicketNumbers::code(db, type, fuelType);
     const qlonglong base = settings.value(SettingKey::TicketSerialBase).toLongLong();
     if (sign.size() != 5 || code.size() != 2 || base <= 0) {
         *error = QObject::tr("The ticket numbers are not known yet. Download from the server first.");

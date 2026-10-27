@@ -141,9 +141,15 @@ bool SyncStore::applyConfig(const QJsonObject &config, QString *error)
         if (ok && config.contains("ticket_sign")) {
             ok = settings.setValue(SettingKey::TicketSign, config.value("ticket_sign").toString());
         }
-        const QJsonObject codes = config.value("reserved_codes").toObject();
-        foreach (const QString &name, codes.keys()) {
-            ok = ok && settings.setValue(TicketNumbers::codeSetting(name), codes.value(name).toString());
+        // the digits of the code of a ticket: the first is the fuel type, the second the kind (1 spot sale, 2 self use, 3 other use, 4 ticket loan, 5 card, 9 remainder)
+        const QJsonObject posCodes = config.value("pos_codes").toObject();
+        const QJsonObject fuelDigits = posCodes.value("fuel").toObject();
+        foreach (const QString &fuel, fuelDigits.keys()) {
+            ok = ok && settings.setValue(TicketNumbers::fuelDigitSetting(fuel), fuelDigits.value(fuel).toString());
+        }
+        const QJsonObject typeDigits = posCodes.value("type").toObject();
+        foreach (const QString &type, typeDigits.keys()) {
+            ok = ok && settings.setValue(TicketNumbers::typeDigitSetting(type), typeDigits.value(type).toString());
         }
         const QJsonObject floors = config.value("ticket_serial_floor").toObject();
         foreach (const QString &code, floors.keys()) {

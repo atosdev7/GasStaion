@@ -196,7 +196,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
     if (ok && remainder > 0) {
         QString error;
-        const qlonglong barcode = TicketNumbers::next(db, "remainder", &error);
+        const qlonglong barcode = TicketNumbers::next(db, "remainder", fuelType, &error);
         if (barcode < 0) {
             db.rollback();
 

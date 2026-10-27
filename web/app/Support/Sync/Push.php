@@ -444,8 +444,7 @@ class Push
             return;
         }
 
-        $remainderCode = config('ticket_reserved_codes.remainder');
-        if ($status === $s['sale'] && empty($d['sale_id']) && $ticket->code !== $remainderCode && empty($ticket->card_id)) {
+        if ($status === $s['sale'] && empty($d['sale_id']) && Barcode::posType($ticket->code) !== 'remainder' && empty($ticket->card_id)) {
             throw new RejectedRow('a sold ticket needs its sale');
         }
 
@@ -515,15 +514,22 @@ class Push
         if (empty($d['amount_kg'])) {
             throw new RejectedRow('a new ticket needs its amount');
         }
+        // the code says the fuel type and the kind of the ticket: the fuel type must be the ticket's own
+        if (Barcode::posFuel($parsed['code']) !== $d['fuel_type']) {
+            throw new RejectedRow('the code of the ticket is of another fuel type than the ticket');
+        }
+        $kind = Barcode::posType($parsed['code']);
         if (!empty($d['card_id'])) {
-            // a ticket made for a card: paid for with the card's kg, no sale behind it; of the card's fuel type, with the code of the tickets a Smart210 makes itself
-            if ($parsed['code'] !== config('ticket_reserved_codes.direct')) {
-                throw new RejectedRow('a ticket made for a card has the code of a direct ticket');
+            // a ticket made for a card: paid for with the card's kg, no sale behind it; of the card's fuel type, with the card code
+            if ($kind !== 'card') {
+                throw new RejectedRow('a ticket made for a card has a card code');
             }
             if (Card::find($d['card_id'])->fuel_type !== $d['fuel_type']) {
                 throw new RejectedRow('the fuel type is not the fuel type of the card');
             }
-        } elseif ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $parsed['code'] !== config('ticket_reserved_codes.remainder')) {
+        } elseif ($kind === 'card') {
+            throw new RejectedRow('a ticket with a card code needs its card');
+        } elseif ($status === config('ticket_statuses.sale') && empty($d['sale_id']) && $kind !== 'remainder') {
             throw new RejectedRow('a sold ticket needs its sale');
         }
         self::requireRecords($d);

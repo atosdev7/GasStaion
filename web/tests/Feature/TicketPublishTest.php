@@ -62,6 +62,37 @@ class TicketPublishTest extends TestCase
         $this->assertFalse(Barcode::isReservedCode('20'));
     }
 
+    // the code of a ticket a POS issues: the first digit is the fuel type (1 gasoline, 2 diesel), the second the kind (1 spot sale, 2 self use, 3 other use,
+    // 4 ticket loan, 5 card, 9 remainder); the codes of the press (01 to 08) are never one of them
+    public function testThePosCodeIsTheFuelTypeAndTheKindOfTheTicket()
+    {
+        $expected = [
+            'A' => ['direct' => '11', 'self' => '12', 'other' => '13', 'ticket_loan' => '14', 'card' => '15', 'remainder' => '19'],
+            'D' => ['direct' => '21', 'self' => '22', 'other' => '23', 'ticket_loan' => '24', 'card' => '25', 'remainder' => '29'],
+        ];
+        foreach ($expected as $fuel => $kinds) {
+            foreach ($kinds as $kind => $code) {
+                $this->assertSame($code, Barcode::posCode($kind, $fuel));
+                $this->assertTrue(Barcode::isReservedCode($code));
+                $this->assertSame($kind, Barcode::posType($code));
+                $this->assertSame($fuel, Barcode::posFuel($code));
+            }
+        }
+        $this->assertCount(12, Barcode::posCodes());
+        $this->assertNull(Barcode::posCode('direct', 'X'));              // an unknown fuel type
+        $this->assertNull(Barcode::posCode('nonsense', 'D'));            // an unknown kind
+
+        foreach (['01', '08', '10', '16', '18', '20', '26', '28', '30', '99', '2', '211'] as $notPos) {
+            $this->assertFalse(Barcode::isReservedCode($notPos), $notPos);
+            $this->assertNull(Barcode::posType($notPos), $notPos);
+        }
+        foreach (config('ticket_codes') as $bySpec) {
+            foreach ($bySpec as $pressCode) {
+                $this->assertFalse(Barcode::isReservedCode($pressCode), $pressCode);
+            }
+        }
+    }
+
     // ---- publish ----
 
     public function testPublishCreatesNumberedTicketsFromStockUsingTheFuelTypesCode()

@@ -233,171 +233,186 @@
         <translation>Supplies</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
+        <location filename="../src/supplies/SupplyPage.ui" line="34"/>
+        <source>Enter ticket</source>
+        <translation>Enter ticket</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplyPage.ui" line="39"/>
+        <source>The ticket number (11 or 16 digits), then Enter</source>
+        <translation>The ticket number (11 or 16 digits), then Enter</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplyPage.ui" line="46"/>
+        <source>Add</source>
+        <translation>Add</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
         <source>Nozzle</source>
         <translation>Nozzle</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
-        <location filename="../src/supplies/SupplyPage.cpp" line="91"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="93"/>
         <source>Fuel type</source>
         <translation>Fuel type</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
         <source>Mode</source>
         <translation>Mode</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
         <source>Status</source>
         <translation>Status</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
         <source>Tickets (kg - count)</source>
         <translation>Tickets (kg - count)</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="71"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="73"/>
         <source>Dispensed (kg)</source>
         <translation>Dispensed (kg)</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="91"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="93"/>
         <source>Barcode</source>
         <translation>Barcode</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="91"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="93"/>
         <source>Amount (kg)</source>
         <translation>Amount (kg)</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="180"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="186"/>
         <source>No converter</source>
         <translation>No converter</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="182"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="188"/>
         <source>Not polled</source>
         <translation>Not polled</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="184"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="190"/>
         <source>No answer</source>
         <translation>No answer</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="186"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="192"/>
         <source>Config not set</source>
         <translation>Config not set</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="190"/>
-        <location filename="../src/supplies/SupplyPage.cpp" line="205"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="196"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="211"/>
         <source>Selected</source>
         <translation>Selected</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="193"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="199"/>
         <source>Ready to start</source>
         <translation>Ready to start</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="196"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="202"/>
         <source>Dispensing</source>
         <translation>Dispensing</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="199"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="205"/>
         <source>Finished</source>
         <translation>Finished</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="202"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="208"/>
         <source>Fault</source>
         <translation>Fault</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="205"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="211"/>
         <source>Free</source>
         <translation>Free</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="223"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="229"/>
         <source>Working</source>
         <translation>Working</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="223"/>
         <location filename="../src/supplies/SupplyPage.cpp" line="229"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="235"/>
         <source>Set</source>
         <translation>Set</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="229"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="235"/>
         <source>Queued</source>
         <translation>Queued</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="231"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="237"/>
         <source>Done</source>
         <translation>Done</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="241"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="247"/>
         <source>Manual</source>
         <translation>Manual</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="241"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="247"/>
         <source>Auto</source>
         <translation>Auto</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="242"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="248"/>
         <source>%1 - %2</source>
         <translation>%1 - %2</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="270"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="276"/>
         <source>Click a nozzle to see its tickets.</source>
         <translation>Click a nozzle to see its tickets.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="276"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="282"/>
         <source>Tickets of nozzle %1</source>
         <translation>Tickets of nozzle %1</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="279"/>
-        <location filename="../src/supplies/SupplyPage.cpp" line="298"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="285"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="304"/>
         <source>Card: %1</source>
         <translation>Card: %1</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="281"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="287"/>
         <source>A fill with a card: %1 kg.</source>
         <translation>A fill with a card: %1 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="289"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="295"/>
         <source>Started: %1 kg. The tickets are locked until the fill ends.</source>
         <translation>Started: %1 kg. The tickets are locked until the fill ends.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="291"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="297"/>
         <source>%1 tickets, together %2 kg.</source>
         <translation>%1 tickets, together %2 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="301"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="307"/>
         <source>Done: %1 kg dispensed.</source>
         <translation>Done: %1 kg dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplyPage.cpp" line="303"/>
+        <location filename="../src/supplies/SupplyPage.cpp" line="309"/>
         <source>No tickets are queued on this nozzle.</source>
         <translation>No tickets are queued on this nozzle.</translation>
     </message>
@@ -459,8 +474,8 @@
     </message>
     <message>
         <location filename="../src/supplies/SupplySession.cpp" line="59"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="90"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="106"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="130"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="146"/>
         <source>Nozzle %1 has started: its tickets cannot be changed.</source>
         <translation>Nozzle %1 has started: its tickets cannot be changed.</translation>
     </message>
@@ -470,7 +485,17 @@
         <translation>Nozzle %1: ticket added, %2 kg. Together %3 kg.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="127"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="97"/>
+        <source>The sign of the station is not known yet: type all 16 digits of the ticket.</source>
+        <translation>The sign of the station is not known yet: type all 16 digits of the ticket.</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplySession.cpp" line="103"/>
+        <source>Type the 11 digits after the station sign (the code and the serial), or all 16 digits of the ticket.</source>
+        <translation>Type the 11 digits after the station sign (the code and the serial), or all 16 digits of the ticket.</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplySession.cpp" line="167"/>
         <source>Choose a nozzle first.</source>
         <translation>Choose a nozzle first.</translation>
     </message>
@@ -527,42 +552,42 @@
         <translation type="vanished">The board is busy. Try again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="129"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="169"/>
         <source>Enter the weight and the litres that were dispensed.</source>
         <translation>Enter the weight and the litres that were dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="131"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="171"/>
         <source>The time is in the future.</source>
         <translation>The time is in the future.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="133"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="173"/>
         <source>The time cannot be more than %1 days back (Machine Config, Options).</source>
         <translation>The time cannot be more than %1 days back (Machine Config, Options).</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="133"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="173"/>
         <source>The time must be today (Machine Config, Options).</source>
         <translation>The time must be today (Machine Config, Options).</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="135"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="175"/>
         <source>Nozzle %1 has a fill running or a result waiting: the app reads it by itself.</source>
         <translation>Nozzle %1 has a fill running or a result waiting: the app reads it by itself.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="137"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="177"/>
         <source>More than was asked for (%1 kg). Check the reading.</source>
         <translation>More than was asked for (%1 kg). Check the reading.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="139"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="179"/>
         <source>More than the tickets cover (%1 kg). Check the reading.</source>
         <translation>More than the tickets cover (%1 kg). Check the reading.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="141"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="181"/>
         <source>Enter the tickets first.</source>
         <translation>Enter the tickets first.</translation>
     </message>
@@ -575,13 +600,13 @@
         <translation type="vanished">The supply could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="214"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="254"/>
         <source>Nozzle %1: the queue was cleared at the dispenser.</source>
         <translation>Nozzle %1: the queue was cleared at the dispenser.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="261"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="315"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="301"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="355"/>
         <source>Nozzle %1 started: %2 kg.</source>
         <translation>Nozzle %1 started: %2 kg.</translation>
     </message>
@@ -594,8 +619,8 @@
         <translation type="vanished">Nozzle %1 does not answer. The tickets stay: press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="299"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="380"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="339"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="420"/>
         <source>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</source>
         <translation>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</translation>
     </message>
@@ -604,28 +629,28 @@
         <translation type="vanished">Nozzle %1: the board is busy. Press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="336"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="376"/>
         <source>Nozzle %1: the result could not be saved: %2</source>
         <translation>Nozzle %1: the result could not be saved: %2</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="343"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="383"/>
         <source>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</source>
         <translation>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="345"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="385"/>
         <source>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</source>
         <translation>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="347"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="387"/>
         <source>Nozzle %1: %2 kg dispensed.</source>
         <translation>Nozzle %1: %2 kg dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="369"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="376"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="409"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="416"/>
         <source>Nozzle %1: %2</source>
         <translation>Nozzle %1: %2</translation>
     </message>

@@ -807,15 +807,22 @@ class SaleTest extends TestCase
         $this->assertNull($ticket->publish_id);
     }
 
-    public function testSpotSaleSerialsIncrementIndependentlyOfFuelTypeAndSpec()
+    // the code of a POS ticket is the fuel type (1 gasoline, 2 diesel) and the usage (1 spot sale, 2 self use, 3 other use, 4 ticket loan): the serial counts per code
+    public function testSpotSaleSerialsCountPerCodeAndTheCodeSaysTheFuelTypeAndTheUsage()
     {
         $this->as('manager');
 
         $this->spotSell(10);
         $this->spotSell(15, [], 'A');
+        $this->spotSell(12);
+        $this->spotSell(5, ['usage' => 'self']);
+        $this->spotSell(6, ['usage' => 'other', 'paid_amount' => null], 'A');
 
-        $serials = DB::table('tickets')->orderBy('serial')->pluck('serial')->all();
-        $this->assertSame([1, 2], $serials);
+        $tickets = DB::table('tickets')->orderBy('barcode')->get();
+        $this->assertSame(['11' => [1], '13' => [1], '21' => [1, 2], '22' => [1]], $tickets->groupBy('code')->map(function ($rows) {
+            return $rows->pluck('serial')->map(function ($s) { return (int) $s; })->all();
+        })->sortKeys()->all());
+        $this->assertSame(['A', 'A', 'D', 'D', 'D'], $tickets->sortBy('code')->pluck('fuel_type')->all());
     }
 
     public function testSpotSaleUsageOtherIsZeroAmountButStillCreatesATicket()

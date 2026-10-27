@@ -53,6 +53,11 @@ public:
     // they cover, and what is left of the tickets is a remainder, as when the result comes from the board.
     bool recordManual(int nozzle, qlonglong dispensedX100, qlonglong litersX100, const QList<qlonglong> &tickets, const QDateTime &when, QString *why = 0, const QString &comment = QString());
 
+    // A ticket number typed in (a barcode that cannot be scanned: smudged, torn): the 11 digits after the station sign (the code and the serial) or all
+    // 16 digits, spaces and dashes ignored. It goes to the queue of the chosen nozzle through the same checks as a scan. True when it was added; a refusal
+    // is also said by `message`.
+    bool typed(const QString &text);
+
 public slots:
     // A barcode from the supplier's scanner: it goes to the queue of the chosen nozzle.
     void scanned(const QString &barcode);
@@ -72,6 +77,7 @@ private slots:
 
 private:
     enum StartStep { Starting = 2 };
+    static const int SignLength = 5;   // the digits of the station sign at the front of a ticket number
     enum ResultStep { GettingResult = 1, Acknowledging = 2 };
 
     void saved(int nozzle, const SupplyRecord::Outcome &outcome);

@@ -12,7 +12,7 @@
 //   PIN           the cashier types it for every supply; a wrong one counts, the 5th wrong one in a row locks the card (status "locked"): only
 //                 the web app unlocks it (a manager or the accountant), or resets the PIN. A right PIN counts the wrong ones from zero again.
 //   top-up        a sale of type "card": cash only, paid in full, no customer, no ticket; the balance grows by its kg.
-//   fill          the cashier asks for kg with the card (the PIN is checked first): the balance falls at once and a ticket is made (code "direct", card_id
+//   fill          the cashier asks for kg with the card (the PIN is checked first): the balance falls at once and a ticket is made (a card code, e.g. 25 for a diesel card; card_id
 //                 set, no sale), printed and given to the supplier, who scans it at the dispenser like the ticket of a spot sale. Fuel it did not use
 //                 comes back as a remainder ticket (the usual rule); a ticket that was not used can be cancelled here while it waits for its upload, and
 //                 the kg go back to the card. (Before this, a card paid a supply directly: those supplements keep their card_id.)

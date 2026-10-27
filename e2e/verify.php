@@ -66,7 +66,7 @@ if ($scenario === 'cards') {
     $deleted = DB::table('sales')->where('id', $facts['topup_sale'])->first();
     ok($deleted && $deleted->deleted_at !== null, 'the deleted top-up is still a row (deleted), and the ledger keeps both entries');
     $ticket = DB::table('tickets')->where('card_id', $facts['card_id'])->first();
-    ok($ticket && abs((float) $ticket->amount_kg - 20) < 0.005 && (int) $ticket->status === (int) config('ticket_statuses.supply') && $ticket->sale_id === null && $ticket->code === config('ticket_reserved_codes.direct'),
+    ok($ticket && abs((float) $ticket->amount_kg - 20) < 0.005 && (int) $ticket->status === (int) config('ticket_statuses.supply') && $ticket->sale_id === null && $ticket->code === App\Support\Tickets\Barcode::posCode('card', 'D'),
         'the fill of 20.00 kg is a ticket made for the card (no sale), supplied');
     $supply = DB::table('supplements')->where('id', $ticket->supplement_id ?? 'none')->first();
     ok($supply && abs((float) $supply->out_amount_kg - 20) < 0.005 && $supply->card_id === null, 'the fuel that came out for it is an ordinary supplement of 20.00 kg');
@@ -215,8 +215,8 @@ foreach ($facts['remainders'] as $l) {
     $r = $remainders->get($l['id']);
     $ticket = $r ? DB::table('tickets')->where('barcode', $r->ticket_barcode)->first() : null;
     ok($r && $r->supplement_id === $l['supplement_id'] && $r->ticket_barcode === key16($l['ticket_barcode']) && same($r->amount_kg, $l['amount_kg'])
-        && $ticket && $ticket->code === '25' && $ticket->serial > 500000000 && abs((float) $ticket->amount_kg - $l['amount_kg'] / 100) < 0.005,
-        'remainder ' . ($l['amount_kg'] / 100) . ' kg: its ticket has the reserved code 25 and a serial in the Smart210 range');
+        && $ticket && $ticket->code === '29' && $ticket->serial > 500000000 && abs((float) $ticket->amount_kg - $l['amount_kg'] / 100) < 0.005,
+        'remainder ' . ($l['amount_kg'] / 100) . ' kg: its ticket has the diesel remainder code 29 and a serial in the Smart210 range');
 }
 
 section('ticket loans and settlements');
@@ -261,7 +261,7 @@ if ($scenario === 'basic') {
     }
     ok(abs((float) DB::table('sales')->where('usage', 'sale')->sum('total_amount') - 191.25) < 0.005, 'sold for 191.25 (78.75 + 112.50)');
     ok(abs((float) DB::table('sales')->where('usage', 'sale')->sum('paid_amount') - 191.25) < 0.005, 'all of it paid');
-    ok(DB::table('tickets')->whereIn('code', ['21', '22', '23', '24'])->where('status', $statusSale)->count() === 4, 'the four spot sales have their tickets (codes 21-24), sold');
+    ok(DB::table('tickets')->whereIn('code', ['21', '22', '23', '24'])->where('status', $statusSale)->count() === 4, 'the four spot sales have their tickets (diesel: 21 spot sale, 22 self use, 23 other use, 24 ticket loan), sold');
     foreach ([1, 2, 3, 101] as $n) {
         ok(DB::table('tickets')->where('barcode', sprintf('0000006%09d', $n))->where('status', $statusSale)->whereNotNull('sale_id')->exists(), "ticket $n of the stock is sold, with its sale");
     }

@@ -1129,6 +1129,62 @@ class ConfirmationTest extends TestCase
         $this->assertStringNotContainsString(__('confirm.backup_queued'), session('status'));
     }
 
+    public function testTheBackupWaitsForTheTerminalsThatHaveNotUploadedSinceTheDayEnded()
+    {
+        config(['backup.dump_on_confirmation' => true]);
+        Bus::fake();
+        $device = \App\Models\Admin\Device::forceCreate(['name' => 'POS1', 'initial_sync_done' => true, 'last_synced_at' => '2026-10-01 18:00:00']);
+        $first = $this->sale('2026-10-01');
+        $second = $this->sale('2026-10-01');
+
+        // the terminal uploaded before the day ended (9:00 of the next day): it may still hold records of the day, so no backup yet, and the message says why
+        $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$first->id, $second->id]])->assertRedirect();
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);
+        $this->assertStringContainsString('these terminals have not uploaded since the business day ended: POS1', session('status'));
+        $this->assertStringNotContainsString(__('confirm.backup_queued'), session('status'));
+
+        // once it has uploaded, confirming the next record of the day makes the backup
+        $device->forceFill(['last_synced_at' => '2026-10-02 10:00:00'])->save();
+        $late = $this->sale('2026-10-01');
+        $this->post('/confirmations', ['date' => '2026-10-01', 'sales' => [$late->id]])->assertRedirect();
+        Bus::assertDispatchedAfterResponse(RunBackupDump::class);
+    }
+
+    public function testTheBackupWaitsForTheBusinessDayToEnd()
+    {
+        config(['backup.dump_on_confirmation' => true]);
+        Bus::fake();
+        $sale = $this->sale(today()->toDateString());
+
+        $this->as('accountant')->post('/confirmations', ['date' => today()->toDateString(), 'sales' => [$sale->id]])->assertRedirect();
+
+        Bus::assertNotDispatchedAfterResponse(RunBackupDump::class);
+        $this->assertStringContainsString('the business day is not over', session('status'));
+    }
+
+    public function testTheOverviewCountsTheTicketsIssuedOnTheDateAndNotSuppliedByKind()
+    {
+        $ticket = function ($barcode, $code, $status, $saleDate) {
+            return \App\Models\Tickets\Ticket::forceCreate([
+                'barcode' => $barcode, 'fuel_type' => $code[0] === '1' ? 'A' : 'D', 'code' => $code, 'serial' => (int) substr($barcode, 7), 'status' => $status, 'sale_date' => $saleDate,
+            ]);
+        };
+        $ticket('8676121500000001', '21', 1, '2026-10-01 09:30:00');     // a spot sale ticket, not supplied
+        $ticket('8676121500000002', '21', 1, '2026-10-01 23:10:00');     // another
+        $ticket('8676125500000003', '25', 1, '2026-10-01 10:00:00');     // made for a card
+        $ticket('8676121500000004', '21', 2, '2026-10-01 11:00:00');     // supplied: not counted
+        $ticket('8676121500000005', '21', 3, '2026-10-01 11:00:00');     // restricted: not counted
+        $ticket('8676129500000006', '29', 1, '2026-10-01 12:00:00');     // a remainder waits for its supply by design
+        $ticket('8676121500000007', '21', 1, '2026-10-02 08:00:00');     // another day
+
+        $html = $this->as('accountant')->get('/confirmations/overview?date=2026-10-01')->assertOk()->getContent();
+        $this->assertStringContainsString('Tickets issued on this date that nobody has supplied yet', $html);
+        $this->assertRegExp('/overview-unused-tickets.*Spot sale: 2.*Card: 1/s', $html);
+        $this->assertStringNotContainsString('Remainder: ', $html);
+
+        $this->get('/confirmations/overview?date=2026-09-30')->assertDontSee('nobody has supplied yet');
+    }
+
     public function testNothingNewlyConfirmedMakesNoBackup()
     {
         config(['backup.dump_on_confirmation' => true]);

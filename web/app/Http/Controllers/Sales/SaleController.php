@@ -26,8 +26,8 @@ use Illuminate\Validation\ValidationException;
 // Two ways to sell: a **ticket** sale consumes one or more lines of already-published tickets
 // (fixed fuel type for the whole sale, one line per spec — e.g. 5kg x100, 10kg x100 — each either
 // FIFO by serial or an explicit start serial); a **spot** sale is an arbitrary weight with no
-// pre-existing ticket, so it mints one reserved-code 'direct' ticket on the fly (see
-// config/ticket_reserved_codes.php) and is always cash. `usage` = sale/self/other/ticket_loan (see
+// pre-existing ticket, so it mints one POS ticket on the fly (its code: the fuel type and the usage, see
+// config/ticket_pos_codes.php) and is always cash. `usage` = sale/self/other/ticket_loan (see
 // App\Models\Sales\Sale) applies the same way to both — only "sale" carries a real amount.
 class SaleController extends Controller
 {
@@ -354,7 +354,8 @@ class SaleController extends Controller
                 'user_id' => auth()->id(),
             ])->save();
 
-            $code = config('ticket_reserved_codes.direct');
+            // the code says the fuel type and what the ticket is for: a spot sale, self use, other use or a ticket loan (config/ticket_pos_codes.php)
+            $code = Barcode::posCode($data['usage'] === 'sale' ? 'direct' : $data['usage'], $fuelType);
             $serial = SerialCounter::next($code);
             $now = now();
 
