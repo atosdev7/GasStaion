@@ -12,7 +12,11 @@
                     <div class="form-group">
                         <label for="f_{{ $name }}">{{ $fieldLabel($name) }}</label>
                         @if ($field['type'] === 'select')
-                            <select id="f_{{ $name }}" name="{{ $name }}" class="form-control @error($name) is-invalid @enderror">
+                            @php($locked = !empty($field['locked_on_edit']) && $record->exists)
+                            @if ($locked)
+                                <input type="hidden" name="{{ $name }}" value="{{ $record->{$name} }}">
+                            @endif
+                            <select id="f_{{ $name }}" @if (!$locked) name="{{ $name }}" @else disabled @endif class="form-control @error($name) is-invalid @enderror">
                                 @foreach ($field['options'] as $value => $label)
                                     <option value="{{ $value }}" {{ (string) old($name, $record->{$name}) === (string) $value ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach

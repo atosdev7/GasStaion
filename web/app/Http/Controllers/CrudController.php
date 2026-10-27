@@ -107,8 +107,10 @@ abstract class CrudController extends Controller
         $record = new $class;
         $data = $this->prepare($request->validate($this->rules($record), $this->messages()), $record);
 
-        $record->forceFill($data)->save();
-        $this->audit('create', $record);
+        $record->forceFill($data);
+        $changes = $this->changes($record, true);
+        $record->save();
+        $this->audit('create', $record, $changes);
 
         return $this->done($record, 'created');
     }
@@ -126,8 +128,10 @@ abstract class CrudController extends Controller
         $record = $this->query()->findOrFail($id);
         $data = $this->prepare($request->validate($this->rules($record), $this->messages()), $record);
 
-        $record->forceFill($data)->save();
-        $this->audit('update', $record);
+        $record->forceFill($data);
+        $changes = $this->changes($record, false);
+        $record->save();
+        $this->audit('update', $record, $changes);
 
         return $this->done($record, 'saved');
     }
@@ -175,10 +179,32 @@ abstract class CrudController extends Controller
         return redirect()->route($this->route() . '.index')->with('status', __($this->langFile() . '.' . $message));
     }
 
-    private function audit($action, $record)
+    private function audit($action, $record, $changes = '')
     {
         $label = $record->name ?? $record->getKey();
-        Audit::log($this->route() . '_' . $action, '#' . $record->getKey() . ' ' . $label);
+        Audit::log($this->route() . '_' . $action, '#' . $record->getKey() . ' ' . $label . ($changes !== '' ? ': ' . $changes : ''));
+    }
+
+    // What a save changes, for the audit line: "price 5 -> 6, role cashier -> manager" (a new record: "price 6, role cashier"). A password or PIN is only said to have
+    // changed; the bookkeeping columns are left out.
+    private function changes($record, $new)
+    {
+        $secret = ['password', 'pos_salt', 'pos_hash', 'pin_salt', 'pin_hash'];
+        $skip = ['updated_at', 'created_at', 'synced'];
+        $parts = [];
+        $secretChanged = false;
+        foreach ($record->getDirty() as $key => $value) {
+            if (in_array($key, $secret, true)) {
+                $secretChanged = true;
+            } elseif (!in_array($key, $skip, true)) {
+                $parts[] = $new ? $key . ' ' . $value : $key . ' ' . ($record->getOriginal($key) ?? '-') . ' -> ' . ($value ?? '-');
+            }
+        }
+        if ($secretChanged) {
+            $parts[] = 'password or PIN changed';
+        }
+
+        return implode(', ', $parts);
     }
 
     private function viewData(array $extra)
