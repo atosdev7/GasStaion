@@ -249,10 +249,32 @@ $r = $acct->send('POST', '/confirmations', ['date' => $today, 'sales' => [$credi
 ok(Sale::find($credit->id)->confirmed_at !== null, 'and it is confirmed again');
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
+section('who may open what');
+$admin = isset($admin) ? $admin : new Web($base);
+if (!isset($adminIn)) {
+    $adminIn = $admin->login('wadm');
+}
+$status = function ($web, $path) {
+    $p = $web->get($path);
+
+    return $p['status'];
+};
+ok($status($acct, '/balances/go-live') === 403 && $status($acct, '/ticket-bulk') === 403, 'the accountant cannot open Go-live or Bulk Update');
+ok($status($manager, '/balances/go-live') === 403 && $status($manager, '/ticket-bulk') === 403, 'nor can the manager');
+ok($status($admin, '/balances/go-live') === 200 && $status($admin, '/ticket-bulk') === 200, 'the admin can');
+ok($status($manager, '/users') === 200 && $status($acct, '/users') === 403 && $status($assistant, '/users') === 403, 'Users: the manager and the admin only');
+ok($status($manager, '/payments/create') === 200 && $status($manager, '/loans/create') === 200, 'the manager records debt payments and settles ticket loans like the accountant');
+ok($status($acct, '/sync') === 200 && $status($manager, '/sync') === 200 && $status($assistant, '/sync') === 403, 'the sync status: the accountant and the manager, not the assistant');
+ok($status($assistant, '/reports/ordering') === 403 && $status($acct, '/reports/ordering') === 200, 'the Stock and ordering report: the accountant, not the assistant');
+$edit = $manager->get('/users');
+ok(strpos($edit['body'], '>wadm<') === false, 'the manager does not see the admin account in the list of users');
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
 section('the pages the staff read');
 $pages = ['/', '/ticket-sales', '/spot-sales', '/card-sales', '/supplements', '/remainders', '/payments', '/debt-summary', '/loans', '/cards', '/card-summary',
     '/ticket-summary', '/tickets/lookup', '/confirmations', '/confirmations/supplements', '/confirmations/summary', '/inbound', '/outbound', '/ticket-inbound',
-    '/ticket-publish', '/audit', '/sync', '/balances/tanks'];
+    '/ticket-publish', '/audit', '/sync', '/balances/tanks', '/balances/ticket-sales', '/balances/debts', '/balances/loans', '/balances/remainders', '/users', '/devices', '/fuel',
+    '/tanks', '/nozzles', '/balances/go-live', '/ticket-bulk'];
 $bad = [];
 foreach ($pages as $path) {
     $p = $acct->get($path);
@@ -270,7 +292,7 @@ foreach ($pages as $path) {
 ok(!$bad, count($pages) . ' pages open without an error' . ($bad ? ': ' . implode(', ', $bad) : ''));
 $from = date('Y-m-01');
 $bad = [];
-foreach (['sales', 'cash', 'profit', 'tickets', 'tanks', 'supply'] as $report) {
+foreach (['sales', 'cash', 'profit', 'tickets', 'tanks', 'supply', 'ordering'] as $report) {
     $p = $acct->get("/reports/$report?from=$from&to=$today");
     $x = $acct->get("/reports/$report?from=$from&to=$today&export=xls");
     if ($p['status'] !== 200 || $x['status'] !== 200 || strpos($x['headers'], 'spreadsheetml') === false) {
@@ -281,7 +303,7 @@ $p = $acct->get("/reports/customer?from=$from&to=$today&customer_id=$acme");
 if ($p['status'] !== 200) {
     $bad[] = 'customer (' . $p['status'] . ')';
 }
-ok(!$bad, 'the 7 reports open, and 6 of them export to xlsx' . ($bad ? ': ' . implode(', ', $bad) : ''));
+ok(!$bad, 'the 8 reports open, and 7 of them export to xlsx' . ($bad ? ': ' . implode(', ', $bad) : ''));
 $report = $acct->get("/reports/sales?from=$from&to=$today");
 $kgNet = money(Sale::sum('amount_kg'));
 $amountNet = money(Sale::sum('total_amount'));

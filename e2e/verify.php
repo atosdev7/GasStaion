@@ -249,6 +249,16 @@ foreach ($facts['tickets'] as $l) {
 }
 ok(count($bad) === 0, count($facts['tickets']) . ' tickets sold or supplied: the same status, sale and supplement on both sides' . ($bad ? ' (differ: ' . implode(', ', $bad) . ')' : ''));
 
+if ($scenario === 'basic') {
+    // the old paper ticket the terminal supplied: its row was made on the web, dated as its publish (published before go-live, sold on paper, now supplied)
+    $old = $tickets->get(key16(6000000801));
+    $publish = DB::table('ticket_publishes')->where('code', '06')->where('start_serial', 801)->first();
+    ok($old && (int) $old->status === $statusSupply && $old->supplement_id !== null, 'the old ticket 801 is supplied on the web app too');
+    ok($old && $publish && (int) $old->publish_id === (int) $publish->id && substr((string) $old->publish_date, 0, 10) === substr((string) $publish->date, 0, 10)
+        && substr((string) $old->sale_date, 0, 10) === substr((string) $publish->date, 0, 10), 'its row has the publish date of its publish as its publish date and its sale date');
+    ok(DB::table('tickets')->whereBetween('serial', [802, 810])->where('code', '06')->count() === 0, 'the other old tickets still have no rows');
+}
+
 section('the web app on its own');
 ok(DB::table('sync_errors')->count() === 0, 'no sync errors were logged');
 ok((int) $facts['pending'] === 0, 'the terminal has nothing left to upload');
@@ -265,11 +275,11 @@ if ($scenario === 'basic') {
     foreach ([1, 2, 3, 101] as $n) {
         ok(DB::table('tickets')->where('barcode', sprintf('0000006%09d', $n))->where('status', $statusSale)->whereNotNull('sale_id')->exists(), "ticket $n of the stock is sold, with its sale");
     }
-    ok(DB::table('tickets')->where('status', $statusSupply)->count() === 14, '14 tickets are supplied: 7 for loans, 7 at the nozzles');
+    ok(DB::table('tickets')->where('status', $statusSupply)->count() === 15, '15 tickets are supplied: 7 for loans, 7 at the nozzles, 1 old paper ticket');
     ok(DB::table('ticket_loan_settlements')->count() === 7, '7 settlements');
-    ok(DB::table('supplements')->count() === 4 && DB::table('remainders')->count() === 1, '4 supplements and 1 remainder');
+    ok(DB::table('supplements')->count() === 5 && DB::table('remainders')->count() === 1, '5 supplements and 1 remainder');
     $amounts = DB::table('supplements')->orderBy('out_amount_kg')->pluck('out_amount_kg')->map(function ($v) { return (float) $v; })->all();
-    ok($amounts === [5.0, 10.0, 12.0, 23.0], 'the supplements dispensed 5, 10, 12 and 23 kg');
+    ok($amounts === [5.0, 5.0, 10.0, 12.0, 23.0], 'the supplements dispensed 5, 5, 10, 12 and 23 kg');
     ok(DB::table('supplements')->where('mode', 'manual')->count() === 2, 'two manual supplies: one at the manual dispenser, one reading typed in');
     ok(DB::table('supplements')->where('out_amount_kg', 12)->where('preset_kg', 30)->exists(), 'the 12 kg supply had 30 kg of tickets (the rest is the remainder)');
     $remainderTicket = DB::table('remainders')->first();
@@ -284,7 +294,7 @@ if ($scenario === 'basic') {
     ok(DB::table('sales')->where('comment', 'paid by card')->count() === 1, 'the comment on the first sale arrived');
     ok(DB::table('supplements')->where('comment', 'ticket check done')->count() === 1, 'the comment on the manual supply arrived (an edit after the upload)');
     $levels = App\Support\Dashboard\TankLevels::all()->first();
-    ok($levels && abs($levels->current - 99950) < 0.005, 'the tank holds 99950 kg: 100000 in, 50 supplied (' . ($levels ? $levels->current : '-') . ')');
+    ok($levels && abs($levels->current - 99945) < 0.005, 'the tank holds 99945 kg: 100000 in, 55 supplied (' . ($levels ? $levels->current : '-') . ')');
 }
 
 if ($scenario === 'restore') {

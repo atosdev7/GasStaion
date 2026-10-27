@@ -10,7 +10,9 @@ use App\Models\Admin\Device;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelType;
 use App\Models\Fuel\Tank;
+use App\Models\Admin\Setting;
 use App\Models\Tickets\Ticket;
+use App\Models\Tickets\TicketPublish;
 use App\Models\Debts\TicketLoan;
 use App\Models\Admin\User;
 use App\Support\Admin\DeviceHash;
@@ -85,6 +87,14 @@ foreach ([301, 302] as $n) {
 foreach ([401, 402] as $n) {
     press($n, 1, $sale);               // 10 kg, sold on the web
 }
+
+// The old paper tickets: the system went live today, and 5 kg diesel tickets 801 to 810 were published three days ago and sold on paper. They have no rows:
+// the row of one is made when it is used (LegacyTickets), and the terminal learns the range in its config.
+Setting::updateOrCreate(['key' => 'go_live_date'], ['value' => date('Y-m-d')]);
+TicketPublish::forceCreate([
+    'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => 801, 'end_serial' => 810, 'count' => 10, 'date' => date('Y-m-d', strtotime('-3 days')), 'user_id' => 1,
+    'confirmed_at' => now(), 'confirmed_by' => 1,
+]);
 
 // a ticket loan made on the web: ACME took 20 kg
 TicketLoan::forceCreate(['customer_id' => $acme->id, 'fuel_type' => 'D', 'amount_kg' => 20, 'settled_amount_kg' => 0, 'user_id' => 1]);

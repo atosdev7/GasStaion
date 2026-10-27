@@ -123,6 +123,11 @@ static int basicScenario(Terminal &t, const QString &factsFile)
     // 4: a supply typed in for another nozzle with its ticket
     check(plant.supply.recordManual(1, 500, 602, QList<qlonglong>() << press(209), now, &why), "5.00 kg / 6.02 litres typed in with a 5 kg ticket (" + why + ")");
     const QString handSupplement = plant.lastSupplement;
+    // 5: an old paper ticket (published before go-live and sold on paper: the web app has no row for it) is supplied: its row is made when it is used
+    check(t.one("SELECT COUNT(*) FROM ticket_legacy").toInt() == 1, "the range of the old publish came down in the config");
+    check(t.one("SELECT COUNT(*) FROM tickets WHERE barcode = " + QString::number(press(801))).toInt() == 0, "the old ticket has no row yet");
+    check(plant.autoFill(1, QList<qlonglong>() << press(801), 0), "auto supply: an old paper ticket, run to the preset (" + plant.lastMessage + ")");
+    check(t.one("SELECT status FROM tickets WHERE barcode = " + QString::number(press(801))).toInt() == 2, "its row was made, and it is supplied");
 
     step("the cashier's review, then Upload data");
     const QString firstSale = sale.saleId;
