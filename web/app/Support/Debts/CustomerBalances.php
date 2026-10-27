@@ -42,10 +42,10 @@ class CustomerBalances
         });
     }
 
-    // The day a debt is counted from: the day of its sale, or the day it was entered for an opening balance (Y-m-d).
+    // The day a debt is counted from: the day of its sale, or for an opening balance the day it was entered with ("as of"), else the day it was typed in (Y-m-d).
     public static function debtDay(Debt $debt)
     {
-        return substr((string) ($debt->display_date ?: $debt->created_at), 0, 10);
+        return substr((string) ($debt->display_date ?: ($debt->debt_date ?: $debt->created_at)), 0, 10);
     }
 
     // The ticket loans of a customer that are not settled yet (kg).

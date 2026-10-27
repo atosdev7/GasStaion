@@ -264,11 +264,15 @@ class BalanceController extends Controller
             'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'amount' => 'required|numeric|min:0.01|max:99999999',
             'payment_method' => ['required', Rule::in(DebtController::PAYMENT_METHODS)],
+            'debt_date' => 'nullable|date_format:Y-m-d|before_or_equal:today',      // the day the debt counts from ("as of": the statements and the aging use it); today when it is not sent
+            'comment' => 'nullable|string|max:255',
         ]);
+        $data['debt_date'] = $data['debt_date'] ?? today()->toDateString();
+        $data['comment'] = isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null;
 
         $debt = Debt::forceCreate($data + ['sale_id' => null, 'user_id' => auth()->id()]);
 
-        Audit::log('opening_debt', '#' . $debt->id . ' customer ' . $debt->customer_id . ' amount ' . $debt->amount);
+        Audit::log('opening_debt', '#' . $debt->id . ' customer ' . $debt->customer_id . ' amount ' . $debt->amount . ' as of ' . $data['debt_date'] . ($data['comment'] ? ' (' . $data['comment'] . ')' : ''));
 
         return redirect()->route('balances.debts.index')->with('status', __('initialize.created'));
     }
@@ -279,19 +283,102 @@ class BalanceController extends Controller
             'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
             'amount_kg' => 'required|numeric|min:0.01|max:99999999',
+            'date' => 'nullable|date_format:Y-m-d|before_or_equal:today',      // the day the loan counts from ("as of"); today when it is not sent
+            'comment' => 'nullable|string|max:255',
         ]);
+        $day = $data['date'] ?? today()->toDateString();
+        $comment = isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null;
+        unset($data['date'], $data['comment']);
 
         $loan = TicketLoan::forceCreate($data + [
-            'loaned_at' => now(),
-            'date' => today()->toDateString(),
+            'loaned_at' => $day === today()->toDateString() ? now() : $day . ' ' . now()->format('H:i:s'),
+            'date' => $day,
+            'comment' => $comment,
             'sale_id' => null,
             'user_id' => auth()->id(),
         ]);
 
         Audit::log('opening_ticket_loan', '#' . $loan->id . ' customer ' . $loan->customer_id
-            . ' ' . $loan->fuel_type . ' ' . $loan->amount_kg . 'kg');
+            . ' ' . $loan->fuel_type . ' ' . $loan->amount_kg . 'kg as of ' . $day . ($comment ? ' (' . $comment . ')' : ''));
 
         return redirect()->route('balances.loans.index')->with('status', __('initialize.created'));
+    }
+
+    // An opening debt is changed as a whole while nothing has been paid against it; once there is a payment only the "as of" day and the comment can change (the
+    // customer, the amount and the payment method are what the payments were made against).
+    public function editDebt($id)
+    {
+        $debt = Debt::whereNull('sale_id')->findOrFail($id);
+
+        return view('balance.debt_edit', [
+            'debt' => $debt, 'customers' => Customer::orderBy('name')->pluck('name', 'id'), 'locked' => DebtPayment::where('debt_id', $debt->id)->exists(),
+        ]);
+    }
+
+    public function updateDebt(Request $request, $id)
+    {
+        $debt = Debt::whereNull('sale_id')->findOrFail($id);
+        $locked = DebtPayment::where('debt_id', $debt->id)->exists();
+
+        $rules = [
+            'debt_date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'comment' => 'nullable|string|max:255',
+        ];
+        if (!$locked) {
+            $rules += [
+                'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
+                'amount' => 'required|numeric|min:0.01|max:99999999',
+                'payment_method' => ['required', Rule::in(DebtController::PAYMENT_METHODS)],
+            ];
+        }
+        $data = $request->validate($rules);
+        $data['comment'] = isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null;
+
+        $before = 'customer ' . $debt->customer_id . ' amount ' . $debt->amount . ' ' . $debt->payment_method . ' as of ' . substr((string) $debt->debt_date, 0, 10) . ' (' . $debt->comment . ')';
+        $debt->forceFill($data)->save();
+        Audit::log('opening_debt_update', '#' . $debt->id . ': ' . $before . ' -> customer ' . $debt->customer_id . ' amount ' . $debt->amount . ' ' . $debt->payment_method . ' as of ' . $data['debt_date'] . ' (' . $debt->comment . ')');
+
+        return redirect()->route('balances.debts.index')->with('status', __('initialize.saved'));
+    }
+
+    // The same for an opening ticket loan: whole while nothing has been settled against it, then only the "as of" day and the comment.
+    public function editLoan($id)
+    {
+        $loan = TicketLoan::whereNull('sale_id')->findOrFail($id);
+
+        return view('balance.loan_edit', [
+            'loan' => $loan, 'customers' => Customer::orderBy('name')->pluck('name', 'id'), 'fuels' => config('fuel_types'),
+            'locked' => TicketLoanSettlement::where('loan_id', $loan->id)->exists(),
+        ]);
+    }
+
+    public function updateLoan(Request $request, $id)
+    {
+        $loan = TicketLoan::whereNull('sale_id')->findOrFail($id);
+        $locked = TicketLoanSettlement::where('loan_id', $loan->id)->exists();
+
+        $rules = [
+            'date' => 'required|date_format:Y-m-d|before_or_equal:today',
+            'comment' => 'nullable|string|max:255',
+        ];
+        if (!$locked) {
+            $rules += [
+                'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
+                'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+                'amount_kg' => 'required|numeric|min:0.01|max:99999999',
+            ];
+        }
+        $data = $request->validate($rules);
+        $data['comment'] = isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null;
+        if ($data['date'] !== substr((string) $loan->date, 0, 10)) {
+            $data['loaned_at'] = $data['date'] === today()->toDateString() ? now() : $data['date'] . ' ' . substr((string) $loan->loaned_at, 11, 8);
+        }
+
+        $before = 'customer ' . $loan->customer_id . ' ' . $loan->fuel_type . ' ' . $loan->amount_kg . 'kg as of ' . substr((string) $loan->date, 0, 10) . ' (' . $loan->comment . ')';
+        $loan->forceFill($data)->save();
+        Audit::log('opening_ticket_loan_update', '#' . $loan->id . ': ' . $before . ' -> customer ' . $loan->customer_id . ' ' . $loan->fuel_type . ' ' . $loan->amount_kg . 'kg as of ' . $data['date'] . ' (' . $loan->comment . ')');
+
+        return redirect()->route('balances.loans.index')->with('status', __('initialize.saved'));
     }
 
     // Only while nothing has been paid or settled against it, so a typo can be fixed without

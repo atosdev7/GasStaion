@@ -196,8 +196,12 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::put('balances/tanks/{id}', 'Initialize\BalanceController@updateTank')->name('balances.tanks.update')->where('id', '[0-9]+');
             Route::delete('balances/tanks/{id}', 'Initialize\BalanceController@destroyTank')->name('balances.tanks.destroy')->where('id', '[0-9]+');
             Route::post('balances/debts', 'Initialize\BalanceController@storeDebt')->name('balances.debts.store');
+            Route::get('balances/debts/{id}/edit', 'Initialize\BalanceController@editDebt')->name('balances.debts.edit')->where('id', '[0-9a-fA-F-]{36}');
+            Route::put('balances/debts/{id}', 'Initialize\BalanceController@updateDebt')->name('balances.debts.update')->where('id', '[0-9a-fA-F-]{36}');
             Route::delete('balances/debts/{id}', 'Initialize\BalanceController@destroyDebt')->name('balances.debts.destroy');
             Route::post('balances/loans', 'Initialize\BalanceController@storeLoan')->name('balances.loans.store');
+            Route::get('balances/loans/{id}/edit', 'Initialize\BalanceController@editLoan')->name('balances.loans.edit')->where('id', '[0-9a-fA-F-]{36}');
+            Route::put('balances/loans/{id}', 'Initialize\BalanceController@updateLoan')->name('balances.loans.update')->where('id', '[0-9a-fA-F-]{36}');
             Route::delete('balances/loans/{id}', 'Initialize\BalanceController@destroyLoan')->name('balances.loans.destroy');
         });
 

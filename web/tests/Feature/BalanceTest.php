@@ -245,6 +245,85 @@ class BalanceTest extends TestCase
         $this->assertSame(0.0, $fuel['unknown_kg']);
     }
 
+    // an opening debt and an opening ticket loan have the day they count from ("as of", today when not sent) and a comment
+    public function testOpeningDebtsAndLoansHaveAnAsOfDateAndAComment()
+    {
+        $this->as('accountant')->post('/balances/debts', [
+            'customer_id' => $this->customer->id, 'amount' => 300, 'payment_method' => 'cash', 'debt_date' => '2026-09-15', 'comment' => ' old ledger, page 4 ',
+        ])->assertRedirect('/balances/debts')->assertSessionHasNoErrors();
+        $this->post('/balances/debts', ['customer_id' => $this->customer->id, 'amount' => 50, 'payment_method' => 'bank'])->assertSessionHasNoErrors();
+
+        $old = Debt::where('amount', 300)->first();
+        $this->assertSame('2026-09-15', substr((string) $old->debt_date, 0, 10));
+        $this->assertSame('old ledger, page 4', $old->comment);
+        $this->assertSame('2026-09-15', \App\Support\Debts\CustomerBalances::debtDay($old));          // the statements and the aging count it from that day
+        $this->assertSame(today()->toDateString(), substr((string) Debt::where('amount', 50)->value('debt_date'), 0, 10));
+        $this->post('/balances/debts', ['customer_id' => $this->customer->id, 'amount' => 1, 'payment_method' => 'cash', 'debt_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('debt_date');
+        $this->post('/balances/debts', ['customer_id' => $this->customer->id, 'amount' => 1, 'payment_method' => 'cash', 'debt_date' => 'soon'])->assertSessionHasErrors('debt_date');
+        $this->get('/balances/debts')->assertOk()->assertSee('2026-09-15')->assertSee('old ledger, page 4')->assertSee('As of');
+
+        $this->post('/balances/loans', [
+            'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'date' => '2026-09-10', 'comment' => 'tickets of August',
+        ])->assertRedirect('/balances/loans')->assertSessionHasNoErrors();
+        $loan = TicketLoan::where('amount_kg', 40)->first();
+        $this->assertSame('2026-09-10', substr((string) $loan->date, 0, 10));
+        $this->assertSame('2026-09-10', substr((string) $loan->loaned_at, 0, 10));
+        $this->assertSame('tickets of August', $loan->comment);
+        $this->post('/balances/loans', ['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 5])->assertSessionHasNoErrors();
+        $this->assertSame(today()->toDateString(), substr((string) TicketLoan::where('amount_kg', 5)->value('date'), 0, 10));
+        $this->post('/balances/loans', ['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 1, 'date' => today()->addDay()->toDateString()])->assertSessionHasErrors('date');
+        $this->get('/balances/loans')->assertOk()->assertSee('2026-09-10')->assertSee('tickets of August');
+    }
+
+    // the rows of the opening debts and loans have actions: edit (the whole row while nothing is paid or settled, then the day and the comment) and delete
+    public function testOpeningDebtsAndLoansCanBeEditedFromTheirTables()
+    {
+        $other = Customer::forceCreate(['name' => 'Beta']);
+        $this->as('accountant')->post('/balances/debts', ['customer_id' => $this->customer->id, 'amount' => 300, 'payment_method' => 'cash', 'debt_date' => '2026-09-15']);
+        $debt = Debt::first();
+
+        $page = $this->get('/balances/debts')->assertOk()->getContent();
+        $this->assertStringContainsString('Actions', $page);
+        $this->assertStringContainsString(route('balances.debts.edit', $debt->id), $page);
+        $this->get('/balances/debts/' . $debt->id . '/edit')->assertOk()->assertSee('value="2026-09-15"', false)->assertDontSee('readonly');
+
+        $this->put('/balances/debts/' . $debt->id, [
+            'customer_id' => $other->id, 'amount' => 250, 'payment_method' => 'bank', 'debt_date' => '2026-09-10', 'comment' => 'corrected',
+        ])->assertRedirect('/balances/debts')->assertSessionHasNoErrors();
+        $debt = $debt->fresh();
+        $this->assertSame([$other->id, 250.0, 'bank', '2026-09-10', 'corrected'], [(int) $debt->customer_id, (float) $debt->amount, $debt->payment_method, substr((string) $debt->debt_date, 0, 10), $debt->comment]);
+        $this->put('/balances/debts/' . $debt->id, ['customer_id' => $other->id, 'amount' => 0, 'payment_method' => 'bank', 'debt_date' => '2026-09-10'])->assertSessionHasErrors('amount');
+        $this->put('/balances/debts/' . $debt->id, ['customer_id' => $other->id, 'amount' => 5, 'payment_method' => 'bank', 'debt_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('debt_date');
+
+        // paid against: only the day and the comment (what else is sent is not taken)
+        DebtPayment::forceCreate(['customer_id' => $other->id, 'debt_id' => $debt->id, 'amount' => 20, 'payment_method' => 'cash', 'paid_date' => '2026-09-12', 'date' => '2026-09-12', 'user_id' => 1]);
+        $this->get('/balances/debts/' . $debt->id . '/edit')->assertOk()->assertSee('A payment was made against this debt');
+        $this->put('/balances/debts/' . $debt->id, ['customer_id' => $this->customer->id, 'amount' => 999, 'payment_method' => 'cash', 'debt_date' => '2026-09-11', 'comment' => 'dated again'])->assertSessionHasNoErrors();
+        $debt = $debt->fresh();
+        $this->assertSame([$other->id, 250.0, 'bank', '2026-09-11', 'dated again'], [(int) $debt->customer_id, (float) $debt->amount, $debt->payment_method, substr((string) $debt->debt_date, 0, 10), $debt->comment]);
+
+        // a debt made by a sale is not one of them
+        $sale = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => (string) \Illuminate\Support\Str::uuid(), 'amount' => 10, 'payment_method' => 'cash', 'user_id' => 1]);
+        $this->get('/balances/debts/' . $sale->id . '/edit')->assertNotFound();
+
+        // the loans
+        $this->post('/balances/loans', ['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'date' => '2026-09-10']);
+        $loan = TicketLoan::whereNull('sale_id')->first();
+        $this->assertStringContainsString(route('balances.loans.edit', $loan->id), $this->get('/balances/loans')->assertOk()->getContent());
+        $this->put('/balances/loans/' . $loan->id, ['customer_id' => $other->id, 'fuel_type' => 'A', 'amount_kg' => 35, 'date' => '2026-09-08', 'comment' => 'recounted'])
+            ->assertRedirect('/balances/loans')->assertSessionHasNoErrors();
+        $loan = $loan->fresh();
+        $this->assertSame([$other->id, 'A', 35.0, '2026-09-08', '2026-09-08', 'recounted'],
+            [(int) $loan->customer_id, $loan->fuel_type, (float) $loan->amount_kg, substr((string) $loan->date, 0, 10), substr((string) $loan->loaned_at, 0, 10), $loan->comment]);
+        $this->put('/balances/loans/' . $loan->id, ['customer_id' => $other->id, 'fuel_type' => 'A', 'amount_kg' => 0, 'date' => '2026-09-08'])->assertSessionHasErrors('amount_kg');
+
+        TicketLoanSettlement::forceCreate(['loan_id' => $loan->id, 'ticket_barcode' => '0000006000000001', 'amount_kg' => 5, 'settled_at' => now(), 'date' => today()->toDateString(), 'user_id' => 1]);
+        $this->get('/balances/loans/' . $loan->id . '/edit')->assertOk()->assertSee('Tickets were given back against this loan');
+        $this->put('/balances/loans/' . $loan->id, ['customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 99, 'date' => '2026-09-07', 'comment' => 'again'])->assertSessionHasNoErrors();
+        $loan = $loan->fresh();
+        $this->assertSame([$other->id, 'A', 35.0, '2026-09-07', 'again'], [(int) $loan->customer_id, $loan->fuel_type, (float) $loan->amount_kg, substr((string) $loan->date, 0, 10), $loan->comment]);
+    }
+
     public function testOpeningDebtIsAPlainDebtThatCanBePaid()
     {
         $this->as('accountant')->post('/balances/debts', [
