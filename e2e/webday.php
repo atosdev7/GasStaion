@@ -332,6 +332,7 @@ if (!isset($adminIn)) {
 }
 ok($adminIn, 'the administrator signs in');
 // a backup is refused while a sale it would clear is not confirmed (REVIEW A1)
+$owedBefore = round(Debt::sum('amount') - DebtPayment::sum('amount'), 2);
 $r = $admin->send('POST', '/backup', ['up_to' => $yesterday]);
 ok(DB::table('backups')->count() === 0 && Sale::where('id', $unconfirmedId)->exists(), 'the backup is refused while a sale of those days is not confirmed');
 $r = $acct->send('POST', '/confirmations', ['date' => $yesterday, 'sales' => [$unconfirmedId], 'from' => 'sales']);
@@ -354,7 +355,9 @@ $export = glob(storage_path('app/e2e-backups/exports/*.zip'));
 ok(count($export) === 1, 'the export file exists');
 $levels = TankLevels::all()->first();
 ok($levels && $tankBefore !== null && abs($levels->current - $tankBefore) < 0.005, 'the tank holds the same after the clearing (' . ($levels ? number_format($levels->current, 2) : '-') . ')');
-ok(DebtPayment::count() >= 1 && Debt::count() >= 2, 'the debts and their payments are kept');
+// the debts and loans that are settled in full go with the backup, what is still owed stays: nothing changes in what is owed
+ok(round(Debt::sum('amount') - DebtPayment::sum('amount'), 2) === $owedBefore, 'what is owed is the same after the clearing (' . number_format($owedBefore, 2) . ')');
+ok(Debt::count() >= 1, 'the debts that still owe something are kept');
 ok(!Sale::where('id', $unconfirmedId)->exists(), 'once confirmed, the sale is cleared by the backup');
 
 note('published', Ticket::where('status', config('ticket_statuses.publish'))->count());

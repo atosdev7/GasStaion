@@ -141,7 +141,7 @@ class BackupTest extends TestCase
 
         $response = $this->as('admin')->get('/backup?up_to=' . self::UP_TO)->assertOk();
 
-        $this->assertSame(['sale_items' => 0, 'sales' => 3, 'fuel_outbounds' => 1, 'supplements' => 1, 'fuel_inbounds' => 1, 'tickets' => 2], $response->viewData('preview'));
+        $this->assertSame(['sale_items' => 0, 'sales' => 3, 'fuel_outbounds' => 1, 'supplements' => 1, 'fuel_inbounds' => 1, 'tickets' => 2, 'debt_adjustments' => 0, 'debt_payments' => 0, 'debts' => 0, 'ticket_loan_settlements' => 0, 'ticket_loans' => 0], $response->viewData('preview'));
         $this->assertEquals([$this->tank->id => 400.0], $response->viewData('carry')); // 500 in - 100 out
         $this->assertSame(0, Backup::count());
     }
@@ -345,7 +345,7 @@ class BackupTest extends TestCase
         $cancelledDebt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => $gone->id, 'amount' => 20, 'payment_method' => 'cash', 'user_id' => 1]);
         $cancelledDebt->delete();
         $openingDebt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => null, 'amount' => 7, 'payment_method' => 'cash', 'user_id' => 1]);
-        $openingDebt->delete(); // a deleted opening balance has no sale: it is kept like any other row
+        $openingDebt->delete();
         $liveDebt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => $kept->id, 'amount' => 20, 'payment_method' => 'cash', 'user_id' => 1]);
 
         $cancelledLoan = TicketLoan::forceCreate(['loaned_at' => now(), 'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 5, 'sale_id' => $gone->id, 'user_id' => 1]);
@@ -365,13 +365,13 @@ class BackupTest extends TestCase
 
         $debts = implode("\n", $lines('debts'));
         $this->assertStringNotContainsString($cancelledDebt->id, $debts);
-        $this->assertStringContainsString($openingDebt->id, $debts);
+        $this->assertStringNotContainsString($openingDebt->id, $debts);      // an opening balance is not exported
         $this->assertStringContainsString($liveDebt->id, $debts);
 
         $this->assertSame([], $lines('ticket_loans')); // the only loan was cancelled with its sale
         $manifest = json_decode($zip->getFromName('manifest.json'), true);
         $this->assertSame(1, $manifest['rows']['sales']);
-        $this->assertSame(2, $manifest['rows']['debts']);
+        $this->assertSame(1, $manifest['rows']['debts']);
         $zip->close();
     }
 
@@ -597,6 +597,114 @@ class BackupTest extends TestCase
 
         $this->assertNull(Sale::find($sale->id));
         $this->assertSame('2026-09-03', substr((string) $debt->fresh()->display_date, 0, 10));      // not the 10th
+    }
+
+    // the opening balances are entered on the live server and on the backup server together at go-live: none of them is in an export, and an older export's are not imported
+    public function testTheOpeningBalancesAreNotExportedNorImported()
+    {
+        $sale = $this->sale('2026-09-10');
+        $debt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => $sale->id, 'amount' => 20, 'payment_method' => 'cash', 'user_id' => 1]);
+        $openingDebt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => null, 'amount' => 70, 'payment_method' => 'cash', 'user_id' => 1]);
+        TicketLoan::forceCreate(['loaned_at' => now(), 'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 9, 'sale_id' => $sale->id, 'user_id' => 1]);
+        $openingLoan = TicketLoan::forceCreate(['loaned_at' => now(), 'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'sale_id' => null, 'user_id' => 1]);
+        \App\Models\Tickets\OpeningTicket::create(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 12, 'as_of' => '2026-09-01']);
+        $opening = \App\Support\Supplements\RemainderMaker::opening('D', 7.5, '2026-09-01');
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+
+        $file = storage_path('app/backups/test-exports/' . Backup::first()->file);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($file));
+        $content = function ($table) use ($zip) {
+            return (string) $zip->getFromName($table . '.jsonl');
+        };
+        $this->assertStringContainsString($debt->id, $content('debts'));
+        $this->assertStringNotContainsString($openingDebt->id, $content('debts'));
+        $this->assertStringNotContainsString($openingLoan->id, $content('ticket_loans'));
+        $this->assertFalse($zip->getFromName('opening_tickets.jsonl'));
+        $this->assertStringNotContainsString($opening->ticket_barcode, $content('remainders'));
+        $this->assertStringNotContainsString($opening->ticket_barcode, $content('tickets'));      // nor the ticket of the opening remainder
+        $zip->close();
+
+        // an export made before this rule has them: the backup server leaves them out
+        $old = storage_path('app/backups/test-exports/old-export.zip');
+        $zip = new ZipArchive;
+        $zip->open($old, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('debts.jsonl', json_encode(['id' => $openingDebt->id, 'customer_id' => $this->customer->id, 'sale_id' => null, 'amount' => '70.00', 'payment_method' => 'cash', 'user_id' => 1]) . "\n"
+            . json_encode(['id' => $debt->id, 'customer_id' => $this->customer->id, 'sale_id' => $sale->id, 'amount' => '20.00', 'payment_method' => 'cash', 'user_id' => 1]) . "\n");
+        $zip->addFromString('opening_tickets.jsonl', json_encode(['id' => 1, 'fuel_type' => 'D', 'spec' => 0, 'quantity' => 12, 'as_of' => '2026-09-01']) . "\n");
+        $zip->addFromString('manifest.json', json_encode(['rows' => ['debts' => 2, 'opening_tickets' => 1], 'up_to_date' => '2026-09-01']));
+        $zip->close();
+
+        Debt::query()->forceDelete();
+        \App\Models\Tickets\OpeningTicket::query()->delete();
+        config(['backup.is_backup_server' => true]);
+        $this->artisan('backup:import', ['file' => $old])->assertExitCode(0);
+        $this->assertSame([$debt->id], Debt::pluck('id')->all());
+        $this->assertSame(0, \App\Models\Tickets\OpeningTicket::count());
+    }
+
+    // the debts and ticket loans that are settled in full go with the backup, with their payments and settlements; the ones that still owe something stay
+    public function testSettledDebtsAndLoansAreClearedAndTheOthersStay()
+    {
+        $c = $this->customer->id;
+        $debt = function ($amount, $day, $sale = true) use ($c) {
+            return Debt::forceCreate(['customer_id' => $c, 'sale_id' => $sale ? $this->sale($day)->id : null, 'amount' => $amount, 'payment_method' => 'cash', 'user_id' => 1,
+                'debt_date' => $sale ? null : $day]);
+        };
+        $pay = function ($debtId, $amount, $day) use ($c) {
+            return DebtPayment::forceCreate(['customer_id' => $c, 'debt_id' => $debtId, 'amount' => $amount, 'payment_method' => 'cash', 'paid_date' => $day, 'user_id' => 1, 'confirmed_at' => now()]);
+        };
+
+        $settled = $debt(100, '2026-09-02');
+        $pay($settled->id, 60, '2026-09-05');
+        $pay($settled->id, 40, '2026-09-08');
+        $partly = $debt(100, '2026-09-03');
+        $pay($partly->id, 30, '2026-09-06');
+        $late = $debt(50, '2026-09-04');
+        $pay($late->id, 50, '2026-09-20');                              // settled, but after the backup day
+        $after = $debt(10, '2026-09-20');                               // a day after the backup day
+        $openingSettled = $debt(25, '2026-09-01', false);               // an opening balance that is settled
+        $pay($openingSettled->id, 25, '2026-09-04');
+        $reversed = $debt(40, '2026-09-05');
+        $paid = $pay($reversed->id, 40, '2026-09-06');
+        DebtPayment::forceCreate(['customer_id' => $c, 'debt_id' => $reversed->id, 'amount' => -40, 'payment_method' => 'cash', 'paid_date' => '2026-09-07', 'user_id' => 1,
+            'reverses_payment_id' => $paid->id, 'confirmed_at' => now()]);     // paid and reversed: owes 40 again
+        $loose = DebtPayment::forceCreate(['customer_id' => $c, 'debt_id' => null, 'amount' => 5, 'payment_method' => 'cash', 'paid_date' => '2026-09-09', 'user_id' => 1, 'confirmed_at' => now()]);
+
+        $loan = function ($kg, $day) use ($c) {
+            return TicketLoan::forceCreate(['loaned_at' => $day . ' 10:00:00', 'date' => $day, 'customer_id' => $c, 'fuel_type' => 'D', 'amount_kg' => $kg, 'sale_id' => null, 'user_id' => 1]);
+        };
+        $settle = function ($loanId, $kg, $day) {
+            TicketLoanSettlement::forceCreate(['loan_id' => $loanId, 'ticket_barcode' => '0000006000000' . sprintf('%03d', rand(1, 999)), 'amount_kg' => $kg, 'settled_at' => $day . ' 11:00:00',
+                'date' => $day, 'user_id' => 1, 'confirmed_at' => now()]);
+        };
+        $doneLoan = $loan(20, '2026-09-02');
+        $settle($doneLoan->id, 20, '2026-09-04');
+        $openLoan = $loan(30, '2026-09-02');
+        $settle($openLoan->id, 10, '2026-09-04');
+        $owedBefore = Debt::sum('amount') - DebtPayment::sum('amount');
+
+        $preview = \App\Support\Admin\BackupRun::preview(self::UP_TO);
+        $this->assertSame([2, 3, 1], [$preview['debts'], $preview['debt_payments'], $preview['ticket_loans']]);      // the debt of a sale and the opening one; their 3 payments; the settled loan
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+
+        $left = Debt::pluck('id')->all();
+        sort($left);
+        $wanted = [$partly->id, $late->id, $after->id, $reversed->id];
+        sort($wanted);
+        $this->assertSame($wanted, $left);      // the partly paid one, the one settled after the backup day, the one of a later day, the one paid and reversed
+        $this->assertNull(Debt::find($settled->id));
+        $this->assertNull(Debt::find($openingSettled->id));
+        $this->assertSame(0, DebtPayment::where('debt_id', $settled->id)->count());
+        $this->assertSame(3, DebtPayment::whereIn('debt_id', [$reversed->id, $partly->id])->count());       // 2 of the reversed one, 1 of the partly paid
+        $this->assertNotNull(DebtPayment::find($loose->id));                                                                // not tied to a debt: stays
+        $this->assertNull(TicketLoan::find($doneLoan->id));
+        $this->assertSame(0, TicketLoanSettlement::where('loan_id', $doneLoan->id)->count());
+        $this->assertNotNull(TicketLoan::find($openLoan->id));
+        $this->assertSame(1, TicketLoanSettlement::where('loan_id', $openLoan->id)->count());
+        $this->assertEquals($owedBefore, Debt::sum('amount') - DebtPayment::sum('amount'));       // what is owed did not change
     }
 
     public function testTheTicketsMadeForACardAreKeptByTheBackup()

@@ -52,8 +52,8 @@ class ImportBackup extends Command
         DB::transaction(function () use ($zip, $manifest, $local) {
             foreach (array_keys($manifest['rows']) as $table) {
                 $file = $table;
-                // (never imported, even from an older export: this server's tank balances are entered by hand, its settings and devices are its own)
-                if (!in_array($table, $local, true) || in_array($table, ['tank_balances', 'settings', 'devices'], true)) {
+                // (never imported, even from an older export: this server's opening balances are entered by hand at go-live, its settings and devices are its own)
+                if (!in_array($table, $local, true) || in_array($table, ['tank_balances', 'opening_tickets', 'settings', 'devices'], true)) {
                     $this->warn("Skipped $table: no such table here.");
                     continue;
                 }
@@ -122,6 +122,10 @@ class ImportBackup extends Command
             if ($table === 'sales' && is_array($row) && array_key_exists('sold_at', $row) && !Schema::hasColumn('sales', 'sold_at')) {
                 $row['sale_date'] = isset($row['date']) ? $row['date'] : (isset($row['checkout_date']) ? $row['checkout_date'] : substr((string) $row['sold_at'], 0, 10));
                 unset($row['sold_at'], $row['date'], $row['checkout_date']);
+            }
+            // the opening balances of an older export are left out too: a debt or ticket loan with no sale, a remainder with no supply
+            if (is_array($row) && ((in_array($table, ['debts', 'ticket_loans'], true) && empty($row['sale_id'])) || ($table === 'remainders' && empty($row['supplement_id'])))) {
+                continue;
             }
             $batch[] = $row;
             if (count($batch) === self::BATCH) {

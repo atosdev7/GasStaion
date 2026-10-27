@@ -5,7 +5,9 @@ namespace App\Support\Admin;
 use App\Models\Admin\Backup;
 use App\Models\Admin\Device;
 use App\Models\Debts\Debt;
+use App\Models\Debts\DebtAdjustment;
 use App\Models\Debts\DebtPayment;
+use App\Models\Debts\TicketLoan;
 use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
 use App\Models\Fuel\FuelOutbound;
@@ -28,8 +30,9 @@ use ZipArchive;
 
 // Backup = export everything to a zip, then clear finished daily records up to a date.
 // Cleared: sales, supplements (by date — rows without a date are never
-// cleared), fuel inbounds (by inbound_date), and supplied/restricted tickets. Kept: debts,
-// debt_payments, ticket_loans, ticket_loan_settlements — their balances are computed from those rows; the remainders (a remainder outlives its
+// cleared), fuel inbounds (by inbound_date), supplied/restricted tickets, and the debts and ticket loans that are settled in full by that day with the payments and
+// settlements that settled them (settledDebts, settledLoans: a settled debt owes nothing, so clearing it changes no balance). Kept: the debts and ticket loans that
+// still owe something, and the payments and settlements made against them — their balances are computed from those rows, and their age is what the aging shows; the remainders (a remainder outlives its
 // supply: its supplement_id may then point at a supply that was cleared, and an opening remainder has none); and the sales, supplements and tickets of the cards
 // (the top-ups, the supplies made with a card and the tickets made for a card, `card_id` set), because the balance of a card, its summary and a rebuilt ledger are
 // computed from them.
@@ -41,10 +44,13 @@ use ZipArchive;
 class BackupRun
 {
     // Not exported: framework tables and the live server's own backup history.
-    // tank_balances: the backup server has every fuel inbound and outbound from the live start, so it needs no balances (the ones a backup wrote are those rows summed up, and
-    // it would count them twice); the opening balances of the tanks are entered there once by hand.
+    // The opening balances are not exported: they are entered on the live server and on the backup server together once, at go-live. They are the tank balances
+    // (tank_balances: the backup server has every fuel inbound and outbound from the live start, so the ones a backup wrote would be counted twice), the opening debts and
+    // ticket loans (debts and ticket_loans without a sale), the old paper tickets at customers (opening_tickets) and the opening remainder tickets (remainders without a
+    // supply, and their tickets). A backup rolls the tank balances forward before it clears (tankBalancesAfter); the others keep their rows on the live server, which
+    // never clears them, so there is nothing to roll forward.
     // settings and devices: the go-live date, the default costs, the restore marker and the terminals' tokens belong to the server that holds them.
-    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups', 'tank_balances', 'settings', 'devices'];
+    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups', 'tank_balances', 'opening_tickets', 'settings', 'devices'];
 
     /** Rows that a backup up to $upTo would clear, per table (soft-deleted rows included). */
     public static function preview($upTo)
@@ -293,6 +299,8 @@ class BackupRun
     private static function clearable($upTo)
     {
         $endOfDay = Carbon::parse($upTo)->addDay();
+        $debtIds = static::settledDebts($upTo);
+        $loanIds = static::settledLoans($upTo);
         $byCheckout = function ($model, $column = 'date') use ($upTo) {
             $query = $model::query();
             if (static::softDeletes($model)) {
@@ -326,7 +334,57 @@ class BackupRun
                     $q->whereRaw('1 = 1');
                 }
             }),
+            // the debts and ticket loans that are settled in full, with what settled them (the payments and settlements go before them)
+            'debt_adjustments' => DebtAdjustment::withTrashed()->whereIn('debt_id', $debtIds),
+            'debt_payments' => DebtPayment::withTrashed()->whereIn('debt_id', $debtIds),
+            'debts' => Debt::withTrashed()->whereIn('id', $debtIds),
+            'ticket_loan_settlements' => TicketLoanSettlement::withTrashed()->whereIn('loan_id', $loanIds),
+            'ticket_loans' => TicketLoan::withTrashed()->whereIn('id', $loanIds),
         ];
+    }
+
+    /**
+     * The ids of the debts that a backup up to $upTo clears: dated on or before it, owing nothing (the amount and the returns that cut it, less the payments tied to it),
+     * and with every payment and return of theirs on or before it too, so that nothing of the debt is left outside the backup. Deleted debts do not count (they
+     * were cancelled along with a sale). An opening balance is a debt too (its day is its debt_date).
+     */
+    public static function settledDebts($upTo)
+    {
+        $paid = DebtPayment::selectRaw('debt_id, SUM(amount) AS total, MAX(paid_date) AS last')->whereNotNull('debt_id')->groupBy('debt_id')->get()->keyBy('debt_id');
+        $cut = DebtAdjustment::selectRaw('debt_id, SUM(amount) AS total, MAX(adjusted_date) AS last')->groupBy('debt_id')->get()->keyBy('debt_id');
+
+        $ids = [];
+        foreach (Debt::with('sale')->get() as $debt) {
+            $day = $debt->sale_id === null ? ($debt->debt_date ?: $debt->created_at) : $debt->display_date;
+            $payments = $paid->get($debt->id);
+            $returns = $cut->get($debt->id);
+            $owed = (float) $debt->amount + ($returns ? (float) $returns->total : 0.0) - ($payments ? (float) $payments->total : 0.0);
+            $last = max(substr((string) ($payments ? $payments->last : ''), 0, 10), substr((string) ($returns ? $returns->last : ''), 0, 10));
+            if (substr((string) $day, 0, 10) <= $upTo && abs($owed) < 0.005 && ($last === '' || $last <= $upTo)) {
+                $ids[] = $debt->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /** The ids of the ticket loans that a backup up to $upTo clears: the same, for the kg of a loan and its settlements. */
+    public static function settledLoans($upTo)
+    {
+        $settled = TicketLoanSettlement::selectRaw('loan_id, SUM(amount_kg) AS total, MAX(COALESCE(`date`, DATE(settled_at))) AS last')->groupBy('loan_id')->get()->keyBy('loan_id');
+
+        $ids = [];
+        foreach (TicketLoan::all() as $loan) {
+            $row = $settled->get($loan->id);
+            $owed = (float) $loan->amount_kg - ($row ? (float) $row->total : 0.0);
+            $day = substr((string) ($loan->date ?: $loan->loaned_at), 0, 10);
+            $last = $row ? substr((string) $row->last, 0, 10) : '';
+            if ($day <= $upTo && abs($owed) < 0.005 && ($last === '' || $last <= $upTo)) {
+                $ids[] = $loan->id;
+            }
+        }
+
+        return $ids;
     }
 
     // One JSON-lines file per table (every row, soft-deleted included) plus a manifest. A generic
@@ -396,8 +454,8 @@ class BackupRun
         return in_array(SoftDeletes::class, class_uses_recursive($model), true);
     }
 
-    // Deleted sales are not backed up, nor are the debts and ticket loans that were cancelled along with them (the ones
-    // that came from a sale: a deleted opening balance has no sale and is kept like any other row).
+    // Deleted sales are not backed up, nor are the debts and ticket loans that were cancelled along with them. The opening balances are left out: a debt or a ticket loan
+    // with no sale, a remainder with no supply and its ticket.
     private static function exportRows($table)
     {
         $query = DB::table($table);
@@ -407,9 +465,11 @@ class BackupRun
         } elseif ($table === 'sale_items') {
             $query->whereIn('sale_id', DB::table('sales')->whereNull('deleted_at')->select('id'));
         } elseif (in_array($table, ['debts', 'ticket_loans'], true)) {
-            $query->where(function ($q) {
-                $q->whereNull('deleted_at')->orWhereNull('sale_id');
-            });
+            $query->whereNotNull('sale_id')->whereNull('deleted_at');
+        } elseif ($table === 'remainders') {
+            $query->whereNotNull('supplement_id');
+        } elseif ($table === 'tickets') {
+            $query->whereNotIn('barcode', DB::table('remainders')->whereNull('supplement_id')->select('ticket_barcode'));
         }
 
         return $query;

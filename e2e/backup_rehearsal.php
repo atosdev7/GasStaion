@@ -198,7 +198,7 @@ foreach (['sales', 'supplements', 'ticket_inbounds', 'ticket_publishes', 'debt_p
 }
 DB::table('devices')->update(['last_synced_at' => now()->addDay()]);
 $tanksBefore = TankLevels::all()->mapWithKeys(function ($r) { return [$r->tank->id => round($r->current, 2)]; })->all();
-$kept = ['ticket_loans', 'ticket_loan_settlements', 'debt_payments', 'customers', 'users', 'devices', 'nozzles', 'tanks'];
+$kept = ['customers', 'users', 'devices', 'nozzles', 'tanks'];
 $fingerBeforeClear = fingerprint(LIVE);
 $salesNotCleared = DB::table('sales')->where(function ($q) use ($upTo) { $q->whereNull('sale_date')->orWhere('sale_date', '>', $upTo); })->count();
 echo '  (to be cleared: ' . json_encode($preview) . ")\n";
@@ -212,8 +212,8 @@ ok(DB::table('sales')->where('sale_date', '<=', $upTo)->count() === 0 && DB::tab
     && DB::table('remainders')->where('remainder_date', '<=', $upTo)->count() === 0, 'no sale, supplement or remainder up to ' . $upTo . ' is left');
 ok(DB::table('sales')->count() === $salesNotCleared, 'sales without a date or after it are all still there (' . $salesNotCleared . ')');
 $fingerAfter = fingerprint(LIVE);
-ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups']) === [], 'every other table is untouched'
-    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups'])) . ')' : ''));
+ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'debt_payments', 'debt_adjustments', 'ticket_loans', 'ticket_loan_settlements', 'backups']) === [], 'every other table is untouched'
+    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'debt_payments', 'debt_adjustments', 'ticket_loans', 'ticket_loan_settlements', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'debt_payments', 'debt_adjustments', 'ticket_loans', 'ticket_loan_settlements', 'backups'])) . ')' : ''));
 foreach ($kept as $t) {
     if (isset($fingerBeforeClear[$t])) {
         $same = $fingerBeforeClear[$t] === $fingerAfter[$t];
