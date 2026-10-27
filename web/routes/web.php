@@ -68,8 +68,8 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::post('tickets/{barcode}/lift-restriction', 'Tickets\TicketRestrictController@lift')->name('tickets.lift-restriction');
         });
 
-        // changes or deletes many tickets at once, for the go-live (the manager and the accountant, like the opening balances)
-        Route::middleware('can:balances.manage')->group(function () {
+        // changes or deletes many tickets at once, for the go-live (the admin only)
+        Route::middleware('can:golive.manage')->group(function () {
             Route::get('ticket-bulk', 'Tickets\TicketBulkController@index')->name('ticket-bulk.index');
             Route::post('ticket-bulk', 'Tickets\TicketBulkController@run')->name('ticket-bulk.run');
         });
@@ -183,8 +183,8 @@ Route::middleware(SetLocale::class)->group(function () {
 
         Route::middleware('can:balances.manage')->group(function () {
             Route::redirect('balances', '/balances/tanks')->name('balances.index');   // the old single page
-            Route::get('balances/go-live', 'Initialize\BalanceController@goLive')->name('balances.golive');
-            Route::post('balances/go-live', 'Initialize\BalanceController@saveGoLive')->name('balances.golive.save');
+            Route::get('balances/go-live', 'Initialize\BalanceController@goLive')->name('balances.golive')->middleware('can:golive.manage');
+            Route::post('balances/go-live', 'Initialize\BalanceController@saveGoLive')->name('balances.golive.save')->middleware('can:golive.manage');
             Route::get('balances/tanks', 'Initialize\BalanceController@tanks')->name('balances.tanks.index');
             Route::get('balances/debts', 'Initialize\BalanceController@debts')->name('balances.debts.index');
             Route::get('balances/loans', 'Initialize\BalanceController@loans')->name('balances.loans.index');

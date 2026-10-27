@@ -1028,34 +1028,28 @@ class SaleTest extends TestCase
         $this->assertSame(1, Customer::where('is_default', true)->count());
     }
 
-    public function testASaleCannotBeDatedFurtherBackThanTheLimitExceptByTheManager()
+    public function testASaleCannotBeDatedFurtherBackThanTheLimitExceptByTheManagerAndTheAccountant()
     {
         $this->publishTickets(20);
         config(['sales.backdate_days' => 3]);
         $limit = today()->subDays(3)->toDateString();
         $tooOld = today()->subDays(4)->toDateString();
 
-        foreach (['accountant', 'assistant'] as $role) {
-            $this->as($role);
-            $this->sell(1, ['sale_date' => $tooOld])->assertSessionHasErrors('sale_date');
-            $this->assertStringContainsString('3 days back', session('errors')->first('sale_date'));
-            $this->sell(1, ['sale_date' => $limit])->assertSessionHasNoErrors();
-        }
-        $this->as('accountant');
-        $this->spotSell(2, ['sale_date' => $tooOld])->assertSessionHasErrors('sale_date');
-        $this->spotSell(2, ['sale_date' => $limit])->assertSessionHasNoErrors();
-        $this->assertStringContainsString('min="' . $limit . '"', $this->get('/spot-sales/create')->getContent());
+        $this->as('assistant');
+        $this->sell(1, ['sale_date' => $tooOld])->assertSessionHasErrors('sale_date');
+        $this->assertStringContainsString('3 days back', session('errors')->first('sale_date'));
+        $this->sell(1, ['sale_date' => $limit])->assertSessionHasNoErrors();
         $this->assertStringContainsString('min="' . $limit . '"', $this->get('/ticket-sales/create')->getContent());
 
-        // the manager (and the admin) have no limit
-        foreach (['manager', 'admin'] as $role) {
+        // the manager, the accountant and the admin have no limit
+        foreach (['manager', 'accountant', 'admin'] as $role) {
             $this->as($role);
             $this->sell(1, ['sale_date' => today()->subDays(40)->toDateString()])->assertSessionHasNoErrors();
         }
 
         // the limit is a setting
         config(['sales.backdate_days' => 10]);
-        $this->as('accountant');
+        $this->as('assistant');
         $this->sell(1, ['sale_date' => $tooOld])->assertSessionHasNoErrors();
 
         // changing the date of a sale: the same limit for the new day; the comment of an old sale can still be changed

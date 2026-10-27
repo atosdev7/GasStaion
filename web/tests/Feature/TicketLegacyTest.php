@@ -91,7 +91,7 @@ class TicketLegacyTest extends TestCase
 
     public function testTheGoLiveDateIsSetOnTheInitializePage()
     {
-        $page = $this->as('manager')->get('/balances/go-live')->assertOk()->assertSee('Not set')->getContent();
+        $page = $this->as('admin')->get('/balances/go-live')->assertOk()->assertSee('Not set')->getContent();
         // the page is an item of the Config for Admin menu, not of Initialize
         $link = strpos($page, 'href="' . url('/balances/go-live') . '"');
         $this->assertNotFalse($link);
@@ -100,7 +100,12 @@ class TicketLegacyTest extends TestCase
         $this->assertSame('2026-10-01', LegacyTickets::goLive());
         $this->get('/balances/go-live')->assertOk()->assertSee('value="2026-10-01"', false);
 
-        $this->as('cashier')->get('/balances/go-live')->assertForbidden();
+        // the admin only: not the manager, nor the accountant
+        foreach (['manager', 'accountant', 'assistant', 'cashier'] as $role) {
+            $this->as($role)->get('/balances/go-live')->assertForbidden();
+            $this->post('/balances/go-live', ['go_live_date' => '2026-11-01'])->assertForbidden();
+        }
+        $this->assertSame('2026-10-01', LegacyTickets::goLive());
     }
 
     // the old paper tickets customers still hold are entered by fuel type and spec; each old ticket supplied afterwards takes one off, against the oldest entry
@@ -323,18 +328,16 @@ class TicketLegacyTest extends TestCase
 
     // ---- the bulk page ----
 
-    private function bulk($action, $ranges, $confirm = false, $role = 'manager')
+    private function bulk($action, $ranges, $confirm = false, $role = 'admin')
     {
         return $this->as($role)->post('/ticket-bulk', ['stock_item' => 'D:0', 'ranges' => $ranges, 'action' => $action] + ($confirm ? ['confirm' => 1] : []));
     }
 
-    public function testTheBulkPageIsForTheManagerAndTheAccountant()
+    public function testTheBulkPageIsForTheAdminOnly()
     {
         $this->goLive();
-        foreach (['manager', 'accountant', 'admin'] as $role) {
-            $this->as($role)->get('/ticket-bulk')->assertOk()->assertSee('Bulk Update');
-        }
-        foreach (['assistant', 'cashier'] as $role) {
+        $this->as('admin')->get('/ticket-bulk')->assertOk()->assertSee('Bulk Update');
+        foreach (['manager', 'accountant', 'assistant', 'cashier'] as $role) {
             $this->as($role)->get('/ticket-bulk')->assertForbidden();
             $this->bulk('delete', '1-5', true, $role)->assertForbidden();
         }

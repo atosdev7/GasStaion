@@ -5,6 +5,7 @@
  */
 return [
 
+    // golive.manage (the go-live date and the bulk change or delete of tickets) is in no role: only the admin has it, through '*'.
     'roles' => [
         'admin' => ['*'],
 
@@ -54,6 +55,7 @@ return [
             'sales.all',
             'spot_sales.manage',
             'card_sales.view',
+            'sales.backdate',      // dates a sale further back than the limit, like the manager
             'cards.topup',         // (the accountant tops up and edits, but does not delete a card sale: that is the manager's and the admin's)
             'ticket_stock.manage', // adds, changes and deletes ticket inbounds and publishes blank tickets, like the assistant
             'ticket_sales.manage',

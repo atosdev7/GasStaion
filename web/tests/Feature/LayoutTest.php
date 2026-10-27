@@ -103,7 +103,7 @@ class LayoutTest extends TestCase
     // an item of another group on a page of the same section (Go-live is a balances page too) does not light the items of Initialize
     public function testOnlyTheItemOfThePageIsCurrentWhenAnotherGroupSharesItsRoutePrefix()
     {
-        $html = $this->login('manager')->get('/balances/go-live')->assertOk()->getContent();
+        $html = $this->login('admin')->get('/balances/go-live')->assertOk()->getContent();
         $this->assertSame(1, substr_count($html, 'menu-open'));                                             // Config for Admin only
         $this->assertSame(1, preg_match_all('/<a href="[^"]*"\s+class="nav-link active">\s*<i class="far fa-circle nav-icon"><\/i>/', $html));   // and one item in it
         $this->assertRegExp('#href="' . preg_quote(url('/balances/go-live'), '#') . '"\s+class="nav-link active"#', $html);

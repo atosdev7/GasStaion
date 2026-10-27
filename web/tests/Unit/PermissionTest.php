@@ -34,13 +34,21 @@ class PermissionTest extends TestCase
         }
     }
 
-    public function testOnlyTheManagerAndTheAdminDateASaleFurtherBackThanTheLimit()
+    public function testOnlyTheManagerTheAccountantAndTheAdminDateASaleFurtherBackThanTheLimit()
     {
-        foreach (['admin', 'manager'] as $role) {
+        foreach (['admin', 'manager', 'accountant'] as $role) {
             $this->assertTrue($this->user($role)->hasPermission('sales.backdate'), $role);
         }
-        foreach (['accountant', 'assistant', 'cashier'] as $role) {
+        foreach (['assistant', 'cashier'] as $role) {
             $this->assertFalse($this->user($role)->hasPermission('sales.backdate'), $role);
+        }
+    }
+
+    public function testOnlyTheAdminSetsTheGoLiveDateAndChangesTicketsInBulk()
+    {
+        $this->assertTrue($this->user('admin')->hasPermission('golive.manage'));
+        foreach (['manager', 'accountant', 'assistant', 'cashier'] as $role) {
+            $this->assertFalse($this->user($role)->hasPermission('golive.manage'), $role);
         }
     }
 
