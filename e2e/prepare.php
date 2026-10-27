@@ -52,8 +52,9 @@ FuelType::forceCreate(['fuel_type' => 'D', 'price' => 7.5, 'density' => 0.83]);
 $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => 5000000]);
 FuelInbound::forceCreate([
     'tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 100000, 'cost' => 5.0, 'inbound_date' => date('Y-m-d'),
-    'user_id' => 1, 'is_default' => true,
+    'user_id' => 1,
 ]);
+\App\Support\Fuel\DefaultCost::set('D', 5.0);      // the default cost of the fuel type (a setting of its own)
 
 $acme = Customer::forceCreate(['name' => 'ACME']);
 $beta = Customer::forceCreate(['name' => 'Beta Ltd']);

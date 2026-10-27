@@ -41,6 +41,7 @@ SOURCES += e2e.cpp \
     $$SMART/sync/SyncClient.cpp \
     $$SMART/sync/SyncStore.cpp \
     $$SMART/sales/TicketNumbers.cpp \
+    $$SMART/sales/TicketLegacy.cpp \
     $$SMART/sales/TicketSale.cpp \
     $$SMART/sync/Uploader.cpp
 
