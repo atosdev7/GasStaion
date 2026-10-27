@@ -8,6 +8,8 @@ use App\Models\Fuel\FuelOutbound;
 use App\Models\Fuel\Nozzle;
 use App\Models\Fuel\TankBalance;
 use App\Models\Fuel\Tank;
+use App\Support\Dashboard\TankLevels;
+use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class TankController extends CrudController
@@ -25,6 +27,38 @@ class TankController extends CrudController
             'fuel_type' => ['type' => 'select', 'options' => config('fuel_types')],
             'capacity_kg' => ['type' => 'number', 'step' => '0.01'],
         ];
+    }
+
+    // A capacity below what the tank holds is allowed (it may be a typing mistake, or the stock may be wrong): the save goes through with a warning.
+    public function store(Request $request)
+    {
+        return $this->withCapacityWarning(parent::store($request));
+    }
+
+    public function update(Request $request, $id)
+    {
+        return $this->withCapacityWarning(parent::update($request, $id));
+    }
+
+    private function withCapacityWarning($response)
+    {
+        $name = request()->input('name');
+        $tank = Tank::where('name', $name)->first();
+        $capacity = request()->input('capacity_kg');
+        if (!$tank || $capacity === null || $capacity === '') {
+            return $response;
+        }
+
+        $level = TankLevels::all()->first(function ($row) use ($tank) {
+            return $row->tank->id === $tank->id;
+        });
+        if ($level && $level->current > (float) $capacity) {
+            $response->with('warning', __('admin.tank_capacity_below_stock', [
+                'tank' => $tank->name, 'capacity' => number_format((float) $capacity, 2), 'stock' => number_format($level->current, 2),
+            ]));
+        }
+
+        return $response;
     }
 
     // A tank that a nozzle draws from cannot be deleted (the nozzle's fuel type is the tank's): the nozzles have to be removed on the Smart210 first.

@@ -68,6 +68,22 @@ class ConfigChangeTest extends TestCase
         $this->assertNull(FuelType::find('D'));
     }
 
+    // a capacity below the stock of the tank is saved, with a warning
+    public function testACapacityBelowTheStockIsSavedWithAWarning()
+    {
+        $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => 5000]);
+        \App\Models\Fuel\TankBalance::create(['tank_id' => $tank->id, 'balance' => 3000]);
+
+        $this->as('admin')->put('/tanks/' . $tank->id, ['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => '2000'])->assertRedirect('/tanks')->assertSessionHas('warning');
+        $this->assertEquals(2000, $tank->fresh()->capacity_kg);
+        $this->get('/tanks')->assertOk()->assertSee('is below the fuel it holds now');
+
+        $this->put('/tanks/' . $tank->id, ['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => '4000'])->assertRedirect('/tanks')->assertSessionMissing('warning');
+        $this->put('/tanks/' . $tank->id, ['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => ''])->assertRedirect('/tanks')->assertSessionMissing('warning');
+
+        $this->post('/tanks', ['name' => 'T2', 'fuel_type' => 'D', 'capacity_kg' => '10'])->assertRedirect('/tanks')->assertSessionMissing('warning');   // a new tank holds nothing
+    }
+
     public function testTheFuelTypeOfARowDoesNotChange()
     {
         FuelType::forceCreate(['fuel_type' => 'D', 'price' => 7.5]);
