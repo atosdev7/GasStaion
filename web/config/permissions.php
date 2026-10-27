@@ -83,7 +83,6 @@ return [
             'payments.manage',     // records and reverses debt payments, like the accountant
             'loans.manage',        // settles the ticket loans and reverses a settlement, like the accountant
             'tickets.lookup',
-            'sync.manage',
             'sales.delete',
             'sales.edit',
             'sales.return',

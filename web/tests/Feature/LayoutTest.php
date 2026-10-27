@@ -123,6 +123,11 @@ class LayoutTest extends TestCase
         $this->assertStringContainsString('href="' . url('/sync') . '"', $html);
         $this->assertStringNotContainsString('href="' . url('/devices') . '"', $html);
         $this->get('/sync')->assertOk()->assertSee('POS');
+
+        // the assistant has neither the devices nor the sync status: no POS item
+        $html = $this->login('assistant')->get('/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('href="' . url('/sync') . '"', $html);
+        $this->assertStringNotContainsString('href="' . url('/devices') . '"', $html);
     }
 
     public function testActiveGroupIsOpenOnItsPage()

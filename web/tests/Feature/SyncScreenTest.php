@@ -33,8 +33,12 @@ class SyncScreenTest extends TestCase
     {
         $error = $this->error();
 
-        foreach (['admin', 'manager', 'accountant', 'assistant'] as $role) {
+        foreach (['admin', 'manager', 'accountant'] as $role) {
             $this->as($role)->get('/sync')->assertOk();
+        }
+        foreach (['assistant', 'cashier'] as $role) {
+            $this->as($role)->get('/sync')->assertForbidden();
+            $this->as($role)->post('/sync/errors/' . $error->id . '/resolve')->assertForbidden();
         }
         $this->as('cashier')->get('/sync')->assertForbidden();
         $this->as('cashier')->post('/sync/errors/' . $error->id . '/resolve')->assertForbidden();
