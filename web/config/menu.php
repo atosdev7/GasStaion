@@ -94,9 +94,14 @@ return [
         ],
     ],
     [
+        'label' => 'group_users', 'icon' => 'fa-users', 'single' => true,
+        'items' => [
+            ['label' => 'users', 'route' => 'users.index', 'permission' => 'users.manage'],
+        ],
+    ],
+    [
         'label' => 'group_admin', 'icon' => 'fa-cogs',
         'items' => [
-            ['label' => 'users',   'route' => 'users.index',   'permission' => 'users.manage'],
             ['label' => 'devices', 'route' => 'devices.index', 'permission' => 'devices.view'],
             ['label' => 'fuel',    'route' => 'fuel.index',    'permission' => 'fuel.view'],
             ['label' => 'tanks',   'route' => 'tanks.index',   'permission' => 'fuel.view'],

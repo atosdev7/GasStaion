@@ -64,6 +64,14 @@ abstract class CrudController extends Controller
         return false;
     }
 
+    /** The rows this user may reach (every row by default); a record outside it is not found. */
+    protected function query()
+    {
+        $class = $this->model();
+
+        return $class::query();
+    }
+
     /** Same guard covers deactivate and delete: nobody removes their own account, the Self customer, etc. */
     protected function canModify($model)
     {
@@ -77,7 +85,7 @@ abstract class CrudController extends Controller
         $key = (new $class)->getKeyName(); // not always 'id' — e.g. FuelType is keyed by 'fuel_type'
 
         return view('crud.index', $this->viewData([
-            'rows' => $trashed ? $class::onlyTrashed()->orderBy($key)->get() : $class::orderBy($key)->get(),
+            'rows' => $trashed ? $this->query()->onlyTrashed()->orderBy($key)->get() : $this->query()->orderBy($key)->get(),
             'trashed' => $trashed,
             'hasActive' => $this->hasActiveToggle(),
             'modifiable' => function ($row) {
@@ -109,13 +117,13 @@ abstract class CrudController extends Controller
     {
         $class = $this->model();
 
-        return view('crud.form', $this->viewData(['record' => $class::findOrFail($id)]));
+        return view('crud.form', $this->viewData(['record' => $this->query()->findOrFail($id)]));
     }
 
     public function update(Request $request, $id)
     {
         $class = $this->model();
-        $record = $class::findOrFail($id);
+        $record = $this->query()->findOrFail($id);
         $data = $this->prepare($request->validate($this->rules($record), $this->messages()), $record);
 
         $record->forceFill($data)->save();
@@ -129,7 +137,7 @@ abstract class CrudController extends Controller
         abort_unless($this->hasActiveToggle(), 404);
 
         $class = $this->model();
-        $record = $class::findOrFail($id);
+        $record = $this->query()->findOrFail($id);
         abort_unless($this->canModify($record), 403);
 
         $record->active = !$record->active;
@@ -142,7 +150,7 @@ abstract class CrudController extends Controller
     public function destroy($id)
     {
         $class = $this->model();
-        $record = $class::findOrFail($id);
+        $record = $this->query()->findOrFail($id);
         abort_unless($this->canModify($record), 403);
 
         $record->delete();
@@ -154,7 +162,7 @@ abstract class CrudController extends Controller
     public function restore($id)
     {
         $class = $this->model();
-        $record = $class::onlyTrashed()->findOrFail($id);
+        $record = $this->query()->onlyTrashed()->findOrFail($id);
 
         $record->restore();
         $this->audit('restore', $record);

@@ -41,7 +41,8 @@ class MasterDataTest extends TestCase
     {
         $this->as('cashier')->get('/users')->assertForbidden();
         $this->as('cashier')->get('/fuel')->assertForbidden();
-        $this->as('manager')->get('/users')->assertForbidden();
+        $this->as('accountant')->get('/users')->assertForbidden();
+        $this->as('manager')->get('/users')->assertOk();
         $this->as('manager')->get('/fuel')->assertOk();
         $this->as('manager')->get('/devices')->assertOk();
         $this->as('manager')->get('/devices/create')->assertForbidden(); // devices.view only
@@ -64,6 +65,32 @@ class MasterDataTest extends TestCase
         $this->assertTrue(\Hash::check('secret1', $u->password));
         $this->assertSame(hash('sha256', $u->pos_salt . 'secret1'), $u->pos_hash);
         $this->assertFalse((bool) $u->synced);
+    }
+
+    // the manager looks after the accounts of the staff, never the admin's: those are not found for them and the admin role cannot be given
+    public function testTheManagerManagesTheStaffAccountsButNotTheAdminOnes()
+    {
+        $admin = User::where('username', 'admin')->first() ?: User::forceCreate(['name' => 'Admin', 'username' => 'admin', 'password' => bcrypt('x'), 'role' => 'admin', 'active' => true]);
+        $cashier = User::forceCreate(['name' => 'Z', 'username' => 'zed', 'password' => bcrypt('secret1'), 'role' => 'cashier', 'active' => true]);
+
+        $page = $this->as('manager')->get('/users')->assertOk()->getContent();
+        $this->assertStringContainsString('zed', $page);
+        $this->assertStringNotContainsString('>admin<', $page);
+        $this->assertStringNotContainsString('value="admin"', $this->get('/users/create')->assertOk()->getContent());      // not a role to choose
+
+        $this->post('/users', ['name' => 'Amy', 'username' => 'amy', 'role' => 'assistant', 'password' => 'secret1'])->assertRedirect('/users');
+        $this->post('/users', ['name' => 'Bad', 'username' => 'bad', 'role' => 'admin', 'password' => 'secret1'])->assertSessionHasErrors('role');
+        $this->put('/users/' . $cashier->id, ['name' => 'Z', 'username' => 'zed', 'role' => 'admin'])->assertSessionHasErrors('role');
+
+        $this->get('/users/' . $admin->id . '/edit')->assertNotFound();
+        $this->put('/users/' . $admin->id, ['name' => 'Taken', 'username' => 'admin', 'role' => 'cashier', 'password' => 'hacked1'])->assertNotFound();
+        $this->post('/users/' . $admin->id . '/toggle')->assertNotFound();
+        $this->delete('/users/' . $admin->id)->assertNotFound();
+        $this->assertSame('admin', $admin->fresh()->role);
+        $this->assertTrue($admin->fresh()->active);
+
+        // the admin still sees and gives every role
+        $this->as('admin')->get('/users/create')->assertOk()->assertSee('value="admin"', false);
     }
 
     public function testUserValidation()

@@ -10,6 +10,7 @@ return [
     'group_debts' => 'Debts Management',
     'group_reports' => 'Report',
     'group_init' => 'Initialize',
+    'group_users' => 'Users',
     'group_admin' => 'Config for Admin',
     'supplements' => 'Supplements',
     'remainders' => 'Remainders',

@@ -25,6 +25,7 @@ return [
             'tickets.restrict',
             'tickets.lookup',
             'balances.manage',
+            'users.manage',        // the accounts of the staff (not the admin's: see UserController)
             'sync.manage',
             'confirmations.manage',
             'sales.delete',

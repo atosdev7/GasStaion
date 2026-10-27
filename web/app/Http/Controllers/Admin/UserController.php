@@ -15,10 +15,30 @@ class UserController extends CrudController
     protected function title() { return 'users'; }
     protected function langFile() { return 'admin'; }
 
+    // The manager looks after the accounts of the staff, not the admin's: admin accounts are not found for them and they cannot give the admin role.
+    protected function query()
+    {
+        $query = User::query();
+
+        return $this->mayHandleAdmins() ? $query : $query->where('role', '<>', 'admin');
+    }
+
+    private function mayHandleAdmins()
+    {
+        return auth()->user()->role === 'admin';
+    }
+
+    private function roles()
+    {
+        return array_values(array_filter(config('roles'), function ($role) {
+            return $this->mayHandleAdmins() || $role !== 'admin';
+        }));
+    }
+
     protected function fields()
     {
         $roles = [];
-        foreach (config('roles') as $role) {
+        foreach ($this->roles() as $role) {
             $roles[$role] = __('roles.' . $role);
         }
 
@@ -35,7 +55,7 @@ class UserController extends CrudController
         return [
             'name' => 'required|string|max:100',
             'username' => ['required', 'alpha_dash', 'max:50', Rule::unique('users', 'username')->ignore($user->getKey())],
-            'role' => ['required', Rule::in(config('roles'))],
+            'role' => ['required', Rule::in($this->roles())],
             'password' => [$user->exists ? 'nullable' : 'required', 'string', 'min:6', 'max:100'],
         ];
     }

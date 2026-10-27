@@ -96,7 +96,7 @@ class LayoutTest extends TestCase
             ->assertSee(__('menu.group_admin'))
             ->assertSee(__('menu.devices'))
             ->assertSee(__('menu.audit'))
-            ->assertDontSee(__('menu.users'))
+            ->assertSee('href="' . url('/users') . '"', false)             // Users is a main menu item of its own for the manager
             ->assertDontSee(__('menu.backup'));
     }
 
