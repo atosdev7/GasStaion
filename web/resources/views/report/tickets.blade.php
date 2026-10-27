@@ -21,6 +21,7 @@
                     <th class="text-right">{{ __('report.sold') }}</th>
                     <th class="text-right">{{ __('report.supplied') }}</th>
                     <th class="text-right">{{ __('report.restricted') }}</th>
+                    <th class="text-right">{{ __('report.old_unused') }}</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -34,12 +35,14 @@
                         <td class="text-right">{{ $r->sale }}</td>
                         <td class="text-right">{{ $r->supply }}</td>
                         <td class="text-right">{{ $r->restrict }}</td>
+                        <td class="text-right">{{ $r->old }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-muted">{{ __('report.no_data') }}</td></tr>
+                    <tr><td colspan="9" class="text-muted">{{ __('report.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
+        <div class="card-footer text-muted">{{ __('report.tickets_hint') }}</div>
     </div>
 @endsection

@@ -15,6 +15,8 @@ use App\Support\Reports\ReportSheets;
 use App\Support\Reports\StockOrdering;
 use App\Support\Dashboard\TankLevels;
 use App\Support\Reports\XlsxWriter;
+use App\Models\Tickets\TicketPublish;
+use App\Support\Tickets\LegacyTickets;
 use App\Support\Tickets\TicketStock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -129,7 +131,7 @@ class ReportController extends Controller
 
             return $rows[$key] = $rows[$key] ?? (object) [
                 'fuel_type' => $fuelType, 'spec' => $spec, 'received' => null, 'blank' => null,
-                'publish' => 0, 'sale' => 0, 'supply' => 0, 'restrict' => 0,
+                'publish' => 0, 'sale' => 0, 'supply' => 0, 'restrict' => 0, 'old' => 0,
             ];
         };
 
@@ -143,6 +145,17 @@ class ReportController extends Controller
         $counts = Ticket::selectRaw('fuel_type, spec, status, COUNT(*) AS n')->groupBy('fuel_type', 'spec', 'status')->get();
         foreach ($counts as $c) {
             $row($c->fuel_type, $c->spec === null ? null : (int) $c->spec)->{$statuses[$c->status]} = (int) $c->n;
+        }
+        // the old paper tickets (published before go-live) that nobody has used yet have no row: they are in the published ranges only
+        $goLive = LegacyTickets::goLive();
+        if ($goLive !== null) {
+            $old = TicketPublish::where('date', '<', $goLive);
+            foreach ((clone $old)->selectRaw('fuel_type, spec, SUM(end_serial - start_serial + 1) AS n')->groupBy('fuel_type', 'spec')->get() as $p) {
+                $row($p->fuel_type, (int) $p->spec)->old += (int) $p->n;
+            }
+            foreach (Ticket::whereIn('publish_id', (clone $old)->select('id'))->selectRaw('fuel_type, spec, COUNT(*) AS n')->groupBy('fuel_type', 'spec')->get() as $c) {
+                $row($c->fuel_type, (int) $c->spec)->old -= (int) $c->n;
+            }
         }
         ksort($rows);
 

@@ -198,6 +198,7 @@ class CardTest extends TestCase
     {
         $card = $this->card('AA01', 'Li Wei', 'D');
         Card::where('id', $card->id)->toBase()->update(['synced' => true]);
+        \App\Support\Fuel\DefaultCost::set('D', 5.5);
 
         // the form: the card with its fuel, the price of the fuel as the default for a script
         $html = $this->as('manager')->get('/card-topups/create?card=' . $card->id)->assertOk()->getContent();
@@ -213,6 +214,7 @@ class CardTest extends TestCase
         $this->assertSame('D', $sale->fuel_type);                                                    // the card's
         $this->assertEquals(40, $sale->amount_kg);
         $this->assertEquals(8.2, $sale->price);                                                      // typed, not the price of the fuel
+        $this->assertEquals(5.5, $sale->cost);                                                       // the default cost of the fuel, as on a terminal sale (the profit report needs it)
         $this->assertEquals(328, $sale->total_amount);
         $this->assertEquals(328, $sale->paid_amount);                                                // paid in full: no debt
         $this->assertEquals(0, $sale->unpaid_amount);

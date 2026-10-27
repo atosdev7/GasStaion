@@ -87,6 +87,7 @@ class TopUpController extends Controller
                 'sale_type' => 'card',
                 'fuel_type' => $card->fuel_type,
                 'price' => $data['price'],
+                'cost' => \App\Support\Fuel\DefaultCost::get($card->fuel_type),      // as a sale made on a terminal: the default cost of the fuel type, which the accountant can change before confirming
                 'amount_kg' => $kg,
                 'payment_method' => 'cash',        // a card is only paid in cash: no bank, no debt
                 'total_amount' => $total,

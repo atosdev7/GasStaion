@@ -58,6 +58,8 @@ return [
     'open_loan_kg' => 'Open ticket loans (kg)',
     'unallocated' => 'Unallocated payments',
     'received' => 'Received',
+    'old_unused' => 'Old paper, not used yet',
+    'tickets_hint' => 'What was published (Received - Blank) = Published, unsold + Sold + Supplied + Restricted + Old paper, not used yet. Old paper tickets are the ones published before the go-live date: they have no row until one is used (then it is counted as sold or supplied), so the ones nobody has used yet are only counted here.',
     'blank' => 'Blank',
     'unsold' => 'Published, unsold',
     'sold' => 'Sold',

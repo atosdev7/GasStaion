@@ -177,6 +177,23 @@ class ReportTest extends TestCase
         $this->assertNull($direct->received);
     }
 
+    // the old paper tickets nobody has used have no row: they are counted in their own column, so the columns add up to what was published
+    public function testTicketStockCountsTheOldPaperTicketsThatHaveNoRow()
+    {
+        \App\Models\Admin\Setting::updateOrCreate(['key' => 'go_live_date'], ['value' => '2026-10-01']);
+        TicketInbound::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        $old = TicketPublish::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => 1, 'end_serial' => 20, 'count' => 20, 'date' => '2026-09-05', 'user_id' => 1]);
+        TicketPublish::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => 21, 'end_serial' => 30, 'count' => 10, 'date' => '2026-10-05', 'user_id' => 1]);
+        foreach ([1, 2] as $serial) {          // two old tickets were used: their rows exist
+            Ticket::forceCreate(['barcode' => '00000060000000' . sprintf('%02d', $serial), 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => $serial,
+                'publish_id' => $old->id, 'status' => config('ticket_statuses.supply')]);
+        }
+
+        $press = $this->as('accountant')->get('/reports/tickets')->assertOk()->viewData('rows')->first(function ($r) { return $r->spec === 0; });
+        $this->assertSame(18, $press->old);          // 20 old, 2 used
+        $this->assertSame(70, $press->blank);        // 100 received, 30 published
+    }
+
     public function testTankStockIsOpeningPlusInboundMinusSupplied()
     {
         $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => 2000]);
