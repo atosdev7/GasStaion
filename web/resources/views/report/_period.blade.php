@@ -22,9 +22,5 @@
         @if ($errors->any())
             <div class="text-danger mt-2">{{ $errors->first() }}</div>
         @endif
-        @php($cleared = \App\Models\Admin\Backup::max('up_to_date'))
-        @if ($cleared && isset($from) && $from <= $cleared)
-            <div class="alert alert-warning mt-2 mb-0 report-cleared">{{ __('report.cleared_period', ['date' => substr((string) $cleared, 0, 10)]) }}</div>
-        @endif
     </div>
 </div>

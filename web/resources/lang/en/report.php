@@ -59,7 +59,7 @@ return [
     'unallocated' => 'Unallocated payments',
     'received' => 'Received',
     'old_unused' => 'Old paper, not used yet',
-    'tickets_hint' => 'What was published (Received - Blank) = Published, unsold + Sold + Supplied + Restricted + Old paper, not used yet + Moved to the backup server (the supplied and restricted tickets a backup cleared). Old paper tickets are the ones published before the go-live date: they have no row until one is used (then it is counted as sold or supplied), so the ones nobody has used yet are only counted here.',
+    'tickets_hint' => 'What was published (Received - Blank) = Published, unsold + Sold + Supplied + Restricted + Old paper, not used yet + Cleared by a backup (the supplied and restricted tickets a backup removed). Old paper tickets are the ones published before the go-live date: they have no row until one is used (then it is counted as sold or supplied), so the ones nobody has used yet are only counted here.',
     'blank' => 'Blank',
     'unsold' => 'Published, unsold',
     'sold' => 'Sold',
@@ -150,8 +150,7 @@ return [
     // Copied from cards.php
     'holder' => 'Customer name',
     'uid' => 'Card ID',
-    'cleared_period' => 'A backup moved the sales, supplies and fuel movements up to :date to the backup server, so a period that reaches back to that day is incomplete here: the figures of those days are on the backup server.',
-    'moved' => 'Moved to the backup server',
+    'moved' => 'Cleared by a backup',
     'by_fuel' => 'Total of each fuel type',
     'tank_layers' => 'Fuel in the tanks by cost',
     'layer_cost' => 'Cost per kg',
