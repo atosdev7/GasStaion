@@ -38,13 +38,13 @@ class Debt extends Model
         return round($this->amount + $this->adjustments->sum('amount'), 2);
     }
 
-    // The sale's date; the debt's own time once a backup has cleared the sale; null for an opening balance.
+    // The sale's date; once a backup has cleared the sale, the date the backup copied to debt_date (the debt's own time if there is none); null for an opening balance.
     public function getDisplayDateAttribute()
     {
         if ($this->sale_id === null) {
             return null;
         }
 
-        return $this->sale ? $this->sale->sale_date : $this->created_at;
+        return $this->sale ? $this->sale->sale_date : ($this->debt_date ?: $this->created_at);
     }
 }

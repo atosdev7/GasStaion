@@ -4,6 +4,7 @@ namespace App\Support\Admin;
 
 use App\Models\Admin\Backup;
 use App\Models\Admin\Device;
+use App\Models\Debts\Debt;
 use App\Models\Debts\DebtPayment;
 use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Fuel\FuelInbound;
@@ -29,8 +30,9 @@ use ZipArchive;
 // Cleared: sales, supplements (by date — rows without a date are never
 // cleared), fuel inbounds (by inbound_date), and supplied/restricted tickets. Kept: debts,
 // debt_payments, ticket_loans, ticket_loan_settlements — their balances are computed from those rows; the remainders (a remainder outlives its
-// supply: its supplement_id may then point at a supply that was cleared, and an opening remainder has none); and the sales and supplements of the cards
-// (the top-ups and the supplies made with a card, `card_id` set), because the balance of a card is computed from them.
+// supply: its supplement_id may then point at a supply that was cleared, and an opening remainder has none); and the sales, supplements and tickets of the cards
+// (the top-ups, the supplies made with a card and the tickets made for a card, `card_id` set), because the balance of a card, its summary and a rebuilt ledger are
+// computed from them.
 // A backup is refused while a sale or supplement it would clear has not been confirmed (the accountant could no longer review it), nor the ticket
 // inbounds and publishes of those days (they are not cleared, but the day is not finished until they are confirmed), and while a
 // terminal has not uploaded since the end of that business day (it may still hold records of those days that the web does not know yet).
@@ -230,6 +232,9 @@ class BackupRun
 
                 static::export($file, $upTo);
 
+                // a debt of a sale that is cleared keeps the day of that sale (its own time may be another day: a sale can be dated back)
+                static::keepDatesOfDebts($upTo);
+
                 foreach (static::clearable($upTo) as $query) {
                     static::softDeletes($query->getModel()) ? $query->forceDelete() : $query->delete();
                 }
@@ -252,6 +257,18 @@ class BackupRun
         } catch (\Throwable $e) {
             @unlink(static::path($file));
             throw $e;
+        }
+    }
+
+    // The sale of a debt is cleared with the backup: the day of the sale is written on the debt first, so its place in the aging and the statements does not move.
+    private static function keepDatesOfDebts($upTo)
+    {
+        $sales = Sale::withTrashed()->whereNull('card_id')->whereNotNull('sale_date')->where('sale_date', '<=', $upTo)->select('id');
+        foreach (Debt::with('sale')->whereIn('sale_id', $sales)->get() as $debt) {
+            if ($debt->sale) {
+                $debt->timestamps = false;
+                $debt->forceFill(['debt_date' => substr((string) $debt->sale->sale_date, 0, 10)])->save();
+            }
         }
     }
 
@@ -299,7 +316,7 @@ class BackupRun
                 })->orWhere(function ($q) use ($endOfDay) {
                     $q->where('status', config('ticket_statuses.restrict'))->where('updated_at', '<', $endOfDay);
                 });
-            })->where(function ($q) {
+            })->whereNull('card_id')->where(function ($q) {
                 // The used or restricted tickets of a publish dated before go-live stay: a ticket with no row counts as sold on paper before go-live (see
                 // LegacyTickets), so clearing the row of a used one would make it usable again.
                 $goLive = LegacyTickets::goLive();

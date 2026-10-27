@@ -584,6 +584,48 @@ class BackupTest extends TestCase
         $this->assertSame('0000021000000007', Ticket::first()->barcode);
     }
 
+    // the tickets made for a card are what its balance (and the card summary, and a rebuilt ledger) are worked out from: a backup keeps them, like the card's sales
+    // the sale of a debt goes with the backup: the debt keeps the day of the sale (the sale was dated back, so its own time is another day)
+    public function testADebtKeepsTheDayOfItsClearedSale()
+    {
+        $sale = $this->sale('2026-09-03');
+        $debt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => $sale->id, 'amount' => 50, 'payment_method' => 'cash', 'user_id' => 1]);
+        $debt->forceFill(['created_at' => '2026-09-10 09:00:00'])->save();      // entered a week after the day of the sale
+        $this->assertSame('2026-09-03', substr((string) $debt->fresh()->display_date, 0, 10));
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+
+        $this->assertNull(Sale::find($sale->id));
+        $this->assertSame('2026-09-03', substr((string) $debt->fresh()->display_date, 0, 10));      // not the 10th
+    }
+
+    public function testTheTicketsMadeForACardAreKeptByTheBackup()
+    {
+        $card = \App\Models\Cards\Card::forceCreate(['uid' => 'AA01', 'holder_name' => 'Li Wei', 'fuel_type' => 'D'] + \App\Support\Cards\CardPin::make('1234'));
+        Sale::forceCreate([
+            'card_id' => $card->id, 'sale_type' => 'card', 'fuel_type' => 'D', 'price' => 2, 'amount_kg' => 100, 'payment_method' => 'cash', 'total_amount' => 200,
+            'paid_amount' => 200, 'unpaid_amount' => 0, 'usage' => 'sale', 'sale_date' => '2026-09-01', 'user_id' => 1, 'confirmed_at' => now(),
+        ]);
+        Ticket::forceCreate([
+            'barcode' => '0000025000000001', 'fuel_type' => 'D', 'spec' => null, 'code' => '25', 'serial' => 1, 'amount_kg' => 30, 'card_id' => $card->id,
+            'status' => config('ticket_statuses.supply'), 'sale_date' => '2026-09-05 10:00:00', 'supply_date' => '2026-09-05 10:05:00',
+        ]);
+        // a spot ticket of the same day, which is cleared
+        Ticket::forceCreate([
+            'barcode' => '0000021000000002', 'fuel_type' => 'D', 'spec' => null, 'code' => '21', 'serial' => 2, 'amount_kg' => 10,
+            'status' => config('ticket_statuses.supply'), 'supply_date' => '2026-09-05 11:00:00',
+        ]);
+        $this->assertEquals(70, $card->fresh()->balance());
+        $this->assertEquals(70, $card->fresh()->balanceFromRecords());
+
+        $this->as('admin')->post('/backup', ['up_to' => self::UP_TO])->assertSessionHasNoErrors();
+
+        $this->assertNotNull(Ticket::find('0000025000000001'));        // the card's ticket stays
+        $this->assertNull(Ticket::find('0000021000000002'));           // the spot ticket goes
+        $this->assertEquals(70, $card->fresh()->balance());
+        $this->assertEquals(70, $card->fresh()->balanceFromRecords());      // the records still agree with the ledger
+    }
+
     public function testDailyDumpWritesAFileAndPrunesOldOnes()
     {
         $dir = storage_path('app/backups/test-daily');

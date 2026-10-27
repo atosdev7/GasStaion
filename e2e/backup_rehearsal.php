@@ -192,8 +192,13 @@ section('the backup run: export, then clear up to yesterday');
 // up to the day before the newest day of work, so that the newest day stays (as it would: today's records may still change)
 $upTo = date('Y-m-d', strtotime(DB::table('sales')->max('sale_date') . ' -1 day'));
 $preview = BackupRun::preview($upTo);
+// a backup is refused while a record it would clear is not confirmed, or a terminal has not uploaded since the day ended: the accountant confirms everything first
+foreach (['sales', 'supplements', 'ticket_inbounds', 'ticket_publishes', 'debt_payments', 'ticket_loan_settlements', 'fuel_inbounds', 'fuel_outbounds'] as $confirmable) {
+    DB::table($confirmable)->whereNull('confirmed_at')->update(['confirmed_at' => now()]);
+}
+DB::table('devices')->update(['last_synced_at' => now()->addDay()]);
 $tanksBefore = TankLevels::all()->mapWithKeys(function ($r) { return [$r->tank->id => round($r->current, 2)]; })->all();
-$kept = ['ticket_loans', 'ticket_loan_settlements', 'debts', 'debt_payments', 'customers', 'users', 'devices', 'nozzles', 'tanks'];
+$kept = ['ticket_loans', 'ticket_loan_settlements', 'debt_payments', 'customers', 'users', 'devices', 'nozzles', 'tanks'];
 $fingerBeforeClear = fingerprint(LIVE);
 $salesNotCleared = DB::table('sales')->where(function ($q) use ($upTo) { $q->whereNull('sale_date')->orWhere('sale_date', '>', $upTo); })->count();
 echo '  (to be cleared: ' . json_encode($preview) . ")\n";
@@ -207,8 +212,8 @@ ok(DB::table('sales')->where('sale_date', '<=', $upTo)->count() === 0 && DB::tab
     && DB::table('remainders')->where('remainder_date', '<=', $upTo)->count() === 0, 'no sale, supplement or remainder up to ' . $upTo . ' is left');
 ok(DB::table('sales')->count() === $salesNotCleared, 'sales without a date or after it are all still there (' . $salesNotCleared . ')');
 $fingerAfter = fingerprint(LIVE);
-ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups']) === [], 'every other table is untouched'
-    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'backups'])) . ')' : ''));
+ok(differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups']) === [], 'every other table is untouched'
+    . (differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups']) ? ' (changed: ' . implode(', ', differences($fingerBeforeClear, $fingerAfter, ['sales', 'sale_items', 'supplements', 'remainders', 'tickets', 'fuel_inbounds', 'fuel_outbounds', 'tank_balances', 'debts', 'backups'])) . ')' : ''));
 foreach ($kept as $t) {
     if (isset($fingerBeforeClear[$t])) {
         $same = $fingerBeforeClear[$t] === $fingerAfter[$t];

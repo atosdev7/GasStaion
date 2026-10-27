@@ -132,7 +132,7 @@ class ReportController extends Controller
 
             return $rows[$key] = $rows[$key] ?? (object) [
                 'fuel_type' => $fuelType, 'spec' => $spec, 'received' => null, 'blank' => null,
-                'publish' => 0, 'sale' => 0, 'supply' => 0, 'restrict' => 0, 'old' => 0,
+                'publish' => 0, 'sale' => 0, 'supply' => 0, 'restrict' => 0, 'old' => 0, 'published' => 0, 'moved' => 0,
             ];
         };
 
@@ -140,6 +140,7 @@ class ReportController extends Controller
             $r = $row($s->fuel_type, $s->spec);
             $r->received = $s->received;
             $r->blank = $s->available;
+            $r->published = (int) $s->published;
         }
 
         $statuses = array_flip(config('ticket_statuses'));
@@ -156,6 +157,12 @@ class ReportController extends Controller
             }
             foreach (Ticket::whereIn('publish_id', (clone $old)->select('id'))->selectRaw('fuel_type, spec, COUNT(*) AS n')->groupBy('fuel_type', 'spec')->get() as $c) {
                 $row($c->fuel_type, (int) $c->spec)->old -= (int) $c->n;
+            }
+        }
+        // the supplied and restricted tickets a backup cleared are in the published ranges only
+        foreach ($rows as $r) {
+            if ($r->spec !== null) {
+                $r->moved = max(0, $r->published - $r->old - $r->publish - $r->sale - $r->supply - $r->restrict);
             }
         }
         ksort($rows);

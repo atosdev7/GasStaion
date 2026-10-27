@@ -22,6 +22,7 @@
                     <th class="text-right">{{ __('report.supplied') }}</th>
                     <th class="text-right">{{ __('report.restricted') }}</th>
                     <th class="text-right">{{ __('report.old_unused') }}</th>
+                    <th class="text-right">{{ __('report.moved') }}</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -36,9 +37,10 @@
                         <td class="text-right">{{ $r->supply }}</td>
                         <td class="text-right">{{ $r->restrict }}</td>
                         <td class="text-right">{{ $r->old }}</td>
+                        <td class="text-right">{{ $r->moved }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="text-muted">{{ __('report.no_data') }}</td></tr>
+                    <tr><td colspan="10" class="text-muted">{{ __('report.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
             </table>

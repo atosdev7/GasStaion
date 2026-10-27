@@ -331,6 +331,24 @@ class ReportTest extends TestCase
         \Carbon\Carbon::setTestNow();
     }
 
+    // after a backup the reports say that a period back to the cleared day is incomplete, and the ticket report counts what the backup cleared
+    public function testReportsSayWhenAPeriodReachesWhatABackupMovedAway()
+    {
+        \App\Models\Admin\Backup::forceCreate(['up_to_date' => '2026-09-15', 'file' => 'x.zip', 'cleared' => '[]', 'tank_carry' => '[]', 'user_id' => 1]);
+
+        $this->as('accountant')->get('/reports/sales?from=2026-09-01&to=2026-09-30')->assertOk()->assertSee('report-cleared', false)->assertSee('2026-09-15');
+        $this->get('/reports/sales?from=2026-09-16&to=2026-09-30')->assertOk()->assertDontSee('report-cleared', false);
+
+        TicketInbound::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 100, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        TicketPublish::forceCreate(['fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'start_serial' => 1, 'end_serial' => 10, 'count' => 10, 'date' => '2026-09-02', 'user_id' => 1]);
+        foreach ([1 => 'publish', 2 => 'sale'] as $serial => $status) {      // 8 of the 10 are gone: used tickets that the backup cleared
+            Ticket::forceCreate(['barcode' => sprintf('0000006%09d', $serial), 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => $serial, 'status' => config('ticket_statuses.' . $status)]);
+        }
+
+        $press = $this->get('/reports/tickets')->assertOk()->viewData('rows')->first(function ($r) { return $r->spec === 0; });
+        $this->assertSame(8, $press->moved);
+    }
+
     public function testEndDateBeforeStartIsRejected()
     {
         $this->as('accountant')->from('/reports/sales')->get('/reports/sales?from=2026-09-10&to=2026-09-01')

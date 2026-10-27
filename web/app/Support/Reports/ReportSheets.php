@@ -170,14 +170,14 @@ class ReportSheets
                 isset($fuels[$r->fuel_type]) ? $fuels[$r->fuel_type] : $r->fuel_type,
                 $r->spec === null ? __('report.direct') : config('ticket_specs.' . $r->spec) . ' ' . __('report.kg'),
                 $r->received === null ? '-' : (int) $r->received, $r->blank === null ? '-' : (int) $r->blank,
-                (int) $r->publish, (int) $r->sale, (int) $r->supply, (int) $r->restrict, (int) $r->old,
+                (int) $r->publish, (int) $r->sale, (int) $r->supply, (int) $r->restrict, (int) $r->old, (int) $r->moved,
             ];
         }
 
         return [[
             'title' => __('report.title_tickets'),
             'headings' => [__('report.fuel_type'), __('report.spec'), __('report.received'), __('report.blank'),
-                __('report.unsold'), __('report.sold'), __('report.supplied'), __('report.restricted'), __('report.old_unused')],
+                __('report.unsold'), __('report.sold'), __('report.supplied'), __('report.restricted'), __('report.old_unused'), __('report.moved')],
             'rows' => $rows,
         ]];
     }
