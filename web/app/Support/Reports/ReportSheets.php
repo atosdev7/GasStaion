@@ -186,7 +186,15 @@ class ReportSheets
     {
         $fuels = $d['fuels'];
         $rows = [];
+        $layerRows = [];
         foreach ($d['rows'] as $r) {
+            foreach (($d['layers'][$r->tank->id] ?? []) as $layer) {
+                $layerRows[] = [
+                    $r->tank->name, isset($fuels[$r->tank->fuel_type]) ? $fuels[$r->tank->fuel_type] : $r->tank->fuel_type,
+                    $layer['cost'] !== null ? (float) $layer['cost'] : '-', (float) $layer['kg'],
+                    $layer['cost'] !== null ? round($layer['kg'] * $layer['cost'], 2) : '-', (string) $layer['date'],
+                ];
+            }
             $rows[] = [
                 $r->tank->name, isset($fuels[$r->tank->fuel_type]) ? $fuels[$r->tank->fuel_type] : $r->tank->fuel_type,
                 (float) $r->opening, (float) $r->inbound, (float) $r->supplied, (float) $r->current,
@@ -200,7 +208,12 @@ class ReportSheets
                 __('report.outbound'), __('report.current'), __('report.capacity'), __('report.percent_full')],
             'rows' => $rows,
             'money' => [2, 3, 4, 5, 6],
-        ]];
+        ]] + ($layerRows ? [1 => [
+            'title' => __('report.tank_layers'),
+            'headings' => [__('report.tank_id'), __('report.fuel_type'), __('report.layer_cost'), __('report.layer_kg'), __('report.layer_value'), __('report.layer_since')],
+            'rows' => $layerRows,
+            'money' => [2, 3, 4],
+        ]] : []);
     }
 
     public static function ordering(array $d)
@@ -254,7 +267,14 @@ class ReportSheets
             'headings' => [__('report.day'), __('report.nozzle_id'), __('report.count'), __('report.liters'), __('report.amount_kg')],
             'rows' => $rows,
             'money' => [3, 4],
-        ]];
+        ]] + ($d['byFuel']->isNotEmpty() ? [1 => [
+            'title' => __('report.by_fuel'),
+            'headings' => [__('report.fuel_type'), __('report.count'), __('report.liters'), __('report.amount_kg')],
+            'rows' => $d['byFuel']->map(function ($r) use ($d) {
+                return [isset($d['fuels'][$r->fuel_type]) ? $d['fuels'][$r->fuel_type] : $r->fuel_type, (int) $r->supplies, (float) $r->liters, (float) $r->kg];
+            })->all(),
+            'money' => [2, 3],
+        ]] : []);
     }
 
     // One tab of the Daily Confirmation Sales page, as one sheet: the same table as on the page, raw numbers, the totals at the foot. When the

@@ -43,4 +43,39 @@
         </div>
         <div class="card-footer text-muted">{{ __('report.tanks_hint') }}</div>
     </div>
+
+    @if (count($layers))
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">{{ __('report.tank_layers') }}</h3></div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-sm text-nowrap" id="tank-layers">
+                    <thead>
+                    <tr>
+                        <th>{{ __('report.tank_id') }}</th>
+                        <th>{{ __('report.fuel_type') }}</th>
+                        <th class="text-right">{{ __('report.layer_cost') }}</th>
+                        <th class="text-right">{{ __('report.layer_kg') }}</th>
+                        <th class="text-right">{{ __('report.layer_value') }}</th>
+                        <th>{{ __('report.layer_since') }}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach ($rows as $r)
+                        @foreach ($layers[$r->tank->id] ?? [] as $layer)
+                            <tr>
+                                <td>{{ $r->tank->name }}</td>
+                                <td>{{ $fuels[$r->tank->fuel_type] ?? $r->tank->fuel_type }}</td>
+                                <td class="text-right">{{ $layer['cost'] !== null ? number_format($layer['cost'], 4) : '-' }}</td>
+                                <td class="text-right {{ $layer['kg'] < 0 ? 'text-danger' : '' }}">{{ number_format($layer['kg'], 2) }}</td>
+                                <td class="text-right">{{ $layer['cost'] !== null ? number_format($layer['kg'] * $layer['cost'], 2) : '-' }}</td>
+                                <td>{{ $layer['date'] }}</td>
+                            </tr>
+                        @endforeach
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer text-muted">{{ __('report.tank_layers_hint') }}</div>
+        </div>
+    @endif
 @endsection

@@ -207,6 +207,33 @@ class ReportTest extends TestCase
         $this->assertEquals(70.0, $row->percent);
     }
 
+    // what a tank holds at each cost it was bought at, for those who may see costs
+    public function testTankStockShowsTheFuelOfEachTankByCost()
+    {
+        $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D', 'capacity_kg' => 2000]);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 1000, 'cost' => 5]);
+        FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 500, 'cost' => 6, 'inbound_date' => '2026-09-02', 'user_id' => 1]);
+        $this->supplement($this->nozzle($tank), 100)->forceFill(['cost' => 5])->save();
+
+        $page = $this->as('accountant')->get('/reports/tanks')->assertOk()->assertSee('tank-layers', false);
+        $layers = collect($page->viewData('layers')[$tank->id])->keyBy(function ($layer) {
+            return number_format($layer['cost'], 4, '.', '');
+        });
+        $this->assertEquals(900, $layers['5.0000']['kg']);          // 1000 - 100 at its cost
+        $this->assertEquals(500, $layers['6.0000']['kg']);
+
+        // the export has the layers as a second sheet
+        $file = $this->get('/reports/tanks?export=xls')->assertOk();
+        $zip = new \ZipArchive();
+        $zip->open($file->baseResponse->getFile()->getPathname());
+        $this->assertNotFalse($zip->getFromName('xl/worksheets/sheet2.xml'));
+        $zip->close();
+
+        // a user who may not see costs has no layers (nobody with the reports does today, so the permission is taken away for the test)
+        config(['permissions.roles.accountant' => array_values(array_diff(config('permissions.roles.accountant'), ['costs.view']))]);
+        $this->as('accountant')->get('/reports/tanks')->assertOk()->assertDontSee('tank-layers', false);
+    }
+
     public function testReportsGroupByTheDateField()
     {
         // the supply (02:00 / 03:00 of the 11th) belongs to the business day of the 10th, which its date field says
@@ -238,6 +265,28 @@ class ReportTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertEquals(2, $rows->first()->supplies);
         $this->assertEquals(15, $rows->first()->kg);
+    }
+
+    // the total of each fuel type under the table and as a second sheet of the export
+    public function testSupplyReportTotalsEachFuelType()
+    {
+        $diesel = $this->nozzle(Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']));
+        $gasoline = $this->nozzle(Tank::forceCreate(['name' => 'T2', 'fuel_type' => 'A']));
+        $this->supplement($diesel, 10);
+        $this->supplement($diesel, 5);
+        $this->supplement($gasoline, 7);
+        $this->supplement($gasoline, 99, '2026-10-01 08:00:00');      // after the period
+
+        $page = $this->as('accountant')->get('/reports/supply' . self::PERIOD)->assertOk()->assertSee('supply-by-fuel', false);
+        $byFuel = $page->viewData('byFuel')->keyBy('fuel_type');
+        $this->assertEquals([2, 15], [$byFuel['D']->supplies, $byFuel['D']->kg]);
+        $this->assertEquals([1, 7], [$byFuel['A']->supplies, $byFuel['A']->kg]);
+
+        $file = $this->get('/reports/supply' . self::PERIOD . '&export=xls')->assertOk();
+        $zip = new \ZipArchive();
+        $zip->open($file->baseResponse->getFile()->getPathname());
+        $this->assertNotFalse($zip->getFromName('xl/worksheets/sheet2.xml'));
+        $zip->close();
     }
 
     // the numbers to decide an order: the tanks, what is owed on tickets sold and not supplied (here and on paper), the free fuel, the speed of supply and sales

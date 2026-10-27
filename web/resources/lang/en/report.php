@@ -150,6 +150,13 @@ return [
     // Copied from cards.php
     'holder' => 'Customer name',
     'uid' => 'Card ID',
+    'by_fuel' => 'Total of each fuel type',
+    'tank_layers' => 'Fuel in the tanks by cost',
+    'layer_cost' => 'Cost per kg',
+    'layer_kg' => 'In the tank (kg)',
+    'layer_value' => 'Value',
+    'layer_since' => 'Since',
+    'tank_layers_hint' => 'What each tank holds at each cost it was bought at (the oldest fuel goes out first when a supply has no cost). Below zero: more left at that cost than came in.',
     'cards_opening' => 'Opening balance (kg)',
     'topped_up_kg' => 'Topped up (kg)',
     'topped_up_amount' => 'Topped up (amount)',

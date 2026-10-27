@@ -14,6 +14,7 @@ use App\Models\Debts\TicketLoan;
 use App\Support\Reports\ReportSheets;
 use App\Support\Reports\StockOrdering;
 use App\Support\Dashboard\TankLevels;
+use App\Support\Fuel\TankCostLayers;
 use App\Support\Reports\XlsxWriter;
 use App\Models\Tickets\TicketPublish;
 use App\Support\Tickets\LegacyTickets;
@@ -164,7 +165,10 @@ class ReportController extends Controller
 
     public function tanks(Request $request)
     {
-        return $this->respond($request, 'tanks', ['rows' => TankLevels::all(), 'fuels' => config('fuel_types')]);
+        // the fuel of each tank by the cost it was bought at (only for those who may see costs)
+        $layers = auth()->user()->can('costs.view') ? TankCostLayers::all() : [];
+
+        return $this->respond($request, 'tanks', ['rows' => TankLevels::all(), 'fuels' => config('fuel_types'), 'layers' => $layers]);
     }
 
     public function supply(Request $request)
@@ -177,6 +181,11 @@ class ReportController extends Controller
                 ->selectRaw(self::day('supplied_at', 'supply_date') . ' AS day, nozzle_id, COUNT(*) AS supplies, SUM(out_amount_lt) AS liters, SUM(out_amount_kg) AS kg')
                 ->groupBy('day', 'nozzle_id')->orderBy('day')->get(),
             'nozzleLabels' => Nozzle::labels(),
+            // the total of each fuel type
+            'byFuel' => Supplement::whereRaw(self::day('supplied_at', 'supply_date') . ' BETWEEN ? AND ?', [$from, $to])
+                ->selectRaw('fuel_type, COUNT(*) AS supplies, SUM(out_amount_lt) AS liters, SUM(out_amount_kg) AS kg')
+                ->groupBy('fuel_type')->orderBy('fuel_type')->get(),
+            'fuels' => config('fuel_types'),
         ]);
     }
 
