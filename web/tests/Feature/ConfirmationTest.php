@@ -85,8 +85,8 @@ class ConfirmationTest extends TestCase
         $this->supplement('2026-10-01');
 
         $html = $this->as('accountant')->get('/confirmations/supplements?date=2026-10-01')->assertOk()->getContent();
-        // no Tickets column: the mode is followed by the preset, out kg and out litres, the remainder and the comment
-        $this->assertRegExp('/<th>Nozzle<\/th>\s*<th>Mode<\/th>\s*<th class="text-right">Preset amount \(kg\)<\/th>\s*<th class="text-right">Out amount \(kg\)<\/th>\s*<th>Remainder<\/th>\s*<th>Comment<\/th>/', $html);
+        // no Tickets column: the mode is followed by the preset, out kg, the cost per kg (a user who may see costs), the remainder and the comment
+        $this->assertRegExp('/<th>Nozzle<\/th>\s*<th>Mode<\/th>\s*<th class="text-right">Preset amount \(kg\)<\/th>\s*<th class="text-right">Out amount \(kg\)<\/th>\s*<th class="text-right">Cost per kg<\/th>\s*<th>Remainder<\/th>\s*<th>Comment<\/th>/', $html);
         $this->assertStringNotContainsString('>Tickets<', $html);
         $this->assertSame(1, substr_count($html, '<td>Manual</td>'));
         $this->assertSame(1, substr_count($html, '<td>Auto</td>'));
@@ -340,7 +340,7 @@ class ConfirmationTest extends TestCase
         $this->as('assistant')->get('/confirmations/sales-export?date=2026-10-01&block=spot')->assertForbidden();
     }
 
-    public function testTheSupplementsHaveGasolineOnTheLeftAndDieselOnTheRight()
+    public function testTheSupplementsHaveGasolineOnTopAndDieselUnderIt()
     {
         $diesel = $this->supplement('2026-10-01', ['fuel_type' => 'D']);
         $gasoline = $this->supplement('2026-10-01', ['fuel_type' => 'A']);
@@ -352,13 +352,14 @@ class ConfirmationTest extends TestCase
         $this->assertSame([$gasoline->id], $byFuel['A']->pluck('id')->all());
         $this->assertSame([$diesel->id], $byFuel['D']->pluck('id')->all());
 
-        // ONE table: gasoline on the left, diesel on the right, the two in the same row
+        // one table for each fuel type, one under the other: gasoline on top, diesel under it (not side by side)
         $html = $response->getContent();
         $html = substr($html, strpos($html, 'id="tab-supplements" role="tabpanel"'), strpos($html, 'id="tab-remainders" role="tabpanel"') - strpos($html, 'id="tab-supplements" role="tabpanel"'));
-        $this->assertSame(1, substr_count($html, '<table'));
-        $this->assertRegExp('/<th colspan="9" class="text-center ">Gasoline \(1\)<\/th>\s*<th colspan="9" class="text-center border-left">Diesel \(1\)<\/th>/', $html);
-        $this->assertRegExp('/<tr>\s*<td[^>]*>\s*<input type="checkbox" name="supplements\[\]" value="' . $gasoline->id . '".*?value="' . $diesel->id . '"/s', $html);
+        $this->assertSame(2, substr_count($html, '<table'));
+        $this->assertRegExp('/<h5[^>]*>Gasoline \(1\)<\/h5>.*?id="supplements-table-A".*?<h5[^>]*>Diesel \(1\)<\/h5>.*?id="supplements-table-D"/s', $html);
+        $this->assertRegExp('/id="supplements-table-A".*?value="' . $gasoline->id . '".*?id="supplements-table-D".*?value="' . $diesel->id . '"/s', $html);
         $this->assertSame(2, substr_count($html, 'name="supplements[]"'));
+        $this->assertStringNotContainsString('border-left', $html);
     }
 
     public function testTheSupplementsPageHasSupplementsAndRemaindersTabs()
@@ -1203,6 +1204,31 @@ class ConfirmationTest extends TestCase
         $this->assertStringContainsString('2 remainders came out of this one supply', $html);
 
         $this->get('/confirmations/overview?date=2026-10-02')->assertDontSee('whose figures do not agree');
+    }
+
+    // the supplies page shows the cost of a supply (a user who may see costs), and marks a cost that has no fuel behind it; the Overview lists those
+    public function testTheCostOfASupplyIsShownAndACostWithNoFuelBehindItIsMarked()
+    {
+        $tank = $this->tank();
+        \App\Models\Fuel\FuelInbound::forceCreate(['tank_id' => $tank->id, 'fuel_type' => 'D', 'amount_kg' => 100, 'cost' => 6.5, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        $device = \App\Models\Admin\Device::forceCreate(['name' => 'POS1']);
+        $nozzle = \App\Models\Fuel\Nozzle::forceCreate(['device_id' => $device->id, 'number' => 1, 'tank_id' => $tank->id, 'fuel_type' => 'D']);
+        $good = $this->supplement('2026-10-01', ['out_amount_kg' => 40, 'nozzle_id' => $nozzle->id]);
+        $good->forceFill(['cost' => 6.5])->save();                                         // 6.50: 100 kg came in at it
+        $bad = $this->supplement('2026-10-01', ['out_amount_kg' => 70, 'nozzle_id' => $nozzle->id]);
+        $bad->forceFill(['cost' => 8])->save();                                            // 8.00: nothing came in at it, a layer of -70 kg
+
+        $page = $this->as('accountant')->get('/confirmations/supplements?date=2026-10-01')->assertOk();
+        $html = $page->getContent();
+        $this->assertStringContainsString('Cost per kg', $html);
+        $this->assertStringContainsString('6.5000', $html);
+        $this->assertSame([$bad->id], array_keys($page->viewData('belowZero')));
+        $this->assertSame(1, substr_count($html, 'fa-exclamation-triangle'));
+
+        $found = $this->get('/confirmations/overview?date=2026-10-01')->assertOk()->viewData('warnings')['supplyChecks'];
+        $this->assertContains($bad->id, array_column($found, 'id'));
+        $this->assertStringContainsString('the cost 8.0000 has no fuel behind it', collect($found)->firstWhere('id', $bad->id)['text']);
+        $this->assertNotContains($good->id, array_column($found, 'id'));
     }
 
     public function testTheOverviewCountsTheTicketsIssuedOnTheDateAndNotSuppliedByKind()

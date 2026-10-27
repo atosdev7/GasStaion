@@ -21,6 +21,7 @@ use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
 use App\Support\Admin\BackupRun;
 use App\Support\Cards\CardLedger;
+use App\Support\Fuel\CostChoices;
 use App\Support\Reports\ReportSheets;
 use App\Support\Sales\SaleDeletion;
 use App\Support\Reports\XlsxWriter;
@@ -178,6 +179,7 @@ class ConfirmationController extends Controller
 
         return view('confirmation.supplements', $page + [
             'supplements' => $supplements,
+            'belowZero' => auth()->user()->can('costs.view') ? CostChoices::suppliesBelowZero($supplements) : [],      // the supplies whose cost has no fuel behind it
             'byFuel' => $byFuel,
             'nozzleLabels' => Nozzle::labels(),
             // the Remainders tab: the remainders of the date (they are not confirmed, only listed), with the supply each came from
@@ -357,6 +359,16 @@ class ConfirmationController extends Controller
                 $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainders', ['supply' => $name, 'count' => $remainderCount[$supplement->id]])];
             } elseif (!$given && abs($left - $remainder) > 0.05 && ($remainder > 0 || $left > 0.05)) {
                 $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainder', ['supply' => $name, 'left' => number_format($left, 2), 'remainder' => number_format($remainder, 2)])];
+            }
+        }
+
+        // a cost with no fuel behind it: more left at it than came in (the layer of that cost in the tank is below zero), for the accountant to choose another cost
+        if (auth()->user()->can('costs.view')) {
+            $all = Supplement::where('supply_date', $date)->orderBy('supplied_at')->get();
+            foreach (CostChoices::suppliesBelowZero($all) as $id => $tankId) {
+                $supplement = $all->firstWhere('id', $id);
+                $name = substr((string) $supplement->supplied_at, 11, 5) . ' ' . ($nozzles[$supplement->nozzle_id] ?? $supplement->nozzle_id);
+                $found[] = ['id' => $id, 'text' => __('confirm.check_cost', ['supply' => $name, 'cost' => number_format($supplement->cost, 4)])];
             }
         }
 

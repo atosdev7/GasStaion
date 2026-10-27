@@ -50,6 +50,38 @@ class CostChoices
         return null;
     }
 
+    /**
+     * The supplies (of a collection) whose cost has no fuel behind it: the layer of that cost in the tank they took their fuel from is below zero now, so more left at
+     * that cost than came in at it. [supplement id => the tank id]. A supply with no cost is not in it.
+     */
+    public static function suppliesBelowZero($supplements)
+    {
+        $withCost = collect($supplements)->filter(function ($supplement) {
+            return $supplement->cost !== null;
+        });
+        if ($withCost->isEmpty()) {
+            return [];
+        }
+
+        $tanks = \App\Models\Fuel\FuelOutbound::withTrashed()->whereIn('supplement_id', $withCost->pluck('id'))->pluck('tank_id', 'supplement_id');
+        $layers = [];
+        $found = [];
+        foreach ($withCost as $supplement) {
+            $tankId = $tanks[$supplement->id] ?? null;
+            if ($tankId === null) {
+                continue;
+            }
+            $layers[$tankId] = $layers[$tankId] ?? TankCostLayers::forTank($tankId);
+            foreach ($layers[$tankId] as $layer) {
+                if ($layer['cost'] !== null && $layer['kg'] < -0.004 && abs($layer['cost'] - round((float) $supplement->cost, 4)) < 0.00005) {
+                    $found[$supplement->id] = $tankId;
+                }
+            }
+        }
+
+        return $found;
+    }
+
     /** The choices of every tank (an outbound by hand takes its fuel from the layer of its cost in the tank): tank id => list. */
     public static function byTank()
     {
