@@ -887,11 +887,11 @@ class ConfirmationTest extends TestCase
         $this->assertNull($otherInbound->fresh()->confirmed_at);                          // another date: not touched
         $this->assertNull($otherOutbound->fresh()->confirmed_at);
 
-        // confirmed ones have no check box; the accountant cannot take a confirmation back, a manager can
+        // confirmed ones have no check box; the accountant and the manager can take a confirmation back, the assistant cannot
         $html = $this->get('/confirmations/fuel?date=2026-10-01')->getContent();
         $this->assertSame(0, substr_count($html, 'name="fuel_inbounds[]"') + substr_count($html, 'name="fuel_outbounds[]"'));
-        $this->assertStringNotContainsString('/unconfirm', $html);
-        $this->post('/inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+        $this->assertStringContainsString('/unconfirm', $html);
+        $this->as('assistant')->post('/inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
         $this->post('/outbound/' . $outbound->id . '/unconfirm')->assertForbidden();
         $this->as('manager')->post('/inbound/' . $inbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
         $this->post('/outbound/' . $outbound->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
@@ -929,8 +929,8 @@ class ConfirmationTest extends TestCase
         $html = $this->get('/confirmations/debts?date=2026-10-01')->getContent();
         $this->assertSame(1, substr_count($html, 'name="debt_payments[]"'));
         $this->assertSame(0, substr_count($html, 'name="ticket_settlements[]"'));
-        $this->assertStringNotContainsString('/unconfirm', $html);
-        $this->post('/payments/' . $payment->id . '/unconfirm')->assertForbidden();
+        $this->assertStringContainsString('/unconfirm', $html);
+        $this->as('assistant')->post('/payments/' . $payment->id . '/unconfirm')->assertForbidden();
         $this->post('/loans/settlements/' . $settlement->id . '/unconfirm')->assertForbidden();
 
         $html = $this->as('manager')->get('/confirmations/debts?date=2026-10-01')->getContent();
@@ -1358,8 +1358,8 @@ class ConfirmationTest extends TestCase
         $this->as('accountant')->post('/confirmations', ['date' => '2026-10-01', 'from' => 'tickets', 'ticket_inbounds' => [$inbound->id], 'ticket_publishes' => [$batch->id]]);
 
         $page = $this->get('/confirmations/tickets?date=2026-10-01')->assertOk()->getContent();
-        $this->assertStringNotContainsString(route('ticket-inbound.unconfirm', $inbound->id), $page);         // the accountant has no such button
-        $this->post('/ticket-inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
+        $this->assertStringContainsString(route('ticket-inbound.unconfirm', $inbound->id), $page);         // the accountant has this button too
+        $this->as('assistant')->post('/ticket-inbound/' . $inbound->id . '/unconfirm')->assertForbidden();
         $this->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertForbidden();
 
         $page = $this->as('manager')->get('/confirmations/tickets?date=2026-10-01')->assertOk()->getContent();

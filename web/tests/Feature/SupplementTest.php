@@ -690,8 +690,8 @@ class SupplementTest extends TestCase
         $this->delete('/supplements/' . $supplement->id)->assertSessionHasErrors('supplement');
         $this->assertNotNull(Supplement::find($supplement->id));
 
-        // the accountant cannot take the confirmation back, the manager can; then it can be changed again
-        $this->as('accountant')->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
+        // the assistant cannot take the confirmation back, the manager can; then it can be changed again
+        $this->as('assistant')->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
         $this->as('manager')->post('/supplements/' . $supplement->id . '/unconfirm')->assertSessionHas('status');
         $this->put('/supplements/' . $supplement->id, ['comment' => 'now'])->assertSessionHas('status');
         $this->assertSame('now', $supplement->fresh()->comment);

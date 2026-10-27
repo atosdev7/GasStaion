@@ -63,6 +63,7 @@ return [
             'balances.manage',
             'sync.manage',
             'confirmations.manage',
+            'confirmations.unconfirm', // takes a confirmation back, like the manager
             'sales.delete',
             'sales.edit',
             'card_sales.edit',

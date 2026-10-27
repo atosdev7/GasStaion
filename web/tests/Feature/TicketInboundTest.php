@@ -292,8 +292,8 @@ class TicketInboundTest extends TestCase
         $this->assertSame(10, (int) $row->fresh()->quantity);
         $this->assertNull($row->fresh()->deleted_at);
 
-        // the accountant cannot take it back, a manager can
-        $this->post('/ticket-inbound/' . $row->id . '/unconfirm')->assertForbidden();
+        // the assistant cannot take it back, a manager can
+        $this->as('assistant')->post('/ticket-inbound/' . $row->id . '/unconfirm')->assertForbidden();
         $this->as('manager')->post('/ticket-inbound/' . $row->id . '/unconfirm')->assertRedirect();
         $this->assertFalse($row->fresh()->isConfirmed());
         $this->put('/ticket-inbound/' . $row->id, ['quantity' => 11, 'inbound_date' => '2026-09-20'])->assertSessionHasNoErrors();

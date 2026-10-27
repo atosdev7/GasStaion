@@ -468,7 +468,7 @@ class TicketPublishTest extends TestCase
         $this->assertSame($this->actingUserId(), (int) $batch->fresh()->confirmed_by);
         $this->get('/ticket-publish')->assertSee('Confirmed');
 
-        $this->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertForbidden();
+        $this->as('assistant')->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertForbidden();
         $this->as('manager')->post('/ticket-publish/' . $batch->id . '/unconfirm')->assertRedirect();
         $this->assertFalse($batch->fresh()->isConfirmed());
     }

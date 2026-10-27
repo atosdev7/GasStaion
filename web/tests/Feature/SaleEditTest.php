@@ -173,8 +173,8 @@ class SaleEditTest extends TestCase
         $this->assertSame('old', $sale->fresh()->comment);
         $this->assertSame('2026-10-01', substr((string) $sale->fresh()->sale_date, 0, 10));
 
-        // only the manager takes a confirmation back
-        $this->as('accountant')->post('/ticket-sales/' . $sale->id . '/unconfirm')->assertForbidden();
+        // only the manager and the accountant take a confirmation back
+        $this->as('assistant')->post('/ticket-sales/' . $sale->id . '/unconfirm')->assertForbidden();
         $this->assertNotNull($sale->fresh()->confirmed_at);
         $this->as('manager')->post('/ticket-sales/' . $sale->id . '/unconfirm')->assertRedirect()->assertSessionHas('status');
         $this->assertNull($sale->fresh()->confirmed_at);
@@ -186,11 +186,11 @@ class SaleEditTest extends TestCase
         $this->post('/ticket-sales/' . $sale->id . '/unconfirm')->assertSessionHasErrors('record');
     }
 
-    public function testASupplementConfirmationIsTakenBackByTheManagerOnly()
+    public function testASupplementConfirmationIsTakenBackByTheManagerAndTheAccountantOnly()
     {
         $supplement = $this->supplement('2026-10-01', $this->confirmed());
 
-        foreach (['accountant', 'assistant', 'cashier'] as $role) {
+        foreach (['assistant', 'cashier'] as $role) {
             $this->as($role)->post('/supplements/' . $supplement->id . '/unconfirm')->assertForbidden();
         }
         $this->assertNotNull($supplement->fresh()->confirmed_at);
@@ -328,7 +328,7 @@ class SaleEditTest extends TestCase
         $this->assertStringContainsString('/ticket-sales/' . $card->id . '/edit', $html);                                                   // the accountant edits a card sale too
         $this->assertStringNotContainsString('/ticket-sales/' . $done->id . '/edit', $html);                                                // locked once confirmed
         $this->assertStringContainsString('Confirmed: take the confirmation back to edit it', $html);
-        $this->assertStringNotContainsString('/unconfirm', $html);                                                                           // only the manager
+        $this->assertStringContainsString('/unconfirm', $html);                                                                              // the accountant takes a confirmation back too
         $this->assertStringContainsString('id="record-modal"', $html);                                                                       // the popup
 
         $html = $this->as('manager')->get('/confirmations?date=2026-10-01')->getContent();
@@ -338,7 +338,8 @@ class SaleEditTest extends TestCase
         $html = $this->get('/confirmations/supplements?date=2026-10-01')->getContent();
         $this->assertStringContainsString('href="' . url('/supplements/' . $supplement->id) . '" class="dropdown-item record-detail"', $html);
         $this->assertStringContainsString('formaction="' . url('/supplements/' . $supplement->id . '/unconfirm') . '"', $html);
-        $this->as('accountant')->get('/confirmations/supplements?date=2026-10-01')->assertDontSee('/unconfirm');
+        $this->as('assistant')->get('/confirmations/supplements?date=2026-10-01')->assertDontSee('/unconfirm');
+        $this->as('accountant');
 
         // the popup shows the same detail as the list
         $this->get('/ticket-sales/' . $open->id . '?modal=1')->assertOk()->assertSee('Sale date')->assertDontSee('<html', false);
