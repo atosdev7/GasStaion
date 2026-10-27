@@ -367,7 +367,7 @@ class CardTest extends TestCase
             collect($rows['BB02'])->only(['opening', 'topped_kg', 'topped_amount', 'used_kg', 'closing'])->all());
 
         $html = $response->getContent();
-        $this->assertRegExp('/<td>Li Wei<\/td>\s*<td>AA01<\/td>\s*<td>Diesel<\/td>\s*<td class="text-right">70\.00<\/td>\s*<td class="text-right">50\.00<\/td>\s*<td class="text-right">100\.00<\/td>\s*<td class="text-right">20\.00<\/td>\s*<td class="text-right">100\.00<\/td>/', $html);
+        $this->assertRegExp('/<td>Li Wei<\/td>\s*<td>AA01<\/td>\s*<td>Diesel<\/td>\s*<td class="text-right">70\.00<\/td>\s*<td class="text-right">50\.00<\/td>\s*<td class="text-right">100\.00<\/td>\s*<td class="text-right">20\.00<\/td>\s*<td class="text-right">0\.00<\/td>\s*<td class="text-right">100\.00<\/td>/', $html);
         $this->assertStringContainsString('Total Diesel', $html);
         $this->assertStringContainsString('Total Gasoline', $html);
 
@@ -381,8 +381,8 @@ class CardTest extends TestCase
         $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
         $this->assertFalse($zip->getFromName('xl/worksheets/sheet2.xml'));
         $zip->close();
-        $this->assertRegExp('#<row r="1">.*Customer name.*Card ID.*Fuel type.*Opening balance.*Topped up.*Used.*Closing balance.*</row>#s', $sheet);
-        $this->assertRegExp('#<row r="2">.*Li Wei.*AA01.*Diesel.*<v>70</v>.*<v>50</v>.*<v>100</v>.*<v>20</v>.*<v>100</v>.*</row>#s', $sheet);
+        $this->assertRegExp('#<row r="1">.*Customer name.*Card ID.*Fuel type.*Opening balance.*Topped up.*Used.*Given back.*Closing balance.*</row>#s', $sheet);
+        $this->assertRegExp('#<row r="2">.*Li Wei.*AA01.*Diesel.*<v>70</v>.*<v>50</v>.*<v>100</v>.*<v>20</v>.*<v>0</v>.*<v>100</v>.*</row>#s', $sheet);
         $this->assertStringContainsString('Total Diesel', $sheet);
 
         $this->get('/card-summary?from=2026-10-31&to=2026-10-01')->assertSessionHasErrors('to');
@@ -596,6 +596,21 @@ class CardTest extends TestCase
         $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => today()->addDay()->toDateString()])->assertSessionHasErrors('sale_date');
         $this->post('/card-topups', ['card_id' => $card->id, 'amount_kg' => 10, 'price' => 2, 'sale_date' => 'yesterday'])->assertSessionHasErrors('sale_date');
         $this->assertSame(2, Sale::where('sale_type', 'card')->count());
+    }
+
+    // the unused part of a ticket a supply gave back is in the summary: it is a column of its own and part of the closing balance, as it is of the card's balance
+    public function testTheSummaryCountsTheKgAFillGaveBackToTheCard()
+    {
+        $card = $this->card('AA01', 'Li Wei', 'D');
+        $this->topUp($card, 100, '2026-09-20');
+        \App\Models\Cards\CardTransaction::forceCreate(['card_id' => $card->id, 'type' => 'refund', 'source_id' => 'r1', 'kg' => 4, 'occurred_at' => '2026-09-25 10:00:00']);      // before the period
+        \App\Models\Cards\CardTransaction::forceCreate(['card_id' => $card->id, 'type' => 'refund', 'source_id' => 'r2', 'kg' => 6, 'occurred_at' => '2026-10-08 10:00:00']);      // in it
+
+        $rows = collect($this->as('accountant')->get('/card-summary?from=2026-10-01&to=2026-10-31')->assertOk()->viewData('rows'))->keyBy(function ($row) {
+            return $row['card']->uid;
+        });
+        $this->assertEquals(['opening' => 104, 'refunded_kg' => 6, 'closing' => 110], collect($rows['AA01'])->only(['opening', 'refunded_kg', 'closing'])->all());
+        $this->assertEquals(110, $card->fresh()->balance());
     }
 
     public function testTheTicketsMadeForACardAreItsUseInTheSummaryAndTheHistoryRecords()

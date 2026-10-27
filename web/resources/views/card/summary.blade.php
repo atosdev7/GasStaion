@@ -32,6 +32,7 @@
                     <th class="text-right">{{ __('cards.topped_up_kg') }}</th>
                     <th class="text-right">{{ __('cards.topped_up_amount') }}</th>
                     <th class="text-right">{{ __('cards.used_kg') }}</th>
+                    <th class="text-right">{{ __('cards.refunded_kg') }}</th>
                     <th class="text-right">{{ __('cards.closing') }}</th>
                 </tr>
                 </thead>
@@ -45,10 +46,11 @@
                         <td class="text-right">{{ number_format($row['topped_kg'], 2) }}</td>
                         <td class="text-right">{{ number_format($row['topped_amount'], 2) }}</td>
                         <td class="text-right">{{ number_format($row['used_kg'], 2) }}</td>
+                        <td class="text-right">{{ number_format($row['refunded_kg'], 2) }}</td>
                         <td class="text-right">{{ number_format($row['closing'], 2) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-muted">{{ __('cards.no_data') }}</td></tr>
+                    <tr><td colspan="9" class="text-muted">{{ __('cards.no_data') }}</td></tr>
                 @endforelse
                 </tbody>
                 @if (count($rows))
@@ -63,6 +65,7 @@
                                 <td class="text-right">{{ number_format($mine->sum('topped_kg'), 2) }}</td>
                                 <td class="text-right">{{ number_format($mine->sum('topped_amount'), 2) }}</td>
                                 <td class="text-right">{{ number_format($mine->sum('used_kg'), 2) }}</td>
+                                <td class="text-right">{{ number_format($mine->sum('refunded_kg'), 2) }}</td>
                                 <td class="text-right">{{ number_format($mine->sum('closing'), 2) }}</td>
                             </tr>
                         @endif

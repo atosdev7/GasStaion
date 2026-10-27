@@ -12,7 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 // Summary of the cards by card for a period (a start date and an end date): what the card held at the start, what was topped up (kg and money),
-// what was used (kg supplied with it) and what it holds at the end.
+// what was used (kg supplied with it), what was given back (the unused part of a ticket a supply did not use) and what it holds at the end.
 class CardSummaryController extends Controller
 {
     public function index(Request $request)
@@ -42,7 +42,7 @@ class CardSummaryController extends Controller
         $figures = [];
         $add = function ($card, $key, $kg) use (&$figures) {
             if (!isset($figures[$card])) {
-                $figures[$card] = ['opening' => 0.0, 'topped_kg' => 0.0, 'topped_amount' => 0.0, 'used_kg' => 0.0];
+                $figures[$card] = ['opening' => 0.0, 'topped_kg' => 0.0, 'topped_amount' => 0.0, 'used_kg' => 0.0, 'refunded_kg' => 0.0];
             }
             $figures[$card][$key] += (float) $kg;
         };
@@ -75,6 +75,16 @@ class CardSummaryController extends Controller
             }
         }
 
+        // the kg a supply gave back to the card (the unused part of the tickets the card paid for): entries of the ledger
+        foreach (\App\Models\Cards\CardTransaction::where('type', 'refund')->get() as $entry) {
+            $day = substr((string) $entry->occurred_at, 0, 10);
+            if ($day < $from) {
+                $add($entry->card_id, 'opening', $entry->kg);
+            } elseif ($day <= $to) {
+                $add($entry->card_id, 'refunded_kg', $entry->kg);
+            }
+        }
+
         // a card with nothing in the period and nothing on it is left out
         $cards = Card::withTrashed()->orderBy('holder_name')->orderBy('uid')->get();
         $rows = [];
@@ -83,8 +93,8 @@ class CardSummaryController extends Controller
                 continue;
             }
             $row = $figures[$card->id];
-            $row['closing'] = $row['opening'] + $row['topped_kg'] - $row['used_kg'];
-            if (max(abs($row['opening']), abs($row['topped_kg']), abs($row['used_kg']), abs($row['closing'])) < 0.005) {
+            $row['closing'] = $row['opening'] + $row['topped_kg'] + $row['refunded_kg'] - $row['used_kg'];
+            if (max(abs($row['opening']), abs($row['topped_kg']), abs($row['used_kg']), abs($row['refunded_kg']), abs($row['closing'])) < 0.005) {
                 continue;
             }
             $rows[] = ['card' => $card] + $row;

@@ -572,7 +572,7 @@ class ReportSheets
             $fuel = $row['card']->fuel_type;
             $rows[] = [
                 $row['card']->holder_name, $row['card']->uid, isset($d['fuels'][$fuel]) ? $d['fuels'][$fuel] : $fuel,
-                (float) $row['opening'], (float) $row['topped_kg'], (float) $row['topped_amount'], (float) $row['used_kg'], (float) $row['closing'],
+                (float) $row['opening'], (float) $row['topped_kg'], (float) $row['topped_amount'], (float) $row['used_kg'], (float) $row['refunded_kg'], (float) $row['closing'],
             ];
         }
         $all = collect($d['rows']);
@@ -582,16 +582,16 @@ class ReportSheets
             });
             if ($mine->isNotEmpty()) {
                 $rows[] = [__('report.total') . ' ' . $name, '', '', (float) $mine->sum('opening'), (float) $mine->sum('topped_kg'), (float) $mine->sum('topped_amount'),
-                    (float) $mine->sum('used_kg'), (float) $mine->sum('closing')];
+                    (float) $mine->sum('used_kg'), (float) $mine->sum('refunded_kg'), (float) $mine->sum('closing')];
             }
         }
 
         return [[
             'title' => __('menu.card_summary'),
             'headings' => [__('report.holder'), __('report.uid'), __('report.fuel_type'), __('report.cards_opening'), __('report.topped_up_kg'), __('report.topped_up_amount'),
-                __('report.used_kg'), __('report.closing')],
+                __('report.used_kg'), __('report.refunded_kg'), __('report.closing')],
             'rows' => $rows,
-            'money' => [3, 4, 5, 6, 7],
+            'money' => [3, 4, 5, 6, 7, 8],
         ]];
     }
 

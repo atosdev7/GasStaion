@@ -154,6 +154,7 @@ return [
     'topped_up_kg' => 'Topped up (kg)',
     'topped_up_amount' => 'Topped up (amount)',
     'used_kg' => 'Used (kg)',
+    'refunded_kg' => 'Given back (kg)',
     'closing' => 'Closing balance (kg)',
 
     // Copied from debt_summary.php
