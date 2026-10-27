@@ -34,14 +34,15 @@ use ZipArchive;
 // A backup is refused while a sale or supplement it would clear has not been confirmed (the accountant could no longer review it), nor the ticket
 // inbounds and publishes of those days (they are not cleared, but the day is not finished until they are confirmed), and while a
 // terminal has not uploaded since the end of that business day (it may still hold records of those days that the web does not know yet).
-// The net kg each tank loses from the cleared inbound/supplied rows is recorded on the backup row
-// (see TankLevels), so live tank stock does not change and tank_balances stays the go-live value.
+// What the cleared inbound/outbound rows leave in each tank is written as its tank_balances rows, one per cost (tankBalancesAfter), so live tank
+// stock does not change. The net kg per tank is also noted on the backup row (tank_carry), for the history screen only.
 class BackupRun
 {
     // Not exported: framework tables and the live server's own backup history.
     // tank_balances: the backup server has every fuel inbound and outbound from the live start, so it needs no balances (the ones a backup wrote are those rows summed up, and
     // it would count them twice); the opening balances of the tanks are entered there once by hand.
-    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups', 'tank_balances'];
+    // settings and devices: the go-live date, the default costs, the restore marker and the terminals' tokens belong to the server that holds them.
+    const NOT_EXPORTED = ['migrations', 'password_resets', 'failed_jobs', 'backups', 'tank_balances', 'settings', 'devices'];
 
     /** Rows that a backup up to $upTo would clear, per table (soft-deleted rows included). */
     public static function preview($upTo)

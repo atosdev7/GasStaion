@@ -12,6 +12,7 @@ use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
 use App\Models\Debts\TicketLoan;
 use App\Support\Reports\ReportSheets;
+use App\Support\Reports\StockOrdering;
 use App\Support\Dashboard\TankLevels;
 use App\Support\Reports\XlsxWriter;
 use App\Support\Tickets\TicketStock;
@@ -21,7 +22,7 @@ use Illuminate\Http\Request;
 // Read-only reports. Everything goes through Eloquent so soft-deleted rows stay out of the sums.
 class ReportController extends Controller
 {
-    const REPORTS = ['sales', 'cash', 'profit', 'customer', 'tickets', 'tanks', 'supply'];
+    const REPORTS = ['sales', 'cash', 'profit', 'customer', 'tickets', 'tanks', 'supply', 'ordering'];
 
     public function index()
     {
@@ -164,6 +165,12 @@ class ReportController extends Controller
                 ->groupBy('day', 'nozzle_id')->orderBy('day')->get(),
             'nozzleLabels' => Nozzle::labels(),
         ]);
+    }
+
+    // What the tanks hold, what is owed on tickets sold and not supplied, and the speed of supply and sales, to decide when and how much to order.
+    public function ordering(Request $request)
+    {
+        return $this->respond($request, 'ordering', ['rows' => StockOrdering::rows(), 'fuels' => config('fuel_types'), 'windows' => StockOrdering::WINDOWS]);
     }
 
     // The page, or the same data as an .xlsx file when the request has ?export=xls.

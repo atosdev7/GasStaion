@@ -209,6 +209,8 @@ class BackupTest extends TestCase
         $this->assertSame(3, $manifest['rows']['sales']); // exported before clearing; the deleted sale is not backed up
         $this->assertCount(3, array_filter(explode("\n", $zip->getFromName('sales.jsonl'))));
         $this->assertFalse($zip->getFromName('tank_balances.jsonl'));              // (the backup server enters its own opening balances)
+        $this->assertFalse($zip->getFromName('settings.jsonl'));                   // (nor the settings and terminals of the live server)
+        $this->assertFalse($zip->getFromName('devices.jsonl'));
         $this->assertFalse($zip->getFromName('backups.jsonl'));
         $zip->close();
     }

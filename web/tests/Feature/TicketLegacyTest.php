@@ -103,6 +103,49 @@ class TicketLegacyTest extends TestCase
         $this->as('cashier')->get('/balances/go-live')->assertForbidden();
     }
 
+    // the old paper tickets customers still hold are entered by fuel type and spec; each old ticket supplied afterwards takes one off, against the oldest entry
+    public function testTheOldTicketsAtCustomersAreEnteredAndShrinkAsTheyAreSupplied()
+    {
+        $this->goLive('2026-10-01');
+        $this->publish(1, 20, '2026-09-20', false);
+        $this->as('manager')->get('/balances/ticket-sales')->assertOk()->assertSee('Old tickets at customers');
+        $this->post('/balances/ticket-sales', ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 10, 'as_of' => '2026-10-01', 'comment' => ' first count '])
+            ->assertRedirect('/balances/ticket-sales')->assertSessionHasNoErrors();
+        $this->post('/balances/ticket-sales', ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 2, 'as_of' => '2026-10-05'])->assertSessionHasNoErrors();
+        $this->post('/balances/ticket-sales', ['fuel_type' => 'D', 'spec' => 9, 'quantity' => 1])->assertSessionHasErrors('spec');
+        $this->post('/balances/ticket-sales', ['fuel_type' => 'X', 'spec' => 0, 'quantity' => 1])->assertSessionHasErrors('fuel_type');
+        $this->post('/balances/ticket-sales', ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 0])->assertSessionHasErrors('quantity');
+        $this->assertSame('first count', \App\Models\Tickets\OpeningTicket::orderBy('id')->first()->comment);
+
+        $this->assertEquals(['D' => ['count' => 12, 'kg' => 60.0]], \App\Support\Tickets\OpeningTickets::owed());
+
+        // three old tickets were supplied on the 2nd, 3rd and 6th, one before the first count (it does not count), one a new ticket (not an old one)
+        foreach ([[1, '2026-10-02'], [2, '2026-10-03'], [3, '2026-10-06'], [4, '2026-09-30']] as list($serial, $day)) {
+            Ticket::forceCreate([
+                'barcode' => $this->code($serial), 'fuel_type' => 'D', 'spec' => 0, 'code' => '06', 'serial' => $serial,
+                'publish_id' => TicketPublish::first()->id, 'status' => config('ticket_statuses.supply'), 'supply_date' => $day . ' 09:00:00',
+            ]);
+        }
+        $this->publish(30, 31, '2026-10-02');
+        Ticket::where('serial', 30)->update(['status' => config('ticket_statuses.supply'), 'supply_date' => '2026-10-04 09:00:00']);
+
+        $entries = \App\Support\Tickets\OpeningTickets::rows();
+        $this->assertSame([3, 0], [$entries[0]['supplied'], $entries[1]['supplied']]);      // the three go against the oldest entry
+        $this->assertSame([7, 2], [$entries[0]['left'], $entries[1]['left']]);
+        $this->assertEquals(['D' => ['count' => 9, 'kg' => 45.0]], \App\Support\Tickets\OpeningTickets::owed());
+        $this->get('/balances/ticket-sales')->assertOk()->assertSee('ticket-owed-table', false);
+
+        // a cancelled ticket is taken off by editing the count
+        $row = $entries[0]['row'];
+        $this->get('/balances/ticket-sales/' . $row->id . '/edit')->assertOk();
+        $this->put('/balances/ticket-sales/' . $row->id, ['fuel_type' => 'D', 'spec' => 0, 'quantity' => 8, 'as_of' => '2026-10-01'])->assertSessionHasNoErrors();
+        $this->assertSame(5, \App\Support\Tickets\OpeningTickets::rows()[0]['left']);
+        $this->delete('/balances/ticket-sales/' . $row->id)->assertRedirect('/balances/ticket-sales');
+        $this->assertSame(1, \App\Models\Tickets\OpeningTicket::count());
+
+        $this->as('cashier')->get('/balances/ticket-sales')->assertForbidden();
+    }
+
     public function testATicketWithNoRowInAPublishBeforeGoLiveIsOldAndOneAfterItIsNot()
     {
         $this->publish(1, 3, '2026-09-20', false);          // before go-live, no rows at all

@@ -223,6 +223,48 @@ class ReportTest extends TestCase
         $this->assertEquals(15, $rows->first()->kg);
     }
 
+    // the numbers to decide an order: the tanks, what is owed on tickets sold and not supplied (here and on paper), the free fuel, the speed of supply and sales
+    public function testStockAndOrderingShowsTheTanksTheFuelOwedAndTheSpeedOfSupply()
+    {
+        \Carbon\Carbon::setTestNow('2026-10-20 10:00:00');
+        $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 1000]);
+        $nozzle = $this->nozzle($tank);
+        $this->supplement($nozzle, 140, '2026-10-15 12:00:00');          // inside the last 7 days
+        $this->supplement($nozzle, 70, '2026-10-01 12:00:00');           // only inside the last 30
+        $this->sale(['sale_date' => '2026-10-18', 'amount_kg' => 100]);
+        $this->sale(['sale_date' => '2026-10-18', 'amount_kg' => 50, 'usage' => 'self']);      // self use is not a sale
+
+        $ticket = function ($barcode, $status, $attrs) {
+            Ticket::forceCreate($attrs + ['barcode' => $barcode, 'fuel_type' => 'D', 'code' => '06', 'serial' => (int) substr($barcode, -3), 'status' => $status]);
+        };
+        $ticket('0000106000000001', config('ticket_statuses.sale'), ['spec' => 2]);                       // 15 kg sold here, not supplied
+        $ticket('0000122000000002', config('ticket_statuses.sale'), ['spec' => null, 'amount_kg' => 7]);   // a spot ticket of 7 kg
+        $ticket('0000106000000003', config('ticket_statuses.publish'), ['spec' => 2]);                    // still in stock: owed to nobody
+        $ticket('0000106000000004', config('ticket_statuses.supply'), ['spec' => 2]);                     // supplied already
+        \App\Models\Tickets\OpeningTicket::create(['fuel_type' => 'D', 'spec' => 0, 'quantity' => 3, 'as_of' => '2026-10-01']);          // 3 old tickets of 5 kg
+
+        $page = $this->as('accountant')->get('/reports/ordering')->assertOk()->assertSee('Stock and ordering');
+        $row = $page->viewData('rows')['D'];
+        $this->assertEquals(790, $row->tanks);
+        $this->assertEquals(22, $row->system_owed);
+        $this->assertEquals(15, $row->old_owed);
+        $this->assertEquals(37, $row->owed);
+        $this->assertEquals(753, $row->free);
+        $this->assertEquals(20, $row->supplied[7]);
+        $this->assertEquals(7, $row->supplied[30]);
+        $this->assertEqualsWithDelta(2.33, $row->supplied[90], 0.01);
+        $this->assertEqualsWithDelta(100 / 7, $row->sold[7], 0.001);
+        $this->assertEqualsWithDelta(37.65, $row->cover[7], 0.001);
+
+        // a fuel type that was never supplied has no days of cover
+        $this->assertNull($page->viewData('rows')['A']->cover[7]);
+
+        $this->get('/reports/ordering?export=xls')->assertOk();
+        $this->get('/reports')->assertOk()->assertSee('Stock and ordering');
+        \Carbon\Carbon::setTestNow();
+    }
+
     public function testEndDateBeforeStartIsRejected()
     {
         $this->as('accountant')->from('/reports/sales')->get('/reports/sales?from=2026-09-10&to=2026-09-01')

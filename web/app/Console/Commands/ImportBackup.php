@@ -52,7 +52,8 @@ class ImportBackup extends Command
         DB::transaction(function () use ($zip, $manifest, $local) {
             foreach (array_keys($manifest['rows']) as $table) {
                 $file = $table;
-                if (!in_array($table, $local, true) || $table === 'tank_balances') {      // (the tank balances are never imported: this server's are entered by hand)
+                // (never imported, even from an older export: this server's tank balances are entered by hand, its settings and devices are its own)
+                if (!in_array($table, $local, true) || in_array($table, ['tank_balances', 'settings', 'devices'], true)) {
                     $this->warn("Skipped $table: no such table here.");
                     continue;
                 }

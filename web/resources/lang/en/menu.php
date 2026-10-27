@@ -53,6 +53,7 @@ return [
     'reports' => 'Reports',
     'backup' => 'Backup',
     'audit' => 'Audit Log',
+    'init_ticket_sales' => 'Ticket Sales',
     'init_remainders' => 'Remainder tickets',
     'go_live' => 'Go-live',
 ];

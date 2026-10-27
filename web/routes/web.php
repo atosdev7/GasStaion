@@ -188,7 +188,12 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::get('balances/tanks', 'Initialize\BalanceController@tanks')->name('balances.tanks.index');
             Route::get('balances/debts', 'Initialize\BalanceController@debts')->name('balances.debts.index');
             Route::get('balances/loans', 'Initialize\BalanceController@loans')->name('balances.loans.index');
-            Route::get('balances/remainders', 'Initialize\BalanceController@remainders')->name('balances.remainders.index');
+            Route::get('balances/ticket-sales', 'Initialize\BalanceController@ticketSales')->name('balances.ticket-sales.index');
+            Route::post('balances/ticket-sales', 'Initialize\BalanceController@storeTicketSale')->name('balances.ticket-sales.store');
+            Route::get('balances/ticket-sales/{id}/edit', 'Initialize\BalanceController@editTicketSale')->name('balances.ticket-sales.edit')->where('id', '[0-9]+');
+            Route::put('balances/ticket-sales/{id}', 'Initialize\BalanceController@updateTicketSale')->name('balances.ticket-sales.update')->where('id', '[0-9]+');
+            Route::delete('balances/ticket-sales/{id}', 'Initialize\BalanceController@destroyTicketSale')->name('balances.ticket-sales.destroy')->where('id', '[0-9]+');
+            Route::get('balances/remainders','Initialize\BalanceController@remainders')->name('balances.remainders.index');
             Route::post('balances/remainders', 'Initialize\BalanceController@storeRemainder')->name('balances.remainders.store');
             Route::post('balances/tanks', 'Initialize\BalanceController@storeTank')->name('balances.tanks.store');
             Route::get('balances/tanks/{id}/edit', 'Initialize\BalanceController@editTank')->name('balances.tanks.edit')->where('id', '[0-9]+');

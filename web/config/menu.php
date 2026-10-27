@@ -89,6 +89,7 @@ return [
             ['label' => 'tanks',        'route' => 'balances.tanks.index', 'permission' => 'balances.manage'],
             ['label' => 'init_debts',   'route' => 'balances.debts.index', 'permission' => 'balances.manage'],
             ['label' => 'ticket_loans', 'route' => 'balances.loans.index', 'permission' => 'balances.manage'],
+            ['label' => 'init_ticket_sales', 'route' => 'balances.ticket-sales.index', 'permission' => 'balances.manage'],
             ['label' => 'init_remainders', 'route' => 'balances.remainders.index', 'permission' => 'balances.manage'],
         ],
     ],

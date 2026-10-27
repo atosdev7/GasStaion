@@ -18,7 +18,9 @@ use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
 use App\Support\Dashboard\TankLevels;
 use App\Support\Fuel\DefaultCost;
+use App\Models\Tickets\OpeningTicket;
 use App\Support\Tickets\LegacyTickets;
+use App\Support\Tickets\OpeningTickets;
 use App\Support\Supplements\RemainderMaker;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -407,5 +409,65 @@ class BalanceController extends Controller
         Audit::log('opening_ticket_loan_delete', '#' . $loan->id);
 
         return redirect()->route('balances.loans.index')->with('status', __('initialize.deleted'));
+    }
+
+    // The old paper tickets customers still hold (sold before go-live, not supplied yet): how many, for a fuel type and a spec. Only for working out what is owed;
+    // what is left of an entry shrinks as old tickets are supplied (OpeningTickets). A ticket cancelled by the customer is taken off by editing the count.
+    public function ticketSales()
+    {
+        return view('balance.ticket_sales', [
+            'entries' => OpeningTickets::rows(),
+            'owed' => OpeningTickets::owed(),
+            'fuels' => config('fuel_types'),
+            'specs' => config('ticket_specs'),
+        ]);
+    }
+
+    public function storeTicketSale(Request $request)
+    {
+        $data = $this->ticketSaleFields($request, true);
+        $row = OpeningTicket::create($data + ['user_id' => auth()->id()]);
+        Audit::log('opening_tickets', '#' . $row->id . ' ' . $row->fuel_type . ' spec ' . $row->spec . ' x' . $row->quantity . ' as of ' . $data['as_of']);
+
+        return redirect()->route('balances.ticket-sales.index')->with('status', __('initialize.created'));
+    }
+
+    public function editTicketSale($id)
+    {
+        return view('balance.ticket_sale_edit', ['row' => OpeningTicket::findOrFail($id), 'fuels' => config('fuel_types'), 'specs' => config('ticket_specs')]);
+    }
+
+    public function updateTicketSale(Request $request, $id)
+    {
+        $row = OpeningTicket::findOrFail($id);
+        $before = $row->fuel_type . ' spec ' . $row->spec . ' x' . $row->quantity . ' as of ' . substr((string) $row->as_of, 0, 10);
+        $row->forceFill($this->ticketSaleFields($request) + ['user_id' => auth()->id()])->save();
+        Audit::log('opening_tickets_update', '#' . $row->id . ': ' . $before . ' -> ' . $row->fuel_type . ' spec ' . $row->spec . ' x' . $row->quantity . ' as of ' . substr((string) $row->as_of, 0, 10));
+
+        return redirect()->route('balances.ticket-sales.index')->with('status', __('initialize.saved'));
+    }
+
+    public function destroyTicketSale($id)
+    {
+        $row = OpeningTicket::findOrFail($id);
+        $row->delete();
+        Audit::log('opening_tickets_delete', '#' . $row->id . ' ' . $row->fuel_type . ' spec ' . $row->spec . ' x' . $row->quantity);
+
+        return redirect()->route('balances.ticket-sales.index')->with('status', __('initialize.deleted'));
+    }
+
+    private function ticketSaleFields(Request $request, $dayOptional = false)
+    {
+        $data = $request->validate([
+            'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
+            'spec' => ['required', 'integer', Rule::in(array_keys(config('ticket_specs')))],
+            'quantity' => 'required|integer|min:1|max:99999999',
+            'as_of' => ($dayOptional ? 'nullable' : 'required') . '|date_format:Y-m-d|before_or_equal:today',      // the day the count is from; today when it is not sent
+            'comment' => 'nullable|string|max:255',
+        ]);
+        $data['as_of'] = $data['as_of'] ?? today()->toDateString();
+        $data['comment'] = isset($data['comment']) && trim($data['comment']) !== '' ? trim($data['comment']) : null;
+
+        return $data;
     }
 }

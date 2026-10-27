@@ -10,17 +10,4 @@ class Backup extends Model
         'cleared' => 'array',
         'tank_carry' => 'array',
     ];
-
-    /** Total kg carried per tank id across all backups. */
-    public static function tankCarryTotals()
-    {
-        $totals = [];
-        foreach (static::all()->pluck('tank_carry') as $carry) {
-            foreach ((array) $carry as $tankId => $kg) {
-                $totals[$tankId] = ($totals[$tankId] ?? 0) + (float) $kg;
-            }
-        }
-
-        return $totals;
-    }
 }

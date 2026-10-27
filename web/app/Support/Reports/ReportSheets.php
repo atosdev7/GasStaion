@@ -203,6 +203,39 @@ class ReportSheets
         ]];
     }
 
+    public static function ordering(array $d)
+    {
+        $fuels = $d['fuels'];
+        $windows = $d['windows'];
+        $rows = [];
+        foreach ($d['rows'] as $r) {
+            $row = [isset($fuels[$r->fuel_type]) ? $fuels[$r->fuel_type] : $r->fuel_type, $r->tanks, $r->system_owed, $r->old_owed, $r->owed, $r->free];
+            foreach (['supplied', 'sold'] as $kind) {
+                foreach ($windows as $days) {
+                    $row[] = round($r->$kind[$days], 2);
+                }
+            }
+            foreach ($windows as $days) {
+                $row[] = $r->cover[$days] === null ? '-' : round($r->cover[$days], 1);
+            }
+            $rows[] = $row;
+        }
+
+        $headings = [__('report.fuel_type'), __('report.ord_tanks'), __('report.ord_system_owed'), __('report.ord_old_owed'), __('report.ord_owed'), __('report.ord_free')];
+        foreach (['ord_supplied', 'ord_sold', 'ord_cover'] as $key) {
+            foreach ($windows as $days) {
+                $headings[] = __('report.' . $key) . ' ' . $days . ' ' . __('report.ord_days_short');
+            }
+        }
+
+        return [[
+            'title' => __('report.title_ordering'),
+            'headings' => $headings,
+            'rows' => $rows,
+            'money' => array_merge(range(1, 5), range(6, 5 + 2 * count($windows))),
+        ]];
+    }
+
     public static function supply(array $d)
     {
         $rows = [];
