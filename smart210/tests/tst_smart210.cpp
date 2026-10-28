@@ -394,6 +394,7 @@ private slots:
 
     void theEscPosCommandsAreTheRightBytes();
     void theBarcodeIsNativeCode128SubsetC();
+    void theBarcodeOfATicketIsDrawnAsCode128CWithItsCheckSymbol();
     void aPictureBecomesBlackAndWhiteRasterRows();
     void tallPicturesAreSentInBandsOf128Rows();
     void theStatusAnswerSaysWhatIsWrongWithThePrinter();
@@ -467,6 +468,8 @@ private slots:
     void theDispensersScreenShowsTheNozzlesInDetail();
     void aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATicket();
     void aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket();
+    void theSettingsPageChoosesWhatASpotSaleAndACardFillGive();
+    void aCardFillSetDirectlyAsksForTheNozzleAndPrintsNothing();
     void theNozzleQuestionIsAnsweredWithTheKeyboardAlone();
     void grabAllScreens();
     void theThemeComesFromTheResourcesOrFromAFileThatIsReadAgainWhenSaved();
@@ -2193,8 +2196,8 @@ void Smart210Test::theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload()
         askedSales << id.toString();
     }
     askedSales.sort();
-    QCOMPARE(askedSales, QStringList() << "done" << "open");                              // uploaded, not a card's: not the unsent one, not the top-up
-    QCOMPARE(asked.value("supplements").toArray().size(), 3);                              // sup-done, sup-done2, sup-open (not the card's)
+    QCOMPARE(askedSales, QStringList() << "done" << "open" << "topup");                    // uploaded and shown: not the unsent one; a card's top-up is asked about too
+    QCOMPARE(asked.value("supplements").toArray().size(), 4);                              // sup-done, sup-done2, sup-open and the card's
 
     QStringList sales;
     QSqlQuery query(db);
@@ -2210,6 +2213,13 @@ void Smart210Test::theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload()
         supplies << query.value(0).toString();
     }
     QCOMPARE(supplies, QStringList() << "sup-card" << "sup-open");
+    // a card's confirmed top-up and supply stay (the balance and the history of the card) and are hidden: the Review screen does not list them
+    QCOMPARE(one("SELECT hidden FROM sales WHERE id = 'topup'").toInt(), 1);
+    QCOMPARE(one("SELECT hidden FROM supplements WHERE id = 'sup-card'").toInt(), 1);
+    QCOMPARE(one("SELECT hidden FROM sales WHERE id = 'open'").toInt(), 0);
+    QCOMPARE(ReviewData::sales(db, "2026-10-07", true).size(), 2);                          // open and unsent, not the top-up
+    QCOMPARE(ReviewData::supplements(db, "2026-10-07").size(), 1);                          // sup-open, not the card's
+    QVERIFY(!Purger::keptSaleIds(db, 100).contains("topup"));                              // and it is not asked about again
     QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-printed'").toInt(), 0);
     QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-unprinted'").toInt(), 1);   // not printed yet: it may still be printed
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000021").toInt(), 0);
@@ -3434,7 +3444,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 10);                                  // the program still opens it
+    QCOMPARE(Migrator::version(db), 11);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -4286,7 +4296,6 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     QComboBox *usage = window.findChild<QComboBox *>("usageCombo");
     QLineEdit *kg = window.findChild<QLineEdit *>("kgField");
     QLineEdit *amount = window.findChild<QLineEdit *>("amountField");
-    QComboBox *result = window.findChild<QComboBox *>("resultCombo");
     QCheckBox *receipt = window.findChild<QCheckBox *>("receiptCheck");
     QLineEdit *comment = window.findChild<QLineEdit *>("commentField");
     QPushButton *save = window.findChild<QPushButton *>("saveSaleButton");
@@ -4296,7 +4305,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     QCOMPARE(window.findChild<QPushButton *>("navSales")->focusPolicy(), Qt::NoFocus); // the sidebar is not in the way
 
     // Enter goes through the fields in the order of the form, from the first one
-    QWidget *order[] = {customer, fuel, price, usage, kg, amount, result, receipt, comment, save};
+    QWidget *order[] = {customer, fuel, price, usage, kg, amount, receipt, comment, save};
     customer->setFocus();
     for (unsigned i = 0; i + 1 < sizeof(order) / sizeof(order[0]); ++i) {
         QCOMPARE(page->focusWidget(), order[i]);
@@ -4311,7 +4320,6 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     enterIn(kg);
     QCOMPARE(page->focusWidget(), static_cast<QWidget *>(amount));
     enterIn(amount);
-    enterIn(result);
     QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
     QTest::keyClick(receipt, Qt::Key_Space);                             // Space ticks the box, Enter only moves on
     QVERIFY(receipt->isChecked());
@@ -4334,7 +4342,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     kg->setFocus();
     QTest::keyClicks(kg, "5");
     enterIn(kg);
-    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(result));
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
     save->setFocus();
     QTest::keyClick(save, Qt::Key_Space);
     QCOMPARE(countRows("sales"), 2);
@@ -5555,6 +5563,63 @@ void Smart210Test::theBarcodeIsNativeCode128SubsetC()
     QVERIFY(EscPos::barcode128C("0000", 1, 60).contains(QByteArray("\x1D\x77\x02", 3)));
 }
 
+// The bars of a ticket as a bitmap: Start C, one symbol for two digits, the check symbol and Stop. Every symbol is 11 modules wide, the stop 13.
+void Smart210Test::theBarcodeOfATicketIsDrawnAsCode128CWithItsCheckSymbol()
+{
+    // "1234": symbols 12 and 34; check = (105 + 12 * 1 + 34 * 2) % 103 = 82; Start C is 211232, Stop 2331112
+    const QList<int> widths = TicketRenderer::barcodeModules("1234");
+    int modules = 0;
+    foreach (int width, widths) {
+        modules += width;
+    }
+    QCOMPARE(widths.size(), 6 * 4 + 7);                              // start, two symbols, the check and the stop
+    QCOMPARE(modules, 11 * 4 + 13);
+    QCOMPARE(widths.mid(0, 6), QList<int>() << 2 << 1 << 1 << 2 << 3 << 2);               // Start C: 211232
+    QCOMPARE(widths.mid(6, 6), QList<int>() << 1 << 1 << 2 << 2 << 3 << 2);               // 12: 112232
+    QCOMPARE(widths.mid(12, 6), QList<int>() << 1 << 3 << 1 << 1 << 2 << 3);              // 34: 131123
+    QCOMPARE(widths.mid(18, 6), QList<int>() << 1 << 2 << 1 << 2 << 4 << 1);              // the check symbol 82: 121241
+    QCOMPARE(widths.mid(widths.size() - 7), QList<int>() << 2 << 3 << 3 << 1 << 1 << 1 << 2);   // Stop: 2331112
+    QVERIFY(TicketRenderer::barcodeModules("123").isEmpty());          // an odd number of digits
+    QVERIFY(TicketRenderer::barcodeModules("12a4").isEmpty());
+    QVERIFY(TicketRenderer::barcodeModules("").isEmpty());
+
+    // a ticket: 8 symbols and the start and the check: 10 * 11 + 13 modules; the picture has bars in it and the digits under them
+    const QFont font = TicketRenderer::fontFor(PrintOptions());
+    const QList<int> ticket = TicketRenderer::barcodeModules("0000021500000001");
+    int ticketModules = 0;
+    foreach (int width, ticket) {
+        ticketModules += width;
+    }
+    QCOMPARE(ticketModules, 10 * 11 + 13);
+    const QImage image = TicketRenderer::barcodeImage("0000021500000001", 3, 80, font, 576);
+    QCOMPARE(image.width(), 576);
+    QVERIFY(image.height() > 80);
+    int dark = 0;
+    for (int y = 4; y < 4 + 80; ++y) {                                // inside the bars: a dark column every few dots
+        for (int x = 0; x < image.width(); ++x) {
+            if (qGray(image.pixel(x, y)) < 128) {
+                ++dark;
+            }
+        }
+    }
+    QVERIFY(dark > 80 * 3 * 20);                                      // at least 20 modules of black in 80 rows
+    bool textBelow = false;
+    for (int y = 4 + 80 + 2; y < image.height() && !textBelow; ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            if (qGray(image.pixel(x, y)) < 128) {
+                textBelow = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(textBelow);                                               // the digits are printed under the bars
+    QVERIFY(TicketRenderer::barcodeImage("123", 3, 80, font, 576).isNull());
+
+    // paper too narrow for the module: it is made thinner so that the bars fit
+    const QImage narrow = TicketRenderer::barcodeImage("0000021500000001", 6, 80, font, 400);
+    QCOMPARE(narrow.width(), 400);
+}
+
 void Smart210Test::aPictureBecomesBlackAndWhiteRasterRows()
 {
     QImage image(10, 2, QImage::Format_RGB32);
@@ -5660,7 +5725,11 @@ void Smart210Test::theTicketHasTheTitleTheDetailsTheBarcodeAndTheLogoInThatOrder
 
     const QStringList commands = commandsOf(TicketRenderer::render(sampleTicket(), options));
 
-    QCOMPARE(commands, QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "barcode" << "feed" << "raster" << "cut");
+    // the barcode is a bitmap too (so every printer prints it, a virtual printer included)
+    QCOMPARE(commands, QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "raster" << "cut");
+
+    options.barcodeMode = "printer";                                       // or the printer's own command
+    QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)), QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "barcode" << "feed" << "raster" << "cut");
 }
 
 void Smart210Test::withoutALogoThereIsNothingAfterTheBarcode()
@@ -5669,7 +5738,7 @@ void Smart210Test::withoutALogoThereIsNothingAfterTheBarcode()
     options.logoPath = "/no/such/logo.png";
 
     QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)),
-             QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "barcode" << "feed" << "cut");
+             QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "cut");
 
     options.endMode = "label";
     QVERIFY(commandsOf(TicketRenderer::render(sampleTicket(), options)).last() == "formfeed");
@@ -5762,7 +5831,9 @@ void Smart210Test::aTicketReachesThePrinterAfterTheStatusCheck()
     printer.goodStatus();
     Settings(db).setValue(SettingKey::PrinterHost, "127.0.0.1");
     Settings(db).setInt(SettingKey::PrinterPort, printer.port());
-    PrintService service(db, PrintOptions());
+    PrintOptions options;
+    options.barcodeMode = "printer";                                     // the printer's own barcode command
+    PrintService service(db, options);
     const SpotSale::Result sale = SpotSale::create(db, spotInput(1050), 7, QDateTime::currentDateTime());
     QSignalSpy spy(&service, SIGNAL(finished(bool,QString)));
 
@@ -5831,7 +5902,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 10);
+    QCOMPARE(Migrator::version(db), 11);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -6936,7 +7007,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 10);
+    QCOMPARE(all.size(), 11);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -10227,7 +10298,7 @@ void Smart210Test::theRemainderTicketsScreenPrintsATicketAgain()
     print->click();
     QTRY_COMPARE_WITH_TIMEOUT(printer.jobs().size(), 1, 5000);
     QVERIFY(printer.jobs().at(0).startsWith(QByteArray("\x1B\x40", 2)));
-    QVERIFY(printer.jobs().at(0).contains(EscPos::barcode128C("0000029500000001", 3, 80)));
+    QVERIFY(printer.jobs().at(0).count(QByteArray("\x1D\x76\x30", 3)) >= 3);      // the title, the details and the barcode are bitmaps
     QTRY_VERIFY_WITH_TIMEOUT(status->text().contains("was sent to the printer"), 5000);
     QCOMPARE(table->item(0, 5)->text(), QString("Printed"));
     QVERIFY(!one("SELECT printed_at FROM remainders WHERE id = 'rem-r'").isNull());
@@ -11772,15 +11843,15 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 10);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes
-    QCOMPARE(Migrator::version(db), 10);
+    QCOMPARE(Migrator::bundled().size(), 11);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card
+    QCOMPARE(Migrator::version(db), 11);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
     QCOMPARE(columnsOf(db, "sales").join(" "), QString("id created_at updated_at customer_id card_id sale_type fuel_type price amount_kg payment_method "
-                                                       "total_amount paid_amount unpaid_amount receipt usage comment sale_date user_id deleted_at synced uploaded_at"));
+                                                       "total_amount paid_amount unpaid_amount receipt usage comment sale_date user_id deleted_at synced uploaded_at hidden"));   // (hidden: migration 011, not sent)
     QCOMPARE(columnsOf(db, "supplements").join(" "), QString("id fuel_type nozzle_id card_id supply_date supplied_at mode preset_kg density out_amount_lt "
-                                                             "out_amount_kg comment board_result_id synced uploaded_at"));
+                                                             "out_amount_kg comment board_result_id synced uploaded_at hidden"));
     QCOMPARE(columnsOf(db, "remainders").join(" "), QString("id supplement_id ticket_barcode fuel_type amount_kg remainder_date created_at printed_at synced uploaded_at comment"));
     QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at card_id print_count last_printed_at"));   // (the columns of migrations 008 and 009 come last)
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
@@ -12104,10 +12175,11 @@ void Smart210Test::theNozzleQuestionIsAnsweredWithTheKeyboardAlone()
     QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
     QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(2), 3000);
     PrintService printer(db, PrintOptions());
-    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    Settings settings(db);
+    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    page.findChild<QComboBox *>("resultCombo")->setCurrentIndex(1);
+    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));      // the setting of the Settings page
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QLabel *status = page.findChild<QLabel *>("saleStatus");
@@ -12154,16 +12226,14 @@ void Smart210Test::aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATi
     QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
     QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(2), 3000);
     PrintService printer(db, PrintOptions());
-    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    Settings settings(db);
+    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    QComboBox *result = page.findChild<QComboBox *>("resultCombo");
-    QCOMPARE(result->count(), 2);
-    QCOMPARE(result->itemText(0), QString("Print ticket"));
-    QCOMPARE(result->itemText(1), QString("Set directly"));
-    QCOMPARE(result->currentIndex(), 0);                             // the ticket is printed unless the cashier says otherwise
+    QVERIFY(!settings.resultIsDirect(SettingKey::SpotSaleResult));    // the ticket is printed unless the Settings page says otherwise
+    QVERIFY(page.findChild<QComboBox *>("resultCombo") == 0);          // and there is no box for it on the screen
 
-    result->setCurrentIndex(1);
+    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "10.5");
@@ -12210,10 +12280,11 @@ void Smart210Test::aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket()
     QVERIFY(startBus(&bench.bus, &bench.boards));
     QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
     PrintService printer(db, PrintOptions());
-    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    Settings settings(db);
+    SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    page.findChild<QComboBox *>("resultCombo")->setCurrentIndex(1);
+    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));      // the setting of the Settings page
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "5");
@@ -12230,7 +12301,88 @@ void Smart210Test::aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket()
     QVERIFY(!SupplyQueue::session(db, 1).exists);
     QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
     QVERIFY(page.findChild<QPushButton *>("printAgainButton")->isEnabled());   // the ticket can still be printed
-    QCOMPARE(page.findChild<QComboBox *>("resultCombo")->currentIndex(), 1);   // and the mode stays for the next sale
+    QVERIFY(settings.resultIsDirect(SettingKey::SpotSaleResult));              // and the setting stays for the next sale
+}
+
+void Smart210Test::theSettingsPageChoosesWhatASpotSaleAndACardFillGive()
+{
+    setUpLoggedInTerminalWithAPin();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+
+    window.showPage("settings");
+    QComboBox *spot = window.findChild<QComboBox *>("spotResultCombo");
+    QComboBox *card = window.findChild<QComboBox *>("cardResultCombo");
+    QVERIFY(spot != 0 && card != 0);
+    QCOMPARE(spot->count(), 2);
+    QCOMPARE(spot->itemText(0), QString("Print ticket"));
+    QCOMPARE(spot->itemText(1), QString("Set directly"));
+    QCOMPARE(card->itemText(1), QString("Set directly"));
+    QCOMPARE(spot->currentIndex(), 0);                                       // a terminal that never chose prints
+    QCOMPARE(card->currentIndex(), 0);
+    QVERIFY(!Settings(db).resultIsDirect(SettingKey::SpotSaleResult));
+    QVERIFY(!Settings(db).resultIsDirect(SettingKey::CardFillResult));
+
+    // each is saved when it changes, one apart from the other
+    spot->setCurrentIndex(1);
+    QVERIFY(Settings(db).resultIsDirect(SettingKey::SpotSaleResult));
+    QVERIFY(!Settings(db).resultIsDirect(SettingKey::CardFillResult));
+    card->setCurrentIndex(1);
+    QVERIFY(Settings(db).resultIsDirect(SettingKey::CardFillResult));
+    spot->setCurrentIndex(0);
+    QVERIFY(!Settings(db).resultIsDirect(SettingKey::SpotSaleResult));
+    QVERIFY(Settings(db).resultIsDirect(SettingKey::CardFillResult));
+
+    // and the page shows what is saved when it is opened again
+    window.showPage("spot");
+    window.showPage("settings");
+    QCOMPARE(spot->currentIndex(), 0);
+    QCOMPARE(card->currentIndex(), 1);
+    QVERIFY(Settings::isDeviceBound(SettingKey::SpotSaleResult) && Settings::isDeviceBound(SettingKey::CardFillResult));   // they stay with the machine
+}
+
+// A card fill set directly: the ticket is made (the card pays) and the question for the nozzle opens, nothing is printed; with no nozzle chosen the ticket stays
+// for Print again or Cancel.
+void Smart210Test::aCardFillSetDirectlyAsksForTheNozzleAndPrintsNothing()
+{
+    setUpSellingTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const Cards::Registration li = Cards::registerCard(db, "04A1B2", "Li Wei", "D", "1234", "");
+    QVERIFY(li.ok);
+    QVERIFY(Cards::topUp(db, li.cardId, 5000, 750, 7, QDateTime::currentDateTime().addSecs(-60)).ok);
+    QVERIFY(Settings(db).setValue(SettingKey::CardFillResult, "direct"));
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);
+    QTest::qWait(300);
+    window.showPage("cards");
+    window.findChild<CardPage *>()->showCard("04A1B2");
+    QLineEdit *kgField = window.findChild<QLineEdit *>("fillKgField");
+    QLineEdit *pin = window.findChild<QLineEdit *>("fillPinField");
+    QPushButton *ok = window.findChild<QPushButton *>("fillOkButton");
+    QLabel *message = window.findChild<QLabel *>("cardMessage");
+
+    kgField->setText("10");
+    pin->setText("1234");
+    nozzleToChoose_ = 0;                                                    // Cancel
+    QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestion()));
+    ok->click();                                                            // the question is open until it is answered
+
+    QVERIFY2(message->text().contains("is made. The card holds 40.00 kg."), qPrintable(message->text()));
+    QVERIFY2(message->text().contains("No nozzle was chosen"), qPrintable(message->text()));
+    QVERIFY(message->text().contains("Print again prints the ticket."));
+    QVERIFY(!message->text().contains("Printing"));
+    QVERIFY(!message->text().contains("It was not printed"));               // nothing was sent to the printer
+    QCOMPARE(Cards::find(db, "04A1B2").balanceX100, qlonglong(4000));       // the card paid
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "' AND status = 1 AND print_count = 0").toInt(), 1);
+    QVERIFY(window.findChild<QPushButton *>("ticketPrintButton")->isEnabled());      // the ticket can still be printed
+    QVERIFY(window.findChild<QPushButton *>("ticketCancelButton")->isEnabled());     // or cancelled
 }
 
 void Smart210Test::salesHasOnlyTheSpotSaleAndTheTicketSale()

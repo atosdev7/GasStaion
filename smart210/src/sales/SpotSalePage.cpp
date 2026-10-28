@@ -2,11 +2,12 @@
 
 #include "BoardBus.h"
 #include "Decimal.h"
+#include "DirectSet.h"
 #include "EnterChain.h"
 #include "MachineConfig.h"
-#include "NozzleDialog.h"
 #include "PrintService.h"
 #include "Session.h"
+#include "Settings.h"
 #include "SpotSale.h"
 #include "SupplySelection.h"
 #include "SupplySession.h"
@@ -24,16 +25,10 @@
 #include <QSqlQuery>
 #include <QTimer>
 
-namespace {
-
-enum { ResultPrint = 0, ResultDirect = 1 };
-
-}
-
 SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *printer, BoardBus *bus, MachineConfig *config, SupplySelection *selection,
-                           SupplySession *supply, QWidget *parent)
+                           SupplySession *supply, Settings *settings, QWidget *parent)
     : QWidget(parent), ui_(new Ui::SpotSalePage), db_(db), session_(session), printer_(printer), bus_(bus), config_(config), selection_(selection),
-      supply_(supply), printing_(false), amountTypedLast_(false)
+      supply_(supply), settings_(settings), printing_(false), amountTypedLast_(false)
 {
     ui_->setupUi(this);
 
@@ -43,11 +38,6 @@ SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *prin
     usage_->addItem(tr("Self use"));
     usage_->addItem(tr("Other"));
     usage_->addItem(tr("Ticket loan"));
-
-    // what the sale gives: the ticket on paper, or the weight straight to a nozzle (the index of the choice is the mode)
-    result_ = ui_->resultCombo;
-    result_->addItem(tr("Print ticket"));
-    result_->addItem(tr("Set directly"));
 
     // the same order as the web form: the customer, the fuel type and the price; the weight, the amount and the payment (always cash);
     // what the fuel is for; the receipt and the comment
@@ -74,7 +64,6 @@ SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *prin
     chain_->add(usage_);
     chain_->add(kg_);
     chain_->add(amount_);
-    chain_->add(result_);
     chain_->add(receipt_);
     chain_->add(comment_);
     chain_->add(ui_->saveSaleButton);
@@ -264,34 +253,20 @@ void SpotSalePage::save()
     clearEntry(); // the next sale of the same kind starts with an empty weight; the last one stays on the screen
     chain_->focusWidget(kg_);
     emit saved();
-    if (result_->currentIndex() == ResultDirect) {
+    // what the sale gives is the setting of the Settings page: the ticket on paper, or the weight straight to a nozzle
+    if (settings_->resultIsDirect(SettingKey::SpotSaleResult)) {
         setDirectly(input.fuelType, result.kgX100, result.barcode);
     } else {
         startPrint(); // the ticket is printed at once
     }
 }
 
-// No ticket on paper: the weight of the sale goes to a nozzle of its fuel type, like the tickets the supplier scans. The nozzle is chosen on
-// its board first (the board's answer comes as currentNozzleChanged), then the ticket is queued and the fill started.
+// No ticket on paper: the weight of the sale goes to a nozzle of its fuel type, like the tickets the supplier scans (see DirectSet).
 void SpotSalePage::setDirectly(const QString &fuelType, qlonglong kgX100, const QString &barcode)
 {
-    NozzleDialog dialog(db_, bus_, config_, fuelType, kgX100, this);
-    if (dialog.exec() != QDialog::Accepted || dialog.nozzle() < 1) {
-        showStatus(savedMessage_ + "\n" + tr("No nozzle was chosen, so nothing was sent. Print again prints the ticket."), false);
-
-        return;
-    }
-
-    // The nozzle becomes the chosen one (the choice is kept by the Smart210; the board beeps), the ticket goes to its queue as when the supplier
-    // scans it, and the session sends the weight as the preset (the dispenser shows it). The supplier takes the gun up and the fill starts.
-    const int nozzle = dialog.nozzle();
-    QString why;
-    if (!selection_->select(nozzle, &why) || !supply_->add(nozzle, barcode, &why)) {
-        showStatus(savedMessage_ + "\n" + why + " " + tr("Print again prints the ticket."), false);
-
-        return;
-    }
-    showStatus(savedMessage_ + "\n" + tr("Nozzle %1: %2 kg are set. Take the gun up to start the fill.").arg(nozzle).arg(Decimal::format(kgX100, 2)), true);
+    QString message;
+    const bool done = DirectSet::run(this, db_, bus_, config_, selection_, supply_, fuelType, kgX100, barcode, &message);
+    showStatus(savedMessage_ + "\n" + message + (done ? QString() : " " + tr("Print again prints the ticket.")), done);
 }
 
 // The ticket of the last sale goes to the printer; the sale is already saved, so a printer that fails only gives a message.

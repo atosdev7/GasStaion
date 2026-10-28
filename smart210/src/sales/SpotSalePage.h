@@ -18,6 +18,7 @@ class QPushButton;
 class PrintService;
 class QTimer;
 class Session;
+class Settings;
 class SupplySelection;
 class SupplySession;
 
@@ -30,8 +31,8 @@ class SpotSalePage;
 // cash, paid in full); what the fuel is for; the receipt and the comment. Save writes the sale (see SpotSale); the screen then clears
 // for the next one.
 //
-// The result of the sale is chosen next to the payment: "Print ticket" prints the sale's ticket at once (Print again prints it once more),
-// "Set directly" prints nothing: a question asks for the nozzle (of the sale's fuel type, see NozzleDialog), the nozzle is chosen on its board
+// The result of the sale is the cashier's setting (Settings page, SettingKey::SpotSaleResult): "Print ticket" prints the sale's ticket at once (Print again prints
+// it once more), "Set directly" prints nothing: a question asks for the nozzle (of the sale's fuel type, see DirectSet), the nozzle is chosen on its board
 // and the ticket of the sale goes to its queue, so the weight is the preset of the board (the dispenser shows it) and the supplier starts the
 // fill by taking the gun up, exactly as when the supplier scans the ticket (SupplySession::add). A sale that could not be sent keeps its ticket, which Print again prints.
 //
@@ -44,7 +45,7 @@ class SpotSalePage : public QWidget
 
 public:
     SpotSalePage(QSqlDatabase db, Session *session, PrintService *printer, BoardBus *bus, MachineConfig *config, SupplySelection *selection,
-                 SupplySession *supply, QWidget *parent = 0);
+                 SupplySession *supply, Settings *settings, QWidget *parent = 0);
     ~SpotSalePage();
 
     // Called whenever the page is opened: fuel types and customers as downloaded, an empty form.
@@ -79,8 +80,8 @@ private:
     MachineConfig *config_;
     SupplySelection *selection_;
     SupplySession *supply_;
+    Settings *settings_;
     QComboBox *usage_;
-    QComboBox *result_;
     QComboBox *fuel_;
     QComboBox *customer_;
     QLineEdit *price_;

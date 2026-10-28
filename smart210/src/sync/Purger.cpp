@@ -52,7 +52,7 @@ QStringList Purger::keptSaleIds(QSqlDatabase db, int limit)
 {
     QStringList ids;
     QSqlQuery query(db);
-    query.prepare("SELECT id FROM sales WHERE synced = 1 AND deleted_at IS NULL AND card_id IS NULL AND sale_type <> 'card' LIMIT ?");
+    query.prepare("SELECT id FROM sales WHERE synced = 1 AND deleted_at IS NULL AND hidden = 0 LIMIT ?");
     query.addBindValue(limit);
     if (query.exec()) {
         while (query.next()) {
@@ -67,7 +67,7 @@ QStringList Purger::keptSupplementIds(QSqlDatabase db, int limit)
 {
     QStringList ids;
     QSqlQuery query(db);
-    query.prepare("SELECT id FROM supplements WHERE synced = 1 AND card_id IS NULL LIMIT ?");
+    query.prepare("SELECT id FROM supplements WHERE synced = 1 AND hidden = 0 LIMIT ?");
     query.addBindValue(limit);
     if (query.exec()) {
         while (query.next()) {
@@ -119,6 +119,9 @@ int Purger::removeConfirmed(QSqlDatabase db, const QStringList &saleIds, const Q
     removed += run(db, "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND id IN (%1)", supplementIds);
     removed += run(db, "DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE synced = 1 AND card_id IS NULL AND sale_type <> 'card' AND id IN (%1))", saleIds);
     removed += run(db, "DELETE FROM sales WHERE synced = 1 AND card_id IS NULL AND sale_type <> 'card' AND id IN (%1)", saleIds);
+    // a card's top-ups and supplies are kept (its balance and history) and hidden
+    removed += run(db, "UPDATE sales SET hidden = 1 WHERE synced = 1 AND hidden = 0 AND (card_id IS NOT NULL OR sale_type = 'card') AND id IN (%1)", saleIds);
+    removed += run(db, "UPDATE supplements SET hidden = 1 WHERE synced = 1 AND hidden = 0 AND card_id IS NOT NULL AND id IN (%1)", supplementIds);
     db.commit();
 
     return removed;

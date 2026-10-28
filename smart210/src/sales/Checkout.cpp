@@ -137,8 +137,8 @@ QStringList Checkout::days(QSqlDatabase db)
     QStringList list;
 
     QSqlQuery query(db);
-    query.exec("SELECT sale_date FROM sales WHERE sale_date IS NOT NULL AND deleted_at IS NULL "
-               "UNION SELECT supply_date FROM supplements WHERE supply_date IS NOT NULL "
+    query.exec("SELECT sale_date FROM sales WHERE sale_date IS NOT NULL AND deleted_at IS NULL AND hidden = 0 "
+               "UNION SELECT supply_date FROM supplements WHERE supply_date IS NOT NULL AND hidden = 0 "
                "UNION SELECT remainder_date FROM remainders WHERE remainder_date IS NOT NULL "
                "UNION SELECT date FROM ticket_loans WHERE date IS NOT NULL AND deleted = 0 "
                "UNION SELECT date FROM ticket_loan_settlements WHERE date IS NOT NULL "
@@ -157,7 +157,7 @@ Checkout::Report Checkout::report(QSqlDatabase db, const QString &date)
 
     QSqlQuery sales(db);
     sales.prepare("SELECT COUNT(*), COALESCE(SUM(amount_kg), 0), COALESCE(SUM(total_amount), 0), COALESCE(SUM(paid_amount), 0) "
-                  "FROM sales WHERE sale_date = ? AND deleted_at IS NULL");
+                  "FROM sales WHERE sale_date = ? AND deleted_at IS NULL AND hidden = 0");
     sales.addBindValue(date);
     if (sales.exec() && sales.next()) {
         report.sales = sales.value(0).toInt();
@@ -169,7 +169,7 @@ Checkout::Report Checkout::report(QSqlDatabase db, const QString &date)
     const char *groups[] = {"usage", "fuel_type"};
     for (int g = 0; g < 2; ++g) {
         QSqlQuery query(db);
-        query.prepare(QString("SELECT %1, COUNT(*), SUM(amount_kg), SUM(total_amount) FROM sales WHERE sale_date = ? AND deleted_at IS NULL "
+        query.prepare(QString("SELECT %1, COUNT(*), SUM(amount_kg), SUM(total_amount) FROM sales WHERE sale_date = ? AND deleted_at IS NULL AND hidden = 0 "
                               "GROUP BY %1 ORDER BY %1").arg(groups[g]));
         query.addBindValue(date);
         if (query.exec()) {
@@ -185,7 +185,7 @@ Checkout::Report Checkout::report(QSqlDatabase db, const QString &date)
     }
 
     QSqlQuery supplements(db);
-    supplements.prepare("SELECT COUNT(*), COALESCE(SUM(out_amount_lt), 0), COALESCE(SUM(out_amount_kg), 0) FROM supplements WHERE supply_date = ?");
+    supplements.prepare("SELECT COUNT(*), COALESCE(SUM(out_amount_lt), 0), COALESCE(SUM(out_amount_kg), 0) FROM supplements WHERE supply_date = ? AND hidden = 0");
     supplements.addBindValue(date);
     if (supplements.exec() && supplements.next()) {
         report.supplements = supplements.value(0).toInt();

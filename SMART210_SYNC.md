@@ -48,6 +48,9 @@ The migration numbers 013 to 016 named below are from before 2026-10-14: all of 
 | 2026-10-12 | Spot sale form arranged like the ticket form (9.4w) | `SpotSalePage` rearranged (9.4z) |
 | 2026-10-13 | `sale_items`: the items are kept as entered (9.4aa) | table `sale_items` (migration 014), written by `TicketSale::create`, sent inside the sale's row (`items`) |
 | 2026-10-13 | Start and end of an item shown as full barcodes (9.4aa) | the items table of the ticket sale screen shows them |
+| 2026-10-29 | The result of a spot sale and of a card fill is a setting of the cashier's Settings page (user, 2026-10-29: "the options for print or set direct should be 2 for spot sale and card fill ... on cashier's setting page") | done: `SettingKey::SpotSaleResult` / `CardFillResult` (print or direct), two boxes on the Settings page, the box of the spot sale screen is gone, a card fill can be set directly (`DirectSet`, shared with the spot sale); web: nothing |
+| 2026-10-29 | The records a card owns are hidden once confirmed (user: "sales and supplements should be hidden after confirm at web app") | done: migration 011 `hidden` on `sales` and `supplements`; the confirmed question now also names a card's top-ups and old supplies, which are hidden (not removed); Review and checkout skip them; web: `POST /api/confirmed` already answered for any sale or supplement id |
+| 2026-10-29 | The barcode of a printed ticket is a bitmap (user: "barcode is not printed" on a virtual ESC/POS printer) | done: `TicketRenderer::barcodeImage` (Code 128 C, digits under the bars); `printBarcode=printer` in config.ini keeps the printer's own command; web: nothing |
 
 ## Web changes that need nothing on the Smart210
 

@@ -14,6 +14,8 @@ extern const char *const DeviceId;     // the web app's id of this device (set w
 extern const char *const DeviceName;
 extern const char *const UploadMode;    // "manual", "close" (at the close of the day) or "continuous" (see AutoUpload), Machine Config
 extern const char *const NozzlesNotOnBoard; // the numbers ("1,3") of the nozzles whose saved config the board has not confirmed yet (Update that failed or was not sent)
+extern const char *const SpotSaleResult; // "print" (default) or "direct": what a spot sale gives, the ticket on paper or the weight set straight on a nozzle (Settings page)
+extern const char *const CardFillResult; // the same for the ticket of a card fill
 extern const char *const ShowSalesWithoutReceipt; // "1" (default) or "0": the Review screen lists the sales without a receipt or leaves them out, Machine Config
 extern const char *const ManualSupplyDays; // how many days back the time of a manual supply may be (default 3, 0 = today only), Machine Config
 extern const char *const PurgeDays;    // how long synced records stay on the device
@@ -61,6 +63,8 @@ public:
     int intValue(const QString &key, int defaultValue = 0) const;
     bool boolValue(const QString &key, bool defaultValue = false) const;
     bool contains(const QString &key) const;
+    // True when the setting of a result (SpotSaleResult, CardFillResult) is "direct": the weight is set on a nozzle and no ticket is printed.
+    bool resultIsDirect(const QString &key) const;
 
     // Each returns false when the database refused the write. (Named apart from setValue on purpose: a plain "text"
     // would pick an overload taking bool, since a pointer converts to bool more readily than to QString.)

@@ -9,6 +9,7 @@ height=720
 ;downloadMinutes=10
 ;setSystemClock=true   ; set the board's clock from the server's (UTC) and write it to the RTC chip; needs root. The default is true for a Linux program running as root, false otherwise
 ;printWidthDots=576
+;printBarcode=image
 ;logo=/path/to/logo.png
 ;ticketFont=/path/to/titlefont.ttf
 ;printEnd=cut

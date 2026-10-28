@@ -1,14 +1,20 @@
 #include "CardPage.h"
 
 #include "Barcode.h"
+#include "BoardBus.h"
 #include "CardHistoryDialog.h"
 #include "CardReader.h"
 #include "ConfirmDialog.h"
 #include "Decimal.h"
+#include "DirectSet.h"
 #include "EnterChain.h"
+#include "MachineConfig.h"
 #include "PrintService.h"
 #include "Session.h"
+#include "Settings.h"
 #include "SpotSale.h"
+#include "SupplySelection.h"
+#include "SupplySession.h"
 #include "ui_CardPage.h"
 #include "Theme.h"
 
@@ -46,9 +52,10 @@ QString statusText(const QString &status)
 
 }
 
-CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, CardReader *reader, QWidget *parent)
-    : QWidget(parent), ui_(new Ui::CardPage), db_(db), session_(session), printer_(printer), reader_(reader),
-      printing_(false), priceTouched_(false), totalTyped_(false)
+CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, CardReader *reader, BoardBus *bus, MachineConfig *config, SupplySelection *selection,
+                   SupplySession *supply, Settings *settings, QWidget *parent)
+    : QWidget(parent), ui_(new Ui::CardPage), db_(db), session_(session), printer_(printer), reader_(reader), bus_(bus), config_(config), selection_(selection),
+      supply_(supply), settings_(settings), printing_(false), priceTouched_(false), totalTyped_(false)
 {
     ui_->setupUi(this);
 
@@ -480,6 +487,15 @@ void CardPage::fillClicked()
     showTicket();
     emit saved();
     filled_ = tr("The ticket %1 for %2 kg is made. The card holds %3 kg.").arg(made.barcode).arg(kg(made.kgX100)).arg(kg(made.balanceX100));
+
+    // what the fill gives is the setting of the Settings page: the ticket on paper, or the weight straight to a nozzle (no paper)
+    if (settings_->resultIsDirect(SettingKey::CardFillResult)) {
+        QString message;
+        const bool done = DirectSet::run(this, db_, bus_, config_, selection_, supply_, card.fuelType, made.kgX100, made.barcode, &message);
+        showStatus(filled_ + "\n" + message + (done ? QString() : " " + tr("Print again prints the ticket.")), done);
+
+        return;
+    }
     startPrint(made.barcode);
 }
 

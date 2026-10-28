@@ -14,6 +14,8 @@ const char *const ServerPort = "server_port";
 const char *const DeviceId = "device_id";
 const char *const DeviceName = "device_name";
 const char *const UploadMode = "upload_mode";
+const char *const SpotSaleResult = "spot_sale_result";
+const char *const CardFillResult = "card_fill_result";
 const char *const ShowSalesWithoutReceipt = "show_sales_without_receipt";
 const char *const NozzlesNotOnBoard = "nozzles_not_on_board";
 const char *const ManualSupplyDays = "manual_supply_days";
@@ -81,7 +83,8 @@ bool Settings::isDeviceBound(const QString &key)
         || key == SettingKey::PrinterHost || key == SettingKey::PrinterPort || key == SettingKey::ConverterPort
         || key == SettingKey::CardReaderPort || key == SettingKey::CardReaderBaud || key == SettingKey::CardReaderFormat
         || key == SettingKey::CardReaderLength || key == SettingKey::CardReaderEncoding || key == SettingKey::CardReaderPrefix
-        || key == SettingKey::UploadMode || key == SettingKey::ShowSalesWithoutReceipt || key == SettingKey::ManualSupplyDays;
+        || key == SettingKey::UploadMode || key == SettingKey::ShowSalesWithoutReceipt || key == SettingKey::ManualSupplyDays
+        || key == SettingKey::SpotSaleResult || key == SettingKey::CardFillResult;
 }
 
 QString Settings::deviceValue(const QString &name)
@@ -124,6 +127,11 @@ QString Settings::value(const QString &key, const QString &defaultValue) const
     }
 
     return defaultValue;
+}
+
+bool Settings::resultIsDirect(const QString &key) const
+{
+    return value(key, "print") == "direct";
 }
 
 int Settings::intValue(const QString &key, int defaultValue) const

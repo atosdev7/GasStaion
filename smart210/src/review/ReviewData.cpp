@@ -104,7 +104,7 @@ const char *const noReceipt = "(s.receipt IS NULL OR s.receipt = '' OR s.receipt
 int ReviewData::salesWithoutReceipt(QSqlDatabase db, const QString &date)
 {
     QSqlQuery query(db);
-    query.prepare(QString("SELECT COUNT(*) FROM sales s WHERE s.deleted_at IS NULL AND ") + noReceipt + " AND " + dateOf("s", "created_at", "sale_date") + " = ?");
+    query.prepare(QString("SELECT COUNT(*) FROM sales s WHERE s.deleted_at IS NULL AND s.hidden = 0 AND ") + noReceipt + " AND " + dateOf("s", "created_at", "sale_date") + " = ?");
     query.addBindValue(date);
 
     return query.exec() && query.next() ? query.value(0).toInt() : 0;
@@ -119,7 +119,7 @@ QList<ReviewData::Record> ReviewData::sales(QSqlDatabase db, const QString &date
                   "s.unpaid_amount, COALESCE(u.name, ''), COALESCE(s.comment, ''), " + dateOf("s", "created_at", "sale_date") + ", s.synced, COALESCE(e.message, '') "
                   "FROM sales s LEFT JOIN customers c ON c.id = s.customer_id LEFT JOIN users u ON u.id = s.user_id "
                   "LEFT JOIN upload_errors e ON e.table_name = 'sales' AND e.row_key = s.id "
-                  "WHERE s.deleted_at IS NULL AND " + dateOf("s", "created_at", "sale_date") + " = ? " + (withoutReceipt ? QString() : QString("AND NOT ") + noReceipt + " ") +
+                  "WHERE s.deleted_at IS NULL AND s.hidden = 0 AND " + dateOf("s", "created_at", "sale_date") + " = ? " + (withoutReceipt ? QString() : QString("AND NOT ") + noReceipt + " ") +
                   "ORDER BY s.created_at, s.id");
     query.addBindValue(date);
     query.exec();
@@ -156,7 +156,7 @@ QList<ReviewData::Record> ReviewData::supplements(QSqlDatabase db, const QString
                   ", s.synced, COALESCE(e.message, '') "
                   "FROM supplements s "
                   "LEFT JOIN upload_errors e ON e.table_name = 'supplements' AND e.row_key = s.id "
-                  "WHERE " + dateOf("s", "supplied_at", "supply_date") + " = ? ORDER BY s.supplied_at, s.id");
+                  "WHERE s.hidden = 0 AND " + dateOf("s", "supplied_at", "supply_date") + " = ? ORDER BY s.supplied_at, s.id");
     query.addBindValue(date);
     query.exec();
     while (query.next()) {

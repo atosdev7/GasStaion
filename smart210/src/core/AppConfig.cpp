@@ -36,6 +36,7 @@ AppConfig::AppConfig()
     printOptions_.widthDots = qBound(256, settings.value("printWidthDots", 576).toInt(), 832);
     printOptions_.logoPath = settings.value("logo", dir + "/logo.png").toString();
     printOptions_.fontFamily = QString();
+    printOptions_.barcodeMode = settings.value("printBarcode", "image").toString().toLower() == "printer" ? "printer" : "image";
     printOptions_.endMode = settings.value("printEnd", "cut").toString().toLower();
     if (printOptions_.endMode != "label" && printOptions_.endMode != "none") {
         printOptions_.endMode = "cut";

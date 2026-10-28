@@ -19,6 +19,7 @@
 //   (no key)         the app downloads from the server by itself every minute: fixed, so that the terminal sees the web app's changes within a minute
 //   hangul           = true (default) | false: the Hangul input method (the Hangul key or Ctrl+Space switches it on at the keyboard, see HangulInput)
 //   printWidthDots   = 576 (80 mm paper) or 640: the printable width in dots
+//   printBarcode     = image (default: the barcode is drawn as a bitmap, every printer prints it) or printer (the printer's own Code 128 command)
 //   logo             = the logo picture (default: logo.png next to the program); ticketFont = a font file for the ticket text
 //   printEnd         = cut | label | none: what the printer does after a ticket
 //   ticketTitle_sale, ticketTitle_self, ticketTitle_other, ticketTitle_ticket_loan, ticketTitle_remainder = the long title of each ticket

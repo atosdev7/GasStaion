@@ -16,20 +16,22 @@
 // (card_transactions, pulled and never purged, see CardLedger); the card records stay besides it, which costs little.
 //
 // Besides age there is confirmation: when the accountant confirms a day on the web app, the records of it that were uploaded are final
-// and are removed at the next download (removeConfirmed), however young they are.
+// and are removed at the next download (removeConfirmed), however young they are. A card's top-ups and old supplies are not removed (the balance and the
+// history of the card are made of them) but hidden (hidden = 1): the Review screen and the checkout leave them out.
 class Purger
 {
 public:
     // Returns how many rows were removed.
     static int purge(QSqlDatabase db, int days, const QDateTime &now);
 
-    // The ids of the uploaded sales and supplements that are still kept (a card's records are never removed, so they are not asked about):
+    // The ids of the uploaded sales and supplements that are still shown (a card's records that are hidden already are not asked about again):
     // the terminal asks the web app which of them are confirmed.
     static QStringList keptSaleIds(QSqlDatabase db, int limit);
     static QStringList keptSupplementIds(QSqlDatabase db, int limit);
 
     // Removes the uploaded sales and supplements named (confirmed on the web app) with their items, their remainders that are printed and
-    // their finished tickets. A ticket that is sold and not supplied yet stays: the supplier still needs it. Returns how many rows were removed.
+    // their finished tickets. A ticket that is sold and not supplied yet stays: the supplier still needs it. The confirmed top-ups and supplies of a card stay in the
+    // database and are hidden. Returns how many rows were removed or hidden.
     static int removeConfirmed(QSqlDatabase db, const QStringList &saleIds, const QStringList &supplementIds);
 };
 

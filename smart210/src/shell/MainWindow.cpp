@@ -106,15 +106,15 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     loginPage_ = new LoginPage(session_);
     about_ = tr("Version %1").arg(APP_VERSION) + "\n" + tr("Language: %1").arg(AppConfig::languageName(config.language())) + "\n"
         + (fontFamily.isEmpty() ? tr("No font found in the fonts folder, using the system font.") : tr("Font: %1").arg(fontFamily)) + "\n" + databaseInfo;
-    settingsPage_ = new SettingsPage;
+    settingsPage_ = new SettingsPage(settings_);
     pinPage_ = new PinPage(settings_);
     machinePage_ = new MachineConfigPage(setup_, machineConfig_, session_, settings_, printer_, nozzleSync_);
     reviewPage_ = new ReviewPage(db, uploader_, session_);
     supplySelection_ = new SupplySelection(boardBus_, machineConfig_, this);
     supplySession_ = new SupplySession(db, boardBus_, machineConfig_, supplySelection_, session_, this);
-    spotPage_ = new SpotSalePage(db, session_, printer_, boardBus_, machineConfig_, supplySelection_, supplySession_);
+    spotPage_ = new SpotSalePage(db, session_, printer_, boardBus_, machineConfig_, supplySelection_, supplySession_, settings_);
     supplyPage_ = new SupplyPage(db, boardBus_, machineConfig_, supplySelection_, supplySession_);
-    cardPage_ = new CardPage(db, session_, printer_, cardReader_);
+    cardPage_ = new CardPage(db, session_, printer_, cardReader_, boardBus_, machineConfig_, supplySelection_, supplySession_, settings_);
     manualPage_ = new ManualSupplyPage(db, machineConfig_, supplySession_);
     remainderPage_ = new RemainderTicketsPage(db);
     dispensersPage_ = new DispensersPage(db, boardBus_, machineConfig_);
@@ -517,6 +517,7 @@ void MainWindow::showPage(const QString &name)
         part = settingsPage_;
         key = "settings";
         settingsPage_->setCashier(session_->userName());
+        settingsPage_->reload();
         settingsPage_->setAbout(about_ + "\n" + tr("Server %1:%2, this terminal is %3")
                                              .arg(settings_->value(SettingKey::ServerHost))
                                              .arg(settings_->intValue(SettingKey::ServerPort))

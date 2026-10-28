@@ -74,6 +74,7 @@ SOURCES += \
     src/supplies/SupplySelection.cpp \
     src/supplies/SupplyQueue.cpp \
     src/supplies/SupplyRecord.cpp \
+    src/supplies/DirectSet.cpp \
     src/supplies/SupplySession.cpp \
     src/supplies/ManualSupplyPage.cpp \
     src/remainders/RemainderTicketsPage.cpp \
@@ -153,6 +154,7 @@ HEADERS += \
     src/supplies/SupplySelection.h \
     src/supplies/SupplyQueue.h \
     src/supplies/SupplyRecord.h \
+    src/supplies/DirectSet.h \
     src/supplies/SupplySession.h \
     src/supplies/ManualSupplyPage.h \
     src/remainders/RemainderTicketsPage.h \

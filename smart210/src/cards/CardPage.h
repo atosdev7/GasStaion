@@ -8,6 +8,8 @@
 
 class CardReader;
 class EnterChain;
+class BoardBus;
+class MachineConfig;
 class PrintService;
 class QComboBox;
 class QGroupBox;
@@ -16,6 +18,9 @@ class QLineEdit;
 class QPushButton;
 class QStackedWidget;
 class Session;
+class Settings;
+class SupplySelection;
+class SupplySession;
 
 namespace Ui {
 class CardPage;
@@ -29,8 +34,9 @@ class CardPage;
 //     - a known card shows its holder, its fuel type, its balance and its status, and the Fill page, the main work of a card: the cursor is in its first field.
 //       The Top Up button above History switches to the Top Up page (and its text becomes Fill, which switches back).
 //         Fill        the weight to supply and the PIN the customer said (the PIN is the last field); OK asks "OK / Cancel" (ConfirmDialog), checks the PIN (5 wrong
-//                     ones lock the card), takes the kg from the card and makes a ticket for them (Cards::issueTicket), which is printed: the supplier scans it at the
-//                     dispenser like the ticket of a spot sale, at an auto or a manual nozzle. Under the form the last ticket of the card that is not used yet can be
+//                     ones lock the card), takes the kg from the card and makes a ticket for them (Cards::issueTicket). The cashier's setting (Settings page,
+//                     SettingKey::CardFillResult) says what the fill gives: the ticket is printed, and the supplier scans it at the dispenser like the ticket of a spot
+//                     sale, at an auto or a manual nozzle; or nothing is printed and the weight is set straight on a nozzle (DirectSet, as a spot sale does). Under the form the last ticket of the card that is not used yet can be
 //                     printed again or cancelled (the kg go back to the card) while it waits for its upload.
 //         Top up      kg at a price per kg (the fuel's price is filled in, it can be changed), paid in cash: a sale of type "card"; Top Up asks "OK / Cancel" too
 //     Enter moves on to the next field of a page and Enter on the button presses it.
@@ -40,7 +46,8 @@ class CardPage : public QWidget
     Q_OBJECT
 
 public:
-    CardPage(QSqlDatabase db, Session *session, PrintService *printer, CardReader *reader, QWidget *parent = 0);
+    CardPage(QSqlDatabase db, Session *session, PrintService *printer, CardReader *reader, BoardBus *bus, MachineConfig *config, SupplySelection *selection,
+             SupplySession *supply, Settings *settings, QWidget *parent = 0);
     ~CardPage();
 
     // Called whenever the page is opened: nothing is shown until a card is read.
@@ -80,6 +87,11 @@ private:
     Session *session_;
     PrintService *printer_;
     CardReader *reader_;
+    BoardBus *bus_;
+    MachineConfig *config_;
+    SupplySelection *selection_;
+    SupplySession *supply_;
+    Settings *settings_;
 
     QLineEdit *idField_;
     QLabel *readerStatus_;
