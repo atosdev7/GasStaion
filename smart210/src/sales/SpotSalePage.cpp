@@ -25,6 +25,12 @@
 #include <QSqlQuery>
 #include <QTimer>
 
+namespace {
+
+enum { ResultPrint = 0, ResultDirect = 1 };
+
+}
+
 SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *printer, BoardBus *bus, MachineConfig *config, SupplySelection *selection,
                            SupplySession *supply, Settings *settings, QWidget *parent)
     : QWidget(parent), ui_(new Ui::SpotSalePage), db_(db), session_(session), printer_(printer), bus_(bus), config_(config), selection_(selection),
@@ -38,6 +44,11 @@ SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *prin
     usage_->addItem(tr("Self use"));
     usage_->addItem(tr("Other"));
     usage_->addItem(tr("Ticket loan"));
+
+    // what the sale gives: the ticket on paper, or the weight straight to a nozzle (the index of the choice is the mode); it starts with the setting (reload)
+    result_ = ui_->resultCombo;
+    result_->addItem(tr("Print ticket"));
+    result_->addItem(tr("Set directly"));
 
     // the same order as the web form: the customer, the fuel type and the price; the weight, the amount and the payment (always cash);
     // what the fuel is for; the receipt and the comment
@@ -64,6 +75,7 @@ SpotSalePage::SpotSalePage(QSqlDatabase db, Session *session, PrintService *prin
     chain_->add(usage_);
     chain_->add(kg_);
     chain_->add(amount_);
+    chain_->add(result_);
     chain_->add(receipt_);
     chain_->add(comment_);
     chain_->add(ui_->saveSaleButton);
@@ -102,6 +114,7 @@ QString SpotSalePage::usage() const
 
 void SpotSalePage::reload()
 {
+    result_->setCurrentIndex(settings_->resultIsDirect(SettingKey::SpotSaleResult) ? ResultDirect : ResultPrint);      // the box starts with the setting
     fuel_->blockSignals(true);
     fuel_->clear();
     QSqlQuery fuels(db_);
@@ -253,8 +266,7 @@ void SpotSalePage::save()
     clearEntry(); // the next sale of the same kind starts with an empty weight; the last one stays on the screen
     chain_->focusWidget(kg_);
     emit saved();
-    // what the sale gives is the setting of the Settings page: the ticket on paper, or the weight straight to a nozzle
-    if (settings_->resultIsDirect(SettingKey::SpotSaleResult)) {
+    if (result_->currentIndex() == ResultDirect) {
         setDirectly(input.fuelType, result.kgX100, result.barcode);
     } else {
         startPrint(); // the ticket is printed at once

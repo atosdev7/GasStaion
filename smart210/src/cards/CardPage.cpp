@@ -94,6 +94,9 @@ CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, Car
     actionPages_ = ui_->cardActionPages;
     switchButton_ = ui_->cardTopUpButton;
     fillKg_ = ui_->fillKgField;
+    fillResult_ = ui_->fillResultCombo;
+    fillResult_->addItem(tr("Print ticket"));
+    fillResult_->addItem(tr("Set directly"));
     fillKg_->setValidator(decimal);
     fillPin_ = ui_->fillPinField;
     fillOk_ = ui_->fillOkButton;
@@ -117,6 +120,7 @@ CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, Car
     // keyboard entry: Enter in a field moves on to the next one of the page (the PIN is the last), Enter on the button presses it
     fillChain_ = new EnterChain(this);
     fillChain_->add(fillKg_);
+    fillChain_->add(fillResult_);
     fillChain_->add(fillPin_);
     fillChain_->add(fillOk_);
     topUpChain_ = new EnterChain(this);
@@ -138,6 +142,7 @@ CardPage::~CardPage()
 
 void CardPage::reload()
 {
+    fillResult_->setCurrentIndex(settings_->resultIsDirect(SettingKey::CardFillResult) ? 1 : 0);      // the box starts with the setting
     cardId_.clear();
     uid_.clear();
     ticket_.clear();
@@ -488,8 +493,8 @@ void CardPage::fillClicked()
     emit saved();
     filled_ = tr("The ticket %1 for %2 kg is made. The card holds %3 kg.").arg(made.barcode).arg(kg(made.kgX100)).arg(kg(made.balanceX100));
 
-    // what the fill gives is the setting of the Settings page: the ticket on paper, or the weight straight to a nozzle (no paper)
-    if (settings_->resultIsDirect(SettingKey::CardFillResult)) {
+    // what the fill gives is the Result box: the ticket on paper, or the weight straight to a nozzle (no paper)
+    if (fillResult_->currentIndex() == 1) {
         QString message;
         const bool done = DirectSet::run(this, db_, bus_, config_, selection_, supply_, card.fuelType, made.kgX100, made.barcode, &message);
         showStatus(filled_ + "\n" + message + (done ? QString() : " " + tr("Print again prints the ticket.")), done);

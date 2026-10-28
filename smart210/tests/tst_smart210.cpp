@@ -4296,6 +4296,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     QComboBox *usage = window.findChild<QComboBox *>("usageCombo");
     QLineEdit *kg = window.findChild<QLineEdit *>("kgField");
     QLineEdit *amount = window.findChild<QLineEdit *>("amountField");
+    QComboBox *result = window.findChild<QComboBox *>("resultCombo");
     QCheckBox *receipt = window.findChild<QCheckBox *>("receiptCheck");
     QLineEdit *comment = window.findChild<QLineEdit *>("commentField");
     QPushButton *save = window.findChild<QPushButton *>("saveSaleButton");
@@ -4305,7 +4306,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     QCOMPARE(window.findChild<QPushButton *>("navSales")->focusPolicy(), Qt::NoFocus); // the sidebar is not in the way
 
     // Enter goes through the fields in the order of the form, from the first one
-    QWidget *order[] = {customer, fuel, price, usage, kg, amount, receipt, comment, save};
+    QWidget *order[] = {customer, fuel, price, usage, kg, amount, result, receipt, comment, save};
     customer->setFocus();
     for (unsigned i = 0; i + 1 < sizeof(order) / sizeof(order[0]); ++i) {
         QCOMPARE(page->focusWidget(), order[i]);
@@ -4320,6 +4321,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     enterIn(kg);
     QCOMPARE(page->focusWidget(), static_cast<QWidget *>(amount));
     enterIn(amount);
+    enterIn(result);
     QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
     QTest::keyClick(receipt, Qt::Key_Space);                             // Space ticks the box, Enter only moves on
     QVERIFY(receipt->isChecked());
@@ -4342,7 +4344,7 @@ void Smart210Test::theSpotSaleIsFilledWithTheKeyboardAlone()
     kg->setFocus();
     QTest::keyClicks(kg, "5");
     enterIn(kg);
-    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(receipt));
+    QCOMPARE(page->focusWidget(), static_cast<QWidget *>(result));
     save->setFocus();
     QTest::keyClick(save, Qt::Key_Space);
     QCOMPARE(countRows("sales"), 2);
@@ -11459,20 +11461,22 @@ void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWit
     window.showPage("cards");
     window.findChild<CardPage *>()->showCard(CardId);
 
-    // the order of the fields of the Fill page: the weight, then the PIN (the last)
+    // the order of the fields of the Fill page: the weight, the Result box, then the PIN (the last)
     QFormLayout *form = window.findChild<QFormLayout *>("fillForm");
     QVERIFY(form != 0);
     int row = -1;
     QFormLayout::ItemRole role;
     QList<int> rows;
-    foreach (const char *name, QList<const char *>() << "fillKgField" << "fillPinField") {
+    foreach (const char *name, QList<const char *>() << "fillKgField" << "fillResultCombo" << "fillPinField") {
         form->getWidgetPosition(window.findChild<QWidget *>(name), &row, &role);
         rows << row;
     }
-    QCOMPARE(rows, QList<int>() << 0 << 1);
+    QCOMPARE(rows, QList<int>() << 0 << 1 << 2);
 
-    // Fill: the cursor is in the weight; Enter goes to the PIN, then to OK
+    // Fill: the cursor is in the weight; Enter goes to the Result box, to the PIN, then to OK
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillKgField"));
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
+    QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillResultCombo"));
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
     QCOMPARE(window.focusWidget(), window.findChild<QWidget *>("fillPinField"));
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
@@ -11505,9 +11509,10 @@ void Smart210Test::theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWit
     QCOMPARE(Cards::find(db, CardId).balanceX100, qlonglong(6000));
     QVERIFY(ConfirmDialog::lastQuestion().contains("10.00 kg"));
 
-    // Fill with the keyboard alone: weight, Enter, PIN, Enter, Enter on OK
+    // Fill with the keyboard alone: weight, Enter, Enter on the Result box (Print ticket), PIN, Enter, Enter on OK
     window.findChild<QPushButton *>("cardTopUpButton")->click();
     QTest::keyClicks(window.focusWidget(), "20");
+    QTest::keyClick(window.focusWidget(), Qt::Key_Return);
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
     QTest::keyClicks(window.focusWidget(), "1234");
     QTest::keyClick(window.focusWidget(), Qt::Key_Return);
@@ -12179,7 +12184,7 @@ void Smart210Test::theNozzleQuestionIsAnsweredWithTheKeyboardAlone()
     SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));      // the setting of the Settings page
+    page.findChild<QComboBox *>("resultCombo")->setCurrentIndex(1);
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QLabel *status = page.findChild<QLabel *>("saleStatus");
@@ -12230,10 +12235,21 @@ void Smart210Test::aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATi
     SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    QVERIFY(!settings.resultIsDirect(SettingKey::SpotSaleResult));    // the ticket is printed unless the Settings page says otherwise
-    QVERIFY(page.findChild<QComboBox *>("resultCombo") == 0);          // and there is no box for it on the screen
+    QComboBox *result = page.findChild<QComboBox *>("resultCombo");
+    QCOMPARE(result->count(), 2);
+    QCOMPARE(result->itemText(0), QString("Print ticket"));
+    QCOMPARE(result->itemText(1), QString("Set directly"));
+    QCOMPARE(result->currentIndex(), 0);                             // the ticket is printed unless the setting of the Settings page says otherwise
 
+    // the setting is only what the box starts with: the page takes it when it is opened, and the box can be changed for a sale
     QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));
+    page.reload();
+    QCOMPARE(result->currentIndex(), 1);
+    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "print"));
+    page.reload();
+    QCOMPARE(result->currentIndex(), 0);
+    result->setCurrentIndex(1);
+    QVERIFY(!settings.resultIsDirect(SettingKey::SpotSaleResult));    // choosing in the box does not change the setting
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "10.5");
@@ -12284,7 +12300,7 @@ void Smart210Test::aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket()
     SpotSalePage page(db, &bench.session, &printer, &bench.bus, &bench.config, &bench.selection, &bench.supply, &settings);
     page.reload();
 
-    QVERIFY(settings.setValue(SettingKey::SpotSaleResult, "direct"));      // the setting of the Settings page
+    page.findChild<QComboBox *>("resultCombo")->setCurrentIndex(1);
     QComboBox *customer = page.findChild<QComboBox *>("customerCombo");
     customer->setCurrentIndex(customer->findText("ACME"));
     QTest::keyClicks(page.findChild<QLineEdit *>("kgField"), "5");
@@ -12301,7 +12317,7 @@ void Smart210Test::aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket()
     QVERIFY(!SupplyQueue::session(db, 1).exists);
     QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
     QVERIFY(page.findChild<QPushButton *>("printAgainButton")->isEnabled());   // the ticket can still be printed
-    QVERIFY(settings.resultIsDirect(SettingKey::SpotSaleResult));              // and the setting stays for the next sale
+    QCOMPARE(page.findChild<QComboBox *>("resultCombo")->currentIndex(), 1);   // and the mode stays for the next sale
 }
 
 void Smart210Test::theSettingsPageChoosesWhatASpotSaleAndACardFillGive()
@@ -12370,6 +12386,11 @@ void Smart210Test::aCardFillSetDirectlyAsksForTheNozzleAndPrintsNothing()
 
     kgField->setText("10");
     pin->setText("1234");
+    QComboBox *result = window.findChild<QComboBox *>("fillResultCombo");
+    QVERIFY(result != 0);
+    QCOMPARE(result->itemText(0), QString("Print ticket"));
+    QCOMPARE(result->itemText(1), QString("Set directly"));
+    QCOMPARE(result->currentIndex(), 1);                                    // it starts with the setting of the Settings page
     nozzleToChoose_ = 0;                                                    // Cancel
     QTimer::singleShot(50, this, SLOT(answerTheNozzleQuestion()));
     ok->click();                                                            // the question is open until it is answered

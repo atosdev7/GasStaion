@@ -34,8 +34,8 @@ class CardPage;
 //     - a known card shows its holder, its fuel type, its balance and its status, and the Fill page, the main work of a card: the cursor is in its first field.
 //       The Top Up button above History switches to the Top Up page (and its text becomes Fill, which switches back).
 //         Fill        the weight to supply and the PIN the customer said (the PIN is the last field); OK asks "OK / Cancel" (ConfirmDialog), checks the PIN (5 wrong
-//                     ones lock the card), takes the kg from the card and makes a ticket for them (Cards::issueTicket). The cashier's setting (Settings page,
-//                     SettingKey::CardFillResult) says what the fill gives: the ticket is printed, and the supplier scans it at the dispenser like the ticket of a spot
+//                     ones lock the card), takes the kg from the card and makes a ticket for them (Cards::issueTicket). The Result box (it starts with the cashier's
+//                     setting of the Settings page, SettingKey::CardFillResult, and stays as it is changed) says what the fill gives: the ticket is printed, and the supplier scans it at the dispenser like the ticket of a spot
 //                     sale, at an auto or a manual nozzle; or nothing is printed and the weight is set straight on a nozzle (DirectSet, as a spot sale does). Under the form the last ticket of the card that is not used yet can be
 //                     printed again or cancelled (the kg go back to the card) while it waits for its upload.
 //         Top up      kg at a price per kg (the fuel's price is filled in, it can be changed), paid in cash: a sale of type "card"; Top Up asks "OK / Cancel" too
@@ -115,6 +115,7 @@ private:
     QStackedWidget *actionPages_;    // Fill / Top Up
     QPushButton *switchButton_;      // the Top Up button above History: it shows the Top Up page, and then the Fill page
     QLineEdit *fillKg_;
+    QComboBox *fillResult_;          // Print ticket / Set directly: it starts with the setting of the Settings page whenever the page is opened
     QLineEdit *fillPin_;
     QPushButton *fillOk_;
     QGroupBox *ticketBox_;

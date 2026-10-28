@@ -19,7 +19,7 @@
    </item>
    <item>
     <widget class="QLabel" name="resultsTitle">
-     <property name="text"><string>After a sale</string></property>
+     <property name="text"><string>Result of a sale: what the Result box starts with</string></property>
     </widget>
    </item>
    <item>
