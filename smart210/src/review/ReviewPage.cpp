@@ -385,6 +385,12 @@ void ReviewPage::setDate()
         return;
     }
     const QString date = newDate_->date().toString("yyyy-MM-dd");
+    const QString problem = ReviewData::dateProblem(db_, date, QDateTime::currentDateTime());
+    if (!problem.isEmpty()) {
+        showStatus(problem, false);
+
+        return;
+    }
     const int changed = ReviewData::setDate(db_, refs, date);
 
     reload();

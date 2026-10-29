@@ -30,7 +30,7 @@ public:
     static const int MaxPhoneLength = 30;
 
     struct Card {
-        Card() : failedAttempts(0), balanceX100(0), deleted(false), synced(true), exists(false) {}
+        Card() : failedAttempts(0), balanceX100(0), deleted(false), synced(true), exists(false), freePayment(false) {}
 
         QString id;
         QString uid;           // the id on the card, as the reader gives it
@@ -45,6 +45,7 @@ public:
         bool deleted;
         bool synced;
         bool exists;
+        bool freePayment;      // the web app allows a top-up for nothing (a price of 0) on this card
 
         bool isActive() const { return exists && !deleted && status == "active"; }
     };

@@ -139,6 +139,14 @@ bool SyncStore::applyConfig(const QJsonObject &config, QString *error)
             && (device.value("pin_salt").isNull() ? settings.remove(SettingKey::PinSalt) : settings.setValue(SettingKey::PinSalt, device.value("pin_salt").toString()))
             && (device.value("pin_hash").isNull() ? settings.remove(SettingKey::PinHash) : settings.setValue(SettingKey::PinHash, device.value("pin_hash").toString()));
         // What the terminal needs to number a ticket of its own (older servers do not send it: then the settings stay as they were).
+        // the hour the business day starts and the days back a record may be dated: the web app's (a web app that does not say leaves what there is)
+        if (ok && config.contains("business_day_start_hour")) {
+            ok = settings.setInt(SettingKey::BusinessDayStartHour, config.value("business_day_start_hour").toInt(Checkout::StartHour));
+            Checkout::setStartHour(config.value("business_day_start_hour").toInt(Checkout::StartHour));
+        }
+        if (ok && config.contains("sale_backdate_days")) {
+            ok = settings.setInt(SettingKey::SaleBackdateDays, qMax(0, config.value("sale_backdate_days").toInt(3)));
+        }
         if (ok && config.contains("ticket_sign")) {
             ok = settings.setValue(SettingKey::TicketSign, config.value("ticket_sign").toString());
         }
@@ -438,10 +446,10 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     QSqlQuery query(db_);
     if (exists) {
         query.prepare("UPDATE cards SET uid = ?, holder_name = ?, holder_phone = ?, fuel_type = ?, pin_salt = ?, pin_hash = ?, failed_attempts = ?, status = ?, "
-                      "balance_kg = ?, deleted = ?, synced = 1 WHERE id = ?");
+                      "balance_kg = ?, deleted = ?, free_payment = ?, synced = 1 WHERE id = ?");
     } else {
-        query.prepare("INSERT INTO cards (uid, holder_name, holder_phone, fuel_type, pin_salt, pin_hash, failed_attempts, status, balance_kg, deleted, synced, id) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)");
+        query.prepare("INSERT INTO cards (uid, holder_name, holder_phone, fuel_type, pin_salt, pin_hash, failed_attempts, status, balance_kg, deleted, free_payment, synced, id) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)");
     }
     query.addBindValue(row.value("uid").toString());
     query.addBindValue(row.value("holder_name").toString());
@@ -453,6 +461,7 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     query.addBindValue(row.value("status").toString());
     query.addBindValue(balance);
     query.addBindValue(row.value("deleted").toBool() ? 1 : 0);
+    query.addBindValue(row.value("free_payment").toBool() ? 1 : 0);
     query.addBindValue(id);
 
     return run(query, error);

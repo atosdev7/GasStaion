@@ -57,6 +57,9 @@ class PullController extends Controller
             // The press tickets published before go-live and sold on paper have no rows: a ticket with no row on the terminal whose serial is inside one of
             // these ranges is a ticket sold before go-live (it is made when it is used). Empty until the go-live date is set.
             'ticket_legacy' => \App\Support\Tickets\LegacyTickets::ranges(),
+            // the hour a business day starts (a sale at 02:00 belongs to the day before) and how many days back a record may be dated: the terminal follows the web app
+            'business_day_start_hour' => (int) config('backup.business_day_start_hour'),
+            'sale_backdate_days' => (int) config('sales.backdate_days'),
             'fuel_types' => $fuelTypes,
             'tanks' => TankLevels::all()->map(function ($r) {
                 return [

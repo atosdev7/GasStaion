@@ -89,7 +89,7 @@ bool ReviewData::nearShiftLine(const QString &dateTime)
         return false;
     }
     const int minutes = clock.left(2).toInt() * 60 + clock.mid(3, 2).toInt();
-    const int line = Checkout::StartHour * 60;
+    const int line = Checkout::startHour() * 60;
 
     return minutes >= line - GraceMinutes && minutes <= line + GraceMinutes;
 }
@@ -318,6 +318,24 @@ int ReviewData::setComment(QSqlDatabase db, const QList<Ref> &records, const QSt
     db.commit();
 
     return changed;
+}
+
+QString ReviewData::dateProblem(QSqlDatabase db, const QString &date, const QDateTime &now)
+{
+    const QDate day = QDate::fromString(date, "yyyy-MM-dd");
+    if (!day.isValid()) {
+        return QObject::tr("Choose a date.");
+    }
+    const QDate today = QDate::fromString(Checkout::businessDay(now), "yyyy-MM-dd");
+    const int days = Settings(db).intValue(SettingKey::SaleBackdateDays, 3);
+    if (day > today) {
+        return QObject::tr("A record cannot be dated after today.");
+    }
+    if (day < today.addDays(-days)) {
+        return days > 0 ? QObject::tr("A record cannot be dated more than %1 days back.").arg(days) : QObject::tr("A record can only be dated today.");
+    }
+
+    return QString();
 }
 
 int ReviewData::setDate(QSqlDatabase db, const QList<Ref> &records, const QString &date)

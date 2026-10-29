@@ -102,6 +102,10 @@ public:
     // invalid date changes nothing); those are marked not uploaded.
     static int setDate(QSqlDatabase db, const QList<Ref> &records, const QString &date);
 
+    // Why a record may not be dated `date` (an empty text: it may): not after today's business day, and not more days back than the web app allows a cashier
+    // (SettingKey::SaleBackdateDays, 3 until the web app says). The Review screen asks before it moves a record.
+    static QString dateProblem(QSqlDatabase db, const QString &date, const QDateTime &now);
+
     // Is this time within GraceMinutes of the 9 AM line?
     static bool nearShiftLine(const QString &dateTime);
 };

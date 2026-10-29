@@ -52,11 +52,12 @@ Cards::Card fromQuery(QSqlQuery &query)
     card.deleted = query.value(9).toInt() != 0;
     card.synced = query.value(10).toInt() != 0;
     card.holderPhone = query.value(11).toString();
+    card.freePayment = query.value(12).toInt() != 0;
 
     return card;
 }
 
-const char *const Columns = "id, uid, holder_name, fuel_type, pin_salt, pin_hash, failed_attempts, status, balance_kg, deleted, synced, holder_phone";
+const char *const Columns = "id, uid, holder_name, fuel_type, pin_salt, pin_hash, failed_attempts, status, balance_kg, deleted, synced, holder_phone, free_payment";
 
 }
 
@@ -256,13 +257,13 @@ Cards::TopUpResult Cards::topUp(QSqlDatabase db, const QString &cardId, qlonglon
 
         return result;
     }
-    if (priceX100 < 1 || priceX100 > SpotSale::MaxPriceX100) {
+    if (priceX100 < 0 || priceX100 > SpotSale::MaxPriceX100) {
         result.error = QObject::tr("Enter the price per kg.");
 
         return result;
     }
     const qlonglong total = totalX100 >= 0 ? totalX100 : SpotSale::amountFor(kgX100, priceX100);
-    if (total < 1 || total > SpotSale::MaxAmountX100) {
+    if (total < 0 || total > SpotSale::MaxAmountX100) {
         result.error = QObject::tr("The amount is not allowed.");
 
         return result;
@@ -284,6 +285,13 @@ Cards::TopUpResult Cards::topUp(QSqlDatabase db, const QString &cardId, qlonglon
     if (card.status == "blocked") {
         db.rollback();
         result.error = QObject::tr("This card is blocked (lost): it cannot be topped up.");
+
+        return result;
+    }
+    // fuel is not given away: the price is above 0, unless the card is a free payment card (as on the web app)
+    if (!card.freePayment && (priceX100 < 1 || total < 1)) {
+        db.rollback();
+        result.error = priceX100 < 1 ? QObject::tr("Enter the price per kg.") : QObject::tr("The amount is not allowed.");
 
         return result;
     }

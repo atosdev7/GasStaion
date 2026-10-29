@@ -67,7 +67,7 @@ QString dateCondition(const QString &table, const QString &date)
                "OR supplement_id IN (SELECT id FROM supplements WHERE " + Checkout::dateExpression("supplements", "supplied_at", "supply_date") + " = " + day + ") "
                "OR barcode IN (SELECT ticket_barcode FROM ticket_loan_settlements WHERE " + Checkout::dateExpression("ticket_loan_settlements", "settled_at") + " = " + day + ") "
                "OR barcode IN (SELECT ticket_barcode FROM remainders WHERE " + Checkout::dateExpression("remainders", "created_at", "remainder_date") + " = " + day + ") "
-               "OR (card_id IS NOT NULL AND " + "date(sale_date, '-" + QString::number(Checkout::StartHour) + " hours')" + " = " + day + "))";
+               "OR (card_id IS NOT NULL AND " + "date(sale_date, '-" + QString::number(Checkout::startHour()) + " hours')" + " = " + day + "))";
     }
 
     return QString();

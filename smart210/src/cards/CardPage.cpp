@@ -343,10 +343,13 @@ void CardPage::topUpEdited()
     qlonglong weight = 0;
     qlonglong price = 0;
     qlonglong total = 0;
-    if (!Decimal::parse(topUpPrice_->text(), 2, &price) || price <= 0) {
+    const bool free = Cards::findById(db_, cardId_).freePayment;       // a free payment card may be topped up for nothing
+    if (!Decimal::parse(topUpPrice_->text(), 2, &price) || price < 0 || (price == 0 && !free)) {
         if (!totalTyped_) {
             topUpTotal_->clear();
         }
+    } else if (price == 0) {
+        topUpTotal_->setText(kg(0));
     } else if (totalTyped_ && Decimal::parse(topUpTotal_->text(), 2, &total)) {
         topUpKg_->setText(kg(SpotSale::kgFor(total, price)));
     } else if (Decimal::parse(topUpKg_->text(), 2, &weight) && weight > 0) {
@@ -383,7 +386,7 @@ void CardPage::topUpClicked()
 
         return;
     }
-    if (!Decimal::parse(topUpPrice_->text(), 2, &price) || price <= 0) {
+    if (!Decimal::parse(topUpPrice_->text(), 2, &price) || price < 0 || (price == 0 && !Cards::findById(db_, cardId_).freePayment)) {
         showStatus(tr("Enter the price per kg."), false);
 
         return;

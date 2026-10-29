@@ -21,7 +21,11 @@
 class Checkout
 {
 public:
-    static const int StartHour = 9;
+    static const int StartHour = 9;           // the hour a business day starts until the web app says another (startHour)
+
+    // The hour the business day starts now: the web app's (its config, kept in the settings and applied at the start and after each download), StartHour until it said.
+    static int startHour();
+    static void setStartHour(int hour);   // 0 to 23; anything else is ignored
 
     struct Run {
         Run() : records(0) {}

@@ -28,19 +28,37 @@ const int kindCount = sizeof(kinds) / sizeof(kinds[0]);
 // SQL for the business day of a time column.
 QString dayOf(const char *column)
 {
-    return QString("date(%1, '-%2 hours')").arg(column).arg(Checkout::StartHour);
+    return QString("date(%1, '-%2 hours')").arg(column).arg(Checkout::startHour());
 }
 
+}
+
+namespace {
+
+int currentStartHour = Checkout::StartHour;
+
+}
+
+int Checkout::startHour()
+{
+    return currentStartHour;
+}
+
+void Checkout::setStartHour(int hour)
+{
+    if (hour >= 0 && hour <= 23) {
+        currentStartHour = hour;
+    }
 }
 
 QString Checkout::businessDay(const QDateTime &time)
 {
-    return time.addSecs(-StartHour * 3600).toString("yyyy-MM-dd");
+    return time.addSecs(-startHour() * 3600).toString("yyyy-MM-dd");
 }
 
 QString Checkout::dateExpression(const QString &alias, const QString &timeColumn, const QString &dateColumn)
 {
-    return QString("COALESCE(%1.%4, date(%1.%2, '-%3 hours'))").arg(alias).arg(timeColumn).arg(StartHour).arg(dateColumn);
+    return QString("COALESCE(%1.%4, date(%1.%2, '-%3 hours'))").arg(alias).arg(timeColumn).arg(startHour()).arg(dateColumn);
 }
 
 Checkout::Run Checkout::run(QSqlDatabase db, const QDateTime &now, const QString &mode, int userId, bool includeCurrentDay)
