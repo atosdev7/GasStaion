@@ -175,7 +175,7 @@ bool SupplySession::recordManual(int nozzle, qlonglong dispensedX100, qlonglong 
         reason = tr("Nozzle %1 has a fill running or a result waiting: the app reads it by itself.").arg(nozzle);
     } else if (isLocked(nozzle) && SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::session(db_, nozzle).presetX100) {
         reason = tr("More than was asked for (%1 kg). Check the reading.").arg(kg(SupplyQueue::session(db_, nozzle).presetX100));
-    } else if (isLocked(nozzle) && !SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::totalX100(db_, nozzle)) {
+    } else if (isLocked(nozzle) && !SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::totalX100(db_, nozzle) + SupplyRecord::ToleranceX100) {
         reason = tr("More than the tickets cover (%1 kg). Check the reading.").arg(kg(SupplyQueue::totalX100(db_, nozzle)));
     } else if (!isLocked(nozzle) && tickets.isEmpty()) {
         reason = tr("Enter the tickets first.");

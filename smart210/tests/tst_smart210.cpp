@@ -185,6 +185,7 @@ private slots:
     void purgeRemovesOnlyOldRecordsThatAreSafeToLose();
     void purgeNeverUsesLessThanOneDay();
     void purgeKeepsTheHistoryOfCards();
+    void aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem();
     void theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload();
     void aServerThatDoesNotKnowTheConfirmedQuestionDoesNotFailTheDownload();
 
@@ -2146,6 +2147,30 @@ void Smart210Test::purgeRemovesOnlyOldRecordsThatAreSafeToLose()
     QCOMPARE(tickets, QList<qlonglong>() << 3000000022LL << 3000000023LL << 3000000024LL << 3000000025LL << 3000000026LL);
 }
 
+void Smart210Test::aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    Session session(db);
+    QVERIFY(session.login(7, "secret1"));
+    MachineConfig config(db);
+    FakeBoards boards;
+    BoardBus bus;
+    quickBus(&bus, &boards);
+    SupplySelection selection(&bus, &config);
+    SupplySession supply(db, &bus, &config, &selection, &session);
+    const QDateTime when = QDateTime(QDate(2026, 10, 13), QTime(9, 15, 0));
+    QList<qlonglong> tickets;
+    QString why;
+
+    // 20.04 kg came out against tickets of 20.00 kg: the station absorbs the 0.04 kg, the tickets are used and no remainder is made
+    tickets << 3000000041 << 3000000043;                                  // 15.00 + 5.00
+    QVERIFY2(supply.recordManual(3, 2004, 2415, tickets, when, &why), qPrintable(why));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL AND status = 2 AND synced = 0").toInt(), 2);
+    QCOMPARE(countRows("remainders"), 0);
+    QCOMPARE(one("SELECT out_amount_kg || '/' || preset_kg FROM supplements").toString(), QString("2004/2000"));
+}
+
 void Smart210Test::purgeKeepsTheHistoryOfCards()
 {
     QSqlDatabase db = openDatabase();
@@ -3444,7 +3469,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 11);                                  // the program still opens it
+    QCOMPARE(Migrator::version(db), 12);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -5904,7 +5929,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 11);
+    QCOMPARE(Migrator::version(db), 12);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -7009,7 +7034,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 11);
+    QCOMPARE(all.size(), 12);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -10544,7 +10569,7 @@ void Smart210Test::theCardTablesAreMadeByTheMigration()
     QSqlDatabase db = openDatabase();
 
     // PRAGMA table_info works in every SQLite (the table-valued pragma_table_info() needs 3.16)
-    QCOMPARE(columnsOf(db, "cards").size(), 13);
+    QCOMPARE(columnsOf(db, "cards").size(), 14);
     QVERIFY(columnsOf(db, "cards").contains("holder_phone"));
     QVERIFY(columnsOf(db, "sales").contains("card_id"));
     QVERIFY(columnsOf(db, "supplements").contains("card_id"));
@@ -11848,8 +11873,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 11);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card
-    QCOMPARE(Migrator::version(db), 11);
+    QCOMPARE(Migrator::bundled().size(), 12);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card
+    QCOMPARE(Migrator::version(db), 12);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables

@@ -115,8 +115,11 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         total += entry.kgX100;
         withTickets = withTickets && stillGood(db, entry.barcode, fuelType, nozzleNumber);
     }
-    if (withTickets && reading.dispensedX100 > total) {
-        withTickets = false; // more came out than the tickets cover: the station never accepts that, the cashier sorts the tickets out
+    // A fill that overshoots its preset by a few grams (the valve closes a moment late; the board's grams are rounded to 0.01 kg) is covered by its tickets:
+    // the station absorbs up to the tolerance, so the supply is saved with its tickets and the web app takes it. More than that is never accepted: the
+    // supply is saved without the tickets and the cashier sorts them out.
+    if (withTickets && reading.dispensedX100 > total + ToleranceX100) {
+        withTickets = false;
     }
 
     // The tickets typed in with the reading replace the queue: each must pass the checks of a scan, and together they must cover what was
@@ -142,7 +145,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
             queue.append(entry);
             total += scan.kgX100;
         }
-        if (total < reading.dispensedX100) {
+        if (total + ToleranceX100 < reading.dispensedX100) {
             db.rollback();
 
             return refused(QObject::tr("The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.")

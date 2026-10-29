@@ -34,6 +34,9 @@ class Push
 
     const DATETIME = 'date_format:Y-m-d H:i:s';
 
+    // how far past its tickets a supply may go (the Smart210's ToleranceX100)
+    const SUPPLY_TOLERANCE_KG = 0.05;
+
     public static function pattern()
     {
         return implode('|', self::TABLES);
@@ -278,8 +281,9 @@ class Push
             'supply_date' => 'nullable|date_format:Y-m-d',
         ]);
 
-        // The tolerance of the Smart210 (0.05 kg) only ever favours the station: the tickets may exceed what was dispensed, never the other way.
-        if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > 0) {
+        // The tolerance of the Smart210 is 0.05 kg both ways: a fill that stops a few grams past its tickets (the valve closes a moment late) is taken, the
+        // station absorbs it; more than that is refused.
+        if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > self::SUPPLY_TOLERANCE_KG) {
             throw new RejectedRow('more was dispensed than the tickets cover');
         }
 
@@ -471,8 +475,13 @@ class Push
                 self::conflict($device, $d, 'the ticket is already ' . $names[$current] . ' on the server, the sale was not applied');
             }
         } elseif ($current === $s['supply']) {
-            if (!empty($d['supplement_id']) && !empty($ticket->supplement_id) && $ticket->supplement_id !== $d['supplement_id']) {
-                self::conflict($device, $d, 'the ticket was already supplied under another supplement, kept as it was');
+            // The same ticket used twice: at a nozzle under two supplements, or once at a nozzle and once for a ticket loan (that use has no supplement). Whichever
+            // came first stays; the staff see the case among the sync problems. (The same use sent again is quiet: the supplements are equal, or both are empty.)
+            $stored = (string) $ticket->supplement_id;
+            $pushed = (string) ($d['supplement_id'] ?? '');
+            if ($stored !== $pushed) {
+                self::conflict($device, $d, $stored === '' ? 'the ticket was already used for a ticket loan, kept as it was'
+                    : ($pushed === '' ? 'the ticket was already supplied at a nozzle, kept as it was' : 'the ticket was already supplied under another supplement, kept as it was'));
             }
         } else {
             if ($current === $s['restrict']) {

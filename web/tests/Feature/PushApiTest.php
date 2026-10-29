@@ -96,6 +96,20 @@ class PushApiTest extends TestCase
         $this->assertNotNull(Device::where('name', 'POS1')->value('last_synced_at'));
     }
 
+    public function testOnlyAStoredBatchOfRecordsCountsAsAnUpload()
+    {
+        $nozzles = $this->push('nozzles', [['number' => 3, 'tank_id' => $this->nozzle->tank_id, 'board_address' => 3, 'name' => null, 'deleted' => false]]);
+        $this->assertSame(['3'], $nozzles['saved']);
+        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));     // the nozzles go up on their own: that is not an upload of the day
+
+        $bad = $this->sale(['paid_amount' => '15.00', 'unpaid_amount' => '5.00']);      // a terminal sale cannot leave an unpaid amount
+        $this->push('sales', [$this->sale(), $bad]);
+        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));     // a refused row stays on the terminal
+
+        $this->push('sales', [$this->sale()]);
+        $this->assertNotNull(Device::where('name', 'POS1')->value('last_synced_at'));  // a batch stored whole
+    }
+
     public function testTheReceiptOfAPushedSaleIsAYesNo()
     {
         $none = $this->sale();
@@ -531,15 +545,16 @@ class PushApiTest extends TestCase
         $this->assertSame(0, Supplement::count());
     }
 
-    public function testASupplementMayFallShortOfItsTicketsButNeverExceedThem()
+    public function testASupplementMayFallShortOfItsTicketsAndOvershootThemByTheToleranceOnly()
     {
         $within = $this->supplement(['out_amount_kg' => '14.95']);   // the station keeps 0.05 kg: fine
-        $over = $this->supplement(['out_amount_kg' => '15.01']);     // more than the tickets cover: refused
+        $over = $this->supplement(['out_amount_kg' => '15.05']);     // the valve closed a moment late: the station absorbs up to 0.05 kg
+        $tooMuch = $this->supplement(['out_amount_kg' => '15.06']);  // more than the tolerance past the tickets: refused
 
-        $result = $this->push('supplements', [$within, $over]);
+        $result = $this->push('supplements', [$within, $over, $tooMuch]);
 
-        $this->assertSame([$within['id']], $result['saved']);
-        $this->assertSame($over['id'], $result['rejected'][0]['key']);
+        $this->assertSame([$within['id'], $over['id']], $result['saved']);
+        $this->assertSame($tooMuch['id'], $result['rejected'][0]['key']);
     }
 
     public function testASupplementNeedsANozzleOfItsOwnDevice()
@@ -927,6 +942,32 @@ class PushApiTest extends TestCase
         $this->assertSame([$ticket->barcode], $second['saved']);
         $this->assertSame(0, $this->conflicts());
         $this->assertSame($row['supplement_id'], Ticket::find($ticket->barcode)->supplement_id);
+    }
+
+    public function testFuelPouredForATicketThatWasUsedForALoanIsLoggedAndTheLoanUseKept()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.supply'));      // used for a ticket loan on the web: no supplement
+
+        $result = $this->push('tickets', [$this->supplyRow($ticket->barcode)]);
+
+        $this->assertSame([$ticket->barcode], $result['saved']);
+        $this->assertSame(1, $this->conflicts());
+        $this->assertNull(Ticket::find($ticket->barcode)->supplement_id);
+    }
+
+    public function testALoanUseOfATicketAlreadySuppliedAtANozzleIsLogged()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $first = $this->supplyRow($ticket->barcode);
+        $this->push('tickets', [$first]);
+        $this->assertSame(0, $this->conflicts());
+
+        $loan = $first;
+        $loan['supplement_id'] = null;                                          // the terminal used it to settle a loan
+        $this->push('tickets', [$loan]);
+
+        $this->assertSame(1, $this->conflicts());
+        $this->assertSame($first['supplement_id'], Ticket::find($ticket->barcode)->supplement_id);
     }
 
     public function testASecondSupplementForTheSameTicketIsLoggedAndTheFirstKept()

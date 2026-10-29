@@ -20,8 +20,6 @@ class PushController extends Controller
     public function store(Request $request, $table)
     {
         $device = $request->attributes->get('device');
-        $device->last_synced_at = now();
-        $device->save();
 
         $validator = Validator::make($request->all(), [
             'rows' => 'required|array|max:' . self::MAX_ROWS,
@@ -50,6 +48,14 @@ class PushController extends Controller
                 $rejected[] = ['key' => $key, 'error' => substr($message, 0, 255)];
                 SyncError::record($device->id, $table, $key, json_encode($row), $message);
             }
+        }
+
+        // "The terminal uploaded" is what lets a backup run and a confirmed day be dumped: it says the terminal has sent the records of the day. So it is the moment a batch
+        // of records was stored whole, not the moment a request arrived: the nozzles go up on their own whatever the upload mode is, and a batch with a refused row leaves
+        // that row on the terminal.
+        if ($table !== 'nozzles' && $saved && !$rejected) {
+            $device->last_synced_at = now();
+            $device->save();
         }
 
         return Api::response([
