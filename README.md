@@ -1,6 +1,6 @@
 # Gas Station Management System
 
-Four parts: a Laravel web app (`web/`), a Qt app on the Smart210 cashier terminal, STM32 firmware per nozzle, and an offline backup server (same Laravel code). See [WORK_PLAN.md](WORK_PLAN.md) for the plan and progress.
+Four parts: a Laravel web app (`web/`), a Qt app on the Smart210 cashier terminal, STM32 firmware per nozzle, and an offline backup server (same Laravel code). See [WORK_PLAN.md](WORK_PLAN.md) for what is open and [WORK_PLAN_DONE.md](WORK_PLAN_DONE.md) for the finished tasks.
 
 Also: `PROTOCOL.md` (the nozzle board protocol) and `simulator/` (a PC program that plays the converter and the six nozzle boards, see its README).
 
