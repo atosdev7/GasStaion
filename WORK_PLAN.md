@@ -33,7 +33,7 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 
 ## Open findings of the logic review (REVIEW_2026-10-29.md)
 
-Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), A6 (a terminal sale's total must be price x kg), C1 (only cashiers' password hashes go to the terminals), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
+Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), A6 (a terminal sale's total must be price x kg), C1 (only cashiers' password hashes go to the terminals), C7 (a remainder ticket that is not used yet is never purged and always listed), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
 
 | Ref | Finding | Where |
 |---|---|---|
@@ -48,7 +48,6 @@ Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 
 | C4 | No guard against a wrong terminal clock | `Clock`, `Session` |
 | C5 | An edit saved while an upload is in flight is never uploaded (skipped by decision) | `Uploader::replyFinished` |
 | C6 | Default admin password, PIN 0000 and `APP_DEBUG=true` (skipped by decision) | `DatabaseSeeder`, `.env.example` |
-| C7 | A synced remainder is purged after `purge_days` even when it was never printed or used | `Purger::purge` |
 | C8 | A ticket can settle two loans, and a remainder ticket can belong to two remainders, across web and terminal | `Push::ticket_loan_settlements`, `Push::remainders` |
 | D, E | Small items and the whole-table queries that will need SQL aggregates (see the review) | |
 

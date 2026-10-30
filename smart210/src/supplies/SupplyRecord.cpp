@@ -252,7 +252,9 @@ QList<SupplyRecord::RemainderRow> SupplyRecord::remainders(QSqlDatabase db, int 
     query.prepare("SELECT r.created_at, COALESCE((SELECT COALESCE(NULLIF(name, ''), number) FROM nozzles WHERE id = s.nozzle_id), ''), r.fuel_type, r.amount_kg, r.ticket_barcode, "
                   "COALESCE(r.printed_at, ''), COALESCE(t.status, 1), r.id, COALESCE(r.comment, '') "
                   "FROM remainders r LEFT JOIN supplements s ON s.id = r.supplement_id LEFT JOIN tickets t ON t.barcode = r.ticket_barcode "
-                  "ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?");
+                  // every remainder ticket that was not supplied yet, however old, and the latest used ones up to the limit
+                  "WHERE COALESCE(t.status, 1) = 1 OR r.rowid IN (SELECT rowid FROM remainders ORDER BY created_at DESC, rowid DESC LIMIT ?) "
+                  "ORDER BY r.created_at DESC, r.rowid DESC");
     query.addBindValue(limit);
     query.exec();
     while (query.next()) {

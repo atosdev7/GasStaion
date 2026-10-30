@@ -185,6 +185,7 @@ private slots:
     void purgeRemovesOnlyOldRecordsThatAreSafeToLose();
     void purgeNeverUsesLessThanOneDay();
     void purgeKeepsTheHistoryOfCards();
+    void purgeKeepsTheRemainderTicketsThatAreNotUsedYet();
     void aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem();
     void theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload();
     void aServerThatDoesNotKnowTheConfirmedQuestionDoesNotFailTheDownload();
@@ -2169,6 +2170,38 @@ void Smart210Test::aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem()
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL AND status = 2 AND synced = 0").toInt(), 2);
     QCOMPARE(countRows("remainders"), 0);
     QCOMPARE(one("SELECT out_amount_kg || '/' || preset_kg FROM supplements").toString(), QString("2004/2000"));
+}
+
+void Smart210Test::purgeKeepsTheRemainderTicketsThatAreNotUsedYet()
+{
+    QSqlDatabase db = openDatabase();
+    const QDateTime now(QDate(2026, 10, 7), QTime(12, 0, 0)); // with 3 days the limit is 2026-10-04 12:00:00
+    run("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, supplied_at, synced) VALUES ('sup-a', 'D', 2, 100, 100, 110, '2026-10-01 09:00:00', 1)");
+    const QString remainder = "INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, printed_at, synced) VALUES ";
+    run(remainder + "('rem-unused', 'sup-a', 21500000011, 'D', 1000, '2026-10-01 09:00:00', NULL, 1)");                      // not printed, not used: stays
+    run(remainder + "('rem-printed', 'sup-a', 21500000012, 'D', 1000, '2026-10-01 09:00:00', '2026-10-01 09:01:00', 1)");  // printed, not used: stays
+    run(remainder + "('rem-used', 'sup-a', 21500000013, 'D', 1000, '2026-10-01 09:00:00', '2026-10-01 09:01:00', 1)");     // used: goes
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000011, 'D', 1000, 1, 1)");
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000012, 'D', 1000, 1, 1)");
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, supply_date, synced) VALUES (21500000013, 'D', 1000, 2, '2026-10-02 09:00:00', 1)");
+
+    Purger::purge(db, 3, now);
+
+    QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id IN ('rem-unused', 'rem-printed')").toInt(), 2);
+    QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-used'").toInt(), 0);
+
+    // the confirmed supply goes too, its unused remainder tickets stay in the list
+    Purger::removeConfirmed(db, QStringList(), QStringList() << "sup-a");
+    QCOMPARE(one("SELECT COUNT(*) FROM remainders").toInt(), 2);
+    QCOMPARE(SupplyRecord::remainders(db).size(), 2);
+
+    // the list shows every unused one, however many newer used ones there are
+    run("UPDATE tickets SET status = 2 WHERE barcode = 21500000012");
+    run(remainder + "('rem-new', 'sup-a', 21500000014, 'D', 1000, '2026-10-06 09:00:00', NULL, 1)");
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000014, 'D', 1000, 2, 1)");
+    const QList<SupplyRecord::RemainderRow> rows = SupplyRecord::remainders(db, 1);
+    QCOMPARE(rows.size(), 2);                                // the newest (used) and the old one that is still unused
+    QCOMPARE(rows.at(1).ticketStatus, int(TicketStatus::Sale));
 }
 
 void Smart210Test::purgeKeepsTheHistoryOfCards()
