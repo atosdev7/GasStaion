@@ -33,11 +33,10 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 
 ## Open findings of the logic review (REVIEW_2026-10-29.md)
 
-Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), A6 (a terminal sale's total must be price x kg), C1 (only cashiers' password hashes go to the terminals), C7 (a remainder ticket that is not used yet is never purged and always listed), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
+Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), A6 (a terminal sale's total must be price x kg), C1 (only cashiers' password hashes go to the terminals), C7 (a remainder ticket that is not used yet is never purged and always listed), the stale migration tests. A2 (the terminal reports when nothing of a finished day waits, `POST /api/sync/uploaded`; a push no longer marks an upload). Open:
 
 | Ref | Finding | Where |
 |---|---|---|
-| A2 | The terminal should say when a full upload finished; `last_synced_at` should follow that call | `PushController`, `Uploader`, `BackupRun::silentDevices` |
 | A3 | Opening debts, loans and remainders have the same ids on both servers by procedure: the backup server is copied from the live server after the opening balances are entered (README, Backups). `backup:import` counts payments and settlements that point at an opening balance the backup server lacks (done on the branch). Still open: B5, freezing the opening balances after the copy | `ImportBackup::orphans`, `BalanceController` |
 | B1 | Remainder tolerance: the web makes a remainder for any shortfall, the terminal keeps up to 0.05 kg | `SupplementController::returnRemainder` |
 | B2 | A card ticket's unused part: refund to the card on the web, a paper remainder ticket on the terminal | `CardLedger::refund`, `SupplyRecord::record` |

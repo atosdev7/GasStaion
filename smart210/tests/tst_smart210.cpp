@@ -297,6 +297,8 @@ private slots:
     void theUploadModeIsPickedAndSavedOnMachineConfig();
     void theTerminalUploadsByItselfInTheAutomaticModes();
     void aNozzleGoesToTheWebAppByItselfWhateverTheUploadMode();
+    void theTerminalTellsTheWebAppWhenNothingOfAFinishedDayWaits();
+    void unsentBeforeCountsTheRefusedRecordsToo();
     void pressingUploadSendsEverythingAndEmptiesTheScreen();
     void aFailedUploadSaysSoAndCanBePressedAgain();
     void refusedRecordsStayListedWithTheirReason();
@@ -3770,6 +3772,49 @@ void Smart210Test::aNozzleGoesToTheWebAppByItselfWhateverTheUploadMode()
     QVERIFY(!server_->log().contains("POST /api/push/sales"));
     QCOMPARE(one("SELECT synced FROM sales WHERE id = 'waits'").toInt(), 0);
     QCOMPARE(footerWaiting(window), QString("Waiting for upload: 1"));
+}
+
+void Smart210Test::theTerminalTellsTheWebAppWhenNothingOfAFinishedDayWaits()
+{
+    setUpSellingTerminal();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+    const QString columns = "(id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, synced) ";
+    run("INSERT INTO sales " + columns + "VALUES ('old', '" + now.addDays(-3).toString("yyyy-MM-dd HH:mm:ss") + "', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 7, '"
+        + Checkout::businessDay(now.addDays(-3)) + "', 0)");
+    run("INSERT INTO sales " + columns + "VALUES ('recent', '" + now.addSecs(-20).toString("yyyy-MM-dd HH:mm:ss") + "', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 7, '"
+        + Checkout::businessDay(now.addSecs(-20)) + "', 0)");
+    serveUploads();
+    server_->reply("/api/sync/uploaded", 200, q("{'status':'ok'}"));
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.setUploadIntervalMs(100);
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("GET /api/pull/ticket_loans?limit=200"), 10000);   // the first download is done
+    QTest::qWait(500);
+
+    // a record of a business day that is over waits (the upload mode is manual): the web app is not told that the terminal is clear
+    QVERIFY(!server_->log().contains("POST /api/sync/uploaded"));
+
+    // it is uploaded: only the running day's record is left, and that one is the cashier's until the day is over
+    run("UPDATE sales SET synced = 1 WHERE id = 'old'");
+    QTRY_VERIFY_WITH_TIMEOUT(server_->log().contains("POST /api/sync/uploaded"), 10000);
+}
+
+void Smart210Test::unsentBeforeCountsTheRefusedRecordsToo()
+{
+    QSqlDatabase db = openDatabase();
+    const QString columns = "(id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, synced) ";
+    run("INSERT INTO sales " + columns + "VALUES ('refused', '2026-10-03 09:00:00', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 5, '2026-10-03', 0)");
+    run("INSERT INTO sales " + columns + "VALUES ('sent', '2026-10-03 10:00:00', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 5, '2026-10-03', 1)");
+    run("INSERT INTO sales " + columns + "VALUES ('today', '2026-10-07 10:00:00', 'spot', 'D', 750, 100, 'cash', 750, 750, 'sale', 5, '2026-10-07', 0)");
+    run("INSERT INTO upload_errors (table_name, row_key, message, created_at) VALUES ('sales', 'refused', 'no', '2026-10-03 11:00:00')");
+
+    QCOMPARE(Uploader::pendingTotal(db, QString(), "2026-10-07 09:00:00"), 0);       // the automatic upload leaves a refused record alone
+    QCOMPARE(Uploader::unsentBefore(db, "2026-10-07 09:00:00"), 1);                  // but the web app does not have it: the terminal is not clear
+    QCOMPARE(Uploader::unsentBefore(db, "2026-10-03 00:00:00"), 0);                  // nothing was made before that
 }
 
 void Smart210Test::pressingUploadSendsEverythingAndEmptiesTheScreen()

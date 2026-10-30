@@ -26,7 +26,7 @@ class SyncBusyTest extends TestCase
     {
         Cache::put(BackupRun::BUSY_KEY, true, 60);
 
-        foreach (['GET' => ['/api/pull/config', '/api/pull/customers'], 'POST' => ['/api/pull/customers/ack', '/api/push/sales', '/api/sync/initial-done']] as $method => $uris) {
+        foreach (['GET' => ['/api/pull/config', '/api/pull/customers'], 'POST' => ['/api/pull/customers/ack', '/api/push/sales', '/api/sync/initial-done', '/api/sync/uploaded']] as $method => $uris) {
             foreach ($uris as $uri) {
                 $response = $this->json($method, $uri, [])->assertStatus(503);
                 $this->assertSame('busy', json_decode($response->getContent(), true)['status']);

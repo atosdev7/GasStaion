@@ -52,9 +52,15 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+namespace {
+
+const qint64 NothingWaitingEveryMs = 5 * 60 * 1000; // how often the web app is told that no record of a finished business day waits for an upload
+
+}
+
 MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const QString &databaseInfo, QSqlDatabase db,
                        QWidget *parent)
-    : QWidget(parent), db_(db), settings_(new Settings(db)), session_(new Session(db)), machineConfig_(new MachineConfig(db)), printingRemainder_(false), restartWanted_(false)
+    : QWidget(parent), db_(db), settings_(new Settings(db)), session_(new Session(db)), machineConfig_(new MachineConfig(db)), printingRemainder_(false), restartWanted_(false), lastReportMs_(0)
 {
     setWindowTitle(tr("Gas Station Cashier"));
     themeFile_ = config.themeFile();
@@ -370,12 +376,31 @@ void MainWindow::autoUpload()
         return;
     }
 
+    reportNothingWaiting();
+
     const QString cutoff = AutoUpload::cutoff(AutoUpload::modeOf(settings_->value(SettingKey::UploadMode)), QDateTime::currentDateTime());
     if (cutoff.isEmpty() || Uploader::pendingTotal(db_, QString(), cutoff) == 0) {
         return;
     }
 
     uploader_->upload(QString(), cutoff);
+}
+
+// Every few minutes, while no record of a business day that is over waits for an upload (the upload mode does not matter: the running day is the cashier's), the web app
+// is told so. Its backup waits for this call: a push of records says only that a batch arrived, and an upload can stop between two tables.
+void MainWindow::reportNothingWaiting()
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - lastReportMs_ < NothingWaitingEveryMs) {
+        return;
+    }
+    const QString cutoff = AutoUpload::cutoff(AutoUpload::CloseOfDay, QDateTime::currentDateTime());   // the start of the running business day
+    if (Uploader::unsentBefore(db_, cutoff) > 0) {
+        return;
+    }
+
+    lastReportMs_ = now;
+    uploader_->reportNothingWaiting();
 }
 
 // A nozzle was added, removed or changed on Machine Config: the web app is told now, not with the next upload of the records.

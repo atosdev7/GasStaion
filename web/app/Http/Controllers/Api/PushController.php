@@ -50,14 +50,6 @@ class PushController extends Controller
             }
         }
 
-        // "The terminal uploaded" is what lets a backup run and a confirmed day be dumped: it says the terminal has sent the records of the day. So it is the moment a batch
-        // of records was stored whole, not the moment a request arrived: the nozzles go up on their own whatever the upload mode is, and a batch with a refused row leaves
-        // that row on the terminal.
-        if ($table !== 'nozzles' && $saved && !$rejected) {
-            $device->last_synced_at = now();
-            $device->save();
-        }
-
         return Api::response([
             'status' => 'ok',
             'server_time' => now()->format('Y-m-d H:i:s'),
@@ -65,5 +57,16 @@ class PushController extends Controller
             'saved' => $saved,
             'rejected' => $rejected,
         ]);
+    }
+
+    // The terminal says it holds nothing that waits for an upload from before the running business day (no record, refused ones included): what lets a backup run and a
+    // confirmed day be dumped. It is the terminal that knows, so this is not stamped by a push: a push is only a batch, and an upload can stop between two tables.
+    public function uploaded(Request $request)
+    {
+        $device = $request->attributes->get('device');
+        $device->last_synced_at = now();
+        $device->save();
+
+        return Api::response(['status' => 'ok', 'server_time' => now()->format('Y-m-d H:i:s')]);
     }
 }

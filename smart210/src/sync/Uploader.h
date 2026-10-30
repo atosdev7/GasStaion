@@ -39,6 +39,13 @@ public:
     // changed on Machine Config, and by Upload data.
     void uploadNozzles(bool retryRefused = false);
 
+    // Tells the web app that nothing waits for an upload from before the running business day (a record the web app refused counts as waiting): the backup of the web
+    // app waits for this, not for a batch of records (an upload can stop between two tables). No answer is waited for; it is said again at the next beat.
+    void reportNothingWaiting();
+
+    // How many records made before a moment still wait for an upload, the refused ones included (pendingTotal leaves those out when it is given a moment).
+    static int unsentBefore(QSqlDatabase db, const QString &before);
+
     int savedCount() const { return saved_; }
     int rejectedCount() const { return rejected_; }
 

@@ -87,27 +87,20 @@ class PushApiTest extends TestCase
         ];
     }
 
-    public function testPushingRecordsTheUploadTime()
+    public function testOnlyTheTerminalsReportMarksAnUpload()
     {
         $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));
 
+        // a push, of nozzles or of records, stored whole or with a refused row, is only a batch: an upload can stop between two tables
+        $this->push('nozzles', [['number' => 3, 'tank_id' => $this->nozzle->tank_id, 'board_address' => 3, 'name' => null, 'deleted' => false]]);
+        $this->push('sales', [$this->sale(), $this->sale(['paid_amount' => '15.00', 'unpaid_amount' => '5.00'])]);      // (the second cannot leave an unpaid amount)
         $this->push('sales', [$this->sale()]);
+        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));
 
+        // the terminal says that nothing of the days before the running business day waits
+        $reply = $this->payload($this->postJson('/api/sync/uploaded', [])->assertOk());
+        $this->assertSame('ok', $reply['status']);
         $this->assertNotNull(Device::where('name', 'POS1')->value('last_synced_at'));
-    }
-
-    public function testOnlyAStoredBatchOfRecordsCountsAsAnUpload()
-    {
-        $nozzles = $this->push('nozzles', [['number' => 3, 'tank_id' => $this->nozzle->tank_id, 'board_address' => 3, 'name' => null, 'deleted' => false]]);
-        $this->assertSame(['3'], $nozzles['saved']);
-        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));     // the nozzles go up on their own: that is not an upload of the day
-
-        $bad = $this->sale(['paid_amount' => '15.00', 'unpaid_amount' => '5.00']);      // a terminal sale cannot leave an unpaid amount
-        $this->push('sales', [$this->sale(), $bad]);
-        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));     // a refused row stays on the terminal
-
-        $this->push('sales', [$this->sale()]);
-        $this->assertNotNull(Device::where('name', 'POS1')->value('last_synced_at'));  // a batch stored whole
     }
 
     public function testTheReceiptOfAPushedSaleIsAYesNo()

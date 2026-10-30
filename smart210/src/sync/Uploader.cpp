@@ -367,6 +367,38 @@ QString Uploader::waitingCondition(const QString &table, const QString &date, co
     return whereOf(table, date, before);
 }
 
+int Uploader::unsentBefore(QSqlDatabase db, const QString &before)
+{
+    int total = 0;
+
+    foreach (const QString &table, tables()) {
+        if (table == "nozzles" || table == "cards") {
+            continue; // not records of a day
+        }
+        QSqlQuery query(db);
+        if (query.exec("SELECT COUNT(*) FROM " + table + " WHERE " + waiting(table) + " AND " + beforeCondition(table, before)) && query.next()) {
+            total += query.value(0).toInt();
+        }
+    }
+
+    return total;
+}
+
+void Uploader::reportNothingWaiting()
+{
+    if (started_) {
+        return;
+    }
+    Settings settings(db_);
+    if (settings.value(SettingKey::ServerHost).isEmpty()) {
+        return;
+    }
+    client_.setServer(settings.value(SettingKey::ServerHost), settings.intValue(SettingKey::ServerPort, 80));
+
+    ApiReply *reply = client_.post("sync/uploaded", QJsonObject());
+    connect(reply, SIGNAL(finished()), reply, SLOT(deleteLater()));
+}
+
 int Uploader::nozzlesWaiting(QSqlDatabase db)
 {
     QSqlQuery query(db);
