@@ -331,6 +331,33 @@ class ReportTest extends TestCase
         \Carbon\Carbon::setTestNow();
     }
 
+    // a card's kg are fuel that was paid for and has to be supplied: they are owed like a ticket sold and not supplied yet
+    public function testTheKgOfTheCardsAreOwedInTheOrderingFigures()
+    {
+        $tank = Tank::forceCreate(['name' => 'T1', 'fuel_type' => 'D']);
+        TankBalance::create(['tank_id' => $tank->id, 'balance' => 1000]);
+        $card = function ($uid, $kg, $fuel = 'D') {
+            $card = \App\Models\Cards\Card::forceCreate(['uid' => $uid, 'holder_name' => 'Li Wei', 'fuel_type' => $fuel] + \App\Support\Cards\CardPin::make('1234'));
+            \App\Models\Cards\CardTransaction::forceCreate(['card_id' => $card->id, 'type' => 'topup', 'source_id' => (string) \Illuminate\Support\Str::uuid(), 'kg' => $kg, 'occurred_at' => now()]);
+
+            return $card;
+        };
+        $card('AA01', 30);
+        $card('AA02', 12.5);
+        $card('AA03', -4);               // supplied more than it held: it owes nothing and does not lower the others
+        $card('AA04', 50, 'A');          // another fuel type
+
+        $page = $this->as('accountant')->get('/reports/ordering')->assertOk();
+        $row = $page->viewData('rows')['D'];
+        $this->assertEquals(42.5, $row->card_owed);
+        $this->assertEquals(42.5, $row->owed);
+        $this->assertEquals(957.5, $row->free);
+        $this->assertEquals(50, $page->viewData('rows')['A']->card_owed);
+
+        $this->get('/reports/ordering?export=xls')->assertOk();
+        $this->get('/')->assertOk()->assertSee('Owed on tickets and cards');
+    }
+
     // the ticket report counts what a backup cleared, so that its columns add up to what was published
     public function testTicketReportCountsWhatABackupCleared()
     {

@@ -17,6 +17,7 @@
                     <th rowspan="2" class="text-right">{{ __('report.ord_tanks') }}</th>
                     <th rowspan="2" class="text-right">{{ __('report.ord_system_owed') }}</th>
                     <th rowspan="2" class="text-right">{{ __('report.ord_old_owed') }}</th>
+                    <th rowspan="2" class="text-right">{{ __('report.ord_card_owed') }}</th>
                     <th rowspan="2" class="text-right">{{ __('report.ord_owed') }}</th>
                     <th rowspan="2" class="text-right">{{ __('report.ord_free') }}</th>
                     <th colspan="{{ count($windows) }}" class="text-center">{{ __('report.ord_group_supplied') }}</th>
@@ -38,6 +39,7 @@
                         <td class="text-right">{{ number_format($r->tanks, 2) }}</td>
                         <td class="text-right">{{ number_format($r->system_owed, 2) }}</td>
                         <td class="text-right">{{ number_format($r->old_owed, 2) }}</td>
+                        <td class="text-right">{{ number_format($r->card_owed, 2) }}</td>
                         <td class="text-right">{{ number_format($r->owed, 2) }}</td>
                         <td class="text-right font-weight-bold {{ $r->free < 0 ? 'text-danger' : '' }}">{{ number_format($r->free, 2) }}</td>
                         @foreach ($windows as $days)
