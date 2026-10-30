@@ -33,19 +33,17 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 
 ## Open findings of the logic review (REVIEW_2026-10-29.md)
 
-Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
+Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), A4 (card balances count as owed fuel in the ordering figures), A6 (a terminal sale's total must be price x kg), C1 (only cashiers' password hashes go to the terminals), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
 
 | Ref | Finding | Where |
 |---|---|---|
 | A2 | The terminal should say when a full upload finished; `last_synced_at` should follow that call | `PushController`, `Uploader`, `BackupRun::silentDevices` |
 | A3 | Opening debts, loans and remainders have the same ids on both servers by procedure: the backup server is copied from the live server after the opening balances are entered (README, Backups). `backup:import` counts payments and settlements that point at an opening balance the backup server lacks (done on the branch). Still open: B5, freezing the opening balances after the copy | `ImportBackup::orphans`, `BalanceController` |
-| A6 | A terminal sale is not checked against price x kg, nor its items against its kg | `Push::sales` |
 | B1 | Remainder tolerance: the web makes a remainder for any shortfall, the terminal keeps up to 0.05 kg | `SupplementController::returnRemainder` |
 | B2 | A card ticket's unused part: refund to the card on the web, a paper remainder ticket on the terminal | `CardLedger::refund`, `SupplyRecord::record` |
 | B3 | The default cost is read when the row uploads, not when the sale happened | `Push::sales`, `Push::supplements`, `DefaultCost` |
 | B4 | "Set directly" leaves a sold ticket unprinted if the nozzle is never used: check that a reprint exists | `DirectSet`, `SpotSalePage` |
 | B5 | Opening balances never freeze after go-live | `BalanceController` |
-| C1 | Every user's password hash goes to every terminal (the terminal reads cashiers only) | `Pull::row('users')` |
 | C2 | Card PINs are a salted SHA-256 of 4 to 8 digits | `Cards::registerCard`, `CardPin` |
 | C4 | No guard against a wrong terminal clock | `Clock`, `Session` |
 | C5 | An edit saved while an upload is in flight is never uploaded (skipped by decision) | `Uploader::replyFinished` |

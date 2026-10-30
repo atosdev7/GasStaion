@@ -204,6 +204,18 @@ class Push
         if (abs($d['paid_amount'] + $d['unpaid_amount'] - $d['total_amount']) > 0.01) {
             throw new RejectedRow('paid and unpaid amounts do not add up to the total');
         }
+        // The amount is the price times the weight. The terminal can also type the amount and work the weight out from it, which is rounded to 0.01 kg, so the two may
+        // differ by one cent and half a hundredth of a kg of fuel; more than that is a wrong row. Own use and other use have no amount.
+        if ($d['usage'] === 'sale' || $d['total_amount'] > 0) {
+            $expected = round($d['price'] * $d['amount_kg'], 2);
+            if (abs($d['total_amount'] - $expected) > 0.01 + 0.005 * $d['price']) {
+                throw new RejectedRow('the total amount is not the price times the weight (' . number_format($expected, 2, '.', '') . ')');
+            }
+        }
+        // The items of a ticket sale are the tickets that were sold: their kg make the weight of the sale.
+        if ($items && abs(array_sum(array_column($items, 'amount_kg')) - $d['amount_kg']) > 0.01) {
+            throw new RejectedRow('the weights of the tickets do not add up to the weight of the sale');
+        }
         // Debts are created on the web; a sale made at the pump is always paid in full.
         if ($d['unpaid_amount'] > 0.01) {
             throw new RejectedRow('a Smart210 sale cannot leave an unpaid amount');

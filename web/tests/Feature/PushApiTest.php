@@ -122,7 +122,7 @@ class PushApiTest extends TestCase
 
     public function testTheItemsOfASaleComeWithItAndAreReplacedWhenItIsSentAgain()
     {
-        $row = $this->sale(['sale_type' => 'ticket', 'items' => [
+        $row = $this->sale(['sale_type' => 'ticket', 'amount_kg' => '25.00', 'total_amount' => '50.00', 'paid_amount' => '50.00', 'items' => [
             ['spec' => 0, 'start_serial' => 11, 'end_serial' => 13, 'quantity' => 3, 'amount_kg' => '15.00'],
             ['spec' => 1, 'start_serial' => 5, 'end_serial' => 5, 'quantity' => 1, 'amount_kg' => '10.00'],
         ]]);
@@ -134,6 +134,8 @@ class PushApiTest extends TestCase
 
         // the same sale again (the cashier changed its comment): the items are replaced, not doubled
         $row['comment'] = 'changed';
+        $row['amount_kg'] = '15.00';
+        $row['total_amount'] = $row['paid_amount'] = '30.00';
         $row['items'] = [['spec' => 0, 'start_serial' => 11, 'end_serial' => 13, 'quantity' => 3, 'amount_kg' => '15.00']];
         $this->push('sales', [$row]);
         $this->assertSame(1, \App\Models\Sales\SaleItem::where('sale_id', $row['id'])->count());
@@ -141,7 +143,7 @@ class PushApiTest extends TestCase
         // a sale sent without items (a spot sale, or an older terminal) is stored as before; a bad item rejects the sale
         $spot = $this->sale();
         $this->assertSame([$spot['id']], $this->push('sales', [$spot])['saved']);
-        $bad = $this->sale(['items' => [['spec' => 0, 'start_serial' => 0, 'end_serial' => 3, 'quantity' => 3, 'amount_kg' => '15.00']]]);
+        $bad = $this->sale(['amount_kg' => '15.00', 'total_amount' => '30.00', 'paid_amount' => '30.00', 'items' => [['spec' => 0, 'start_serial' => 0, 'end_serial' => 3, 'quantity' => 3, 'amount_kg' => '15.00']]]);
         $result = $this->push('sales', [$bad]);
         $this->assertSame([], $result['saved']);
         $this->assertCount(1, $result['rejected']);
@@ -274,6 +276,22 @@ class PushApiTest extends TestCase
         $this->assertTrue($sale->synced);
     }
 
+    public function testTheTotalMustBeThePriceTimesTheWeightAndTheItemsMustAddUpToTheWeight()
+    {
+        $wrongTotal = $this->sale(['total_amount' => '25.00', 'paid_amount' => '25.00']);                     // 2.00 x 10.00 kg is 20.00
+        $wrongItems = $this->sale(['sale_type' => 'ticket', 'items' => [
+            ['spec' => 0, 'start_serial' => 11, 'end_serial' => 12, 'quantity' => 2, 'amount_kg' => '8.00'], // 8 kg of tickets for a 10 kg sale
+        ]]);
+        $typedAmount = $this->sale(['price' => '7.50', 'amount_kg' => '2.67', 'total_amount' => '20.00', 'paid_amount' => '20.00']); // 20.00 typed: 2.67 kg is its rounded weight (20.025)
+
+        $result = $this->push('sales', [$wrongTotal, $wrongItems, $typedAmount]);
+
+        $this->assertSame([$typedAmount['id']], $result['saved']);
+        $this->assertCount(2, $result['rejected']);
+        $this->assertNull(Sale::find($wrongTotal['id']));
+        $this->assertNull(Sale::find($wrongItems['id']));
+    }
+
     public function testOwnUseAndOtherUseFromTheTerminalAreTheIndividualCustomer()
     {
         $individual = Customer::where('is_default', true)->first();
@@ -311,7 +329,7 @@ class PushApiTest extends TestCase
         $this->push('sales', [$row]);
         Sale::whereKey($row['id'])->update(['confirmed_at' => now(), 'confirmed_by' => 1]);
 
-        $result = $this->push('sales', [array_merge($row, ['amount_kg' => '99.00'])]);
+        $result = $this->push('sales', [array_merge($row, ['amount_kg' => '99.00', 'total_amount' => '198.00', 'paid_amount' => '198.00'])]);      // (a consistent row: the total is price x kg)
 
         $this->assertSame([$row['id']], $result['saved']); // still acknowledged, so the device stops retrying
         $sale = Sale::find($row['id']);
