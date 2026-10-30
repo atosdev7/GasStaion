@@ -68,7 +68,31 @@ class ImportBackup extends Command
         Audit::log('backup_import', basename($this->argument('file')) . ' (up to ' . $manifest['up_to_date'] . ')', 'system');
         $this->info('Imported.');
 
+        foreach (self::orphans() as $what => $count) {
+            if ($count > 0) {
+                $this->warn("$count $what point at an opening balance this server does not have: it was added or changed on the live server after this server was copied from it (see the README, Backups).");
+            }
+        }
+
         return 0;
+    }
+
+    /**
+     * What the backup server holds that points at a debt or a ticket loan it has no row for. The opening debts and loans are not in an export: this server has them
+     * because it was copied from the live server after the opening balances were entered (same ids). An opening balance added or changed on the live server after that
+     * copy is missing here, and the payments and settlements of it, which do arrive, are what shows it. [what => count]
+     */
+    public static function orphans()
+    {
+        $found = [];
+        if (Schema::hasTable('debt_payments') && Schema::hasTable('debts')) {
+            $found['debt payments'] = DB::table('debt_payments')->whereNotNull('debt_id')->whereNotIn('debt_id', DB::table('debts')->select('id'))->count();
+        }
+        if (Schema::hasTable('ticket_loan_settlements') && Schema::hasTable('ticket_loans')) {
+            $found['ticket loan settlements'] = DB::table('ticket_loan_settlements')->whereNotIn('loan_id', DB::table('ticket_loans')->select('id'))->count();
+        }
+
+        return $found;
     }
 
     private function mergeTable($table, $stream)

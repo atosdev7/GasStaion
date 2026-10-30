@@ -644,6 +644,23 @@ class BackupTest extends TestCase
         $this->assertSame(0, \App\Models\Tickets\OpeningTicket::count());
     }
 
+    // the backup server holds the opening debts and loans because it was copied from the live server: a payment or settlement that points at one it lacks is counted
+    public function testTheImportCountsPaymentsAndSettlementsOfAnOpeningBalanceTheServerLacks()
+    {
+        $this->assertSame(['debt payments' => 0, 'ticket loan settlements' => 0], \App\Console\Commands\ImportBackup::orphans());
+
+        $debt = Debt::forceCreate(['customer_id' => $this->customer->id, 'sale_id' => null, 'amount' => 70, 'payment_method' => 'cash', 'user_id' => 1]);
+        $loan = TicketLoan::forceCreate(['loaned_at' => now(), 'customer_id' => $this->customer->id, 'fuel_type' => 'D', 'amount_kg' => 40, 'sale_id' => null, 'user_id' => 1]);
+        DebtPayment::forceCreate(['customer_id' => $this->customer->id, 'debt_id' => $debt->id, 'amount' => 30, 'payment_method' => 'cash', 'paid_date' => '2026-09-05', 'user_id' => 1]);
+        DebtPayment::forceCreate(['customer_id' => $this->customer->id, 'debt_id' => null, 'amount' => 5, 'payment_method' => 'cash', 'paid_date' => '2026-09-05', 'user_id' => 1]);   // tied to none: not an orphan
+        TicketLoanSettlement::forceCreate(['loan_id' => $loan->id, 'ticket_barcode' => '0000006000000001', 'amount_kg' => 10, 'settled_at' => now(), 'user_id' => 1]);
+        $this->assertSame(['debt payments' => 0, 'ticket loan settlements' => 0], \App\Console\Commands\ImportBackup::orphans());      // the rows are here: the same ids
+
+        $debt->forceDelete();      // this server was copied before the opening debt and the loan were entered
+        $loan->forceDelete();
+        $this->assertSame(['debt payments' => 1, 'ticket loan settlements' => 1], \App\Console\Commands\ImportBackup::orphans());
+    }
+
     // the debts and ticket loans that are settled in full go with the backup, with their payments and settlements; the ones that still owe something stay
     public function testSettledDebtsAndLoansAreClearedAndTheOthersStay()
     {

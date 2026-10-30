@@ -33,12 +33,12 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 
 ## Open findings of the logic review (REVIEW_2026-10-29.md)
 
-Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
+Fixed on `claude/review-fixes-2026-10-29`: A1 (a small overshoot of a fill), A5 (a second use of a ticket is logged), A3 (by procedure and a check, below), the stale migration tests. Partly fixed: A2 (the upload guard: a nozzles-only push or a batch with a refused row no longer counts, a partial upload still does). Open:
 
 | Ref | Finding | Where |
 |---|---|---|
 | A2 | The terminal should say when a full upload finished; `last_synced_at` should follow that call | `PushController`, `Uploader`, `BackupRun::silentDevices` |
-| A3 | Opening debts, loans and remainders get different ids on the live and the backup server, so the payments exported from live point at nothing there | `BalanceController`, `HasUuidPrimaryKey`, `BackupRun::exportRows` |
+| A3 | Opening debts, loans and remainders have the same ids on both servers by procedure: the backup server is copied from the live server after the opening balances are entered (README, Backups). `backup:import` counts payments and settlements that point at an opening balance the backup server lacks (done on the branch). Still open: B5, freezing the opening balances after the copy | `ImportBackup::orphans`, `BalanceController` |
 | A4 | Card balances are not subtracted as owed fuel in the ordering figures | `StockOrdering::rows` |
 | A6 | A terminal sale is not checked against price x kg, nor its items against its kg | `Push::sales` |
 | B1 | Remainder tolerance: the web makes a remainder for any shortfall, the terminal keeps up to 0.05 kg | `SupplementController::returnRemainder` |

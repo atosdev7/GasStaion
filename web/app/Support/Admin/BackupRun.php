@@ -44,7 +44,7 @@ use ZipArchive;
 class BackupRun
 {
     // Not exported: framework tables and the live server's own backup history.
-    // The opening balances are not exported: they are entered on the live server and on the backup server together once, at go-live. They are the tank balances
+    // The opening balances are not exported: they are entered on the live server at go-live and the backup server is copied from it afterwards (the whole site and its database), so both hold the same rows with the same ids. They are the tank balances
     // (tank_balances: the backup server has every fuel inbound and outbound from the live start, so the ones a backup wrote would be counted twice), the opening debts and
     // ticket loans (debts and ticket_loans without a sale), the old paper tickets at customers (opening_tickets) and the opening remainder tickets (remainders without a
     // supply, and their tickets). A backup rolls the tank balances forward before it clears (tankBalancesAfter); the others keep their rows on the live server, which
