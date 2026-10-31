@@ -2,6 +2,7 @@
 
 #include "Checkout.h"
 #include "Decimal.h"
+#include "PrintService.h"
 #include "SaleDeletion.h"
 #include "Session.h"
 #include "Settings.h"
@@ -25,6 +26,7 @@ namespace {
 
 const int IdRole = Qt::UserRole;
 const int KindRole = Qt::UserRole + 1;
+const int PrintRole = Qt::UserRole + 2; // what the Print ticket button prints for the record: "sale" (its own ticket) or "remainder:<16 digits>"; empty: no ticket
 
 QString money(qlonglong value)
 {
@@ -43,8 +45,8 @@ QString useText(const QString &use)
 
 }
 
-ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, QWidget *parent)
-    : QWidget(parent), ui_(new Ui::ReviewPage), db_(db), uploader_(uploader), session_(session), loading_(false)
+ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, PrintService *printer, QWidget *parent)
+    : QWidget(parent), ui_(new Ui::ReviewPage), db_(db), uploader_(uploader), session_(session), printer_(printer), loading_(false), printing_(false)
 {
     ui_->setupUi(this);
 
@@ -77,6 +79,7 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, QW
     newDate_ = ui_->reviewSetDate;
     newDate_->setDate(date_->date());
     setDate_ = ui_->setDateButton;
+    printTicket_ = ui_->printTicketButton;
     deleteSale_ = ui_->deleteSaleButton;
     deleteTimer_ = new QTimer(this);
     deleteTimer_->setSingleShot(true);
@@ -90,6 +93,8 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, QW
     connect(debts_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
     connect(saveComment_, SIGNAL(clicked()), this, SLOT(saveComment()));
     connect(setDate_, SIGNAL(clicked()), this, SLOT(setDate()));
+    connect(printTicket_, SIGNAL(clicked()), this, SLOT(printTicket()));
+    connect(printer_, SIGNAL(finished(bool,QString)), this, SLOT(printFinished(bool,QString)));
     connect(deleteSale_, SIGNAL(clicked()), this, SLOT(deleteSale()));
     connect(deleteTimer_, SIGNAL(timeout()), this, SLOT(resetDelete()));
     connect(uploadButton_, SIGNAL(clicked()), this, SLOT(upload()));
@@ -189,6 +194,11 @@ void ReviewPage::fillRecords(QTableWidget *table, const QList<ReviewData::Record
             if (column == 0) {
                 item->setData(IdRole, r.id);
                 item->setData(KindRole, int(r.kind));
+                if (r.kind == ReviewData::Sale && r.saleType == "spot") {
+                    item->setData(PrintRole, QString("sale"));
+                } else if (r.kind == ReviewData::Supplement && !r.remainderTicket.isEmpty()) {
+                    item->setData(PrintRole, "remainder:" + r.remainderTicket);
+                }
             }
             if (column == dateColumn && r.nearShiftLine) {
                 item->setBackground(QBrush(QColor("#fef3c7")));
@@ -310,6 +320,13 @@ void ReviewPage::selectionChanged()
     deleteSale_->setEnabled(deletable);
 
     QTableWidget *table = currentTable();
+    QString printable;
+    if (refs.size() == 1) {
+        printable = table->item(table->selectionModel()->selectedRows().first().row(), 0)->data(PrintRole).toString();
+    }
+    printTicket_->setEnabled(!printable.isEmpty() && !printing_);
+    printTicket_->setToolTip(refs.size() == 1 && printable.isEmpty()
+                                 ? tr("This record has no ticket to print: a spot sale and a supply with a remainder ticket have one.") : QString());
     if (refs.size() == 1) {
         const int row = table->selectionModel()->selectedRows().first().row();
         const int columns = table->columnCount();
@@ -325,6 +342,50 @@ void ReviewPage::showStatus(const QString &message, bool ok)
 {
     Theme::setState(status_, ok ? "ok" : "error");
     status_->setText(message);
+}
+
+// The ticket of the selected record goes to the printer again: the ticket of a spot sale, or the remainder ticket of a supply (the program prints that one and
+// marks it printed, as on the Remainders screen).
+void ReviewPage::printTicket()
+{
+    QTableWidget *table = currentTable();
+    const QModelIndexList rows = table->selectionModel()->selectedRows();
+    if (rows.size() != 1 || printing_) {
+        return;
+    }
+    QTableWidgetItem *item = table->item(rows.first().row(), 0);
+    const QString what = item->data(PrintRole).toString();
+    if (what.isEmpty()) {
+        return;
+    }
+    if (printer_->isBusy()) {
+        showStatus(tr("The printer is busy. Try again in a moment."), false);
+
+        return;
+    }
+
+    if (what.startsWith("remainder:")) {
+        emit printRemainderRequested(what.mid(10));
+        showStatus(tr("The remainder ticket %1 is being printed.").arg(what.mid(10)), true);
+
+        return;
+    }
+
+    printing_ = true;
+    printTicket_->setEnabled(false);
+    showStatus(tr("Printing..."), true);
+    printer_->printSaleTicket(item->data(IdRole).toString());
+}
+
+void ReviewPage::printFinished(bool ok, const QString &message)
+{
+    if (!printing_) {
+        return; // another screen's print
+    }
+
+    printing_ = false;
+    showStatus(ok ? tr("The ticket was sent to the printer.") : tr("It was not printed: %1").arg(message), ok);
+    selectionChanged();
 }
 
 // The first press only asks ("Confirm delete" for six seconds); the second deletes the sale (SaleDeletion).

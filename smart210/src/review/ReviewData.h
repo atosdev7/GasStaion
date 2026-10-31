@@ -35,6 +35,7 @@ public:
         QString fuel;
         QString nozzle;     // supplements: the nozzle number
         QString ticket;     // settlements: the 16 digits
+        QString remainderTicket; // supplements: the 16 digits of the remainder ticket the supply made (empty: it made none)
         qlonglong kgX100;
         qlonglong amountX100;
         qlonglong paidX100;

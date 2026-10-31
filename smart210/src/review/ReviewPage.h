@@ -14,6 +14,7 @@ class QPushButton;
 class QTabWidget;
 class QTableWidget;
 class QTimer;
+class PrintService;
 class Session;
 class Uploader;
 
@@ -26,12 +27,13 @@ class ReviewPage;
 // may change the comment and the date (a record made near 9 AM may belong to the day before or after); a changed record waits for
 // the upload again. Upload data sends everything that waits, from all dates, and only that. A mistaken spot sale is deleted here too (Delete
 // sale on the Sales tab, asked twice; the rules are those of SaleDeletion): the cashier enters the correct sale and then deletes the wrong one.
+// Print ticket prints the ticket of the selected record again: the ticket of a spot sale (Sales tab) or the remainder ticket a supply made (Supplies tab).
 class ReviewPage : public QWidget
 {
     Q_OBJECT
 
 public:
-    ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, QWidget *parent = 0);
+    ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, PrintService *printer, QWidget *parent = 0);
     ~ReviewPage();
 
     // Called whenever the page is opened (and after an upload or an edit). The date stays what the cashier chose; it starts as today's
@@ -44,6 +46,7 @@ public:
 signals:
     void uploaded(); // an upload finished: what waits has changed
     void edited();   // a comment or a date was changed: records wait for the upload again
+    void printRemainderRequested(const QString &barcode); // the remainder ticket of a supply is to be printed again (the program prints it and marks it printed)
 
 private slots:
     void dateChanged();
@@ -51,6 +54,8 @@ private slots:
     void selectionChanged();
     void saveComment();
     void setDate();
+    void printTicket();
+    void printFinished(bool ok, const QString &message);
     void deleteSale();
     void resetDelete();
     void upload();
@@ -68,6 +73,7 @@ private:
     QSqlDatabase db_;
     Uploader *uploader_;
     Session *session_;
+    PrintService *printer_;
     QDateEdit *date_;
     QLabel *dayInfo_;
     QPushButton *uploadButton_;
@@ -84,10 +90,12 @@ private:
     QPushButton *saveComment_;
     QDateEdit *newDate_;
     QPushButton *setDate_;
+    QPushButton *printTicket_;
     QPushButton *deleteSale_;
     QTimer *deleteTimer_;   // the first press of Delete sale only asks: the question is taken back after this long
     QLabel *status_;
     bool loading_;
+    bool printing_;   // a ticket of a sale is being sent by this page
 };
 
 #endif

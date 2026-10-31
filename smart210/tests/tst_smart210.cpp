@@ -299,6 +299,7 @@ private slots:
     void theTerminalTellsTheWebAppWhenNothingOfAFinishedDayWaits();
     void unsentBeforeCountsTheRefusedRecordsToo();
     void pressingUploadSendsEverythingAndEmptiesTheScreen();
+    void theReviewScreenOffersToPrintTheTicketOfASpotSaleAndTheRemainderTicketOfASupply();
     void aFailedUploadSaysSoAndCanBePressedAgain();
     void refusedRecordsStayListedWithTheirReason();
     void withNothingWaitingTheUploadButtonIsOff();
@@ -3790,6 +3791,52 @@ void Smart210Test::unsentBeforeCountsTheRefusedRecordsToo()
     QCOMPARE(Uploader::pendingTotal(db, QString(), "2026-10-07 09:00:00"), 0);       // the automatic upload leaves a refused record alone
     QCOMPARE(Uploader::unsentBefore(db, "2026-10-07 09:00:00"), 1);                  // but the web app does not have it: the terminal is not clear
     QCOMPARE(Uploader::unsentBefore(db, "2026-10-03 00:00:00"), 0);                  // nothing was made before that
+}
+
+void Smart210Test::theReviewScreenOffersToPrintTheTicketOfASpotSaleAndTheRemainderTicketOfASupply()
+{
+    setUpLoggedInTerminalWithAPin();
+    recordADay();                                                       // a spot sale, and a supply with a remainder ticket
+    const QString columns = "INSERT INTO sales (id, created_at, customer_id, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, "
+                            "unpaid_amount, receipt, usage, comment, sale_date, user_id) VALUES ";
+    run(columns + "('sale-2', '2026-10-07 09:30:00', 1, 'ticket', 'D', 750, 1000, 'cash', 7500, 7500, 0, NULL, 'sale', NULL, '2026-10-07', 5)");
+    run(columns + "('sale-3', '2026-10-07 09:40:00', NULL, 'card', 'D', 750, 2000, 'cash', 15000, 15000, 0, NULL, 'sale', NULL, '2026-10-07', 5)");
+    run("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, density, mode, supplied_at, supply_date) "
+        "VALUES ('sup-2', 'D', 2, 600, 500, 500, 8300, 'auto', '2026-10-07 09:50:00', '2026-10-07')");       // no remainder
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 7));
+    QPushButton *print = window.findChild<QPushButton *>("printTicketButton");
+    QTableWidget *sales = window.findChild<QTableWidget *>("reviewSalesTable");
+    QTableWidget *supplies = window.findChild<QTableWidget *>("reviewSupplyTable");
+    QTabWidget *tabs = window.findChild<QTabWidget *>("reviewTabs");
+    QVERIFY(print != 0 && sales != 0 && supplies != 0 && tabs != 0);
+    QVERIFY(!print->isEnabled());                                       // nothing is selected
+
+    QCOMPARE(sales->rowCount(), 3);
+    for (int row = 0; row < sales->rowCount(); ++row) {
+        sales->selectRow(row);
+        const bool spot = sales->item(row, 1)->text().startsWith("Spot");
+        QCOMPARE(print->isEnabled(), spot);                             // only a spot sale has a ticket: a ticket sale's tickets are the customer's, a card top-up has none
+    }
+
+    tabs->setCurrentIndex(1);
+    QCOMPARE(supplies->rowCount(), 2);
+    for (int row = 0; row < supplies->rowCount(); ++row) {
+        supplies->selectRow(row);
+        QCOMPARE(print->isEnabled(), supplies->item(row, 3)->text() == "12.65");   // the supply that made a remainder ticket (its litres)
+    }
+
+    // the remainder ticket is printed again by the program: the request reaches it, and the ticket counts as printed once it was sent
+    QSignalSpy requested(window.findChild<ReviewPage *>(), SIGNAL(printRemainderRequested(QString)));
+    supplies->selectRow(0);
+    QVERIFY(print->isEnabled());
+    print->click();
+    QCOMPARE(requested.size(), 1);
+    QCOMPARE(requested.at(0).at(0).toString(), QString("0000021500000001"));
 }
 
 void Smart210Test::pressingUploadSendsEverythingAndEmptiesTheScreen()

@@ -115,7 +115,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     settingsPage_ = new SettingsPage(settings_);
     pinPage_ = new PinPage(settings_);
     machinePage_ = new MachineConfigPage(setup_, machineConfig_, session_, settings_, printer_, nozzleSync_);
-    reviewPage_ = new ReviewPage(db, uploader_, session_);
+    reviewPage_ = new ReviewPage(db, uploader_, session_, printer_);
     supplySelection_ = new SupplySelection(boardBus_, machineConfig_, this);
     supplySession_ = new SupplySession(db, boardBus_, machineConfig_, supplySelection_, session_, this);
     spotPage_ = new SpotSalePage(db, session_, printer_, boardBus_, machineConfig_, supplySelection_, supplySession_, settings_);
@@ -190,6 +190,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     connect(remainderPage_, SIGNAL(saved()), this, SLOT(refreshUploadButton()));
     connect(manualPage_, SIGNAL(recorded()), this, SLOT(refreshUploadButton()));
     connect(reviewPage_, SIGNAL(uploaded()), this, SLOT(refreshUploadButton()));
+    connect(reviewPage_, SIGNAL(printRemainderRequested(QString)), this, SLOT(printRemainder(QString)));
     connect(reviewPage_, SIGNAL(edited()), this, SLOT(refreshUploadButton()));
     connect(boardBus_, SIGNAL(connectionChanged(bool)), this, SLOT(refreshStatus()));
     connect(boardBus_, SIGNAL(boardOnlineChanged(int,bool)), this, SLOT(refreshStatus()));
