@@ -510,6 +510,33 @@ class Push
         if ($attributes) {
             $ticket->saveFromDevice($attributes + ['synced' => true]);
         }
+
+        if ($status === $s['supply'] && !empty($d['supplement_id'])) {
+            self::checkSupplyMix($device, $d, $ticket);
+        }
+    }
+
+    // One supply takes tickets of one kind and, for a card, of one card (the terminal sees to it; the fuel is poured anyway, so an older terminal's mix is stored and shown
+    // among the sync problems).
+    private static function checkSupplyMix(Device $device, array $d, Ticket $ticket)
+    {
+        $kind = function ($t) {
+            $kind = Barcode::posType($t->code);
+
+            return $kind === null ? 'press' : $kind;
+        };
+        foreach (Ticket::where('supplement_id', $d['supplement_id'])->where('barcode', '<>', $ticket->barcode)->get(['barcode', 'code', 'card_id']) as $other) {
+            if ($kind($other) !== $kind($ticket)) {
+                self::conflict($device, $d, 'the supply mixes tickets of different kinds');
+
+                return;
+            }
+            if ($kind($ticket) === 'card' && $other->card_id !== $ticket->card_id) {
+                self::conflict($device, $d, 'the supply mixes the tickets of different cards');
+
+                return;
+            }
+        }
     }
 
     // The sale (or the supplement) a ticket names must be on the server: when the sale was refused (its rows are checked one by one) or has not

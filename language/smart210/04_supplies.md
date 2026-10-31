@@ -119,3 +119,9 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | it is twice in the list. | TicketSale, SupplyRecord, LoanSettlement |
 | This ticket is not known on this terminal. | TicketSale, SupplyQueue, LoanSettlement |
 | This ticket was already used. | TicketSale, SupplyQueue, LoanSettlement |
+| A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets. | SupplyQueue |
+| A supply takes the tickets of one card only: this ticket was made for another card. | SupplyQueue |
+| Nozzle %1: %2 kg dispensed. %3 kg of the card's ticket went back to the card. | SupplySession / ManualSupplyPage |
+| Tickets: %1 kg, dispensed: %2 kg. %3 kg go back to the card that paid for the tickets. | SupplySession / ManualSupplyPage |
+| The supply was recorded with %1 tickets, and %2 kg went back to the card. It will be uploaded. | SupplySession / ManualSupplyPage |
+| Tickets: %1 kg, dispensed: %2 kg. No remainder. | SupplySession / ManualSupplyPage |

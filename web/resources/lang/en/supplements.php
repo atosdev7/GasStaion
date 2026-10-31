@@ -46,6 +46,8 @@ return [
     'remainder_goes_to_card' => 'The tickets of this supply were paid for by a card: the unused part goes back to the card, not into a remainder ticket.',
     'supplied_with_remainder' => 'Supplied :kg kg. Remainder ticket :barcode for :left kg was created.',
     'supplied_more_than_tickets' => 'That is more than the tickets cover (:preset kg).',
+    'tickets_mixed_kind' => 'A supply takes tickets of one kind only (press tickets, spot sale tickets, remainder tickets, card tickets ...): the tickets given are of different kinds.',
+    'tickets_mixed_card' => 'A supply takes the tickets of one card only: the tickets given were made for different cards.',
     'tickets_not_suppliable' => 'These barcodes aren\'t sold tickets that can be supplied (already used, restricted, never sold, or don\'t exist): :barcodes',
 
     // Supplements

@@ -224,6 +224,14 @@
         <source>The supply could not be saved.</source>
         <translation>The supply could not be saved.</translation>
     </message>
+    <message>
+        <source>A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.</source>
+        <translation>A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.</translation>
+    </message>
+    <message>
+        <source>A supply takes the tickets of one card only: this ticket was made for another card.</source>
+        <translation>A supply takes the tickets of one card only: this ticket was made for another card.</translation>
+    </message>
 </context>
 <context>
     <name>SupplyPage</name>

@@ -227,6 +227,14 @@ void ManualSupplyPage::addTicket()
         return;
     }
 
+    const QString mixed = SupplyQueue::mixProblem(db_, barcodes_, scan.barcode);
+    if (!mixed.isEmpty()) {
+        status_->setText(mixed);
+        code_->selectAll();
+
+        return;
+    }
+
     barcodes_ << scan.barcode;
     weights_ << scan.kgX100;
     status_->clear();

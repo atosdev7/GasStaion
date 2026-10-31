@@ -461,6 +461,7 @@ private slots:
     void aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalanceKeepsIt();
     void theHistoryOfACardShowsTheFillsOfItsTickets();
     void theUnusedPartOfACardsTicketGoesBackToTheCard();
+    void aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly();
     void anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets();
     void theConfirmDialogHasOkAsItsDefaultAndCancel();
     void theMachineConfigSavesTheCardReader();
@@ -11285,21 +11286,77 @@ void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
     }
     QCOMPARE(refunds, 1);
 
-    // a supply of a card ticket and an ordinary ticket: not all of them are the card's, so the rest is a remainder ticket
+    // a supply takes tickets of one kind and, for a card, of one card: another kind or another card's ticket cannot join the queue
     const Cards::TicketResult small = Cards::issueTicket(db, card, 500, 7, now.addSecs(1));
     QVERIFY(small.ok);
     QVERIFY(SupplyQueue::add(db, 1, small.barcode, "D", now).ok);
-    QVERIFY(SupplyQueue::add(db, 1, code(3000000043), "D", now).ok);        // 5.00 kg
-    QVERIFY(SupplyQueue::begin(db, 1, 1000, now));
+    const SupplyQueue::Scan press = SupplyQueue::add(db, 1, code(3000000043), "D", now);
+    QVERIFY(!press.ok);
+    QVERIFY2(press.error.contains("one kind"), qPrintable(press.error));
+    const QString other = makeCard(db, "AA02", 4000);
+    const Cards::TicketResult foreign = Cards::issueTicket(db, other, 500, 7, now.addSecs(2));
+    QVERIFY(foreign.ok);
+    const SupplyQueue::Scan otherCard = SupplyQueue::add(db, 1, foreign.barcode, "D", now);
+    QVERIFY(!otherCard.ok);
+    QVERIFY2(otherCard.error.contains("one card"), qPrintable(otherCard.error));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);                        // only the first card ticket is in the queue
+
+    // a fill of that ticket alone, short: the unused part goes back to the card
+    QVERIFY(SupplyQueue::begin(db, 1, 500, now));
     reading.resultId = 2;
-    reading.dispensedX100 = 800;
-    const SupplyRecord::Outcome mixed = SupplyRecord::record(db, 1, reading, now);
-    QVERIFY2(mixed.ok, qPrintable(mixed.error));
-    QVERIFY(mixed.refundCardId.isEmpty());
-    QCOMPARE(mixed.refundKgX100, qlonglong(0));
-    QCOMPARE(mixed.remainderKgX100, qlonglong(200));
+    reading.dispensedX100 = 300;
+    const SupplyRecord::Outcome second = SupplyRecord::record(db, 1, reading, now);
+    QVERIFY2(second.ok, qPrintable(second.error));
+    QCOMPARE(second.refundKgX100, qlonglong(200));
+    QCOMPARE(countRows("remainders"), 0);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2700));       // 30.00 less the 5.00 kg of the new ticket, and the unused 2.00 kg back
+
+    // tickets of an ordinary supply (press tickets) keep making a remainder ticket
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000043), "D", now).ok);
+    QVERIFY(SupplyQueue::begin(db, 1, 500, now));
+    reading.resultId = 3;
+    reading.dispensedX100 = 300;
+    const SupplyRecord::Outcome ordinary = SupplyRecord::record(db, 1, reading, now);
+    QVERIFY2(ordinary.ok, qPrintable(ordinary.error));
+    QVERIFY(ordinary.refundCardId.isEmpty());
+    QCOMPARE(ordinary.remainderKgX100, qlonglong(200));
     QCOMPARE(countRows("remainders"), 1);
-    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2500));       // 30.00 less the 5.00 kg of the new ticket, nothing back
+}
+
+// the typed supply of the Manual input takes the same rules: tickets of one kind, and of one card
+void Smart210Test::aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+    const QString card = makeCard(db, "AA01", 4000);
+    const Cards::TicketResult made = Cards::issueTicket(db, card, 500, 7, now);
+    QVERIFY(made.ok);
+    const QString other = makeCard(db, "AA02", 4000);
+    const Cards::TicketResult foreign = Cards::issueTicket(db, other, 500, 7, now.addSecs(1));
+    QVERIFY(foreign.ok);
+
+    SupplyRecord::Reading reading;
+    reading.dispensedX100 = 1000;
+    reading.litersX100 = 1200;
+    reading.byHand = true;
+
+    reading.tickets << Barcode::toKey(made.barcode) << 3000000043LL;               // a card's ticket and a press ticket
+    SupplyRecord::Outcome refused = SupplyRecord::record(db, 3, reading, now);
+    QVERIFY(!refused.ok);
+    QVERIFY2(refused.error.contains("one kind"), qPrintable(refused.error));
+
+    reading.tickets.clear();
+    reading.tickets << Barcode::toKey(made.barcode) << Barcode::toKey(foreign.barcode);   // two cards
+    refused = SupplyRecord::record(db, 3, reading, now);
+    QVERIFY(!refused.ok);
+    QVERIFY2(refused.error.contains("one card"), qPrintable(refused.error));
+    QCOMPARE(countRows("supplements"), 0);                                          // nothing was saved by the refusals
+
+    reading.tickets.clear();
+    reading.tickets << 3000000041LL << 3000000043LL;                                // two press tickets: fine
+    reading.dispensedX100 = 2000;
+    QVERIFY2(SupplyRecord::record(db, 3, reading, now).ok, "two press tickets");
 }
 
 // the history of a card lists the tickets made for it as fills until the web app has an entry for them

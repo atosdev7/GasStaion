@@ -2,6 +2,7 @@
 
 #include "Barcode.h"
 #include "TicketLegacy.h"
+#include "TicketNumbers.h"
 #include "TicketStatus.h"
 
 #include <QObject>
@@ -66,10 +67,50 @@ SupplyQueue::Scan SupplyQueue::check(QSqlDatabase db, const QString &barcodeText
     return scan;
 }
 
+QString SupplyQueue::mixProblem(QSqlDatabase db, const QList<qlonglong> &have, qlonglong candidate)
+{
+    if (have.isEmpty()) {
+        return QString();
+    }
+
+    const QString kind = TicketNumbers::kindOf(db, candidate);
+    const QString first = TicketNumbers::kindOf(db, have.first());
+    if (kind != first) {
+        return QObject::tr("A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.")
+            .arg(TicketNumbers::kindName(kind)).arg(TicketNumbers::kindName(first));
+    }
+    if (kind == "card") {
+        QSqlQuery cards(db);
+        cards.prepare("SELECT card_id FROM tickets WHERE barcode = ?");
+        cards.addBindValue(candidate);
+        const QString card = cards.exec() && cards.next() ? cards.value(0).toString() : QString();
+        cards.prepare("SELECT card_id FROM tickets WHERE barcode = ?");
+        cards.addBindValue(have.first());
+        const QString other = cards.exec() && cards.next() ? cards.value(0).toString() : QString();
+        if (card != other) {
+            return QObject::tr("A supply takes the tickets of one card only: this ticket was made for another card.");
+        }
+    }
+
+    return QString();
+}
+
 SupplyQueue::Scan SupplyQueue::add(QSqlDatabase db, int nozzle, const QString &barcodeText, const QString &fuelType, const QDateTime &now)
 {
     Scan scan = check(db, barcodeText, fuelType);
     if (!scan.ok) {
+        return scan;
+    }
+
+    QList<qlonglong> have;
+    foreach (const Entry &entry, entries(db, nozzle)) {
+        have << entry.barcode;
+    }
+    const QString mixed = mixProblem(db, have, scan.barcode);
+    if (!mixed.isEmpty()) {
+        scan.ok = false;
+        scan.error = mixed;
+
         return scan;
     }
 

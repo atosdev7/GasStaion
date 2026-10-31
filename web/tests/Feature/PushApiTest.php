@@ -980,6 +980,21 @@ class PushApiTest extends TestCase
         $this->assertSame($first['supplement_id'], Ticket::find($ticket->barcode)->supplement_id);
     }
 
+    public function testASupplyThatMixesKindsOfTicketsIsStoredAndShownAmongTheSyncProblems()
+    {
+        $press = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $spot = Ticket::forceCreate([
+            'barcode' => '0000021000000005', 'fuel_type' => 'D', 'spec' => null, 'code' => '21', 'serial' => 5, 'amount_kg' => 5, 'status' => config('ticket_statuses.sale'),
+        ]);
+        $same = (string) Str::uuid();
+
+        $result = $this->push('tickets', [$this->supplyRow($press->barcode, $same), $this->supplyRow($spot->barcode, $same)]);
+
+        $this->assertSame([$press->barcode, $spot->barcode], $result['saved']);        // the fuel is poured: both are stored
+        $this->assertSame(1, $this->conflicts());                                       // but the mix is shown
+        $this->assertSame($same, Ticket::find($spot->barcode)->supplement_id);
+    }
+
     public function testASecondSupplementForTheSameTicketIsLoggedAndTheFirstKept()
     {
         $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));

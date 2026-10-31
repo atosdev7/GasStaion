@@ -159,6 +159,16 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
                 return refused(QObject::tr("Ticket %1 cannot be used: %2").arg(Barcode::fromKey(barcode)).arg(scan.ok ? QObject::tr("it is twice in the list.") : scan.error));
             }
+            QList<qlonglong> have;
+            foreach (const SupplyQueue::Entry &taken, queue) {
+                have << taken.barcode;
+            }
+            const QString mixed = SupplyQueue::mixProblem(db, have, barcode);
+            if (!mixed.isEmpty()) {
+                db.rollback();
+
+                return refused(QObject::tr("Ticket %1 cannot be used: %2").arg(Barcode::fromKey(barcode)).arg(mixed));
+            }
             SupplyQueue::Entry entry;
             entry.barcode = barcode;
             entry.kgX100 = scan.kgX100;

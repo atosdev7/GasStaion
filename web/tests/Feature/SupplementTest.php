@@ -935,7 +935,8 @@ class SupplementTest extends TestCase
         $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->fresh()->status);
     }
 
-    public function testTheUnusedPartGoesBackToTheCardOnlyWhenTheCardPaidForAllTheTickets()
+    // one supply takes tickets of one kind (press, spot, remainder, card ...) and, for a card, of one card
+    public function testASupplyTakesTicketsOfOneKindAndOfOneCardOnly()
     {
         $this->density(1);
         $nozzle = $this->nozzle('D');
@@ -943,10 +944,21 @@ class SupplementTest extends TestCase
         $paid = $this->cardTicket($card, 5, 1);
         $press = $this->soldTicket(1, 0);                                            // 5 kg paid by somebody else
 
-        $this->supply([$paid->barcode, $press->barcode], $nozzle, 8)->assertSessionHasNoErrors();
-        $this->assertSame(0, \App\Models\Cards\CardTransaction::where('type', 'refund')->count());
-        $this->assertSame(1, Remainder::count());                                    // 2 kg: an ordinary remainder ticket, as before
-        $this->assertEquals(35, $card->fresh()->balance());
+        $this->supply([$paid->barcode, $press->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(0, Supplement::count());                                   // nothing was made
+        $this->assertSame(config('ticket_statuses.sale'), (int) $paid->fresh()->status);
+
+        $other = \App\Models\Cards\Card::forceCreate(['uid' => 'AA02', 'holder_name' => 'Wang', 'fuel_type' => 'D'] + \App\Support\Cards\CardPin::make('1234'));
+        $foreign = $this->cardTicket($other, 5, 2);
+        $this->supply([$paid->barcode, $foreign->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(0, Supplement::count());
+
+        // two tickets of the same card are fine, and what is not used goes back to that card
+        $second = $this->cardTicket($card, 5, 3);
+        $this->supply([$paid->barcode, $second->barcode], $nozzle, 8)->assertSessionHasNoErrors();
+        $this->assertSame(1, Supplement::count());
+        $this->assertSame(0, Remainder::count());
+        $this->assertEquals(2, \App\Models\Cards\CardTransaction::where('type', 'refund')->first()->kg);
     }
 
     public function testTheTimeOfASupplyChangedByTheAdminMovesItsTicketsAndItsRemainderWithIt()

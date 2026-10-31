@@ -3,6 +3,7 @@
 #include "Barcode.h"
 #include "Settings.h"
 
+#include <QObject>
 #include <QSqlQuery>
 #include <QVariant>
 
@@ -28,6 +29,59 @@ QString TicketNumbers::code(QSqlDatabase db, const QString &type, const QString 
     const QString kind = settings.value(typeDigitSetting(type));
 
     return fuel.size() == 1 && kind.size() == 1 ? fuel + kind : QString();
+}
+
+QString TicketNumbers::kindOf(QSqlDatabase db, qlonglong barcodeKey)
+{
+    const QString code = Barcode::fromKey(barcodeKey).mid(5, 2);   // 5 digits of sign, then the code
+    if (code.size() != 2) {
+        return "press";
+    }
+
+    Settings settings(db);
+    bool fuelKnown = false;
+    QSqlQuery fuels(db);
+    if (fuels.exec("SELECT fuel_type FROM fuel_types")) {
+        while (fuels.next()) {
+            fuelKnown = fuelKnown || settings.value(fuelDigitSetting(fuels.value(0).toString())) == code.left(1);
+        }
+    }
+    if (!fuelKnown) {
+        return "press";
+    }
+
+    const char *const kinds[] = {"direct", "self", "other", "ticket_loan", "card", "remainder"};
+    for (int i = 0; i < 6; ++i) {
+        if (settings.value(typeDigitSetting(kinds[i])) == code.right(1)) {
+            return kinds[i];
+        }
+    }
+
+    return "press";
+}
+
+QString TicketNumbers::kindName(const QString &kind)
+{
+    if (kind == "direct") {
+        return QObject::tr("spot sale");
+    }
+    if (kind == "self") {
+        return QObject::tr("self use");
+    }
+    if (kind == "other") {
+        return QObject::tr("other use");
+    }
+    if (kind == "ticket_loan") {
+        return QObject::tr("ticket loan");
+    }
+    if (kind == "card") {
+        return QObject::tr("card");
+    }
+    if (kind == "remainder") {
+        return QObject::tr("remainder");
+    }
+
+    return QObject::tr("press");
 }
 
 bool TicketNumbers::available(QSqlDatabase db, const QString &type, const QString &fuelType)
