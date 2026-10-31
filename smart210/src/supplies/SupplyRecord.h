@@ -40,7 +40,7 @@ public:
     };
 
     struct Outcome {
-        Outcome() : ok(false), duplicate(false), tickets(0), kgX100(0), remainderKgX100(0) {}
+        Outcome() : ok(false), duplicate(false), tickets(0), kgX100(0), remainderKgX100(0), refundKgX100(0) {}
 
         bool ok;
         QString error;
@@ -50,7 +50,13 @@ public:
         qlonglong kgX100;        // what the tickets add up to
         QString remainderBarcode; // the remainder ticket to print, 16 digits; empty when none
         qlonglong remainderKgX100;
+        QString refundCardId;     // the card that paid for the tickets when the unused part of them went back to it (no remainder ticket then); empty when none
+        qlonglong refundKgX100;
     };
+
+    // The card that paid for all of these tickets (tickets made for a card, Cards::issueTicket): empty when one of them is no card's ticket or they are of several
+    // cards. The unused part of such tickets goes back to the card, not into a remainder ticket (the web app does the same: CardLedger::refund).
+    static QString cardOf(QSqlDatabase db, const QList<qlonglong> &barcodes);
 
     static Outcome record(QSqlDatabase db, int nozzle, const Reading &reading, const QDateTime &now);
 

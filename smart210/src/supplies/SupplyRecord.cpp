@@ -62,6 +62,29 @@ bool supplyTicket(QSqlDatabase db, qlonglong barcode, const QString &supplementI
 
 }
 
+QString SupplyRecord::cardOf(QSqlDatabase db, const QList<qlonglong> &barcodes)
+{
+    if (barcodes.isEmpty()) {
+        return QString();
+    }
+
+    QString card;
+    foreach (qlonglong barcode, barcodes) {
+        QSqlQuery query(db);
+        query.prepare("SELECT card_id FROM tickets WHERE barcode = ?");
+        query.addBindValue(barcode);
+        if (!query.exec() || !query.next() || query.value(0).isNull() || query.value(0).toString().isEmpty()) {
+            return QString();
+        }
+        if (!card.isEmpty() && card != query.value(0).toString()) {
+            return QString();
+        }
+        card = query.value(0).toString();
+    }
+
+    return card;
+}
+
 SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, const Reading &reading, const QDateTime &now)
 {
     if (!db.transaction()) {
@@ -151,10 +174,23 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         withTickets = true;
     }
 
+    // What is left of the tickets was paid for. When the tickets are a card's (the card paid for them when they were made) it goes back to the card; otherwise it is a
+    // remainder ticket for the customer.
     qlonglong remainder = 0;
+    qlonglong refund = 0;
+    QString payer;
     if (withTickets) {
         const qlonglong rest = total - reading.dispensedX100;
-        remainder = rest > 0 ? rest : 0; // whatever is left of the tickets is a remainder ticket: the customer paid for it
+        QList<qlonglong> used;
+        foreach (const SupplyQueue::Entry &entry, queue) {
+            used << entry.barcode;
+        }
+        payer = cardOf(db, used);
+        if (rest > 0 && !payer.isEmpty()) {
+            refund = rest;
+        } else {
+            remainder = rest > 0 ? rest : 0;
+        }
     }
 
     const QString when = now.toString("yyyy-MM-dd HH:mm:ss");
@@ -191,6 +227,12 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         }
         outcome.tickets = queue.size();
         outcome.kgX100 = total;
+    }
+
+    if (ok && refund > 0) {
+        ok = Cards::adjustBalance(db, payer, refund);
+        outcome.refundCardId = payer;
+        outcome.refundKgX100 = refund;
     }
 
     if (ok && remainder > 0) {

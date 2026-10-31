@@ -50,7 +50,7 @@ CardHistoryDialog::CardHistoryDialog(QSqlDatabase db, const QString &cardId, con
     const QList<CardLedger::Entry> entries = CardLedger::entries(db, cardId, Latest);
     for (int i = 0; i < entries.size(); ++i) {
         const CardLedger::Entry &entry = entries.at(i);
-        QString kind = entry.type == "fill" ? tr("Fill") : (entry.type == "reversal" ? tr("Reversal (deleted)") : tr("Top-up"));
+        QString kind = entry.type == "fill" ? tr("Fill") : (entry.type == "reversal" ? tr("Reversal (deleted)") : (entry.type == "refund" ? tr("Refund (unused part)") : tr("Top-up")));
         if (entry.provisional) {
             kind += " " + tr("(not confirmed yet)");
         }

@@ -93,6 +93,26 @@ QList<CardLedger::Entry> CardLedger::entries(QSqlDatabase db, const QString &car
         }
     }
 
+    // the unused part of the card's tickets that a supply gave back, not in the ledger of the web app yet (see SupplyRecord::record)
+    QSqlQuery refunds(db);
+    refunds.prepare("SELECT s.supplied_at, (SELECT SUM(t.amount_kg) FROM tickets t WHERE t.supplement_id = s.id) - s.out_amount_kg FROM supplements s "
+                    "WHERE s.card_id IS NULL AND s.id NOT IN (SELECT source_id FROM card_transactions WHERE type = 'refund') "
+                    "AND EXISTS (SELECT 1 FROM tickets t WHERE t.supplement_id = s.id AND t.card_id = ?) "
+                    "AND NOT EXISTS (SELECT 1 FROM tickets t WHERE t.supplement_id = s.id AND (t.card_id IS NULL OR t.card_id <> ?)) "
+                    "AND (SELECT SUM(t.amount_kg) FROM tickets t WHERE t.supplement_id = s.id) > s.out_amount_kg");
+    refunds.addBindValue(cardId);
+    refunds.addBindValue(cardId);
+    if (refunds.exec()) {
+        while (refunds.next()) {
+            Entry entry;
+            entry.when = refunds.value(0).toString();
+            entry.type = "refund";
+            entry.kgX100 = refunds.value(1).toLongLong();
+            entry.provisional = true;
+            pending << entry;
+        }
+    }
+
     qlonglong balance = 0;
     QSqlQuery last(db);
     last.prepare("SELECT balance_kg FROM card_transactions WHERE card_id = ? ORDER BY occurred_at DESC, seq DESC, rowid DESC LIMIT 1");

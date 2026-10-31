@@ -381,6 +381,8 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         if (!outcome.duplicate) {
             if (outcome.tickets == 0 && outcome.kgX100 == 0) {
                 emit message(tr("Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.").arg(address).arg(kg(reading.dispensedX100)), false);
+            } else if (outcome.refundKgX100 > 0) {
+                emit message(tr("Nozzle %1: %2 kg dispensed. %3 kg of the card's ticket went back to the card.").arg(address).arg(kg(reading.dispensedX100)).arg(kg(outcome.refundKgX100)), true);
             } else if (outcome.remainderKgX100 > 0) {
                 emit message(tr("Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.").arg(address).arg(kg(reading.dispensedX100)).arg(kg(outcome.remainderKgX100)), true);
             } else {

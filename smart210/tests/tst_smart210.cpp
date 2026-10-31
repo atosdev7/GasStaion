@@ -460,6 +460,7 @@ private slots:
     void aFillIsATicketMadeForTheCardAndItIsCancelledWhileItWaitsForTheUpload();
     void aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalanceKeepsIt();
     void theHistoryOfACardShowsTheFillsOfItsTickets();
+    void theUnusedPartOfACardsTicketGoesBackToTheCard();
     void anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets();
     void theConfirmDialogHasOkAsItsDefaultAndCancel();
     void theMachineConfigSavesTheCardReader();
@@ -11244,6 +11245,61 @@ void Smart210Test::aTicketMadeForACardIsUploadedWithItsCardAndTheDownloadedBalan
     QCOMPARE(one("SELECT status FROM tickets" + where).toInt(), 2);
     QCOMPARE(one("SELECT print_count FROM tickets" + where).toInt(), 3);          // the larger count wins: the web app counted 3, this terminal 2
     QCOMPARE(one("SELECT last_printed_at FROM tickets" + where).toString(), QString("2026-10-26 10:30:00"));
+}
+
+// the card paid for its ticket when it was made, so what a fill leaves of it goes back to the card; a supply of other tickets, or of tickets of several kinds, makes
+// a remainder ticket as before (the web app does the same: CardLedger::refund)
+void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+    const QString card = makeCard(db, "AA01", 4000);
+    const Cards::TicketResult made = Cards::issueTicket(db, card, 1500, 7, now);
+    QVERIFY(made.ok);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2500));
+
+    QVERIFY(SupplyQueue::add(db, 1, made.barcode, "D", now).ok);
+    QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
+    SupplyRecord::Reading reading;
+    reading.resultId = 1;
+    reading.dispensedX100 = 1000;
+    reading.litersX100 = 1200;
+    reading.reason = BoardProtocol::ReasonTankFullOrNoFlow;
+    const SupplyRecord::Outcome outcome = SupplyRecord::record(db, 1, reading, now);
+    QVERIFY2(outcome.ok, qPrintable(outcome.error));
+    QCOMPARE(outcome.refundCardId, card);
+    QCOMPARE(outcome.refundKgX100, qlonglong(500));
+    QVERIFY(outcome.remainderBarcode.isEmpty());
+    QCOMPARE(countRows("remainders"), 0);                                   // no paper ticket
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(3000));       // 25.00 + the unused 5.00 kg
+
+    // the history shows it until the web app has the entry
+    int refunds = 0;
+    foreach (const CardLedger::Entry &entry, CardLedger::entries(db, card, 10)) {
+        if (entry.type == "refund") {
+            ++refunds;
+            QCOMPARE(entry.kgX100, qlonglong(500));
+            QVERIFY(entry.provisional);
+        }
+    }
+    QCOMPARE(refunds, 1);
+
+    // a supply of a card ticket and an ordinary ticket: not all of them are the card's, so the rest is a remainder ticket
+    const Cards::TicketResult small = Cards::issueTicket(db, card, 500, 7, now.addSecs(1));
+    QVERIFY(small.ok);
+    QVERIFY(SupplyQueue::add(db, 1, small.barcode, "D", now).ok);
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000043), "D", now).ok);        // 5.00 kg
+    QVERIFY(SupplyQueue::begin(db, 1, 1000, now));
+    reading.resultId = 2;
+    reading.dispensedX100 = 800;
+    const SupplyRecord::Outcome mixed = SupplyRecord::record(db, 1, reading, now);
+    QVERIFY2(mixed.ok, qPrintable(mixed.error));
+    QVERIFY(mixed.refundCardId.isEmpty());
+    QCOMPARE(mixed.refundKgX100, qlonglong(0));
+    QCOMPARE(mixed.remainderKgX100, qlonglong(200));
+    QCOMPARE(countRows("remainders"), 1);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(2500));       // 30.00 less the 5.00 kg of the new ticket, nothing back
 }
 
 // the history of a card lists the tickets made for it as fills until the web app has an entry for them

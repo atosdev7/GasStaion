@@ -245,8 +245,8 @@ class Push
             return; // confirmed by the accountant: final, so a repeated push changes nothing
         }
         if (!$sale->exists) {
-            // The cost is the web's to fill, from the inbound that was the default when the sale was made (it may arrive days later);
-            // the device never knows it.
+            // The cost is the web's to fill, never the device's: the default cost of the fuel type when the row arrives (it may come days after the sale). The
+            // accountant can change the cost of a sale (and of a supply) before confirming it, so a changed default costs nothing but that look.
             $sale->cost = \App\Support\Fuel\DefaultCost::get($d['fuel_type']);      // the default cost of the fuel type; the accountant can change it on the sale before confirming
         }
 

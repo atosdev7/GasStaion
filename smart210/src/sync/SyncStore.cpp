@@ -442,6 +442,17 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     if (tickets.exec() && tickets.next()) {
         balance -= tickets.value(0).toLongLong();
     }
+    // the unused part of the card's tickets that a supply gave back (SupplyRecord::record) and the web app has not turned into a refund yet
+    QSqlQuery refunds(db_);
+    refunds.prepare("SELECT COALESCE(SUM(ref), 0) FROM (SELECT (SELECT SUM(t.amount_kg) FROM tickets t WHERE t.supplement_id = s.id) - s.out_amount_kg AS ref FROM supplements s "
+                    "WHERE s.card_id IS NULL AND (s.synced = 0 OR EXISTS (SELECT 1 FROM tickets t WHERE t.supplement_id = s.id AND t.synced = 0)) "
+                    "AND EXISTS (SELECT 1 FROM tickets t WHERE t.supplement_id = s.id AND t.card_id = ?) "
+                    "AND NOT EXISTS (SELECT 1 FROM tickets t WHERE t.supplement_id = s.id AND (t.card_id IS NULL OR t.card_id <> ?))) WHERE ref > 0");
+    refunds.addBindValue(id);
+    refunds.addBindValue(id);
+    if (refunds.exec() && refunds.next()) {
+        balance += refunds.value(0).toLongLong();
+    }
 
     QSqlQuery query(db_);
     if (exists) {
