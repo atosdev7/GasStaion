@@ -32,4 +32,27 @@
             </div>
         </form>
     </div>
+
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">{{ __('initialize.opening_lock') }}</h3></div>
+        <div class="card-body">
+            <p class="text-muted">{{ __('initialize.opening_lock_hint') }}</p>
+            <div id="opening-lock-state" class="font-weight-bold">
+                {{ $lockedAt ? __('initialize.opening_lock_state_locked', ['at' => $lockedAt]) : __('initialize.opening_lock_state_open') }}
+            </div>
+        </div>
+        <div class="card-footer">
+            @if ($lockedAt)
+                <form method="POST" action="{{ route('balances.unlock') }}" onsubmit="return confirm('{{ __('initialize.opening_unlock_confirm') }}')">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-danger">{{ __('initialize.opening_unlock_button') }}</button>
+                </form>
+            @else
+                <form method="POST" action="{{ route('balances.lock') }}" onsubmit="return confirm('{{ __('initialize.opening_lock_confirm') }}')">
+                    @csrf
+                    <button type="submit" class="btn btn-primary">{{ __('initialize.opening_lock_button') }}</button>
+                </form>
+            @endif
+        </div>
+    </div>
 @endsection

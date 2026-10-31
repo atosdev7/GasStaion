@@ -3,6 +3,7 @@
 @section('title', __('menu.group_init') . ' - ' . __('menu.ticket_loans'))
 
 @section('content')
+    @include('balance._lock')
     @if (session('status'))
         <div class="alert alert-success">{{ session('status') }}</div>
     @endif
