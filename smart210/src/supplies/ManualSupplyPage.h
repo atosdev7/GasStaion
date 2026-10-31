@@ -24,7 +24,7 @@ class ManualSupplyPage;
 // one). The tickets must be sold, of the nozzle's fuel type and in no queue. Their total is the preset; the dispensed kg is set to the preset
 // by itself (and the remainder is 0), and the litres follow from the kg and the density (they can be edited too). The cashier types the dispensed kg
 // or the remainder, whichever is at hand: the other follows (dispensed + remainder = the tickets). The tickets must cover the dispensed kg; what
-// is left is a remainder ticket, which is printed (unless it is within 0.05 kg, which the station keeps). An optional comment is kept with the supplement. Save writes the supplement with its tickets for the upload (SupplySession::recordManual).
+// is left is a remainder ticket, which is printed. An optional comment is kept with the supplement. Save writes the supplement with its tickets for the upload (SupplySession::recordManual).
 class ManualSupplyPage : public QWidget
 {
     Q_OBJECT

@@ -172,7 +172,7 @@ $supply = Supplement::where('mode', 'manual')->orderByDesc('created_at')->first(
 ok($supply && money($supply->out_amount_kg) === 4.97 && money($supply->preset_kg) === 5.0, '5.99 L x 0.83 = 4.97 kg of the 5 kg ticket');
 ok(Ticket::where('barcode', $used)->value('status') == config('ticket_statuses.supply'), 'the ticket is used');
 $tiny = Remainder::where('supplement_id', $supply->id)->first();
-expect(!$tiny, 'a fill 0.03 kg short of its ticket leaves no remainder, as on the terminal (0.05 kg tolerance); now ' . ($tiny ? 'a remainder ticket of ' . number_format($tiny->amount_kg, 2) . ' kg' : 'none'));
+ok($tiny && money($tiny->amount_kg) === 0.03, 'a fill 0.03 kg short of its ticket leaves a remainder ticket of 0.03 kg (there is no tolerance)');
 ok(substr((string) Ticket::where('barcode', $used)->value('supply_date'), 0, 10) === substr((string) $supply->supply_date, 0, 10), 'the ticket and the supply have the same day');
 note('used', $used);
 

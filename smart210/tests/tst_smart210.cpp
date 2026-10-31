@@ -186,7 +186,6 @@ private slots:
     void purgeNeverUsesLessThanOneDay();
     void purgeKeepsTheHistoryOfCards();
     void purgeKeepsTheRemainderTicketsThatAreNotUsedYet();
-    void aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem();
     void theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload();
     void aServerThatDoesNotKnowTheConfirmedQuestionDoesNotFailTheDownload();
 
@@ -2148,30 +2147,6 @@ void Smart210Test::purgeRemovesOnlyOldRecordsThatAreSafeToLose()
         tickets << query.value(0).toLongLong();
     }
     QCOMPARE(tickets, QList<qlonglong>() << 3000000022LL << 3000000023LL << 3000000024LL << 3000000025LL << 3000000026LL);
-}
-
-void Smart210Test::aFillThatOvershootsItsTicketsByAFewGramsIsCoveredByThem()
-{
-    setUpSupplying();
-    QSqlDatabase db = QSqlDatabase::database(connection_);
-    Session session(db);
-    QVERIFY(session.login(7, "secret1"));
-    MachineConfig config(db);
-    FakeBoards boards;
-    BoardBus bus;
-    quickBus(&bus, &boards);
-    SupplySelection selection(&bus, &config);
-    SupplySession supply(db, &bus, &config, &selection, &session);
-    const QDateTime when = QDateTime(QDate(2026, 10, 13), QTime(9, 15, 0));
-    QList<qlonglong> tickets;
-    QString why;
-
-    // 20.04 kg came out against tickets of 20.00 kg: the station absorbs the 0.04 kg, the tickets are used and no remainder is made
-    tickets << 3000000041 << 3000000043;                                  // 15.00 + 5.00
-    QVERIFY2(supply.recordManual(3, 2004, 2415, tickets, when, &why), qPrintable(why));
-    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE supplement_id IS NOT NULL AND status = 2 AND synced = 0").toInt(), 2);
-    QCOMPARE(countRows("remainders"), 0);
-    QCOMPARE(one("SELECT out_amount_kg || '/' || preset_kg FROM supplements").toString(), QString("2004/2000"));
 }
 
 void Smart210Test::purgeKeepsTheRemainderTicketsThatAreNotUsedYet()
@@ -9378,21 +9353,21 @@ void Smart210Test::aFillThatReachedItsPresetLeavesNoRemainder()
     QSqlDatabase db = QSqlDatabase::database(connection_);
     const QDateTime now = QDateTime::currentDateTime();
 
-    // the board counts pulses, so it may stop a few grams short of the preset: within 0.05 kg that is no remainder
+    // the board stops at the preset exactly (the firmware sees to the pulses): no remainder, and no tolerance on the terminal
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
     SupplyRecord::Reading reading;
     reading.resultId = 1;
-    reading.dispensedX100 = 1496;
+    reading.dispensedX100 = 1500;
     reading.litersX100 = 1800;
     reading.reason = BoardProtocol::ReasonPresetReached;
     SupplyRecord::Outcome outcome = SupplyRecord::record(db, 1, reading, now);
     QVERIFY2(outcome.ok, qPrintable(outcome.error));
     QVERIFY(outcome.remainderBarcode.isEmpty());
     QCOMPARE(countRows("remainders"), 0);
-    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 1496); // what came out is what is recorded
+    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 1500); // what came out is what is recorded
 
-    // 0.2 kg short at the preset is a remainder; 0.05 kg short because the tank was full is one too (the fill did not reach its preset)
+    // 0.2 kg short at the preset is a remainder; so is 0.05 kg short because the tank was full (any shortfall is one)
     QVERIFY(SupplyQueue::add(db, 1, code(3000000042), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 2000, now));
     reading.resultId = 2;
@@ -9490,7 +9465,7 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     QVERIFY(!supply.recordManual(3, 2000, 2410, tickets, when, &why));    // the tickets are used now
     QVERIFY(why.contains("already used"));
 
-    // less dispensed than the tickets cover: the rest is a remainder ticket, as with an automatic fill (within 0.05 kg the station keeps it)
+    // less dispensed than the tickets cover: the rest is a remainder ticket, as with an automatic fill (any shortfall, there is no tolerance)
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000048, 'D', 1, 1000, 1, 1)");
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000049, 'D', 0, 500, 1, 1)");
     tickets.clear();
@@ -9504,7 +9479,7 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     tickets.clear();
     tickets << 3000000049;                                                // 5.00 kg against 4.97 dispensed
     QVERIFY2(supply.recordManual(3, 497, 598, tickets, when, &why), qPrintable(why));
-    QCOMPARE(countRows("remainders"), 1);                                 // 0.03 kg: kept by the station
+    QCOMPARE(countRows("remainders"), 2);                                 // 0.03 kg: a remainder ticket too
     tickets.clear();
 
     // the fill of nozzle 2 was started from the app, then the board died: the reading takes its tickets, the rest is a remainder
@@ -9517,10 +9492,10 @@ void Smart210Test::aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOw
     QVERIFY(why.contains("More than the tickets cover (20.00 kg)"));
     QVERIFY(supply.isLocked(2));
     QVERIFY2(supply.recordManual(2, 1500, 1807, tickets, now, &why), qPrintable(why));
-    QCOMPARE(remainders.size(), 2);
+    QCOMPARE(remainders.size(), 3);
     QVERIFY(!supply.isLocked(2));
     QCOMPARE(one("SELECT COUNT(*) FROM supplements WHERE mode = 'manual' AND out_amount_kg = 1500 AND preset_kg = 2000").toInt(), 1);
-    QCOMPARE(countRows("remainders"), 2);
+    QCOMPARE(countRows("remainders"), 3);
 
     // bad input
     QVERIFY(!supply.recordManual(1, 0, 100, tickets, now, &why));
@@ -10310,7 +10285,7 @@ void Smart210Test::theManualInputScreenRecordsASupplyWithItsTickets()
     QTest::keyClicks(kg, "19.98");
     QCOMPARE(liters->text(), QString("24.07"));
     QCOMPARE(remainder->text(), QString("0.02"));
-    QVERIFY(summary->text().contains("No remainder"));                 // 0.02 kg: the station keeps it
+    QVERIFY(summary->text().contains("remainder ticket of 0.02 kg"));  // 0.02 kg: a remainder ticket (there is no tolerance)
     QVERIFY(save->isEnabled());
     kg->selectAll();
     QTest::keyClicks(kg, "19.90");                                     // 0.10 kg less than the tickets: a remainder ticket
@@ -10327,7 +10302,7 @@ void Smart210Test::theManualInputScreenRecordsASupplyWithItsTickets()
     QVERIFY(remainder->text().isEmpty());
     QVERIFY(!save->isEnabled());
     kg->selectAll();
-    QTest::keyClicks(kg, "19.98");
+    QTest::keyClicks(kg, "20.00");
     QVERIFY(save->isEnabled());
 
     QLineEdit *comment = window.findChild<QLineEdit *>("msCommentField");
@@ -10342,8 +10317,8 @@ void Smart210Test::theManualInputScreenRecordsASupplyWithItsTickets()
     QVERIFY(preset->text().isEmpty());
     QCOMPARE(tickets->rowCount(), 0);
     QSqlDatabase db = QSqlDatabase::database(connection_);
-    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 1998);
-    QCOMPARE(one("SELECT out_amount_lt FROM supplements").toInt(), 2407);
+    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 2000);
+    QCOMPARE(one("SELECT out_amount_lt FROM supplements").toInt(), 2410);
     QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 2000);   // what the tickets cover
     QCOMPARE(one("SELECT mode FROM supplements").toString(), QString("manual"));
     QCOMPARE(one("SELECT nozzle_id FROM supplements").toInt(), 20);   // nozzle 2

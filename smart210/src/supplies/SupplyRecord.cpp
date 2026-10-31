@@ -62,8 +62,6 @@ bool supplyTicket(QSqlDatabase db, qlonglong barcode, const QString &supplementI
 
 }
 
-const qlonglong SupplyRecord::ToleranceX100;
-
 SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, const Reading &reading, const QDateTime &now)
 {
     if (!db.transaction()) {
@@ -115,15 +113,14 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         total += entry.kgX100;
         withTickets = withTickets && stillGood(db, entry.barcode, fuelType, nozzleNumber);
     }
-    // A fill that overshoots its preset by a few grams (the valve closes a moment late; the board's grams are rounded to 0.01 kg) is covered by its tickets:
-    // the station absorbs up to the tolerance, so the supply is saved with its tickets and the web app takes it. More than that is never accepted: the
-    // supply is saved without the tickets and the cashier sorts them out.
-    if (withTickets && reading.dispensedX100 > total + ToleranceX100) {
+    // More came out than the tickets cover: the station never accepts that (the firmware of the board sees to the pulses, the terminal has no tolerance). The supply
+    // is saved without the tickets and the cashier sorts them out.
+    if (withTickets && reading.dispensedX100 > total) {
         withTickets = false;
     }
 
     // The tickets typed in with the reading replace the queue: each must pass the checks of a scan, and together they must cover what was
-    // dispensed. What is left of them is a remainder (a new ticket), unless it is within the tolerance: the station keeps that.
+    // dispensed. What is left of them is a remainder (a new ticket), whatever it is.
     const bool typed = !reading.tickets.isEmpty();
     if (typed) {
         queue.clear();
@@ -145,7 +142,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
             queue.append(entry);
             total += scan.kgX100;
         }
-        if (total + ToleranceX100 < reading.dispensedX100) {
+        if (total < reading.dispensedX100) {
             db.rollback();
 
             return refused(QObject::tr("The tickets add up to %1 kg but %2 kg was dispensed: the tickets must cover everything that was dispensed.")
@@ -157,8 +154,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
     qlonglong remainder = 0;
     if (withTickets) {
         const qlonglong rest = total - reading.dispensedX100;
-        const bool atPreset = typed || (reading.reason == BoardProtocol::ReasonPresetReached); // a typed supply is as good as one that ended at its preset
-        remainder = (rest > 0 && !(atPreset && rest <= ToleranceX100)) ? rest : 0;
+        remainder = rest > 0 ? rest : 0; // whatever is left of the tickets is a remainder ticket: the customer paid for it
     }
 
     const QString when = now.toString("yyyy-MM-dd HH:mm:ss");

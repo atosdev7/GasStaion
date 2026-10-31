@@ -329,7 +329,7 @@ class ConfirmationController extends Controller
     // The supplies of the date whose figures do not agree, each as ['id', 'text']. A supply is a fact (the fuel came out), so none of this is refused on upload; it is
     // shown here for the accountant to look at before confirming:
     // - the tickets of the supply do not add up to its preset (a ticket has not been uploaded yet, or a wrong one is on it)
-    // - more than one remainder came out of it, or the remainder is not what was left of the tickets (the same 0.05 kg tolerance as the terminal), or what was left
+    // - more than one remainder came out of it, or the remainder is not what was left of the tickets (to the hundredth of a kg: there is no tolerance), or what was left
     //   is nowhere (no remainder, and not given back to a card)
     private function supplyChecks($date)
     {
@@ -357,7 +357,7 @@ class ConfirmationController extends Controller
             $given = CardLedger::paidByCard($supplement) !== null;        // the unused part of a card's ticket is the card's
             if (($remainderCount[$supplement->id] ?? 0) > 1) {
                 $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainders', ['supply' => $name, 'count' => $remainderCount[$supplement->id]])];
-            } elseif (!$given && abs($left - $remainder) > 0.05 && ($remainder > 0 || $left > 0.05)) {
+            } elseif (!$given && abs($left - $remainder) > 0.005 && ($remainder > 0 || $left > 0.005)) {
                 $found[] = ['id' => $supplement->id, 'text' => __('confirm.check_remainder', ['supply' => $name, 'left' => number_format($left, 2), 'remainder' => number_format($remainder, 2)])];
             }
         }

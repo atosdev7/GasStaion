@@ -34,9 +34,6 @@ class Push
 
     const DATETIME = 'date_format:Y-m-d H:i:s';
 
-    // how far past its tickets a supply may go (the Smart210's ToleranceX100)
-    const SUPPLY_TOLERANCE_KG = 0.05;
-
     public static function pattern()
     {
         return implode('|', self::TABLES);
@@ -293,9 +290,8 @@ class Push
             'supply_date' => 'nullable|date_format:Y-m-d',
         ]);
 
-        // The tolerance of the Smart210 is 0.05 kg both ways: a fill that stops a few grams past its tickets (the valve closes a moment late) is taken, the
-        // station absorbs it; more than that is refused.
-        if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > self::SUPPLY_TOLERANCE_KG) {
+        // No tolerance: a fill may fall short of its tickets (what is left is a remainder), never go past them. (The firmware of the board makes it stop at the preset.)
+        if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > 0) {
             throw new RejectedRow('more was dispensed than the tickets cover');
         }
 

@@ -915,8 +915,9 @@ class SupplementTest extends TestCase
         $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 15] + $form)->assertSessionHasNoErrors();      // all of it used
         $this->assertEquals(0, $refund->fresh()->kg);
         $this->assertEquals(25, $card->fresh()->balance());
-        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 14.97] + $form)->assertSessionHasNoErrors();   // 0.03 kg left: the station keeps it
-        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 14.97] + $form)->assertSessionHasNoErrors();   // 0.03 kg left: it goes back too (no tolerance)
+        $this->assertEquals(0.03, $refund->fresh()->kg);
+        $this->assertEquals(25.03, $card->fresh()->balance());
         $this->assertSame(0, Remainder::count());
 
         // a remainder cannot be made by hand for it, and the form does not offer it

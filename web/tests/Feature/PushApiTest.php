@@ -556,16 +556,15 @@ class PushApiTest extends TestCase
         $this->assertSame(0, Supplement::count());
     }
 
-    public function testASupplementMayFallShortOfItsTicketsAndOvershootThemByTheToleranceOnly()
+    public function testASupplementMayFallShortOfItsTicketsButNeverExceedThem()
     {
-        $within = $this->supplement(['out_amount_kg' => '14.95']);   // the station keeps 0.05 kg: fine
-        $over = $this->supplement(['out_amount_kg' => '15.05']);     // the valve closed a moment late: the station absorbs up to 0.05 kg
-        $tooMuch = $this->supplement(['out_amount_kg' => '15.06']);  // more than the tolerance past the tickets: refused
+        $short = $this->supplement(['out_amount_kg' => '14.95']);    // short of its tickets: fine (what is left is a remainder)
+        $over = $this->supplement(['out_amount_kg' => '15.01']);     // more than the tickets cover: refused, there is no tolerance
 
-        $result = $this->push('supplements', [$within, $over, $tooMuch]);
+        $result = $this->push('supplements', [$short, $over]);
 
-        $this->assertSame([$within['id'], $over['id']], $result['saved']);
-        $this->assertSame($tooMuch['id'], $result['rejected'][0]['key']);
+        $this->assertSame([$short['id']], $result['saved']);
+        $this->assertSame($over['id'], $result['rejected'][0]['key']);
     }
 
     public function testASupplementNeedsANozzleOfItsOwnDevice()

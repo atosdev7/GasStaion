@@ -23,9 +23,8 @@
 class SupplyRecord
 {
 public:
-    // The most the station may keep: 0.05 kg. The tolerance only ever favours the station. A fill that ends at its preset up to this far short
-    // gives no remainder, and neither does a supply typed in; more dispensed than the tickets cover is never accepted.
-    static const qlonglong ToleranceX100 = 5; // 0.05 kg
+    // There is no tolerance: whatever is left of the tickets is a remainder ticket, and more dispensed than the tickets cover is never accepted. (The firmware of the
+    // board makes it stop at the preset.)
 
     struct Reading {
         Reading() : resultId(0), dispensedX100(0), litersX100(0), presetX100(0), reason(-1), byHand(false) {}

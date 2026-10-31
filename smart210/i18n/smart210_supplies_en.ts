@@ -133,8 +133,8 @@
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.cpp" line="291"/>
-        <source>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</source>
-        <translation>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</translation>
+        <source>Tickets: %1 kg, dispensed: %2 kg. No remainder.</source>
+        <translation>Tickets: %1 kg, dispensed: %2 kg. No remainder.</translation>
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.cpp" line="293"/>

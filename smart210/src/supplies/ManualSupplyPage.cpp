@@ -287,8 +287,8 @@ void ManualSupplyPage::showSummary()
         Theme::setState(summary_, matches ? "ok" : "warning");
         if (barcodes_.isEmpty() || rest < 0) {
             summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. The tickets must cover everything that was dispensed.").arg(kg(total)).arg(kg(dispensed)));
-        } else if (rest == 0 || rest <= SupplyRecord::ToleranceX100) {
-            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).").arg(kg(total)).arg(kg(dispensed)).arg(kg(SupplyRecord::ToleranceX100)));
+        } else if (rest == 0) {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. No remainder.").arg(kg(total)).arg(kg(dispensed)));
         } else {
             summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. A remainder ticket of %3 kg is made and printed.").arg(kg(total)).arg(kg(dispensed)).arg(kg(rest)));
         }
@@ -318,7 +318,7 @@ void ManualSupplyPage::save()
 
     clearForm();
     Theme::setState(status_, "ok");
-    status_->setText(rest > SupplyRecord::ToleranceX100
+    status_->setText(rest > 0
                          ? tr("The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.").arg(tickets).arg(kg(rest))
                          : tr("The supply was recorded with %1 tickets. It will be uploaded.").arg(tickets));
     emit recorded();
