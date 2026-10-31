@@ -995,6 +995,20 @@ class PushApiTest extends TestCase
         $this->assertSame($same, Ticket::find($spot->barcode)->supplement_id);
     }
 
+    public function testARemainderTicketAndAPressTicketMayShareASupply()
+    {
+        $press = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $remainder = Ticket::forceCreate([
+            'barcode' => '0000029000000005', 'fuel_type' => 'D', 'spec' => null, 'code' => '29', 'serial' => 5, 'amount_kg' => 2, 'status' => config('ticket_statuses.sale'),
+        ]);
+        $same = (string) Str::uuid();
+
+        $result = $this->push('tickets', [$this->supplyRow($press->barcode, $same), $this->supplyRow($remainder->barcode, $same)]);
+
+        $this->assertSame([$press->barcode, $remainder->barcode], $result['saved']);
+        $this->assertSame(0, $this->conflicts());                                       // they go together: nothing to show
+    }
+
     public function testASecondSupplementForTheSameTicketIsLoggedAndTheFirstKept()
     {
         $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));

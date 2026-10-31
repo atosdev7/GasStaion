@@ -232,6 +232,10 @@
         <source>A supply takes the tickets of one card only: this ticket was made for another card.</source>
         <translation>A supply takes the tickets of one card only: this ticket was made for another card.</translation>
     </message>
+    <message>
+        <source>A remainder ticket goes with press and spot sale tickets only, not with %1 tickets.</source>
+        <translation>A remainder ticket goes with press and spot sale tickets only, not with %1 tickets.</translation>
+    </message>
 </context>
 <context>
     <name>SupplyPage</name>

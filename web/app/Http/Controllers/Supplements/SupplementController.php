@@ -16,7 +16,7 @@ use App\Support\Cards\CardLedger;
 use App\Support\Fuel\CostChoices;
 use App\Support\Supplements\RemainderMaker;
 use App\Support\Supplements\SupplementDeletion;
-use App\Support\Tickets\Barcode;
+use App\Support\Supplements\SupplyTickets;
 use App\Support\Tickets\LegacyTickets;
 use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
@@ -138,17 +138,9 @@ class SupplementController extends Controller
                 ]);
             }
 
-            // One supply takes tickets of one kind (press, spot sale, self use, other use, ticket loan, card, remainder) and the tickets of a card are all of one card.
-            $kindOf = function ($ticket) {
-                $kind = Barcode::posType($ticket->code);
-
-                return $kind === null ? 'press' : $kind;
-            };
-            if ($tickets->map($kindOf)->unique()->count() > 1) {
-                throw ValidationException::withMessages(['ticket_barcodes' => __('supplements.tickets_mixed_kind')]);
-            }
-            if ($tickets->pluck('card_id')->unique()->count() > 1) {
-                throw ValidationException::withMessages(['ticket_barcodes' => __('supplements.tickets_mixed_card')]);
+            // One supply takes tickets of one kind (a remainder ticket also goes with press and spot sale tickets) and the tickets of a card are all of one card.
+            if ($why = SupplyTickets::problem($tickets)) {
+                throw ValidationException::withMessages(['ticket_barcodes' => __('supplements.' . $why)]);
             }
 
             $nozzle = Nozzle::findOrFail($data['nozzle_id']);

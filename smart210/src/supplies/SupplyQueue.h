@@ -47,8 +47,8 @@ public:
     // not in a queue already. Changes nothing.
     static Scan check(QSqlDatabase db, const QString &barcodeText, const QString &fuelType);
 
-    // The rules of one supply: all its tickets are of one kind (press, spot sale, self use, other use, ticket loan, card, remainder: TicketNumbers::kindOf) and the
-    // tickets of a card are all of one card. Why `candidate` may not join the tickets `have`; empty when it may. Changes nothing.
+    // The rules of one supply: all its tickets are of one kind (press, spot sale, self use, other use, ticket loan, card: TicketNumbers::kindOf); a remainder ticket may
+    // also go with press and spot sale tickets (not with the others); and the tickets of a card are all of one card. Why `candidate` may not join the tickets `have`; empty when it may. Changes nothing.
     static QString mixProblem(QSqlDatabase db, const QList<qlonglong> &have, qlonglong candidate);
 
     // check() and, when it is good, the ticket joins the end of the nozzle's queue.

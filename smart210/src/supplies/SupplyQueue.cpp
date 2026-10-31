@@ -74,10 +74,33 @@ QString SupplyQueue::mixProblem(QSqlDatabase db, const QList<qlonglong> &have, q
     }
 
     const QString kind = TicketNumbers::kindOf(db, candidate);
-    const QString first = TicketNumbers::kindOf(db, have.first());
-    if (kind != first) {
+    // the kind of the tickets that are there: a remainder ticket goes with press and spot sale tickets, so the kind is that of the first ticket that is not a remainder
+    QString base;
+    qlonglong baseTicket = 0;
+    foreach (qlonglong barcode, have) {
+        const QString other = TicketNumbers::kindOf(db, barcode);
+        if (other != "remainder") {
+            base = other;
+            baseTicket = barcode;
+            break;
+        }
+    }
+    const QString remainderRule = QObject::tr("A remainder ticket goes with press and spot sale tickets only, not with %1 tickets.");
+
+    if (kind == "remainder") {
+        if (!base.isEmpty() && base != "press" && base != "direct") {
+            return remainderRule.arg(TicketNumbers::kindName(base));
+        }
+
+        return QString();
+    }
+    if (base.isEmpty()) {
+        // only remainder tickets so far: press and spot sale tickets may join them
+        return kind == "press" || kind == "direct" ? QString() : remainderRule.arg(TicketNumbers::kindName(kind));
+    }
+    if (kind != base) {
         return QObject::tr("A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.")
-            .arg(TicketNumbers::kindName(kind)).arg(TicketNumbers::kindName(first));
+            .arg(TicketNumbers::kindName(kind)).arg(TicketNumbers::kindName(base));
     }
     if (kind == "card") {
         QSqlQuery cards(db);
@@ -85,7 +108,7 @@ QString SupplyQueue::mixProblem(QSqlDatabase db, const QList<qlonglong> &have, q
         cards.addBindValue(candidate);
         const QString card = cards.exec() && cards.next() ? cards.value(0).toString() : QString();
         cards.prepare("SELECT card_id FROM tickets WHERE barcode = ?");
-        cards.addBindValue(have.first());
+        cards.addBindValue(baseTicket);
         const QString other = cards.exec() && cards.next() ? cards.value(0).toString() : QString();
         if (card != other) {
             return QObject::tr("A supply takes the tickets of one card only: this ticket was made for another card.");

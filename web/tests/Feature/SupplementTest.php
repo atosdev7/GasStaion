@@ -961,6 +961,32 @@ class SupplementTest extends TestCase
         $this->assertEquals(2, \App\Models\Cards\CardTransaction::where('type', 'refund')->first()->kg);
     }
 
+    // a ticket made by a POS (code 21 a diesel spot sale, 29 a diesel remainder)
+    private function posTicket($code, $serial, $kg)
+    {
+        return Ticket::forceCreate([
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved($code, config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => $code,
+            'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => config('ticket_statuses.sale'), 'sale_date' => '2026-09-20 07:00:00',
+        ]);
+    }
+
+    // a remainder ticket may be in a supply with press tickets, or with spot sale tickets; press and spot sale tickets do not mix, and a remainder does not go with the rest
+    public function testARemainderTicketGoesWithPressAndSpotSaleTicketsOnly()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+
+        $this->supply([$this->posTicket('29', 10, 2)->barcode, $this->soldTicket(1, 0)->barcode], $nozzle, 7)->assertSessionHasNoErrors();      // a remainder and a press ticket
+        $this->assertSame(1, Supplement::count());
+        $this->supply([$this->posTicket('21', 11, 3)->barcode, $this->posTicket('29', 12, 2)->barcode], $nozzle, 5)->assertSessionHasNoErrors(); // a spot sale ticket and a remainder
+        $this->assertSame(2, Supplement::count());
+
+        $this->supply([$this->soldTicket(2, 0)->barcode, $this->posTicket('21', 13, 3)->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');   // press and spot do not mix
+        $card = $this->cardWith40Kg();
+        $this->supply([$this->cardTicket($card, 5, 1)->barcode, $this->posTicket('29', 14, 2)->barcode], $nozzle, 7)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(2, Supplement::count());
+    }
+
     public function testTheTimeOfASupplyChangedByTheAdminMovesItsTicketsAndItsRemainderWithIt()
     {
         $this->density(1);

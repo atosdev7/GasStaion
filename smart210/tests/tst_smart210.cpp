@@ -462,6 +462,7 @@ private slots:
     void theHistoryOfACardShowsTheFillsOfItsTickets();
     void theUnusedPartOfACardsTicketGoesBackToTheCard();
     void aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly();
+    void aRemainderTicketGoesWithPressAndSpotTicketsOnly();
     void anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets();
     void theConfirmDialogHasOkAsItsDefaultAndCancel();
     void theMachineConfigSavesTheCardReader();
@@ -11321,6 +11322,46 @@ void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
     QVERIFY(ordinary.refundCardId.isEmpty());
     QCOMPARE(ordinary.remainderKgX100, qlonglong(200));
     QCOMPARE(countRows("remainders"), 1);
+}
+
+// a remainder ticket may be in a supply with press tickets or with spot sale tickets, not with the other kinds, and press and spot tickets do not mix
+void Smart210Test::aRemainderTicketGoesWithPressAndSpotTicketsOnly()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (29000000001, 'D', NULL, 200, 1, 1)");      // a remainder ticket (code 29)
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (21000000001, 'D', NULL, 300, 1, 1)");      // a spot sale ticket (code 21)
+    const QString card = makeCard(db, "AA01", 4000);
+    const Cards::TicketResult made = Cards::issueTicket(db, card, 500, 7, now);
+    QVERIFY(made.ok);
+
+    // a remainder ticket and press tickets
+    QVERIFY(SupplyQueue::add(db, 1, code(29000000001LL), "D", now).ok);
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
+    SupplyQueue::Scan scan = SupplyQueue::add(db, 1, code(21000000001LL), "D", now);                  // press and spot do not mix
+    QVERIFY(!scan.ok);
+    QVERIFY2(scan.error.contains("one kind"), qPrintable(scan.error));
+    SupplyQueue::clear(db, 1);
+
+    // a remainder ticket and spot sale tickets, in either order
+    QVERIFY(SupplyQueue::add(db, 1, code(21000000001LL), "D", now).ok);
+    QVERIFY(SupplyQueue::add(db, 1, code(29000000001LL), "D", now).ok);
+    scan = SupplyQueue::add(db, 1, code(3000000041), "D", now);
+    QVERIFY(!scan.ok);
+    QVERIFY2(scan.error.contains("one kind"), qPrintable(scan.error));
+    SupplyQueue::clear(db, 1);
+
+    // not with a card's ticket, in either order
+    QVERIFY(SupplyQueue::add(db, 1, made.barcode, "D", now).ok);
+    scan = SupplyQueue::add(db, 1, code(29000000001LL), "D", now);
+    QVERIFY(!scan.ok);
+    QVERIFY2(scan.error.contains("goes with press and spot sale tickets only"), qPrintable(scan.error));
+    SupplyQueue::clear(db, 1);
+    QVERIFY(SupplyQueue::add(db, 1, code(29000000001LL), "D", now).ok);
+    scan = SupplyQueue::add(db, 1, made.barcode, "D", now);
+    QVERIFY(!scan.ok);
+    QVERIFY2(scan.error.contains("goes with press and spot sale tickets only"), qPrintable(scan.error));
 }
 
 // the typed supply of the Manual input takes the same rules: tickets of one kind, and of one card

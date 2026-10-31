@@ -125,3 +125,4 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Tickets: %1 kg, dispensed: %2 kg. %3 kg go back to the card that paid for the tickets. | SupplySession / ManualSupplyPage |
 | The supply was recorded with %1 tickets, and %2 kg went back to the card. It will be uploaded. | SupplySession / ManualSupplyPage |
 | Tickets: %1 kg, dispensed: %2 kg. No remainder. | SupplySession / ManualSupplyPage |
+| A remainder ticket goes with press and spot sale tickets only, not with %1 tickets. | SupplyQueue |

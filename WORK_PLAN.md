@@ -19,7 +19,7 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 - **Firmware:** the CubeMX project is built (6.1) but not tried on a real board, so the supply workflow has only run against the simulator.
 - **Reviews:** `AUDIT.md` (2026-10-10), `REVIEW_2026-10-20.md` and `REVIEW_2026-10-29.md` (the last on branch `claude/review-fixes-2026-10-29`). The open findings are listed below.
 
-**Supply rule (decided 2026-10-31):** one supply takes tickets of one kind only (press, spot sale, self use, other use, ticket loan, card, remainder) and the tickets of a card are all of one card. A customer who brings, say, a remainder ticket and a press ticket gets two supplies.
+**Supply rule (decided 2026-10-31):** one supply takes tickets of one kind only (press, spot sale, self use, other use, ticket loan, card); a remainder ticket may also go with press tickets or with spot sale tickets (not with the others, and press and spot sale tickets do not mix); and the tickets of a card are all of one card.
 
 ## Open tasks
 
