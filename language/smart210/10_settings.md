@@ -103,3 +103,12 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Settings | SettingsPage |
 | Log out | SettingsPage |
 | Logged in as %1 | SettingsPage |
+| Print ticket | SettingsPage |
+| Set directly | SettingsPage |
+| Result of a sale: what the Result box starts with | SettingsPage |
+| Spot sale | SettingsPage |
+| Card fill | SettingsPage |
+| Card balance shown on | SettingsPage |
+| Automatic | SettingsPage |
+| Off | SettingsPage |
+| Nozzle %1 | SettingsPage |

@@ -91,3 +91,8 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Choose the fuel type. | Cards, SpotSale |
 | Log in first. | Cards, TicketSale, SpotSale, LoanSettlement |
 | The PIN is 4 to 8 digits. | Cards |
+| Refund (unused part) | CardHistoryDialog |
+| Result | CardPage |
+| Print ticket | CardPage |
+| Set directly | CardPage |
+| Print again prints the ticket. | CardPage |

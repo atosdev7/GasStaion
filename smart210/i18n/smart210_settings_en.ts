@@ -772,6 +772,16 @@
         <source>Tickets are queued on nozzle %1. Remove them from its queue before changing its config.</source>
         <translation>Tickets are queued on nozzle %1. Remove them from its queue before changing its config.</translation>
     </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.cpp" line="18"/>
+        <source>Print ticket</source>
+        <translation>Print ticket</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.cpp" line="19"/>
+        <source>Set directly</source>
+        <translation>Set directly</translation>
+    </message>
 </context>
 <context>
     <name>ServerForm</name>
@@ -814,12 +824,47 @@
         <translation>Settings</translation>
     </message>
     <message>
-        <location filename="../src/settings/SettingsPage.ui" line="29"/>
+        <location filename="../src/settings/SettingsPage.ui" line="22"/>
+        <source>Result of a sale: what the Result box starts with</source>
+        <translation>Result of a sale: what the Result box starts with</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.ui" line="30"/>
+        <source>Spot sale</source>
+        <translation>Spot sale</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.ui" line="40"/>
+        <source>Card fill</source>
+        <translation>Card fill</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.ui" line="50"/>
+        <source>Card balance shown on</source>
+        <translation>Card balance shown on</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.ui" line="75"/>
         <source>Log out</source>
         <translation>Log out</translation>
     </message>
     <message>
-        <location filename="../src/settings/SettingsPage.cpp" line="27"/>
+        <location filename="../src/settings/SettingsPage.cpp" line="36"/>
+        <source>Automatic</source>
+        <translation>Automatic</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.cpp" line="37"/>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.cpp" line="39"/>
+        <source>Nozzle %1</source>
+        <translation>Nozzle %1</translation>
+    </message>
+    <message>
+        <location filename="../src/settings/SettingsPage.cpp" line="56"/>
         <source>Logged in as %1</source>
         <translation>Logged in as %1</translation>
     </message>
