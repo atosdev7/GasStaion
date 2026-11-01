@@ -80,8 +80,10 @@ webUser('wmgr', 'manager');
 webUser('wacc', 'accountant');
 webUser('wadm', 'admin');
 webUser('wast', 'assistant');
-$today = date('Y-m-d');
-$yesterday = date('Y-m-d', strtotime('-1 day'));
+// the terminal dates a record with the business day, which starts at business_day_start_hour: before that hour of the morning "today" is still the calendar day before
+$today = date('Y-m-d', time() - (int) config('backup.business_day_start_hour') * 3600);
+$yesterday = date('Y-m-d', strtotime($today . ' -1 day'));
+$calendarToday = date('Y-m-d'); // what the web app dates its own entries with (a reversal, a return)
 
 $acme = Customer::where('name', 'ACME')->value('id');
 $beta = Customer::where('name', 'Beta Ltd')->value('id');
@@ -188,7 +190,7 @@ $net = money(Debt::with('adjustments')->find($betaDebt->id)->net_amount - DebtPa
 ok($net < 0, 'the debt shows a credit (' . number_format(-$net, 2) . ')');
 $r = $acct->send('POST', '/payments/' . $over->id . '/reverse', ['note' => 'typed by mistake']);
 $rev = DebtPayment::where('reverses_payment_id', $over->id)->first();
-ok($rev && money($rev->amount) === -100.0 && substr((string) $rev->paid_date, 0, 10) === $today, 'the wrong payment is reversed by a line of -100.00 dated today');
+ok($rev && money($rev->amount) === -100.0 && substr((string) $rev->paid_date, 0, 10) === $calendarToday, 'the wrong payment is reversed by a line of -100.00 dated today');
 ok(money(DebtPayment::find($over->id)->amount) === 100.0 && DebtPayment::where('debt_id', $betaDebt->id)->count() === $before + 2, 'the wrong payment itself stays in the list');
 $r = $acct->send('POST', '/payments/' . $over->id . '/reverse');
 ok(DebtPayment::where('reverses_payment_id', $over->id)->count() === 1, 'it cannot be reversed twice');
@@ -225,7 +227,7 @@ if ($terminalTicketSale) {
     if ($spare) {
         $r = $acct->send('POST', '/ticket-sales/' . $terminalTicketSale->id . '/return', ['ticket_barcodes' => $spare]); // (the cashier's sale: the accountant works on every sale, the assistant only on his own)
         $late = Sale::where('reverses_sale_id', $terminalTicketSale->id)->first();
-        ok($late && $late->confirmed_at === null && money($late->total_amount) < 0 && substr((string) $late->sale_date, 0, 10) === $today, 'a return of a confirmed sale is a new entry dated today');
+        ok($late && $late->confirmed_at === null && money($late->total_amount) < 0 && substr((string) $late->sale_date, 0, 10) === $calendarToday, 'a return of a confirmed sale is a new entry dated today');
         ok(money(Sale::find($terminalTicketSale->id)->total_amount) === $before, 'the confirmed sale keeps its figures');
         if ($debtBefore !== null && $late && money($late->unpaid_amount) < 0) {
             // REVIEW A2: the return cuts the debt by a counter entry dated today, the debt keeps what the sale made
@@ -290,21 +292,21 @@ foreach ($pages as $path) {
     }
 }
 ok(!$bad, count($pages) . ' pages open without an error' . ($bad ? ': ' . implode(', ', $bad) : ''));
-$from = date('Y-m-01');
+$from = date('Y-m-01', strtotime($today));
 $bad = [];
 foreach (['sales', 'cash', 'profit', 'tickets', 'tanks', 'supply', 'ordering'] as $report) {
-    $p = $acct->get("/reports/$report?from=$from&to=$today");
-    $x = $acct->get("/reports/$report?from=$from&to=$today&export=xls");
+    $p = $acct->get("/reports/$report?from=$from&to=$calendarToday");
+    $x = $acct->get("/reports/$report?from=$from&to=$calendarToday&export=xls");
     if ($p['status'] !== 200 || $x['status'] !== 200 || strpos($x['headers'], 'spreadsheetml') === false) {
         $bad[] = $report . ' (' . $p['status'] . '/' . $x['status'] . ')';
     }
 }
-$p = $acct->get("/reports/customer?from=$from&to=$today&customer_id=$acme");
+$p = $acct->get("/reports/customer?from=$from&to=$calendarToday&customer_id=$acme");
 if ($p['status'] !== 200) {
     $bad[] = 'customer (' . $p['status'] . ')';
 }
 ok(!$bad, 'the 8 reports open, and 7 of them export to xlsx' . ($bad ? ': ' . implode(', ', $bad) : ''));
-$report = $acct->get("/reports/sales?from=$from&to=$today");
+$report = $acct->get("/reports/sales?from=$from&to=$calendarToday");
 $kgNet = money(Sale::sum('amount_kg'));
 $amountNet = money(Sale::sum('total_amount'));
 $reportText = preg_replace('/\s+/', ' ', strip_tags(preg_replace('/<script.*?<\/script>/s', '', $report['body'])));
