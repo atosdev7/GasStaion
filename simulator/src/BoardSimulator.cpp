@@ -4,6 +4,9 @@
 
 using namespace BoardProtocol;
 
+const quint32 BoardSimulator::MaxShownG;
+const int BoardSimulator::ShownMs;
+
 namespace {
 
 QByteArray u32(quint32 v)
@@ -95,6 +98,8 @@ QString BoardSimulator::commandName(int command)
         return "SET_TIME";
     case CmdGetTime:
         return "GET_TIME";
+    case CmdShowBalance:
+        return "SHOW_BALANCE";
     }
 
     return QString("0x%1").arg(command, 2, 16, QChar('0'));
@@ -269,6 +274,24 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
         } else {
             b.presetG = get32(f.data, 0);
             b.state = b.presetG == 0 ? StateIdle : StateArmed; // a preset of zero is the cancel: the nozzle is IDLE again
+            b.shownG = 0;                                      // the dispenser shows the preset now, not a balance
+            b.shownMsLeft = 0;
+            reply = ok(f, f.data);
+        }
+        break;
+    case CmdShowBalance:
+        // the dispenser shows the balance of a card; it arms nothing (no preset, still IDLE) and a gun taken up changes nothing
+        if (f.data.size() != 4) {
+            reply = nak(f, ErrBadLength);
+        } else if (b.state == StateFault) {
+            reply = nak(f, ErrFault);
+        } else if (manual || b.state != StateIdle) {
+            reply = nak(f, ErrWrongState);
+        } else if (get32(f.data, 0) > MaxShownG) {
+            reply = nak(f, ErrBadValue);
+        } else {
+            b.shownG = get32(f.data, 0);
+            b.shownMsLeft = b.shownG > 0 ? ShownMs : 0;
             reply = ok(f, f.data);
         }
         break;
@@ -496,6 +519,14 @@ void BoardSimulator::tick(int milliseconds)
         Board &b = boards_[all.at(i)];
         bool any = false;
 
+        if (b.shownMsLeft > 0) {
+            b.shownMsLeft -= milliseconds;
+            if (b.shownMsLeft <= 0) {
+                b.shownMsLeft = 0;
+                b.shownG = 0;           // the balance goes from the display by itself
+                any = true;
+            }
+        }
         if (b.silentMsLeft > 0) {
             b.silentMsLeft -= milliseconds;
             if (b.silentMsLeft <= 0) {
