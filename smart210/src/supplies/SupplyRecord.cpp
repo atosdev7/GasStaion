@@ -109,11 +109,10 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         density = (reading.dispensedX100 * 10000 + reading.litersX100 / 2) / reading.litersX100;
     }
 
-    if (reading.resultId > 0) {
+    if (reading.sessionId > 0) {
         QSqlQuery seen(db);
-        seen.prepare("SELECT id FROM supplements WHERE nozzle_id = ? AND board_result_id = ?");
-        seen.addBindValue(nozzleId);
-        seen.addBindValue(reading.resultId);
+        seen.prepare("SELECT id FROM supplements WHERE session_id = ?");       // the id is the terminal's own number, so it is the same fill or none
+        seen.addBindValue(reading.sessionId);
         if (seen.exec() && seen.next()) {
             db.rollback();
             Outcome outcome;
@@ -127,7 +126,12 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
     // The queue of a started fill goes with its result, if it still holds up. A fill paid with a card has no tickets: the card's balance falls
     // by what really came out (and no remainder is made: the card keeps what was not taken).
-    const SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    // The session of the nozzle is the one of this result only when the ids are the same (a result of another session, or of one the terminal lost, is saved without
+    // the queue and the session of the nozzle stays); a reading typed in has no id and takes the session of the nozzle.
+    SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    if (session.exists && reading.sessionId != 0 && session.sessionId != reading.sessionId) {
+        session = SupplyQueue::Session();
+    }
     const bool byCard = session.byCard();
     QList<SupplyQueue::Entry> queue = (session.exists && !byCard) ? SupplyQueue::entries(db, nozzleNumber) : QList<SupplyQueue::Entry>();
     qlonglong total = 0;
@@ -210,7 +214,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
     QSqlQuery supplement(db);
     supplement.prepare("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, density, mode, supplied_at, "
-                       "supply_date, synced, board_result_id, card_id, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '" + day + "', 0, ?, ?, ?)");
+                       "supply_date, synced, session_id, card_id, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '" + day + "', 0, ?, ?, ?)");
     supplement.addBindValue(outcome.supplementId);
     supplement.addBindValue(fuelType);
     supplement.addBindValue(nozzleId);
@@ -221,7 +225,7 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
     supplement.addBindValue(density > 0 ? QVariant(density) : QVariant(QVariant::LongLong));
     supplement.addBindValue(manualMode ? "manual" : "auto");
     supplement.addBindValue(when);
-    supplement.addBindValue(reading.resultId > 0 ? QVariant(reading.resultId) : QVariant(QVariant::Int));
+    supplement.addBindValue(reading.sessionId > 0 ? QVariant(reading.sessionId) : QVariant(QVariant::Int));
     supplement.addBindValue(byCard ? QVariant(session.cardId) : QVariant(QVariant::String));
     supplement.addBindValue(reading.comment.trimmed().isEmpty() ? QVariant(QVariant::String) : QVariant(reading.comment.trimmed().left(255)));
     bool ok = supplement.exec();

@@ -82,10 +82,10 @@ QByteArray presetData(quint32 presetG)
     return data;
 }
 
-QByteArray resultIdData(quint32 resultId)
+QByteArray sessionIdData(quint32 sessionId)
 {
     QByteArray data;
-    putU32(&data, resultId);
+    putU32(&data, sessionId);
 
     return data;
 }
@@ -112,7 +112,7 @@ bool parseStatus(const QByteArray &data, Status *status)
     status->state = quint8(data.at(0));
     status->flags = quint8(data.at(1));
     status->fault = quint8(data.at(2));
-    status->resultId = getU32(data, 3);
+    status->sessionId = getU32(data, 3);
     status->dispensedG = getU32(data, 7);
     status->dispensedMl = getU32(data, 11);
     status->presetG = getU32(data, 15);
@@ -125,7 +125,7 @@ bool parseResult(const QByteArray &data, Result *result)
     if (data.size() != 17) {
         return false;
     }
-    result->resultId = getU32(data, 0);
+    result->sessionId = getU32(data, 0);
     result->presetG = getU32(data, 4);
     result->dispensedG = getU32(data, 8);
     result->dispensedMl = getU32(data, 12);
@@ -192,12 +192,12 @@ bool parseTime(const QByteArray &data, QDateTime *time)
     return true;
 }
 
-bool parseResultId(const QByteArray &data, quint32 *resultId)
+bool parseSessionId(const QByteArray &data, quint32 *sessionId)
 {
     if (data.size() != 4) {
         return false;
     }
-    *resultId = getU32(data, 0);
+    *sessionId = getU32(data, 0);
 
     return true;
 }

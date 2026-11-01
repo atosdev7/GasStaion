@@ -1,6 +1,7 @@
 #include "SupplyQueue.h"
 
 #include "Barcode.h"
+#include "Settings.h"
 #include "TicketLegacy.h"
 #include "TicketNumbers.h"
 #include "TicketStatus.h"
@@ -217,13 +218,13 @@ SupplyQueue::Session SupplyQueue::session(QSqlDatabase db, int nozzle)
     Session session;
 
     QSqlQuery query(db);
-    query.prepare("SELECT preset_kg, result_id, started_at, card_id FROM supply_sessions WHERE nozzle_number = ?");
+    query.prepare("SELECT preset_kg, session_id, started_at, card_id FROM supply_sessions WHERE nozzle_number = ?");
     query.addBindValue(nozzle);
     if (query.exec() && query.next()) {
         session.exists = true;
         session.nozzle = nozzle;
         session.presetX100 = query.value(0).toLongLong();
-        session.resultId = query.value(1).toUInt();
+        session.sessionId = query.value(1).toUInt();
         session.startedAt = query.value(2).toString();
         session.cardId = query.value(3).toString(); // NULL gives an empty text
     }
@@ -231,25 +232,63 @@ SupplyQueue::Session SupplyQueue::session(QSqlDatabase db, int nozzle)
     return session;
 }
 
-bool SupplyQueue::begin(QSqlDatabase db, int nozzle, qlonglong presetX100, const QDateTime &now, const QString &cardId)
+quint32 SupplyQueue::begin(QSqlDatabase db, int nozzle, qlonglong presetX100, const QDateTime &now, const QString &cardId, quint32 adoptId)
 {
+    quint32 sessionId = adoptId;
+    if (sessionId == 0) {
+        // the next number: above the counter and above every session and supply this terminal holds (a lost counter cannot give a number twice)
+        Settings settings(db);
+        qlonglong highest = qMax(qlonglong(0), settings.value("supply_session_next").toLongLong() - 1);   // 0 is no session: the first id is 1
+        QSqlQuery top(db);
+        if (top.exec("SELECT MAX(m) FROM (SELECT MAX(session_id) AS m FROM supply_sessions UNION ALL SELECT MAX(session_id) FROM supplements)") && top.next() && !top.value(0).isNull()) {
+            highest = qMax(highest, top.value(0).toLongLong());
+        }
+        sessionId = quint32(highest + 1);
+        settings.setValue("supply_session_next", QString::number(qlonglong(sessionId) + 1));
+    }
+
     QSqlQuery query(db);
-    query.prepare("INSERT OR REPLACE INTO supply_sessions (nozzle_number, preset_kg, result_id, started_at, card_id) VALUES (?, ?, 0, ?, ?)");
+    query.prepare("INSERT OR REPLACE INTO supply_sessions (nozzle_number, preset_kg, session_id, started_at, card_id) VALUES (?, ?, ?, ?, ?)");
     query.addBindValue(nozzle);
     query.addBindValue(presetX100);
+    query.addBindValue(sessionId);
     query.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
     query.addBindValue(cardId.isEmpty() ? QVariant(QVariant::String) : QVariant(cardId));
 
-    return query.exec();
+    return query.exec() ? sessionId : 0;
 }
 
-void SupplyQueue::setResultId(QSqlDatabase db, int nozzle, quint32 resultId)
+QList<qlonglong> SupplyQueue::ticketsOfSession(QSqlDatabase db, quint32 sessionId)
 {
-    QSqlQuery query(db);
-    query.prepare("UPDATE supply_sessions SET result_id = ? WHERE nozzle_number = ?");
-    query.addBindValue(resultId);
-    query.addBindValue(nozzle);
-    query.exec();
+    QList<qlonglong> list;
+    if (sessionId == 0) {
+        return list;
+    }
+
+    // the fill runs (or waits for its result): the queue of the nozzle that holds the session
+    QSqlQuery live(db);
+    live.prepare("SELECT q.barcode FROM supply_queue q JOIN supply_sessions s ON s.nozzle_number = q.nozzle_number WHERE s.session_id = ? ORDER BY q.position, q.rowid");
+    live.addBindValue(sessionId);
+    if (live.exec()) {
+        while (live.next()) {
+            list << live.value(0).toLongLong();
+        }
+    }
+    if (!list.isEmpty()) {
+        return list;
+    }
+
+    // recorded: the tickets of the supply of that session
+    QSqlQuery done(db);
+    done.prepare("SELECT t.barcode FROM tickets t JOIN supplements p ON p.id = t.supplement_id WHERE p.session_id = ? ORDER BY t.barcode");
+    done.addBindValue(sessionId);
+    if (done.exec()) {
+        while (done.next()) {
+            list << done.value(0).toLongLong();
+        }
+    }
+
+    return list;
 }
 
 void SupplyQueue::release(QSqlDatabase db, int nozzle)

@@ -23,7 +23,7 @@ class BoardSimulator : public QObject
 public:
     struct Board {
         Board()
-            : state(0), flags(0), fault(0), gunUp(false), beeps(0), resultId(0), nextId(100), presetG(0), shownG(0), shownMsLeft(0), hookDownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
+            : state(0), flags(0), fault(0), gunUp(false), beeps(0), sessionId(0), presetG(0), shownG(0), shownMsLeft(0), hookDownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
               haveSeq(false), lastSeq(0), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
               silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true),
               clockOffsetSecs(QDateTime::currentDateTime().secsTo(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0))))
@@ -33,7 +33,8 @@ public:
         int state, flags, fault;
         bool gunUp;             // the gun is up (reported in POLL as GUN_UP, as long as it is)
         int beeps;              // how many times the board beeped (it is chosen by a SELECT for its address)
-        quint32 resultId, nextId, presetG, dispensedG, dispensedMl;
+        quint32 sessionId;      // the id of the fill, given by the Smart210 with START and kept with the result until ACK_RESULT; 0: none (a manual board starts by itself)
+        quint32 presetG, dispensedG, dispensedMl;
         quint32 shownG;         // the balance of a card the dispenser shows (SHOW_BALANCE), 0: none; it is not a preset
         int shownMsLeft;        // it goes after this long (the real board takes 60 seconds)
         int hookDownMsLeft;     // the gun was put down while the fill ran: the fill ends after this long (PROTOCOL.md: 3 seconds on its hook), 0: not counting
@@ -116,7 +117,7 @@ private:
     QByteArray execute(Board &b, const BoardProtocol::Frame &f);
     QByteArray nak(const BoardProtocol::Frame &f, int error) const;
     QByteArray ok(const BoardProtocol::Frame &f, const QByteArray &data = QByteArray()) const;
-    void startFill(Board &b);
+    void startFill(Board &b, quint32 sessionId);
     void endFill(Board &b, int reason);
     quint32 mlOf(const Board &b, quint32 grams) const;
 

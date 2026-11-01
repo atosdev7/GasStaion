@@ -31,12 +31,12 @@ public:
     };
 
     struct Session {
-        Session() : exists(false), nozzle(0), presetX100(0), resultId(0) {}
+        Session() : exists(false), nozzle(0), presetX100(0), sessionId(0) {}
 
         bool exists;
         int nozzle;
         qlonglong presetX100;
-        quint32 resultId;   // 0 while the board has not said which fill it is
+        quint32 sessionId;   // the id of the session, made by the terminal when it starts: sent with START, kept by the board with the result, sent back with ACK_RESULT
         QString startedAt;
         QString cardId;     // the fill is paid with this card (no tickets); empty for a fill of tickets
 
@@ -65,8 +65,12 @@ public:
 
     // The session of a nozzle (a fill started and not recorded yet).
     static Session session(QSqlDatabase db, int nozzle);
-    static bool begin(QSqlDatabase db, int nozzle, qlonglong presetX100, const QDateTime &now, const QString &cardId = QString());
-    static void setResultId(QSqlDatabase db, int nozzle, quint32 resultId);
+    // Starts the session of a nozzle (saved before START) and gives it its id: the next number, always above every session and supply of this terminal (the counter
+    // `supply_session_next` of the settings), or `adoptId` when the board is already running a fill with that id (the terminal lost its session). Returns the id, 0 when
+    // the session could not be saved.
+    static quint32 begin(QSqlDatabase db, int nozzle, qlonglong presetX100, const QDateTime &now, const QString &cardId = QString(), quint32 adoptId = 0);
+    // The tickets of a session: the queue of its nozzle while the fill runs, the tickets of its supply after it was recorded (the supply keeps the session id). Empty when none is known.
+    static QList<qlonglong> ticketsOfSession(QSqlDatabase db, quint32 sessionId);
     static void release(QSqlDatabase db, int nozzle); // the fill did not start: the session ends, the queue stays
     static void end(QSqlDatabase db, int nozzle);     // the session is over; the queue is cleared as well
 };

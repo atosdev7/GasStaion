@@ -61,11 +61,11 @@ struct Frame {
 
 // The answer to POLL: the status of the dispenser (state, gun and keys in flags, the preset, what was dispensed).
 struct Status {
-    Status() : state(StateIdle), flags(0), fault(0), resultId(0), dispensedG(0), dispensedMl(0), presetG(0) {}
+    Status() : state(StateIdle), flags(0), fault(0), sessionId(0), dispensedG(0), dispensedMl(0), presetG(0) {}
     int state;
     int flags;
     int fault;
-    quint32 resultId;
+    quint32 sessionId;
     quint32 dispensedG;
     quint32 dispensedMl;
     quint32 presetG;      // the preset of the board (typed at a manual dispenser, or set by the Smart210); 0 when none
@@ -73,8 +73,8 @@ struct Status {
 
 // The answer to GET_RESULT.
 struct Result {
-    Result() : resultId(0), presetG(0), dispensedG(0), dispensedMl(0), reason(0) {}
-    quint32 resultId;
+    Result() : sessionId(0), presetG(0), dispensedG(0), dispensedMl(0), reason(0) {}
+    quint32 sessionId;
     quint32 presetG;
     quint32 dispensedG;
     quint32 dispensedMl;
@@ -107,7 +107,7 @@ QByteArray build(int address, int seq, int command, const QByteArray &data = QBy
 
 // Data of the requests.
 QByteArray presetData(quint32 presetG);
-QByteArray resultIdData(quint32 resultId);
+QByteArray sessionIdData(quint32 sessionId);
 QByteArray configData(const BoardConfig &config);
 QByteArray timeData(const QDateTime &time); // SET_TIME: year (2 bytes), month, day, hour, minute, second of the station's local time
 
@@ -116,7 +116,7 @@ bool parseStatus(const QByteArray &data, Status *status);
 bool parseResult(const QByteArray &data, Result *result);
 bool parseInfo(const QByteArray &data, Info *info);
 bool parseBoardConfig(const QByteArray &data, BoardConfig *config);
-bool parseResultId(const QByteArray &data, quint32 *resultId);
+bool parseSessionId(const QByteArray &data, quint32 *sessionId);
 bool parseTime(const QByteArray &data, QDateTime *time); // false for a wrong length or a date or time that does not exist
 
 QString errorText(int error); // for the screen

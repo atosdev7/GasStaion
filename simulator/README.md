@@ -33,6 +33,8 @@ Six nozzle panels (boards 1 to 6, as configured on the Smart210). Each shows the
 
 Every board has a clock that the Smart210 sets with SET_TIME (a new board starts at 2000-01-01); the flag `supportsTime` of a board in the code makes it behave like an older v0.2 board that answers BAD_COMMAND.
 
+Every fill has a **session id**: the Smart210 sends it with START, the board keeps it with the fill and the result (the panel shows "Session 12: the result waits...") and takes it back in ACK_RESULT; the board has no counter of fills of its own. START without the id is refused with BAD_LENGTH, and with 0 with BAD_VALUE.
+
 The log lists every exchange (`Nozzle 1  <- SET_CONFIG  -> OK`); POLL is left out unless "Show POLL in the log" is on.
 
 Auto mode: the Smart210 selects the nozzle, sets the amount and starts (the select key makes the Smart210 select it too). Manual mode: the Smart210 sends none of that; the board refuses it with WRONG_STATE, and the fill is started by typing the amount here.

@@ -119,7 +119,7 @@ SET_TIME is accepted in every state and must not disturb a fill.
 ### POLL answer (19 bytes)
 
 ```
-state(1)  flags(1)  fault(1)  result_id(4)  dispensed_g(4)  dispensed_ml(4)  preset_g(4)
+state(1)  flags(1)  fault(1)  session_id(4)  dispensed_g(4)  dispensed_ml(4)  preset_g(4)
 ```
 
 | Field | Value |
@@ -127,7 +127,7 @@ state(1)  flags(1)  fault(1)  result_id(4)  dispensed_g(4)  dispensed_ml(4)  pre
 | `state` | 0 IDLE, 2 SET, 3 DISPENSING, 4 DONE, 5 FAULT (1 is not used) |
 | `flags` | bit0 SELECT_KEY (event), bit2 RESULT (level, state DONE), bit3 FAULT (level), bit4 CLEAR_KEY (event), bit5 GUN_UP (level); bit1 reserved, bits 6-7 free |
 | `fault` | 0 none, 1 flow sensor, 2 valve, 3 memory, 4 other |
-| `result_id` | the id of the fill while DISPENSING and DONE, else 0 |
+| `session_id` | the id of the fill while DISPENSING and DONE, else 0 |
 | `dispensed_g`, `dispensed_ml` | the fill in progress (0 when idle) |
 | `preset_g` | the preset in SET, DISPENSING and DONE, else 0 |
 
@@ -166,16 +166,16 @@ What changes the state, and what does not:
 
 ## 6. Fill control
 
-START: **fixed:** the board gives the fill a new `result_id` (a counter in flash that only grows, never 0) and starts; it never dispenses more than the preset.
+START: **fixed (2026-11-01):** START carries the `session_id` of the fill (4 bytes, made by the Smart210, never 0); the board keeps it with the fill and starts; it never dispenses more than the preset. The board has no counter of its own.
 
 ```mermaid
 flowchart TD
     A["START accepted in SET"] --> B["Config valid?<br/>density and pulses per litre above 0"]
     B -- no --> B1["NAK NOT_CONFIGURED"]
-    B -- yes --> C["result_id = next id, never 0<br/>store it in flash first"]
+    B -- yes --> C["session_id = the id in START (never 0)<br/>store it in flash first"]
     C --> D["Target pulses from the preset<br/>(section 7)<br/>Clear the pulse counter<br/>Start the no-flow timer"]
     D --> E["Store a record in flash:<br/>DISPENSING, id, preset, 0 pulses"]
-    E --> F["Open the valve<br/>state DISPENSING<br/>answer START with result_id"]
+    E --> F["Open the valve<br/>state DISPENSING<br/>answer START with session_id"]
     F --> G{"Every tick:<br/>pulses so far"}
     G --> H["dispensed_g and dispensed_ml<br/>from the pulses (section 7)"]
     H --> I{"Pulses reached the target,<br/>less the closing lead?"}
@@ -197,7 +197,7 @@ Points the protocol leaves to the firmware (*proposed*):
 
 - **Closing lead.** The valve closes a moment after the command and a few more pulses pass. To keep "never more than the preset", close the valve early by a lead worked out from the flow rate and the valve closing time, and let the last pulses settle before the result is made. If the dispensed weight still ends above the preset by a pulse or two, report what was really dispensed (the Smart210 handles the difference with its tolerance); never hide it.
 - **No-flow time** (default 30 s, a config value in the future): the timer restarts at every pulse. The gun put down in the middle of a fill stops the flow and so ends the fill with reason 1 this way. Tell us if the dispenser does something else with the hook.
-- **Progress in flash.** The fill in progress must survive a power cut as a result with reason 2. Store `result_id`, the preset and the pulses so far every N pulses or every 2 s. Wear against lost grams is your call (open point 2). The battery backed SRAM of the STM32F407 is an option that needs no flash write at all.
+- **Progress in flash.** The fill in progress must survive a power cut as a result with reason 2. Store `session_id`, the preset and the pulses so far every N pulses or every 2 s. Wear against lost grams is your call (open point 2). The battery backed SRAM of the STM32F407 is an option that needs no flash write at all.
 - **Result held until ACK_RESULT**, also after a power cut. ACK_RESULT with the id of the result frees it; with an id it already acknowledged it answers OK and does nothing.
 
 ## 7. The arithmetic
@@ -262,7 +262,7 @@ stateDiagram-v2
 ```
 
 - POLL reports the state, the gun (GUN_UP), `preset_g` (in SET and DISPENSING) and the amount so far, so that the Sessions and Dispensers screens of the Smart210 can show the dispenser.
-- The fill control of section 6 runs the same way (valve, pulses, stop rules), but when it ends there is no result: the state goes to IDLE, the preset is cleared. Nothing is stored for the Smart210 and no `result_id` is given.
+- The fill control of section 6 runs the same way (valve, pulses, stop rules), but when it ends there is no result: the state goes to IDLE, the preset is cleared. Nothing is stored for the Smart210 and no `session_id` is given.
 - The protocol says `dispensed_g` and `dispensed_ml` are 0 when idle. (The simulator keeps the last fill's numbers in manual mode until the next one starts; the terminal accepts both.)
 - A power cut in a manual fill: the board is IDLE after the restart; nothing is reported.
 - The mode changes only with SET_CONFIG, in IDLE, from the Smart210's Machine Config.
@@ -290,9 +290,9 @@ sequenceDiagram
     S->>B: POLL
     B-->>S: SET, flag GUN_UP
     S->>B: START
-    Note over B: result_id stored, record in flash, valve open, state DISPENSING
+    Note over B: session_id (from START) stored, record in flash, valve open, state DISPENSING
     B->>H: valve open
-    B-->>S: result_id
+    B-->>S: session_id
     loop every 100-200 ms
         S->>B: POLL
         B-->>S: DISPENSING, grams and ml so far, preset

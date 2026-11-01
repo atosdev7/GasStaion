@@ -11,7 +11,7 @@ Please confirm each line (or say what you want instead). The Smart210 app, the t
 | # | Change | Board side | Where |
 |---|---|---|---|
 | 1 | **Four states**: IDLE (0), SET (2, was ARMED), DISPENSING (3), DONE (4, was RESULT); value 1 (SELECTED) is not used; FAULT (5) stays | no "selected" state | section 4 |
-| 2 | **POLL answer has `preset_g`** (19 bytes): state, flags, fault, result_id, dispensed_g, dispensed_ml, preset_g | add 4 bytes | section 5, example in 7 |
+| 2 | **POLL answer has `preset_g`** (19 bytes): state, flags, fault, session_id, dispensed_g, dispensed_ml, preset_g | add 4 bytes | section 5, example in 7 |
 | 3 | **GUN_UP**, POLL flag bit5, a level: set as long as the gun is up | read the hook sensor | section 5 |
 | 4 | **The board never starts a fill by itself in auto mode**: the gun is reported, the Smart210 sends START (when tickets are queued and the preset is on the board) | START as before; no start by the gun | section 6 |
 | 5 | **Keys only report**: SELECT_KEY (bit0) and CLEAR_KEY (bit4) are events raised once in the next POLL answer, the state does not change; bit1 is reserved | no state change on a key | section 5 |
@@ -21,6 +21,7 @@ Please confirm each line (or say what you want instead). The Smart210 app, the t
 | 9 | **Manual mode**: the board only answers POLL, SET_TIME / GET_TIME and the config commands (GET_CONFIG, SET_CONFIG, INFO); the supplier types the preset on the dispenser, takes the gun up, and the board runs and ends the fill by itself; it reports **no keys**, **no end of a fill**, holds **no result** (back to IDLE); SELECT, SET_PRESET, START refused with WRONG_STATE | simplify | section 5 (Modes) |
 | 10 | **INFO answers `protocol` = 4** | one number | section 5 |
 | 11 | **SHOW_BALANCE (0x0E), new on 2026-11-01**: the Smart210 asks the dispenser to show a number, the balance of a customer's card, so that the customer can confirm it before a fill with a card; it arms nothing (no preset, state stays IDLE) | one command and its display | section 5 |
+| 12 | **Session id, new on 2026-11-01**: START carries a `session_id` (4 bytes, made by the Smart210); the board keeps it in flash with the fill and its result and sends it back as the `session_id` of POLL (while a fill runs or a result is held), of GET_RESULT and of the START and ACK_RESULT answers. The board **no longer has a counter of fills**: what was `result_id` is the Smart210's `session_id` | START data (4 bytes) kept with the result; no counter in flash | section 5 |
 
 Behaviour to check on the bench: (a) scan, preset on the display, gun up, START, fill to the preset, result, ACK; (b) the clear key and then the gun up with an empty queue: no START, preset zero, IDLE; (c) the select key of another nozzle: the first nozzle gives its preset back (the Smart210 sends SET_PRESET 0); (d) a manual board: preset typed, gun up, fill, nothing reported afterwards, the Smart210 sends it nothing but POLL and SET_TIME.
 
@@ -107,21 +108,21 @@ sequenceDiagram
     Note right of B: the supplier takes the gun up: the board reports GUN_UP in its POLL answers
     S->>B: POLL
     B-->>S: flag GUN_UP, state SET
-    S->>B: START (tickets are queued, the preset is on the board)
-    B-->>S: result_id of the new fill
+    S->>B: START with the session_id (tickets are queued, the preset is on the board)
+    B-->>S: session_id of the new fill
     loop every 100-200 ms
         S->>B: POLL
-        B-->>S: DISPENSING, result_id, grams and ml so far
+        B-->>S: DISPENSING, session_id, grams and ml so far
     end
     Note left of S: DISPENSING seen: the session is saved, the queue is locked
     S->>B: POLL
     B-->>S: flag RESULT (the fill ended)
     Note right of B: RESULT
     S->>B: GET_RESULT
-    B-->>S: result_id, preset, dispensed g and ml, reason
+    B-->>S: session_id, preset, dispensed g and ml, reason
     Note left of S: the supplement is saved first
-    S->>B: ACK_RESULT (result_id)
-    B-->>S: result_id (the board forgets the result)
+    S->>B: ACK_RESULT (session_id)
+    B-->>S: session_id (the board forgets the result)
     Note right of B: IDLE
 ```
 
@@ -132,12 +133,12 @@ The fill stops by itself when the preset is reached, when the tank is full or wh
 | Code | Name | Request DATA | Answer DATA |
 |---|---|---|---|
 | 0x01 | INFO | - | `protocol`(1) = 4, `fw_major`(1), `fw_minor`(1), `serial`(4) |
-| 0x02 | POLL | - | `state`(1), `flags`(1), `fault`(1), `result_id`(4), `dispensed_g`(4), `dispensed_ml`(4), `preset_g`(4) (v0.4: 19 bytes; the status of the dispenser: state, gun and keys in `flags`, the preset, the amount dispensed) |
+| 0x02 | POLL | - | `state`(1), `flags`(1), `fault`(1), `session_id`(4), `dispensed_g`(4), `dispensed_ml`(4), `preset_g`(4) (v0.4: 19 bytes; the status of the dispenser: state, gun and keys in `flags`, the preset, the amount dispensed) |
 | 0x03 | SELECT | - | empty (v0.4: the board beeps; its state does not change) |
 | 0x05 | SET_PRESET | `preset_g`(4) | same as the request |
-| 0x06 | START | - | `result_id`(4) |
-| 0x08 | GET_RESULT | - | `result_id`(4), `preset_g`(4), `dispensed_g`(4), `dispensed_ml`(4), `reason`(1) |
-| 0x09 | ACK_RESULT | `result_id`(4) | `result_id`(4) |
+| 0x06 | START | `session_id`(4) | `session_id`(4) |
+| 0x08 | GET_RESULT | - | `session_id`(4), `preset_g`(4), `dispensed_g`(4), `dispensed_ml`(4), `reason`(1) |
+| 0x09 | ACK_RESULT | `session_id`(4) | `session_id`(4) |
 | 0x0A | GET_CONFIG | - | the config: `mode`(1), `fuel_type`(4), `density`(2), `pulses_per_litre`(4) |
 | 0x0B | SET_CONFIG | the config (same 11 bytes) | the config as stored |
 | 0x0C | SET_TIME | `year`(2), `month`(1), `day`(1), `hour`(1), `minute`(1), `second`(1) | same as the request (the time now stored) |
@@ -147,10 +148,10 @@ The fill stops by itself when the preset is reached, when the tank is full or wh
 
 Details:
 
-- **POLL** `flags`: bit0 SELECT_KEY (the supplier pressed the select key of the dispenser), bit1 reserved (was DESELECT_KEY), bit2 RESULT (a result is waiting; same as state 4), bit3 FAULT (same as state 5), bit4 CLEAR_KEY (v0.4: the supplier pressed the clear key of the dispenser). Bits 0, 1 and 4 are events: the board raises them once, in the answer to the next POLL, and clears them when that answer has been sent (a repeated POLL with the same `SEQ` gets the same flags again). Bits 2-3 are levels. `fault`: 0 none, 1 flow sensor, 2 valve, 3 memory, 4 other. `result_id` is 0 unless a fill runs (the id of that fill) or a result waits. `dispensed_g` and `dispensed_ml` count the fill in progress (0 when idle).
+- **POLL** `flags`: bit0 SELECT_KEY (the supplier pressed the select key of the dispenser), bit1 reserved (was DESELECT_KEY), bit2 RESULT (a result is waiting; same as state 4), bit3 FAULT (same as state 5), bit4 CLEAR_KEY (v0.4: the supplier pressed the clear key of the dispenser). Bits 0, 1 and 4 are events: the board raises them once, in the answer to the next POLL, and clears them when that answer has been sent (a repeated POLL with the same `SEQ` gets the same flags again). Bits 2-3 are levels. `fault`: 0 none, 1 flow sensor, 2 valve, 3 memory, 4 other. `session_id` is 0 unless a fill runs (the id of that fill) or a result waits. `dispensed_g` and `dispensed_ml` count the fill in progress (0 when idle).
 - **Select key and the SELECT command (v0.4).** The nozzle board has the states IDLE, SET, DISPENSING and DONE; it has **no selected state**. The key of the dispenser does not change the state: when the supplier presses it the board only reports the key code in its next POLL answer (SELECT_KEY, CLEAR_KEY, ...). When the Smart210 gets a select key event it makes that nozzle the current one in **its own state** (one nozzle at a time: the one chosen last) and sends the **SELECT command** to that board's address. The board **beeps** for the selection and nothing else happens: its status is not updated, and its next POLL answer reports the same state as before. Pressing the select key of the current nozzle again lets it go in the Smart210 (no command). The tickets the supplier scans go to the queue of the current nozzle, and the Smart210 sets the preset on that board (SET_PRESET).
 - **SET_PRESET** (IDLE or SET): a preset of 0 is the cancel (see below), the state is IDLE. Otherwise `preset_g` is the weight to dispense in grams (1 kg = 1000, max 4 294 967 295). The board turns it into the pulse count it must reach with its own config: `litres = preset_g x 10 / density` (15000 g at density 5400 is 27.78 L), `pulses = litres x pulses_per_litre / 100`. Sending it again replaces the old preset. State becomes ARMED.
-- **START** (ARMED): the board gives the fill a new `result_id` (a counter in flash that only grows, never 0) and starts. A START repeated in DISPENSING with the same `SEQ` gets the same answer; with a new `SEQ` it is refused (WRONG_STATE).
+- **START** (SET): the request carries the `session_id` of the fill (4 bytes, made by the Smart210, never 0: BAD_VALUE; any other length is BAD_LENGTH). The board **keeps it in flash with the fill and its result** and starts; the answer repeats it. The board has no counter of its own for fills: the id is the Smart210's. A START repeated in DISPENSING with the same `SEQ` gets the same answer; with a new `SEQ` it is refused (WRONG_STATE).
 - **There is no CANCEL command (v0.4).** A preset of zero is the cancel: SET_PRESET with `preset_g` = 0 in IDLE or SET drops the preset and the state is IDLE. In DISPENSING it is refused (WRONG_STATE). Use the dispenser's own emergency stop for an emergency.
 - **GET_RESULT** (RESULT only): `dispensed_g` is the weight the board calculated from the pulses and the density; `dispensed_ml` is the volume. `reason`: 0 preset reached, 1 tank full or no flow, 2 interrupted (power cut or reset), 3 fault.
 - **ACK_RESULT**: the board forgets the result and goes to IDLE. The id must be the one it holds; for an id it already acknowledged it answers OK without doing anything (so a lost answer can be repeated). The Smart210 sends it only after the result is saved in its own database.
@@ -179,14 +180,14 @@ Details:
 | 4 | BAD_VALUE | A value out of range |
 | 5 | NOT_CONFIGURED | START with `density` or `pulses_per_litre` still 0 |
 | 6 | NO_RESULT | GET_RESULT / ACK_RESULT with nothing waiting |
-| 7 | ID_MISMATCH | ACK_RESULT with another `result_id` than the one held |
+| 7 | ID_MISMATCH | ACK_RESULT with another `session_id` than the one held (the id the fill was started with) |
 | 8 | FAULT | The board is in FAULT |
 
 ## 6. What the Smart210 does with it
 
 - The nozzles are the boards 1 to N (N is a constant in the program, 6 for now): nozzle number = board address. The Smart210 asks each board that answers for its config (GET_CONFIG) and keeps what it reports as the nozzle's settings. Machine Config shows every nozzle with its status and config. A change made there is sent to the board (SET_CONFIG); the boards' clocks are kept right with SET_TIME (section 5, Time); the answer, and a GET_CONFIG after it, bring back what the board stored and that is what the Smart210 keeps. Machine Config also stores the port the Smart210 listens on for the converter, and the tank of each nozzle (the board does not know tanks).
-- A supply session is saved locally (queue of tickets, preset, nozzle) before START. The `result_id` from START is stored with the session. When a result is read (GET_RESULT) the supplement is saved first, with that `result_id` as the guard against double recording, and only then ACK_RESULT is sent. After a crash or reconnect the Smart210 polls, sees state RESULT or a running fill and carries on with the saved session.
-- **The supplier works at the dispenser (v0.4).** The Smart210 does not start anything by itself. The supplier presses the select key of a nozzle: the board reports it (SELECT_KEY), the Smart210 makes the nozzle the current one and sends SELECT (the board beeps; see "Select key" in section 5). The supplier scans the tickets; after every change of the queue the Smart210 sends SET_PRESET with the queue's total to the current nozzle (state IDLE or SET; the board's display shows it). When the supplier takes the gun up the board only reports it (GUN_UP in POLL). The Smart210 checks: with tickets queued and their preset on the board (SET) it saves the session (queue, preset) and sends START (the answer carries the `result_id`), and the queue is locked; if the queue was cleared it sends no START and sets the preset to zero. The clear key of the dispenser is reported (CLEAR_KEY); the Smart210 drops the queue and, when the board is SET, sends SET_PRESET with zero so that the board forgets its preset (IDLE) (not once the fill runs). A fill paid with a card is started the same way by the Smart210 (SET_PRESET, then START).
+- A supply session is saved locally (queue of tickets, preset, nozzle) before START. The id of the session (a number the Smart210 makes, each one above the one before) is saved with it and sent to the board with START; the board keeps it with the fill, reports it in POLL while the fill runs or a result is held, in GET_RESULT and in the answer of ACK_RESULT. When a result is read (GET_RESULT) the supplement is saved first, with that `session_id` (a result whose id is not the one of the nozzle's saved session is saved without the queue, and a second result with an id that is already recorded is the same fill), and only then ACK_RESULT is sent with the same id. After a crash or reconnect the Smart210 polls, sees state RESULT or a running fill and carries on with the saved session.
+- **The supplier works at the dispenser (v0.4).** The Smart210 does not start anything by itself. The supplier presses the select key of a nozzle: the board reports it (SELECT_KEY), the Smart210 makes the nozzle the current one and sends SELECT (the board beeps; see "Select key" in section 5). The supplier scans the tickets; after every change of the queue the Smart210 sends SET_PRESET with the queue's total to the current nozzle (state IDLE or SET; the board's display shows it). When the supplier takes the gun up the board only reports it (GUN_UP in POLL). The Smart210 checks: with tickets queued and their preset on the board (SET) it saves the session (queue, preset) and sends START (the answer carries the `session_id`), and the queue is locked; if the queue was cleared it sends no START and sets the preset to zero. The clear key of the dispenser is reported (CLEAR_KEY); the Smart210 drops the queue and, when the board is SET, sends SET_PRESET with zero so that the board forgets its preset (IDLE) (not once the fill runs). A fill paid with a card is started the same way by the Smart210 (SET_PRESET, then START).
 - If a board cannot be read at all (not answering, fault) after a fill that was started from the app, the cashier types the reading in on the Manual input screen; that supplement is marked `manual` and takes the tickets (or the card) of the started fill.
 - In manual mode (see Modes) the Smart210 only polls the board (the Sessions and Dispensers screens show its status, preset and dispensed amount) and records nothing. The cashier types the supply in on the Manual input screen with its tickets, which must cover the dispensed weight and may exceed it by 0.05 kg at most (the tolerance only ever favours the station), so a manual supply has no remainder. An auto fill that stops early (`reason` 1, 2 or 3) gives a remainder ticket for the tickets' weight minus `dispensed_g`; at `reason` 0 a rest of 0.05 kg or less is ignored.
 
@@ -198,7 +199,7 @@ Board 1, `SEQ` 5, POLL request:
 02 01 05 02 00 10 B9
 ```
 
-Answer: DISPENSING, no flags, no fault, `result_id` 42, 12500 g so far, 23148 ml so far, preset 15000 g:
+Answer: DISPENSING, no flags, no fault, `session_id` 42, 12500 g so far, 23148 ml so far, preset 15000 g:
 
 ```
 02 01 05 82 13 03 00 00 2A 00 00 00 D4 30 00 00 6C 5A 00 00 98 3A 00 00 CC 8D

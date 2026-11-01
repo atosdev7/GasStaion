@@ -193,9 +193,9 @@ QByteArray BoardSimulator::answer(const Frame &request)
     return result;
 }
 
-void BoardSimulator::startFill(Board &b)
+void BoardSimulator::startFill(Board &b, quint32 sessionId)
 {
-    b.resultId = ++b.nextId;
+    b.sessionId = sessionId;
     b.dispensedG = 0;
     b.dispensedMl = 0;
     b.accumulated = 0;
@@ -228,7 +228,7 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
         d.append(char(b.state));
         d.append(char((b.flags & (FlagSelectKey | FlagDeselectKey | FlagClearKey)) | levels));
         d.append(char(b.fault));
-        d.append(u32((b.state == StateDispensing || b.state == StateResult) ? b.resultId : 0));
+        d.append(u32((b.state == StateDispensing || b.state == StateResult) ? b.sessionId : 0));
         d.append(u32(b.dispensedG));
         d.append(u32(b.dispensedMl));
         d.append(u32((b.state == StateArmed || b.state == StateDispensing || b.state == StateResult) ? b.presetG : 0));
@@ -302,16 +302,20 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
             reply = nak(f, ErrFault);
         } else if (manual || b.state != StateArmed) {
             reply = nak(f, ErrWrongState);
+        } else if (f.data.size() != 4) {
+            reply = nak(f, ErrBadLength);       // START carries the id of the session
+        } else if (get32(f.data, 0) == 0) {
+            reply = nak(f, ErrBadValue);        // 0 is no session
         } else {
-            startFill(b);
-            reply = ok(f, u32(b.resultId));
+            startFill(b, get32(f.data, 0));
+            reply = ok(f, u32(b.sessionId));
         }
         break;
     case CmdGetResult:
         if (b.state != StateResult) {
             reply = nak(f, ErrNoResult);
         } else {
-            QByteArray d = u32(b.resultId) + u32(b.presetG) + u32(b.dispensedG) + u32(b.dispensedMl);
+            QByteArray d = u32(b.sessionId) + u32(b.presetG) + u32(b.dispensedG) + u32(b.dispensedMl);
             d.append(char(b.reason));
             reply = ok(f, d);
         }
@@ -321,7 +325,7 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
             reply = nak(f, ErrBadLength);
         } else {
             const quint32 id = get32(f.data, 0);
-            if (b.state == StateResult && id == b.resultId) {
+            if (b.state == StateResult && id == b.sessionId) {
                 b.lastAckedId = id;
                 b.state = b.fault != 0 ? StateFault : StateIdle;
                 b.dispensedG = 0;
@@ -419,7 +423,7 @@ bool BoardSimulator::liftGun(int address)
         // a manual board is not worked by the Smart210: with the preset typed at its keyboard it starts by itself when the gun is taken up
         b.gunUp = true;
         if (b.state == StateArmed && b.config.pulsesX100 != 0 && b.config.density != 0) {
-            startFill(b);
+            startFill(b, 0);   // a manual board runs its own fill: no session, no result is held
         }
         emit changed(address);
 
@@ -574,7 +578,6 @@ void BoardSimulator::save(QSettings &settings) const
         settings.setValue(key + "fuel", it.value().config.fuelType);
         settings.setValue(key + "density", int(it.value().config.density));
         settings.setValue(key + "pulses", it.value().config.pulsesX100);
-        settings.setValue(key + "nextId", it.value().nextId);
         settings.setValue(key + "flow", it.value().flowGramsPerSecond);
     }
 }
@@ -590,7 +593,6 @@ void BoardSimulator::load(QSettings &settings)
         it.value().config.fuelType = settings.value(key + "fuel").toString();
         it.value().config.density = quint16(settings.value(key + "density").toInt());
         it.value().config.pulsesX100 = settings.value(key + "pulses").toUInt();
-        it.value().nextId = settings.value(key + "nextId", 100).toUInt();
         it.value().flowGramsPerSecond = settings.value(key + "flow", 500).toInt();
         emit changed(it.key());
     }

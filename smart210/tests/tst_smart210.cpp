@@ -332,6 +332,10 @@ private slots:
     void anAutoFillTakesItsTicketsAndTheRestBecomesARemainder();
     void aFillThatReachedItsPresetLeavesNoRemainder();
     void aResultIsRecordedOnce();
+    void theSessionIdsAreTheNextNumberAndNeverGoBack();
+    void aResultOfAnotherSessionDoesNotTakeTheQueueOfTheNozzle();
+    void theTicketsOfASessionAreFoundWhileItRunsAndAfterItWasRecorded();
+    void aBoardThatCountsFromTheStartAgainIsNotTakenForADuplicate();
     void aSupplyTypedInNeedsTicketsThatCoverItAndAStartedFillUsesItsOwn();
     void theManualInputPageKeepsTheKgAndTheRemainderTogether();
     void theLitresOfAManualSupplyAreWorkedOutAndItsTimeIsLimited();
@@ -3505,7 +3509,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 12);                                  // the program still opens it
+    QCOMPARE(Migrator::version(db), 13);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -6167,7 +6171,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 12);
+    QCOMPARE(Migrator::version(db), 13);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -6455,12 +6459,12 @@ void Smart210Test::theDataOfTheCommandsRoundTrips()
 {
     using namespace BoardProtocol;
     QCOMPARE(hexOf(presetData(15000)), QByteArray("983a0000"));
-    QCOMPARE(hexOf(resultIdData(0x01020304)), QByteArray("04030201"));
+    QCOMPARE(hexOf(sessionIdData(0x01020304)), QByteArray("04030201"));
 
     Status status;
     QVERIFY(parseStatus(QByteArray::fromHex("0300002a000000d43000006c5a0000983a0000"), &status));
     QCOMPARE(status.state, int(StateDispensing));
-    QCOMPARE(status.resultId, quint32(42));
+    QCOMPARE(status.sessionId, quint32(42));
     QCOMPARE(status.dispensedG, quint32(12500));
     QCOMPARE(status.dispensedMl, quint32(23148));
     QCOMPARE(status.presetG, quint32(15000));
@@ -6468,7 +6472,7 @@ void Smart210Test::theDataOfTheCommandsRoundTrips()
 
     Result result;
     QVERIFY(parseResult(QByteArray::fromHex("2a000000983a0000d43000006c5a000001"), &result));
-    QCOMPARE(result.resultId, quint32(42));
+    QCOMPARE(result.sessionId, quint32(42));
     QCOMPARE(result.presetG, quint32(15000));
     QCOMPARE(result.dispensedG, quint32(12500));
     QCOMPARE(result.reason, 1);
@@ -6578,14 +6582,15 @@ void Smart210Test::aLostAnswerCostsOneRoundAndTheCommandRunsOnce()
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 3000);
 
     boards.board(1).dropCommandOnce = BoardProtocol::CmdStart; // the board starts, but the answer never arrives
-    QVERIFY(bus.startFill(1));
+    QVERIFY(bus.startFill(1, 77));                                // the id of the session goes with START
 
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 3, 3000);
     QCOMPARE(failed.size(), 0);
     QCOMPARE(done.at(2).at(1).toInt(), int(BoardProtocol::CmdStart));
     quint32 id = 0;
-    QVERIFY(BoardProtocol::parseResultId(done.at(2).at(2).toByteArray(), &id));
-    QCOMPARE(id, boards.board(1).resultId);
+    QVERIFY(BoardProtocol::parseSessionId(done.at(2).at(2).toByteArray(), &id));
+    QCOMPARE(id, boards.board(1).sessionId);
+    QCOMPARE(id, quint32(77));                                    // the board keeps the id it was given
     QCOMPARE(boards.board(1).commands, QList<int>() << int(BoardProtocol::CmdSelect) << int(BoardProtocol::CmdSetPreset) << int(BoardProtocol::CmdStart));
     QVERIFY(bus.isOnline(1));
     // the START went out twice with the same SEQ
@@ -6724,7 +6729,7 @@ void Smart210Test::aNakIsReportedWithItsError()
     QVERIFY(startBus(&bus, &boards));
     QTRY_VERIFY_WITH_TIMEOUT(bus.isOnline(1), 3000);
 
-    QVERIFY(bus.startFill(1)); // nothing is armed
+    QVERIFY(bus.startFill(1, 5)); // nothing is armed
 
     QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 3000);
     QCOMPARE(failed.at(0).at(0).toInt(), 1);
@@ -6753,13 +6758,13 @@ void Smart210Test::aFillRunsFromPresetToTheAcknowledgedResult()
     QVERIFY(bus.setPreset(1, 15000));
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 3000);
     QCOMPARE(boards.board(1).presetG, quint32(15000));
-    QVERIFY(bus.startFill(1));
+    QVERIFY(bus.startFill(1, 321));
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 3, 3000);
     quint32 id = 0;
-    QVERIFY(BoardProtocol::parseResultId(done.at(2).at(2).toByteArray(), &id));
-    QVERIFY(id != 0);
+    QVERIFY(BoardProtocol::parseSessionId(done.at(2).at(2).toByteArray(), &id));
+    QCOMPARE(id, quint32(321));
     QTRY_COMPARE_WITH_TIMEOUT(bus.lastStatus(1).state, int(BoardProtocol::StateDispensing), 3000);
-    QCOMPARE(bus.lastStatus(1).resultId, id);
+    QCOMPARE(bus.lastStatus(1).sessionId, id);
     QVERIFY(bus.setPreset(1, 0)); // a fill cannot be stopped from here (a preset of zero is the cancel)
     QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 3000);
     QCOMPARE(failed.at(0).at(2).toInt(), int(BoardProtocol::ErrWrongState));
@@ -6772,7 +6777,7 @@ void Smart210Test::aFillRunsFromPresetToTheAcknowledgedResult()
     QTRY_VERIFY_WITH_TIMEOUT(done.size() >= 4 && done.at(3).at(1).toInt() == int(BoardProtocol::CmdGetResult), 3000);
     BoardProtocol::Result result;
     QVERIFY(BoardProtocol::parseResult(done.at(3).at(2).toByteArray(), &result));
-    QCOMPARE(result.resultId, id);
+    QCOMPARE(result.sessionId, id);
     QCOMPARE(result.presetG, quint32(15000));
     QCOMPARE(result.dispensedG, quint32(14980));
     QCOMPARE(result.dispensedMl, quint32(27740));
@@ -7272,7 +7277,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 12);
+    QCOMPARE(all.size(), 13);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -8268,7 +8273,7 @@ void Smart210Test::pulsesPerLitreAreReadAndWrittenAsAConfig()
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 4, 3000);
     QVERIFY(bus.setPreset(2, 5000));
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 5, 3000);
-    QVERIFY(bus.startFill(2));
+    QVERIFY(bus.startFill(2, 9));
     QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 2, 3000);
     QCOMPARE(failed.at(1).at(2).toInt(), int(BoardProtocol::ErrNotConfigured));
 }
@@ -8314,9 +8319,12 @@ void Smart210Test::theSimulatorRunsAnAutoFillOverTimeAndHoldsTheResult()
 
     QCOMPARE(int(ask(sim, 1, CmdSelect).command), int(CmdSelect | AnswerFlag));
     ask(sim, 1, CmdSetPreset, presetData(3000));
-    const Frame started = ask(sim, 1, CmdStart);
+    QCOMPARE(int(ask(sim, 1, CmdStart).command), int(NakCommand));                         // START carries the id of the session
+    QCOMPARE(int(ask(sim, 1, CmdStart, sessionIdData(0)).command), int(NakCommand));      // and 0 is no session
+    const Frame started = ask(sim, 1, CmdStart, sessionIdData(4242));
     quint32 id = 0;
-    QVERIFY(parseResultId(started.data, &id));
+    QVERIFY(parseSessionId(started.data, &id));
+    QCOMPARE(id, quint32(4242));
     QCOMPARE(pollOf(sim, 1).state, int(StateDispensing));
 
     sim.tick(2000); // 1000 g at 500 g/s
@@ -8333,12 +8341,12 @@ void Smart210Test::theSimulatorRunsAnAutoFillOverTimeAndHoldsTheResult()
 
     Result result;
     QVERIFY(parseResult(ask(sim, 1, CmdGetResult).data, &result));
-    QCOMPARE(result.resultId, id);
+    QCOMPARE(result.sessionId, id);
     QCOMPARE(result.presetG, quint32(3000));
     QCOMPARE(result.dispensedG, quint32(3000));
     QCOMPARE(result.reason, int(ReasonPresetReached));
 
-    QCOMPARE(int(ask(sim, 1, CmdAckResult, resultIdData(id)).command), int(CmdAckResult | AnswerFlag));
+    QCOMPARE(int(ask(sim, 1, CmdAckResult, sessionIdData(id)).command), int(CmdAckResult | AnswerFlag));
     QCOMPARE(pollOf(sim, 1).state, int(StateIdle));
 }
 
@@ -8353,7 +8361,7 @@ void Smart210Test::inManualModeTheAmountIsTypedAtTheDispenser()
     // the Smart210 cannot select, set an amount or start in manual mode
     QCOMPARE(int(ask(sim, 2, CmdSelect).command), int(NakCommand));
     QCOMPARE(int(ask(sim, 2, CmdSetPreset, presetData(5000)).command), int(NakCommand));
-    const Frame refused = ask(sim, 2, CmdStart);
+    const Frame refused = ask(sim, 2, CmdStart, sessionIdData(1));
     QCOMPARE(int(refused.command), int(NakCommand));
     QCOMPARE(int(quint8(refused.data.at(0))), int(ErrWrongState));
     sim.pressSelect(2); // the select key is not used either
@@ -8396,7 +8404,7 @@ void Smart210Test::aStoppedFillAFaultAndAPowerCutEndWithTheRightReason()
         sim.board(address).flowGramsPerSecond = 500;
         ask(sim, address, CmdSelect);
         ask(sim, address, CmdSetPreset, presetData(10000));
-        ask(sim, address, CmdStart);
+        ask(sim, address, CmdStart, sessionIdData(100 + address));
     }
     sim.tick(2000);
 
@@ -8422,7 +8430,7 @@ void Smart210Test::aStoppedFillAFaultAndAPowerCutEndWithTheRightReason()
     // after the result is acknowledged the board with the fault stays in FAULT until the fault is cleared
     Status status = pollOf(sim, 2);
     QVERIFY(status.flags & FlagFault);
-    ask(sim, 2, CmdAckResult, resultIdData(status.resultId));
+    ask(sim, 2, CmdAckResult, sessionIdData(status.sessionId));
     QCOMPARE(pollOf(sim, 2).state, int(StateFault));
     QCOMPARE(int(ask(sim, 2, CmdSelect).command), int(NakCommand));
     sim.setFault(2, 0);
@@ -8442,7 +8450,6 @@ void Smart210Test::theSimulatorKeepsTheConfigOfItsBoardsBetweenRuns()
         sim.board(1).config.fuelType = "A";
         sim.board(1).config.density = 7400;
         sim.board(1).config.pulsesX100 = 123450;
-        sim.board(1).nextId = 250;
         sim.board(2).flowGramsPerSecond = 900;
         QSettings settings(path, QSettings::IniFormat);
         sim.save(settings);
@@ -8458,7 +8465,6 @@ void Smart210Test::theSimulatorKeepsTheConfigOfItsBoardsBetweenRuns()
     QCOMPARE(again.board(1).config.fuelType, QString("A"));
     QCOMPARE(int(again.board(1).config.density), 7400);
     QCOMPARE(again.board(1).config.pulsesX100, quint32(123450));
-    QCOMPARE(again.board(1).nextId, quint32(250)); // result ids never go back
     QCOMPARE(again.board(2).flowGramsPerSecond, 900);
 }
 
@@ -9487,10 +9493,11 @@ void Smart210Test::anAutoFillTakesItsTicketsAndTheRestBecomesARemainder()
     const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
     QVERIFY(SupplyQueue::add(db, 1, code(3000000042), "D", now).ok);
-    QVERIFY(SupplyQueue::begin(db, 1, 3500, now));
+    const quint32 session = SupplyQueue::begin(db, 1, 3500, now);
+    QVERIFY(session != 0);
 
     SupplyRecord::Reading reading;
-    reading.resultId = 101;
+    reading.sessionId = session;                                // the board gives back the id the session was started with
     reading.dispensedX100 = 3000;   // 30.00 kg of the 35.00 that the tickets cover
     reading.litersX100 = 3614;
     reading.presetX100 = 3500;
@@ -9506,7 +9513,7 @@ void Smart210Test::anAutoFillTakesItsTicketsAndTheRestBecomesARemainder()
     QCOMPARE(one("SELECT preset_kg FROM supplements WHERE id = '" + id + "'").toInt(), 3500);   // what the tickets cover
     QCOMPARE(one("SELECT out_amount_lt FROM supplements WHERE id = '" + id + "'").toInt(), 3614);
     QCOMPARE(one("SELECT mode FROM supplements WHERE id = '" + id + "'").toString(), QString("auto"));
-    QCOMPARE(one("SELECT board_result_id FROM supplements WHERE id = '" + id + "'").toInt(), 101);
+    QCOMPARE(one("SELECT session_id FROM supplements WHERE id = '" + id + "'").toUInt(), session);
     QCOMPARE(one("SELECT fuel_type FROM supplements WHERE id = '" + id + "'").toString(), QString("D"));
     QCOMPARE(one("SELECT synced FROM supplements WHERE id = '" + id + "'").toInt(), 0);
     QCOMPARE(one("SELECT supply_date = date(supplied_at, '-9 hours') FROM supplements WHERE id = '" + id + "'").toInt(), 1); // the business day of its time, at once
@@ -9543,7 +9550,7 @@ void Smart210Test::aFillThatReachedItsPresetLeavesNoRemainder()
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
     SupplyRecord::Reading reading;
-    reading.resultId = 1;
+    reading.sessionId = 1;
     reading.dispensedX100 = 1500;
     reading.litersX100 = 1800;
     reading.reason = BoardProtocol::ReasonPresetReached;
@@ -9556,7 +9563,7 @@ void Smart210Test::aFillThatReachedItsPresetLeavesNoRemainder()
     // 0.2 kg short at the preset is a remainder; so is 0.05 kg short because the tank was full (any shortfall is one)
     QVERIFY(SupplyQueue::add(db, 1, code(3000000042), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 2000, now));
-    reading.resultId = 2;
+    reading.sessionId = 2;
     reading.dispensedX100 = 1980;
     outcome = SupplyRecord::record(db, 1, reading, now);
     QVERIFY2(outcome.ok, qPrintable(outcome.error));
@@ -9564,12 +9571,125 @@ void Smart210Test::aFillThatReachedItsPresetLeavesNoRemainder()
 
     QVERIFY(SupplyQueue::add(db, 1, code(3000000043), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 500, now));
-    reading.resultId = 3;
+    reading.sessionId = 3;
     reading.dispensedX100 = 495;
     reading.reason = BoardProtocol::ReasonTankFullOrNoFlow;
     outcome = SupplyRecord::record(db, 1, reading, now);
     QCOMPARE(outcome.remainderKgX100, qlonglong(5));
     QCOMPARE(countRows("remainders"), 2);
+}
+
+// The id of a session is made by the terminal: the next number, above every session and supply it holds and above the counter in the settings, so it never repeats.
+void Smart210Test::theSessionIdsAreTheNextNumberAndNeverGoBack()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
+
+    QCOMPARE(SupplyQueue::begin(db, 1, 1000, now), quint32(1));
+    QCOMPARE(SupplyQueue::begin(db, 2, 1000, now), quint32(2));
+    QCOMPARE(SupplyQueue::session(db, 1).sessionId, quint32(1));
+    SupplyQueue::release(db, 1);
+    SupplyQueue::release(db, 2);
+    QCOMPARE(SupplyQueue::begin(db, 1, 1000, now), quint32(3));                  // not the number of a session that is gone
+    QCOMPARE(SupplyQueue::begin(db, 1, 1000, now, QString(), 900), quint32(900)); // the board runs a fill with that id: the session takes it
+    QCOMPARE(SupplyQueue::session(db, 1).sessionId, quint32(900));
+    QCOMPARE(SupplyQueue::begin(db, 2, 1000, now), quint32(901));                 // above the id that was adopted (the next number is above every session)
+    SupplyQueue::release(db, 1);
+    SupplyQueue::release(db, 2);
+
+    // a supply that holds a higher number (a lost counter) is above the next one too
+    run("DELETE FROM settings WHERE key = 'supply_session_next'");
+    run("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, mode, supplied_at, supply_date, synced, session_id) "
+        "VALUES ('x', 'D', 1, 100, 100, 100, 'auto', '2026-10-09 10:00:00', '2026-10-09', 1, 70)");
+    QCOMPARE(SupplyQueue::begin(db, 1, 1000, now), quint32(71));
+}
+
+// A result carries the id of the session it was started with. The queue of the nozzle belongs to that session only: a result of another one (a session the terminal lost,
+// or a fill that was not started here) is saved without the queue, and the session of the nozzle goes on.
+void Smart210Test::aResultOfAnotherSessionDoesNotTakeTheQueueOfTheNozzle()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
+    const quint32 session = SupplyQueue::begin(db, 1, 1500, now);
+
+    SupplyRecord::Reading other;
+    other.sessionId = session + 50;
+    other.dispensedX100 = 1000;
+    other.litersX100 = 1200;
+    other.reason = BoardProtocol::ReasonPresetReached;
+    const SupplyRecord::Outcome outcome = SupplyRecord::record(db, 1, other, now);
+
+    QVERIFY2(outcome.ok, qPrintable(outcome.error));
+    QCOMPARE(outcome.tickets, 0);                                              // no tickets were taken
+    QCOMPARE(one("SELECT session_id FROM supplements WHERE id = '" + outcome.supplementId + "'").toUInt(), session + 50);
+    QVERIFY(SupplyQueue::session(db, 1).exists);                               // the session of the nozzle is still there
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);
+    QCOMPARE(one("SELECT status FROM tickets WHERE barcode = " + QString::number(Barcode::toKey(code(3000000041)))).toInt(), 1);   // still sold, not used
+
+    SupplyRecord::Reading own = other;
+    own.sessionId = session;
+    const SupplyRecord::Outcome mine = SupplyRecord::record(db, 1, own, now);
+    QVERIFY2(mine.ok, qPrintable(mine.error));
+    QCOMPARE(mine.tickets, 1);
+    QVERIFY(!SupplyQueue::session(db, 1).exists);                              // its own result ends it
+}
+
+// The tickets of a session: the queue of the nozzle while the fill runs, the tickets of the supply after it was recorded.
+void Smart210Test::theTicketsOfASessionAreFoundWhileItRunsAndAfterItWasRecorded()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000042), "D", now).ok);
+    const quint32 session = SupplyQueue::begin(db, 1, 2000, now);
+
+    QCOMPARE(SupplyQueue::ticketsOfSession(db, session), QList<qlonglong>() << Barcode::toKey(code(3000000041)) << Barcode::toKey(code(3000000042)));   // while it runs
+    QVERIFY(SupplyQueue::ticketsOfSession(db, session + 1).isEmpty());
+    QVERIFY(SupplyQueue::ticketsOfSession(db, 0).isEmpty());
+
+    SupplyRecord::Reading reading;
+    reading.sessionId = session;
+    reading.dispensedX100 = 2000;
+    reading.litersX100 = 2400;
+    reading.reason = BoardProtocol::ReasonPresetReached;
+    QVERIFY(SupplyRecord::record(db, 1, reading, now).ok);
+
+    QCOMPARE(SupplyQueue::ticketsOfSession(db, session), QList<qlonglong>() << Barcode::toKey(code(3000000041)) << Barcode::toKey(code(3000000042)));   // after: through the supply
+    QVERIFY(SupplyQueue::entries(db, 1).isEmpty());
+}
+
+// The case of the review (T1): a board that was replaced starts its own counter again. The id is the terminal's, so a fill of the new board is not taken for one already recorded.
+void Smart210Test::aBoardThatCountsFromTheStartAgainIsNotTakenForADuplicate()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
+
+    quint32 ids[2] = {0, 0};
+    for (int i = 0; i < 2; ++i) {
+        ids[i] = SupplyQueue::begin(db, 1, 1000, now);
+        SupplyRecord::Reading reading;
+        reading.sessionId = ids[i];
+        reading.dispensedX100 = 1000;
+        reading.litersX100 = 1200;
+        reading.reason = BoardProtocol::ReasonPresetReached;
+        const SupplyRecord::Outcome outcome = SupplyRecord::record(db, 1, reading, now);
+        QVERIFY2(outcome.ok && !outcome.duplicate, qPrintable(outcome.error));
+        SupplyQueue::release(db, 1);
+    }
+    QVERIFY(ids[0] != ids[1]);
+    QCOMPARE(countRows("supplements"), 2);                                     // the same kg and litres twice: two fills
+
+    SupplyRecord::Reading again;                                               // a result offered again after a lost acknowledgement is still the same fill
+    again.sessionId = ids[1];
+    again.dispensedX100 = 1000;
+    again.litersX100 = 1200;
+    QVERIFY(SupplyRecord::record(db, 1, again, now).duplicate);
+    QCOMPARE(countRows("supplements"), 2);
 }
 
 void Smart210Test::aResultIsRecordedOnce()
@@ -9578,9 +9698,10 @@ void Smart210Test::aResultIsRecordedOnce()
     QSqlDatabase db = QSqlDatabase::database(connection_);
     const QDateTime now = QDateTime::currentDateTime();
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
-    QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
+    const quint32 session = SupplyQueue::begin(db, 1, 1500, now);
+    QVERIFY(session != 0);
     SupplyRecord::Reading reading;
-    reading.resultId = 55;
+    reading.sessionId = session;
     reading.dispensedX100 = 1000;
     reading.litersX100 = 1200;
     reading.reason = BoardProtocol::ReasonTankFullOrNoFlow;
@@ -9596,7 +9717,7 @@ void Smart210Test::aResultIsRecordedOnce()
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE amount_kg = 500 AND status = 1 AND sale_id IS NULL").toInt(), 3); // the remainder ticket, 43 and 44
 
     // a later fill of the nozzle has another id (here no session: it waits for tickets)
-    reading.resultId = 56;
+    reading.sessionId = 56;
     QVERIFY(SupplyRecord::record(db, 1, reading, now).ok);
     QCOMPARE(countRows("supplements"), 2);
 
@@ -9903,8 +10024,8 @@ void Smart210Test::scannedTicketsFillTheChosenNozzleAndTheResultIsRecorded()
     QTRY_VERIFY_WITH_TIMEOUT(bench.supply.isLocked(1), 3000);
     QCOMPARE(SupplyQueue::session(db, 1).presetX100, qlonglong(3500));
     QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateDispensing), 3000);
-    QTRY_VERIFY_WITH_TIMEOUT(SupplyQueue::session(db, 1).resultId != 0, 3000);
-    QCOMPARE(SupplyQueue::session(db, 1).resultId, bench.boards.board(1).resultId);
+    QTRY_VERIFY_WITH_TIMEOUT(SupplyQueue::session(db, 1).sessionId != 0, 3000);
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).sessionId, SupplyQueue::session(db, 1).sessionId, 3000);   // the board holds the id the terminal gave it
     QVERIFY(!bench.supply.add(1, code(3000000043), &why));
     QVERIFY(why.contains("started"));
     QVERIFY(!bench.supply.remove(1, 3000000041, &why));
@@ -9977,7 +10098,7 @@ void Smart210Test::aTicketSoldOnPaperBeforeGoLiveIsMadeWhenItIsUsed()
     // the fill: the ticket is supplied and waits for the upload (the web app makes its row from that report)
     QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
     SupplyRecord::Reading reading;
-    reading.resultId = 1;
+    reading.sessionId = 1;
     reading.dispensedX100 = 1500;
     reading.litersX100 = 1800;
     reading.reason = BoardProtocol::ReasonPresetReached;
@@ -10204,9 +10325,9 @@ void Smart210Test::aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice()
     QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
 
     // the board forgot that it was acknowledged (a restart, a lost answer): it holds the same result again
-    const quint32 id = one("SELECT board_result_id FROM supplements").toUInt();
+    const quint32 id = one("SELECT session_id FROM supplements").toUInt();
     bench.boards.board(1).state = BoardProtocol::StateResult;
-    bench.boards.board(1).resultId = id;
+    bench.boards.board(1).sessionId = id;
     bench.boards.board(1).lastAckedId = 0;
     QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 5000);   // acknowledged again, nothing recorded again
 
@@ -10376,8 +10497,9 @@ void Smart210Test::theSessionSetsThePresetOnEveryScanStartsWithTheGunAndClearsWi
     QVERIFY(bench.boards.simulator().liftGun(1));
     QTRY_VERIFY_WITH_TIMEOUT(bench.supply.isLocked(1), 3000);
     QCOMPARE(SupplyQueue::session(db, 1).presetX100, qlonglong(2000));
-    QTRY_VERIFY_WITH_TIMEOUT(SupplyQueue::session(db, 1).resultId != 0, 3000);
-    QCOMPARE(bench.boards.board(1).commands.count(BoardProtocol::CmdStart), 1);   // the gun was reported, the Smart210 sent START once
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).commands.count(BoardProtocol::CmdStart), 1, 3000);   // the gun was reported, the Smart210 sent START once
+    QVERIFY(SupplyQueue::session(db, 1).sessionId != 0);                                              // with the id of the session, which the board keeps
+    QCOMPARE(bench.boards.board(1).sessionId, SupplyQueue::session(db, 1).sessionId);
     QString why;
     QVERIFY(!bench.supply.add(1, code(3000000042), &why));
     QVERIFY(why.contains("started"));
@@ -11179,7 +11301,7 @@ void Smart210Test::aSupplyRecordsTheModeAndTheDensity()
     QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
     SupplyRecord::Reading reading;
-    reading.resultId = 11;
+    reading.sessionId = 11;
     reading.dispensedX100 = 1500;
     reading.litersX100 = 1807;
     reading.presetX100 = 1500;
@@ -11190,7 +11312,7 @@ void Smart210Test::aSupplyRecordsTheModeAndTheDensity()
     QCOMPARE(one("SELECT density FROM supplements WHERE id = '" + autoFill.supplementId + "'").toInt(), 8300);
 
     // a nozzle in manual mode: mode manual
-    reading.resultId = 12;
+    reading.sessionId = 12;
     reading.dispensedX100 = 800;
     reading.litersX100 = 964;
     reading.presetX100 = 800;
@@ -11200,7 +11322,7 @@ void Smart210Test::aSupplyRecordsTheModeAndTheDensity()
     QCOMPARE(one("SELECT density FROM supplements WHERE id = '" + manualNozzle.supplementId + "'").toInt(), 8300);
 
     // a reading typed by hand on an auto nozzle: manual too
-    reading.resultId = 0;
+    reading.sessionId = 0;
     reading.byHand = true;
     reading.dispensedX100 = 1000;
     reading.litersX100 = 1205;
@@ -11400,7 +11522,7 @@ void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
     QVERIFY(SupplyQueue::add(db, 1, made.barcode, "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 1500, now));
     SupplyRecord::Reading reading;
-    reading.resultId = 1;
+    reading.sessionId = 1;
     reading.dispensedX100 = 1000;
     reading.litersX100 = 1200;
     reading.reason = BoardProtocol::ReasonTankFullOrNoFlow;
@@ -11440,7 +11562,7 @@ void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
 
     // a fill of that ticket alone, short: the unused part goes back to the card
     QVERIFY(SupplyQueue::begin(db, 1, 500, now));
-    reading.resultId = 2;
+    reading.sessionId = 2;
     reading.dispensedX100 = 300;
     const SupplyRecord::Outcome second = SupplyRecord::record(db, 1, reading, now);
     QVERIFY2(second.ok, qPrintable(second.error));
@@ -11451,7 +11573,7 @@ void Smart210Test::theUnusedPartOfACardsTicketGoesBackToTheCard()
     // tickets of an ordinary supply (press tickets) keep making a remainder ticket
     QVERIFY(SupplyQueue::add(db, 1, code(3000000043), "D", now).ok);
     QVERIFY(SupplyQueue::begin(db, 1, 500, now));
-    reading.resultId = 3;
+    reading.sessionId = 3;
     reading.dispensedX100 = 300;
     const SupplyRecord::Outcome ordinary = SupplyRecord::record(db, 1, reading, now);
     QVERIFY2(ordinary.ok, qPrintable(ordinary.error));
@@ -12318,21 +12440,21 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 12);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card
-    QCOMPARE(Migrator::version(db), 12);
+    QCOMPARE(Migrator::bundled().size(), 13);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card, the session ids
+    QCOMPARE(Migrator::version(db), 13);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
     QCOMPARE(columnsOf(db, "sales").join(" "), QString("id created_at updated_at customer_id card_id sale_type fuel_type price amount_kg payment_method "
                                                        "total_amount paid_amount unpaid_amount receipt usage comment sale_date user_id deleted_at synced uploaded_at hidden"));   // (hidden: migration 011, not sent)
     QCOMPARE(columnsOf(db, "supplements").join(" "), QString("id fuel_type nozzle_id card_id supply_date supplied_at mode preset_kg density out_amount_lt "
-                                                             "out_amount_kg comment board_result_id synced uploaded_at hidden"));
+                                                             "out_amount_kg comment board_result_id synced uploaded_at hidden session_id"));   // (session_id: migration 013, not sent)
     QCOMPARE(columnsOf(db, "remainders").join(" "), QString("id supplement_id ticket_barcode fuel_type amount_kg remainder_date created_at printed_at synced uploaded_at comment"));
     QCOMPARE(columnsOf(db, "tickets").join(" "), QString("barcode fuel_type spec amount_kg status sale_id sale_date supplement_id supply_date synced uploaded_at card_id print_count last_printed_at"));   // (the columns of migrations 008 and 009 come last)
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));
-    QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("nozzle_number card_id preset_kg result_id started_at"));
+    QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("nozzle_number card_id preset_kg result_id started_at session_id"));
     QCOMPARE(columnsOf(db, "checkouts").join(" "), QString("id date mode user_id performed_at records"));
 
     // none of the old names is left
@@ -12345,7 +12467,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QVERIFY(!columnsOf(db, "supplements").contains("user_id") && !columnsOf(db, "supply_sessions").contains("user_id"));
 
     // the indexes the code relies on
-    QCOMPARE(one("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('sales_sale_date', 'supplements_supply_date', 'supplements_board_result', "
+    QCOMPARE(one("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('sales_sale_date', 'supplements_supply_date', 'supplements_session', "
                  "'sales_unsynced', 'checkouts_date', 'cards_uid', 'nozzles_number_live')").toInt(), 7);
     QCOMPARE(one("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE '%checkout_date%' OR sql LIKE '%checkout_date%'").toInt(), 0);
 }
@@ -12404,7 +12526,7 @@ void Smart210Test::grabAllScreens()
     SupplyQueue::add(db, 1, code(3000000202), "D", now);
     SupplyQueue::begin(db, 1, 1000, now);
     SupplyRecord::Reading reading;
-    reading.resultId = 5;
+    reading.sessionId = 5;
     reading.dispensedX100 = 800;
     reading.litersX100 = 964;
     reading.presetX100 = 1000;

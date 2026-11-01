@@ -64,9 +64,10 @@ public:
     bool setPreset(int address, quint32 presetG) { return send(address, BoardProtocol::CmdSetPreset, BoardProtocol::presetData(presetG)); }
     // Shows a number (grams) on the dispenser's display without arming anything: the balance of a card. 0 clears it. IDLE boards only.
     bool showBalance(int address, quint32 grams) { return send(address, BoardProtocol::CmdShowBalance, BoardProtocol::presetData(grams)); }
-    bool startFill(int address) { return send(address, BoardProtocol::CmdStart); }
+    // START carries the id of the session (made by the terminal); the board keeps it with the result and sends it back with the result and with ACK_RESULT
+    bool startFill(int address, quint32 sessionId) { return send(address, BoardProtocol::CmdStart, BoardProtocol::sessionIdData(sessionId)); }
     bool getResult(int address) { return send(address, BoardProtocol::CmdGetResult); }
-    bool ackResult(int address, quint32 resultId) { return send(address, BoardProtocol::CmdAckResult, BoardProtocol::resultIdData(resultId)); }
+    bool ackResult(int address, quint32 sessionId) { return send(address, BoardProtocol::CmdAckResult, BoardProtocol::sessionIdData(sessionId)); }
     bool getConfig(int address) { return send(address, BoardProtocol::CmdGetConfig); }
     bool setConfig(int address, const BoardProtocol::BoardConfig &config) { return send(address, BoardProtocol::CmdSetConfig, BoardProtocol::configData(config)); }
     bool info(int address) { return send(address, BoardProtocol::CmdInfo); }

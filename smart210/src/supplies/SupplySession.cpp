@@ -294,8 +294,9 @@ void SupplySession::followTheSupplier(int address, const Status &status)
             return;
         }
         if (status.state == StateArmed && presetSent_.value(address, -1) == total && !presetPending_.contains(address)) {
-            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime()); // saved before START: after a crash the session is still known
-            if (bus_->startFill(address)) {
+            // saved before START, with its id: after a crash the session is still known, and the board keeps the id with the result
+            const quint32 sessionId = SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime());
+            if (sessionId != 0 && bus_->startFill(address, sessionId)) {
                 startStep_[address] = Starting;
                 emit queueChanged(address);
             } else {
@@ -308,10 +309,7 @@ void SupplySession::followTheSupplier(int address, const Status &status)
     if (status.state == StateDispensing) {
         if (total > 0) {
             // the gun was taken up: the fill runs with the preset the board has, so the queue is the session from now on
-            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime());
-            if (status.resultId != 0) {
-                SupplyQueue::setResultId(db_, address, status.resultId);
-            }
+            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime(), QString(), status.sessionId); // the id the board runs the fill with (a new one when it has none)
             presetSent_.remove(address);
             emit queueChanged(address);
             emit message(tr("Nozzle %1 started: %2 kg.").arg(address).arg(kg(total)), true);
@@ -363,9 +361,9 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         presetSent_[address] = presetPending_.take(address);
     } else if (command == CmdStart && startStep_.value(address) == Starting) {
         startStep_.remove(address);
-        quint32 resultId = 0;
-        if (parseResultId(data, &resultId)) {
-            SupplyQueue::setResultId(db_, address, resultId);
+        quint32 echoed = 0;
+        if (parseSessionId(data, &echoed) && echoed != SupplyQueue::session(db_, address).sessionId) {
+            emit message(tr("Nozzle %1: the board started a fill with another session id.").arg(address), false);
         }
         emit queueChanged(address);
         emit message(tr("Nozzle %1 started: %2 kg.").arg(address).arg(kg(SupplyQueue::session(db_, address).presetX100)), true);
@@ -379,7 +377,7 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         }
 
         SupplyRecord::Reading reading;
-        reading.resultId = result.resultId;
+        reading.sessionId = result.sessionId;
         reading.dispensedX100 = (qlonglong(result.dispensedG) + 5) / 10;
         reading.litersX100 = (qlonglong(result.dispensedMl) + 5) / 10;
         reading.presetX100 = (qlonglong(result.presetG) + 5) / 10;
@@ -408,7 +406,7 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         }
 
         // saved: the board may forget the result now (a lost answer is repeated by the next poll: the result is a duplicate then)
-        if (bus_->ackResult(address, result.resultId)) {
+        if (bus_->ackResult(address, result.sessionId)) {
             resultStep_[address] = Acknowledging;
         } else {
             resultStep_.remove(address);

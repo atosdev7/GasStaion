@@ -6,7 +6,7 @@ static QDateTime at(int daysAgo, int hour, int minute = 0)
 }
 
 // An auto supply as the board and the supplier would have made it, written with a time of our own (no board is involved).
-static bool fakeSupply(Terminal &t, int nozzle, const QList<qlonglong> &tickets, qlonglong dispensedX100, quint32 resultId, const QDateTime &when, int reason,
+static bool fakeSupply(Terminal &t, int nozzle, const QList<qlonglong> &tickets, qlonglong dispensedX100, quint32 sessionId, const QDateTime &when, int reason,
                        SupplyRecord::Outcome *outcome = 0)
 {
     foreach (qlonglong barcode, tickets) {
@@ -14,11 +14,15 @@ static bool fakeSupply(Terminal &t, int nozzle, const QList<qlonglong> &tickets,
             return false;
         }
     }
-    if (!tickets.isEmpty() && !SupplyQueue::begin(t.db(), nozzle, SupplyQueue::totalX100(t.db(), nozzle), when)) {
-        return false;
+    quint32 own = 0;                                       // the id of the session of the fill (a fill without tickets has none: it takes the given one)
+    if (!tickets.isEmpty()) {
+        own = SupplyQueue::begin(t.db(), nozzle, SupplyQueue::totalX100(t.db(), nozzle), when);
+        if (own == 0) {
+            return false;
+        }
     }
     SupplyRecord::Reading reading;
-    reading.resultId = resultId;
+    reading.sessionId = own != 0 ? own : sessionId;
     reading.dispensedX100 = dispensedX100;
     reading.litersX100 = dispensedX100 * 10000 / 8300;
     reading.reason = reason;
@@ -431,7 +435,7 @@ static int offlineScenario(Terminal &t, const QString &factsFile, const QString 
         Plant again(&t, &boards);
         check(again.login() && again.start(false), "the terminal starts again");
         check(waitFor([&]() { return again.recorded == 1 && boards.board(1).state == BoardProtocol::StateIdle; }), "after the restart the result is read, saved and acknowledged");
-        check(t.one("SELECT out_amount_kg FROM supplements WHERE board_result_id IS NOT NULL ORDER BY rowid DESC LIMIT 1").toInt() == 400, "4.00 kg were dispensed");
+        check(t.one("SELECT out_amount_kg FROM supplements WHERE session_id IS NOT NULL ORDER BY rowid DESC LIMIT 1").toInt() == 400, "4.00 kg were dispensed");
         check(t.one("SELECT amount_kg FROM remainders ORDER BY rowid DESC LIMIT 1").toInt() == 600, "the saved session still had its ticket: 6.00 kg come back as a remainder");
         check(!SupplyQueue::session(t.db(), 1).exists && SupplyQueue::entries(t.db(), 1).isEmpty(), "the session and the queue are cleared");
 

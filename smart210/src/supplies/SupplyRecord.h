@@ -27,9 +27,9 @@ public:
     // board makes it stop at the preset.)
 
     struct Reading {
-        Reading() : resultId(0), dispensedX100(0), litersX100(0), presetX100(0), reason(-1), byHand(false) {}
+        Reading() : sessionId(0), dispensedX100(0), litersX100(0), presetX100(0), reason(-1), byHand(false) {}
 
-        quint32 resultId;        // the board's id of the fill; 0 for a reading typed in
+        quint32 sessionId;        // the id of the session the fill was started with (the board keeps it with the result); 0 for a reading typed in
         QList<qlonglong> tickets; // typed in with the reading (barcodes as keys): they must cover the weight, see record()
         qlonglong dispensedX100;
         qlonglong litersX100;
