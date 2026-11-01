@@ -219,7 +219,6 @@ QByteArray TicketRenderer::render(const TicketData &ticket, const PrintOptions &
     const QImage titleBitmap = bitmapStrip(ticket.titleBitmap, options.widthDots);
     job.append(EscPos::raster(titleBitmap.isNull() ? titleImage(ticket.title, font, options.widthDots) : titleBitmap));
     job.append(EscPos::raster(detailsImage(ticket, font, options.widthDots)));
-    job.append(EscPos::feed(1));
     if (options.barcodeMode == "printer") {
         job.append(EscPos::barcode128C(ticket.barcode, options.barcodeModule, options.barcodeHeight));
     } else {
@@ -228,7 +227,6 @@ QByteArray TicketRenderer::render(const TicketData &ticket, const PrintOptions &
             job.append(EscPos::raster(barcode));
         }
     }
-    job.append(EscPos::feed(1));
 
     const QImage footer = bitmapStrip(options.footerBitmapPath, options.widthDots);
     const QImage logo = footer.isNull() ? logoImage(options.logoPath, options.widthDots, 100) : footer;

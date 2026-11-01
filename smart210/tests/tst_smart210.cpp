@@ -5928,10 +5928,10 @@ void Smart210Test::theTicketHasTheTitleTheDetailsTheBarcodeAndTheLogoInThatOrder
     const QStringList commands = commandsOf(TicketRenderer::render(sampleTicket(), options));
 
     // the barcode is a bitmap too (so every printer prints it, a virtual printer included)
-    QCOMPARE(commands, QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "raster" << "cut");
+    QCOMPARE(commands, QStringList() << "init" << "align" << "raster" << "raster" << "raster" << "raster" << "cut");
 
     options.barcodeMode = "printer";                                       // or the printer's own command
-    QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)), QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "barcode" << "feed" << "raster" << "cut");
+    QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)), QStringList() << "init" << "align" << "raster" << "raster" << "barcode" << "raster" << "cut");
 }
 
 // The title and the footer as ready black-and-white bitmaps (192 x 48): printed at their own size, centred on a strip as wide as the paper, instead of the title text and
@@ -5964,7 +5964,7 @@ void Smart210Test::theTitleAndTheFooterCanBeReadyMadeBlackAndWhiteBitmaps()
     ticket.titleBitmap = dir.path() + "/title.bmp";
     options.footerBitmapPath = dir.path() + "/footer.bmp";
     const QByteArray withBitmaps = TicketRenderer::render(ticket, options);
-    QCOMPARE(commandsOf(withBitmaps), QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "raster" << "cut");   // the footer is printed
+    QCOMPARE(commandsOf(withBitmaps), QStringList() << "init" << "align" << "raster" << "raster" << "raster" << "raster" << "cut");   // the footer is printed
     ticket.titleBitmap = "/no/such/title.bmp";
     options.footerBitmapPath.clear();
     QVERIFY(TicketRenderer::render(ticket, options) != withBitmaps);                                                                                 // the text and no footer
@@ -5991,12 +5991,12 @@ void Smart210Test::withoutALogoThereIsNothingAfterTheBarcode()
     options.logoPath = "/no/such/logo.png";
 
     QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)),
-             QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "cut");
+             QStringList() << "init" << "align" << "raster" << "raster" << "raster" << "cut");
 
     options.endMode = "label";
     QVERIFY(commandsOf(TicketRenderer::render(sampleTicket(), options)).last() == "formfeed");
     options.endMode = "none";
-    QVERIFY(commandsOf(TicketRenderer::render(sampleTicket(), options)).last() == "feed");
+    QVERIFY(commandsOf(TicketRenderer::render(sampleTicket(), options)).last() == "raster");
 }
 
 void Smart210Test::theTitleShrinksThenWrapsToFitThePaper()
