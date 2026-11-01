@@ -39,6 +39,7 @@
         <file alias="011_hidden_confirmed.sql">migrations/011_hidden_confirmed.sql</file>
         <file alias="012_card_free_payment.sql">migrations/012_card_free_payment.sql</file>
         <file alias="013_session_ids.sql">migrations/013_session_ids.sql</file>
+        <file alias="014_session_history.sql">migrations/014_session_history.sql</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="sales.png">icons/sales.png</file>

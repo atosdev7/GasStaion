@@ -281,6 +281,9 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         outcome.remainderKgX100 = remainder;
     }
 
+    if (ok && reading.sessionId != 0) {
+        SupplyQueue::complete(db, reading.sessionId, now);       // the session of this result is over (it may no longer be the one of the nozzle)
+    }
     if (ok && session.exists) {
         SupplyQueue::end(db, nozzleNumber);
     }

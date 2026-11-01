@@ -334,6 +334,7 @@ private slots:
     void aFillThatReachedItsPresetLeavesNoRemainder();
     void aResultIsRecordedOnce();
     void theSessionIdsAreTheNextNumberAndNeverGoBack();
+    void theSessionsAreAHistoryAndTheOnesThatAreOverGoAfterTheDays();
     void aResultOfAnotherSessionDoesNotTakeTheQueueOfTheNozzle();
     void theTicketsOfASessionAreFoundWhileItRunsAndAfterItWasRecorded();
     void aBoardThatCountsFromTheStartAgainIsNotTakenForADuplicate();
@@ -3526,7 +3527,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 13);                                  // the program still opens it
+    QCOMPARE(Migrator::version(db), 14);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -6188,7 +6189,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 13);
+    QCOMPARE(Migrator::version(db), 14);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -7031,7 +7032,7 @@ void Smart210Test::aRemovedNozzleGoesAwayAndTheWebAppIsToldInTheOrderTheyWereMad
     run("UPDATE nozzles SET synced = 1");                                   // both went up before
 
     // a nozzle with an open fill cannot be removed
-    run("INSERT INTO supply_sessions (nozzle_number, preset_kg, started_at) VALUES (1, 3000, '2026-10-24 09:00:00')");
+    run("INSERT INTO supply_sessions (session_id, nozzle_number, preset_kg, started_at) VALUES (1, 1, 3000, '2026-10-24 09:00:00')");
     QVERIFY(!config.removeNozzle(1, 0, &why));
     QVERIFY2(why.contains("fill is open"), qPrintable(why));
     QVERIFY(config.isConfigured(1));
@@ -7294,7 +7295,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 13);
+    QCOMPARE(all.size(), 14);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -9597,6 +9598,44 @@ void Smart210Test::aFillThatReachedItsPresetLeavesNoRemainder()
 }
 
 // The id of a session is made by the terminal: the next number, above every session and supply it holds and above the counter in the settings, so it never repeats.
+// supply_sessions is a history: session_id is the key, a session has its start, its end and its status, and one that is over is removed after the purge days.
+void Smart210Test::theSessionsAreAHistoryAndTheOnesThatAreOverGoAfterTheDays()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime(QDate(2026, 10, 9), QTime(10, 0, 0));
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", now).ok);
+
+    const quint32 first = SupplyQueue::begin(db, 1, 500, now);
+    QCOMPARE(one("SELECT status FROM supply_sessions WHERE session_id = " + QString::number(first)).toString(), QString("started"));
+    QVERIFY(one("SELECT ended_at FROM supply_sessions WHERE session_id = " + QString::number(first)).isNull());
+
+    const quint32 second = SupplyQueue::begin(db, 1, 500, now.addSecs(60));     // a new session of the nozzle takes the place of the one that has not run
+    QCOMPARE(one("SELECT status FROM supply_sessions WHERE session_id = " + QString::number(first)).toString(), QString("cancelled"));
+    QCOMPARE(SupplyQueue::session(db, 1).sessionId, second);
+    QCOMPARE(one("SELECT COUNT(*) FROM supply_sessions WHERE nozzle_number = 1 AND status = 'started'").toInt(), 1);
+
+    SupplyRecord::Reading reading;
+    reading.sessionId = second;
+    reading.dispensedX100 = 500;
+    reading.litersX100 = 600;
+    reading.reason = BoardProtocol::ReasonPresetReached;
+    QVERIFY(SupplyRecord::record(db, 1, reading, now.addSecs(300)).ok);
+    QCOMPARE(one("SELECT status FROM supply_sessions WHERE session_id = " + QString::number(second)).toString(), QString("completed"));
+    QCOMPARE(one("SELECT ended_at FROM supply_sessions WHERE session_id = " + QString::number(second)).toString(), QString("2026-10-09 10:05:00"));
+    QVERIFY(!SupplyQueue::session(db, 1).exists);                                  // the nozzle has no started session
+    QCOMPARE(countRows("supply_sessions"), 2);                                     // both stay as history
+
+    // a session that runs is never purged; the ones that are over go after the days
+    const quint32 running = SupplyQueue::begin(db, 2, 500, now);
+    run("UPDATE supply_sessions SET started_at = '2026-09-01 10:00:00' WHERE session_id = " + QString::number(running));
+    QCOMPARE(Purger::purge(db, 3, now.addDays(2)) >= 0, true);
+    QCOMPARE(countRows("supply_sessions"), 3);                                     // 2 days: nothing is old enough
+    Purger::purge(db, 3, now.addDays(5));
+    QCOMPARE(countRows("supply_sessions"), 1);                                     // the cancelled and the completed one are gone, the running one stays
+    QCOMPARE(SupplyQueue::session(db, 2).sessionId, running);
+}
+
 void Smart210Test::theSessionIdsAreTheNextNumberAndNeverGoBack()
 {
     setUpSupplying();
@@ -9617,6 +9656,7 @@ void Smart210Test::theSessionIdsAreTheNextNumberAndNeverGoBack()
 
     // a supply that holds a higher number (a lost counter) is above the next one too
     run("DELETE FROM settings WHERE key = 'supply_session_next'");
+    run("DELETE FROM supply_sessions");
     run("INSERT INTO supplements (id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, mode, supplied_at, supply_date, synced, session_id) "
         "VALUES ('x', 'D', 1, 100, 100, 100, 'auto', '2026-10-09 10:00:00', '2026-10-09', 1, 70)");
     QCOMPARE(SupplyQueue::begin(db, 1, 1000, now), quint32(71));
@@ -12457,8 +12497,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 13);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card, the session ids
-    QCOMPARE(Migrator::version(db), 13);
+    QCOMPARE(Migrator::bundled().size(), 14);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card, the session ids
+    QCOMPARE(Migrator::version(db), 14);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
@@ -12471,7 +12511,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QCOMPARE(columnsOf(db, "ticket_loans").join(" "), QString("id loaned_at date customer_id fuel_type amount_kg settled_amount_kg sale_id comment user_id deleted synced uploaded_at"));
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));
-    QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("nozzle_number card_id preset_kg result_id started_at session_id"));
+    QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("session_id nozzle_number card_id preset_kg started_at ended_at status"));
     QCOMPARE(columnsOf(db, "checkouts").join(" "), QString("id date mode user_id performed_at records"));
 
     // none of the old names is left

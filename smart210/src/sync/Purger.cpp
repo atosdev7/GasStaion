@@ -22,6 +22,7 @@ int Purger::purge(QSqlDatabase db, int days, const QDateTime &now)
                << "DELETE FROM sales WHERE deleted_at IS NOT NULL AND deleted_at < ?"
                << "DELETE FROM sales WHERE synced = 1 AND card_id IS NULL AND created_at < ?"            // a card's history stays
                << "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND supplied_at < ?"
+               << "DELETE FROM supply_sessions WHERE status <> 'started' AND ended_at < ?"           // a session that is over is kept for the purge days, then it goes (a started one never)
                // (a remainder ticket that was not supplied yet stays for as long as it is unused: the cashier reprints it from the Remainder tickets list)
                << QString("DELETE FROM remainders WHERE synced = 1 AND created_at < ? AND NOT EXISTS (%1)").arg(unusedTicket)
                << "DELETE FROM ticket_loan_settlements WHERE synced = 1 AND settled_at < ?"

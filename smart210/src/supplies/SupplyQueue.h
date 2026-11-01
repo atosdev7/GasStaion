@@ -71,8 +71,11 @@ public:
     static quint32 begin(QSqlDatabase db, int nozzle, qlonglong presetX100, const QDateTime &now, const QString &cardId = QString(), quint32 adoptId = 0);
     // The tickets of a session: the queue of its nozzle while the fill runs, the tickets of its supply after it was recorded (the supply keeps the session id). Empty when none is known.
     static QList<qlonglong> ticketsOfSession(QSqlDatabase db, quint32 sessionId);
-    static void release(QSqlDatabase db, int nozzle); // the fill did not start: the session ends, the queue stays
-    static void end(QSqlDatabase db, int nozzle);     // the session is over; the queue is cleared as well
+    // The sessions are a history (supply_sessions): status started (at most one for a nozzle; the others are history), completed (its result was recorded) or cancelled; the
+    // Purger removes the ones that are over after the purge days.
+    static void release(QSqlDatabase db, int nozzle); // the fill did not start: the session is cancelled, the queue stays
+    static void complete(QSqlDatabase db, quint32 sessionId, const QDateTime &now); // its result was recorded
+    static void end(QSqlDatabase db, int nozzle);     // the session of the nozzle is completed; the queue is cleared as well
 };
 
 #endif

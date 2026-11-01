@@ -218,7 +218,8 @@ SupplyQueue::Session SupplyQueue::session(QSqlDatabase db, int nozzle)
     Session session;
 
     QSqlQuery query(db);
-    query.prepare("SELECT preset_kg, session_id, started_at, card_id FROM supply_sessions WHERE nozzle_number = ?");
+    // the session of a nozzle is the one that is started (the others are history)
+    query.prepare("SELECT preset_kg, session_id, started_at, card_id FROM supply_sessions WHERE nozzle_number = ? AND status = 'started' ORDER BY started_at DESC, session_id DESC LIMIT 1");
     query.addBindValue(nozzle);
     if (query.exec() && query.next()) {
         session.exists = true;
@@ -247,11 +248,19 @@ quint32 SupplyQueue::begin(QSqlDatabase db, int nozzle, qlonglong presetX100, co
         settings.setValue("supply_session_next", QString::number(qlonglong(sessionId) + 1));
     }
 
+    // a nozzle has one started session: a new one takes its place (the old one stays in the history as cancelled)
+    QSqlQuery old(db);
+    old.prepare("UPDATE supply_sessions SET status = 'cancelled', ended_at = ? WHERE nozzle_number = ? AND status = 'started' AND session_id <> ?");
+    old.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
+    old.addBindValue(nozzle);
+    old.addBindValue(sessionId);
+    old.exec();
+
     QSqlQuery query(db);
-    query.prepare("INSERT OR REPLACE INTO supply_sessions (nozzle_number, preset_kg, session_id, started_at, card_id) VALUES (?, ?, ?, ?, ?)");
+    query.prepare("INSERT OR REPLACE INTO supply_sessions (session_id, nozzle_number, preset_kg, started_at, ended_at, status, card_id) VALUES (?, ?, ?, ?, NULL, 'started', ?)");
+    query.addBindValue(sessionId);
     query.addBindValue(nozzle);
     query.addBindValue(presetX100);
-    query.addBindValue(sessionId);
     query.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
     query.addBindValue(cardId.isEmpty() ? QVariant(QVariant::String) : QVariant(cardId));
 
@@ -267,7 +276,7 @@ QList<qlonglong> SupplyQueue::ticketsOfSession(QSqlDatabase db, quint32 sessionI
 
     // the fill runs (or waits for its result): the queue of the nozzle that holds the session
     QSqlQuery live(db);
-    live.prepare("SELECT q.barcode FROM supply_queue q JOIN supply_sessions s ON s.nozzle_number = q.nozzle_number WHERE s.session_id = ? ORDER BY q.position, q.rowid");
+    live.prepare("SELECT q.barcode FROM supply_queue q JOIN supply_sessions s ON s.nozzle_number = q.nozzle_number AND s.status = 'started' WHERE s.session_id = ? ORDER BY q.position, q.rowid");
     live.addBindValue(sessionId);
     if (live.exec()) {
         while (live.next()) {
@@ -293,14 +302,28 @@ QList<qlonglong> SupplyQueue::ticketsOfSession(QSqlDatabase db, quint32 sessionI
 
 void SupplyQueue::release(QSqlDatabase db, int nozzle)
 {
+    // the fill did not run: the session stays in the history as cancelled
     QSqlQuery session(db);
-    session.prepare("DELETE FROM supply_sessions WHERE nozzle_number = ?");
+    session.prepare("UPDATE supply_sessions SET status = 'cancelled', ended_at = ? WHERE nozzle_number = ? AND status = 'started'");
+    session.addBindValue(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
     session.addBindValue(nozzle);
+    session.exec();
+}
+
+void SupplyQueue::complete(QSqlDatabase db, quint32 sessionId, const QDateTime &now)
+{
+    QSqlQuery session(db);
+    session.prepare("UPDATE supply_sessions SET status = 'completed', ended_at = ? WHERE session_id = ? AND status <> 'completed'");
+    session.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
+    session.addBindValue(sessionId);
     session.exec();
 }
 
 void SupplyQueue::end(QSqlDatabase db, int nozzle)
 {
-    release(db, nozzle);
+    const Session started = session(db, nozzle);
+    if (started.exists) {
+        complete(db, started.sessionId, QDateTime::currentDateTime());
+    }
     clear(db, nozzle);
 }
