@@ -482,6 +482,9 @@ private slots:
     void aSpotSaleSetDirectlySendsTheWeightToTheChosenNozzleWithoutATicket();
     void aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket();
     void theSettingsPageChoosesWhatASpotSaleAndACardFillGive();
+    void aFreePaymentCardIsToppedUpForNothingAndAnotherCardIsNot();
+    void theBusinessDayStartsWhenTheWebAppSays();
+    void aRecordCannotBeDatedFurtherBackThanTheWebAppAllows();
     void aCardFillSetDirectlyAsksForTheNozzleAndPrintsNothing();
     void theNozzleQuestionIsAnsweredWithTheKeyboardAlone();
     void grabAllScreens();
@@ -9107,6 +9110,7 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
 {
     setUpLoggedInTerminalWithAPin();
     recordADay();
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::SaleBackdateDays, 100000);      // (the dates of this test are fixed ones, far from today: the limit is tried in aRecordCannotBeDatedFurtherBackThanTheWebAppAllows)
     run("UPDATE sales SET synced = 1");
     run("UPDATE supplements SET synced = 1");
     AppConfig config;
@@ -12860,6 +12864,89 @@ void Smart210Test::aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket()
     QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
     QVERIFY(page.findChild<QPushButton *>("printAgainButton")->isEnabled());   // the ticket can still be printed
     QCOMPARE(page.findChild<QComboBox *>("resultCombo")->currentIndex(), 1);   // and the mode stays for the next sale
+}
+
+// A free payment card (the manager sets it on the web app, the config of the card says so): its top-up may be for nothing; any other card needs a price above 0.
+void Smart210Test::aFreePaymentCardIsToppedUpForNothingAndAnotherCardIsNot()
+{
+    configureServer();
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SyncStore store(db);
+    const QString id = "33333333-3333-3333-3333-333333333333";
+    const QString plain = "[{'id':'" + id + "','uid':'AA02','holder_name':'Li Wei','holder_phone':null,'fuel_type':'D','pin_salt':'ab12','pin_hash':'hh',"
+                          "'failed_attempts':0,'status':'active','balance_kg':'0.00','deleted':false,'free_payment':false}]";
+    QVERIFY(store.applyPage("cards", rowsOf(plain)).ok);
+    QVERIFY(!Cards::findById(db, id).freePayment);
+
+    Cards::TopUpResult result = Cards::topUp(db, id, 1000, 0, 7, QDateTime::currentDateTime());
+    QVERIFY(!result.ok);
+    QVERIFY(result.error.contains("price"));
+    QCOMPARE(countRows("sales"), 0);
+
+    // the web app makes it a free payment card: the next download says so
+    QVERIFY(store.applyPage("cards", rowsOf(QString(plain).replace("'free_payment':false", "'free_payment':true"))).ok);
+    QVERIFY(Cards::findById(db, id).freePayment);
+    result = Cards::topUp(db, id, 1000, 0, 7, QDateTime::currentDateTime());
+    QVERIFY2(result.ok, qPrintable(result.error));
+    QCOMPARE(one("SELECT price FROM sales WHERE id = '" + result.saleId + "'").toInt(), 0);
+    QCOMPARE(one("SELECT total_amount FROM sales WHERE id = '" + result.saleId + "'").toInt(), 0);
+    QCOMPARE(one("SELECT paid_amount FROM sales WHERE id = '" + result.saleId + "'").toInt(), 0);
+    QCOMPARE(Cards::findById(db, id).balanceX100, qlonglong(1000));                        // the card holds the fuel
+    QVERIFY(!Cards::topUp(db, id, 1000, -1, 7, QDateTime::currentDateTime()).ok);          // a negative price is never allowed
+    QVERIFY(Cards::topUp(db, id, 500, 800, 7, QDateTime::currentDateTime()).ok);           // and a free card can be topped up at a price too
+}
+
+// The hour a business day starts is the web app's (its config): a sale at 07:30 belongs to the day before while the day starts at 9, to its own day when it starts at 6
+void Smart210Test::theBusinessDayStartsWhenTheWebAppSays()
+{
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SyncStore store(openDatabase());
+    QString error;
+    QCOMPARE(Checkout::startHour(), 9);
+    const QDateTime early(QDate(2026, 10, 8), QTime(7, 30, 0));
+    QCOMPARE(Checkout::businessDay(early), QString("2026-10-07"));
+
+    QJsonObject config = configObject();
+    config.insert("business_day_start_hour", 6);
+    QVERIFY2(store.applyConfig(config, &error), qPrintable(error));
+    QCOMPARE(Checkout::startHour(), 6);
+    QCOMPARE(Checkout::businessDay(early), QString("2026-10-08"));
+    QCOMPARE(Settings(QSqlDatabase::database(connection_)).intValue(SettingKey::BusinessDayStartHour), 6);
+
+    // a config that does not say (an older web app) leaves it; a wrong hour is ignored
+    QVERIFY2(store.applyConfig(configObject(), &error), qPrintable(error));
+    QCOMPARE(Checkout::startHour(), 6);
+    Checkout::setStartHour(30);
+    QCOMPARE(Checkout::startHour(), 6);
+
+    Checkout::setStartHour(Checkout::StartHour);                       // (the other tests go on with 9)
+    Q_UNUSED(db);
+}
+
+// The Review screen moves a record only as far back as the web app lets a cashier date a sale (3 days; its config says), and never after today
+void Smart210Test::aRecordCannotBeDatedFurtherBackThanTheWebAppAllows()
+{
+    QSqlDatabase db = openDatabase();
+    const QDateTime now(QDate(2026, 10, 20), QTime(12, 0, 0));
+    QCOMPARE(ReviewData::dateProblem(db, "2026-10-20", now), QString());             // today
+    QCOMPARE(ReviewData::dateProblem(db, "2026-10-17", now), QString());             // 3 days back
+    QVERIFY(ReviewData::dateProblem(db, "2026-10-16", now).contains("3 days back"));
+    QVERIFY(ReviewData::dateProblem(db, "2026-10-21", now).contains("after today"));
+    QVERIFY(!ReviewData::dateProblem(db, "not a date", now).isEmpty());
+
+    // the web app's number: more days, or only today
+    SyncStore store(db);
+    QString error;
+    QJsonObject config = configObject();
+    config.insert("sale_backdate_days", 10);
+    QVERIFY2(store.applyConfig(config, &error), qPrintable(error));
+    QCOMPARE(ReviewData::dateProblem(db, "2026-10-10", now), QString());
+    QVERIFY(!ReviewData::dateProblem(db, "2026-10-09", now).isEmpty());
+    config.insert("sale_backdate_days", 0);
+    QVERIFY2(store.applyConfig(config, &error), qPrintable(error));
+    QCOMPARE(ReviewData::dateProblem(db, "2026-10-20", now), QString());
+    QVERIFY(ReviewData::dateProblem(db, "2026-10-19", now).contains("only be dated today"));
 }
 
 void Smart210Test::theSettingsPageChoosesWhatASpotSaleAndACardFillGive()

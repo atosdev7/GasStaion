@@ -2,8 +2,11 @@
 
 #include "Barcode.h"
 #include "Checkout.h"
+#include "Settings.h"
 
 #include <QDate>
+#include <QDateTime>
+#include <QObject>
 #include <QSqlQuery>
 #include <QVariant>
 

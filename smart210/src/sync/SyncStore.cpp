@@ -1,6 +1,7 @@
 #include "SyncStore.h"
 
 #include "Barcode.h"
+#include "Checkout.h"
 #include "Decimal.h"
 #include "Settings.h"
 #include "TicketLegacy.h"

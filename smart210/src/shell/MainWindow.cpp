@@ -72,6 +72,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
         connect(themeWatcher_, SIGNAL(fileChanged(QString)), this, SLOT(themeFileChanged()));
     }
     boardLink_ = config.boardLink();
+    Checkout::setStartHour(settings_->intValue(SettingKey::BusinessDayStartHour, Checkout::StartHour));   // the web app's hour for the start of the business day
 
     setup_ = new SetupFlow(settings_, this);
     sync_ = new SyncClient(db, this);
