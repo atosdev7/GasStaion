@@ -14,6 +14,12 @@
     </qresource>
     <qresource prefix="/ticket">
         <file alias="title.bmp">ticket/title.bmp</file>
+        <file alias="title_sale.bmp">ticket/title_sale.bmp</file>
+        <file alias="title_self.bmp">ticket/title_self.bmp</file>
+        <file alias="title_other.bmp">ticket/title_other.bmp</file>
+        <file alias="title_ticket_loan.bmp">ticket/title_ticket_loan.bmp</file>
+        <file alias="title_remainder.bmp">ticket/title_remainder.bmp</file>
+        <file alias="title_card.bmp">ticket/title_card.bmp</file>
         <file alias="footer.bmp">ticket/footer.bmp</file>
     </qresource>
     <qresource prefix="/theme">

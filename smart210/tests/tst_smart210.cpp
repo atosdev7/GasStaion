@@ -5976,7 +5976,15 @@ void Smart210Test::theTicketBitmapsOfTheProgramAre192By48AndOneBit()
     AppConfig config;
     QCOMPARE(config.printOptions().titleBitmapPath, QString(":/ticket/title.bmp"));
     QCOMPARE(config.printOptions().footerBitmapPath, QString(":/ticket/footer.bmp"));
-    foreach (const QString &path, QStringList() << ":/ticket/title.bmp" << ":/ticket/footer.bmp") {
+    // the default title, one title for each kind of ticket (a sale, self use, other use, a ticket loan, a remainder, a card) and the footer
+    QStringList paths;
+    paths << ":/ticket/title.bmp" << ":/ticket/footer.bmp";
+    const QStringList kinds = QStringList() << "sale" << "self" << "other" << "ticket_loan" << "remainder" << "card";
+    foreach (const QString &kind, kinds) {
+        paths << ":/ticket/title_" + kind + ".bmp";
+        QCOMPARE(config.printOptions().titleBitmaps.value(kind), ":/ticket/title_" + kind + ".bmp");
+    }
+    foreach (const QString &path, paths) {
         const QImage bitmap(path);
         QVERIFY2(!bitmap.isNull(), qPrintable(path));
         QCOMPARE(bitmap.size(), QSize(192, 48));
@@ -6051,6 +6059,8 @@ void Smart210Test::aSpotSalesTicketIsReadFromTheSale()
     QSqlDatabase db = QSqlDatabase::database(connection_);
     PrintOptions options;
     options.titles["self"] = "My Own Self Title";
+    options.titleBitmapPath = "/all/title.bmp";                    // the title bitmap of every kind of ticket...
+    options.titleBitmaps["self"] = "/own/self.bmp";                // ...and the one of a kind that has its own
     PrintService service(db, options);
     const SpotSale::Result sale = SpotSale::create(db, spotInput(1050), 7, QDateTime(QDate(2026, 10, 7), QTime(9, 30, 0)));
     SpotSale::Input own = spotInput(500, "self");
@@ -6061,6 +6071,7 @@ void Smart210Test::aSpotSalesTicketIsReadFromTheSale()
     QString error;
     QVERIFY2(service.ticketOf(sale.saleId, &ticket, &error), qPrintable(error));
     QCOMPARE(ticket.title, QString("Gas Station Fuel Ticket"));  // the default for a sale
+    QCOMPARE(ticket.titleBitmap, QString("/all/title.bmp"));
     QCOMPARE(ticket.fuelName, QString("D"));                       // the letter (A gasoline, D diesel), not the name
     QCOMPARE(ticket.kgX100, qlonglong(1050));
     QCOMPARE(ticket.when, QDateTime(QDate(2026, 10, 7), QTime(9, 30, 0)));
@@ -6068,6 +6079,7 @@ void Smart210Test::aSpotSalesTicketIsReadFromTheSale()
 
     QVERIFY(service.ticketOf(self.saleId, &ticket, &error));
     QCOMPARE(ticket.title, QString("My Own Self Title"));         // config.ini overrides the title of a use
+    QCOMPARE(ticket.titleBitmap, QString("/own/self.bmp"));
 
     QString deletedError;
     run("UPDATE sales SET deleted_at = '2026-10-07 10:00:00' WHERE id = '" + self.saleId + "'");
