@@ -365,6 +365,12 @@ class Push
             'comment' => 'nullable|string|max:255',
         ]);
 
+        // A ticket is the remainder of one fill only: the first report of it stands, a second remainder with the same ticket is not stored (the terminal makes
+        // the remainders, the web only keeps them)
+        if (Remainder::where('ticket_barcode', $d['ticket_barcode'])->where('id', '!=', $d['id'])->exists()) {
+            throw new RejectedRow('conflict: the ticket ' . $d['ticket_barcode'] . ' is already the remainder of another fill, this one was not stored');
+        }
+
         self::store(self::find(Remainder::class, $d['id']), $d);
     }
 
@@ -406,6 +412,12 @@ class Push
         ]);
 
         $settlement = self::find(TicketLoanSettlement::class, $d['id']);
+        // A ticket is surrendered once: while a settlement with it stands (it is not reversed), a second one with the same ticket is not stored, so a loan is
+        // never paid down twice with one paper ticket (the terminal makes the settlements, the web only keeps them)
+        if (!$settlement->exists && TicketLoanSettlement::where('ticket_barcode', $d['ticket_barcode'])->whereNull('reverses_settlement_id')
+            ->whereNotIn('id', TicketLoanSettlement::whereNotNull('reverses_settlement_id')->select('reverses_settlement_id'))->exists()) {
+            throw new RejectedRow('conflict: the ticket ' . $d['ticket_barcode'] . ' already settled a loan, this settlement was not stored');
+        }
         if ($settlement->confirmed_at) {
             self::refuseEditOfConfirmed($settlement, $d, 'date');
 

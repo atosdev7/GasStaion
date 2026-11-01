@@ -218,6 +218,22 @@ class PushApiTest extends TestCase
         $this->assertEquals(0.8333, Supplement::find($none['id'])->density);                     // 10 / 12
     }
 
+    public function testATicketIsTheRemainderOfOneFillOnly()
+    {
+        $supplement = $this->supplement();
+        $this->push('supplements', [$supplement]);
+        $first = $this->remainder($supplement['id']);
+        $second = $this->remainder($supplement['id']);
+
+        $this->push('remainders', [$first]);
+        $result = $this->push('remainders', [$second]);
+
+        $this->assertSame([], $result['saved']);
+        $this->assertStringContainsString('already the remainder of another fill', $result['rejected'][0]['error']);
+        $this->assertSame(1, Remainder::count());
+        $this->assertSame([$first['id']], $this->push('remainders', [$first])['saved']);          // the same row again is fine
+    }
+
     public function testARemainderTakesItsMomentAndDayFromTheNewNamesOrTheOlderTerminalsNames()
     {
         $supplement = $this->supplement();
@@ -1082,7 +1098,7 @@ class PushApiTest extends TestCase
         $loan = $this->loanRow();
         $this->push('ticket_loans', [$loan]);
         $a = $this->settlementRow($loan['id'], ['amount_kg' => '5.00']);
-        $b = $this->settlementRow($loan['id'], ['amount_kg' => '10.00']);
+        $b = $this->settlementRow($loan['id'], ['amount_kg' => '10.00', 'ticket_barcode' => '0000006000000003']);
 
         $result = $this->push('ticket_loan_settlements', [$a, $b]);
 
@@ -1131,6 +1147,31 @@ class PushApiTest extends TestCase
         $taken = $this->push('ticket_loan_settlements', [array_merge($row, ['comment' => 'corrected', 'date' => '2026-10-07'])]);
         $this->assertSame([$row['id']], $taken['saved']);
         $this->assertSame('corrected', \App\Models\Debts\TicketLoanSettlement::find($row['id'])->comment);
+    }
+
+    public function testATicketSettlesOnlyOneLoanUntilThatSettlementIsReversed()
+    {
+        $loan = $this->loanRow();
+        $other = $this->loanRow();
+        $this->push('ticket_loans', [$loan, $other]);
+        $first = $this->settlementRow($loan['id']);
+        $again = $this->settlementRow($other['id']);
+
+        $this->push('ticket_loan_settlements', [$first]);
+        $result = $this->push('ticket_loan_settlements', [$again]);
+
+        $this->assertSame([], $result['saved']);
+        $this->assertStringContainsString('already settled a loan', $result['rejected'][0]['error']);
+        $this->assertSame(1, \App\Models\Debts\TicketLoanSettlement::count());
+        $this->assertEquals(0, \App\Models\Debts\TicketLoan::find($other['id'])->settled_amount_kg);
+        $this->assertSame([$first['id']], $this->push('ticket_loan_settlements', [$first])['saved']);      // the same row again is not a second use
+
+        // once the wrong settlement is reversed (on the web), the ticket is free again
+        \App\Models\Debts\TicketLoanSettlement::forceCreate([
+            'loan_id' => $loan['id'], 'ticket_barcode' => $first['ticket_barcode'], 'amount_kg' => -5, 'settled_at' => now(), 'user_id' => $this->cashier->id,
+            'reverses_settlement_id' => $first['id'],
+        ]);
+        $this->assertSame([$again['id']], $this->push('ticket_loan_settlements', [$again])['saved']);
     }
 
     public function testPushingASettlementTwiceDoesNotCountItTwice()
