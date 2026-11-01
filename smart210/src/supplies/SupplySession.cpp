@@ -1,4 +1,5 @@
 #include "SupplySession.h"
+#include "Clock.h"
 
 #include "Barcode.h"
 #include "Decimal.h"
@@ -57,6 +58,8 @@ bool SupplySession::add(int nozzle, const QString &barcode, QString *why)
         reason = tr("Nozzle %1 is in manual mode: the supplier types the amount at the dispenser, the cashier enters the tickets afterwards.").arg(nozzle);
     } else if (isLocked(nozzle)) {
         reason = tr("Nozzle %1 has started: its tickets cannot be changed.").arg(nozzle);
+    } else if (!Clock::behindRecords(db_, QDateTime::currentDateTime()).isEmpty()) {
+        reason = Clock::behindRecords(db_, QDateTime::currentDateTime());
     } else {
         const SupplyQueue::Scan scan = SupplyQueue::add(db_, nozzle, barcode, info.fuelType, QDateTime::currentDateTime());
         if (scan.ok) {
@@ -178,6 +181,8 @@ bool SupplySession::recordManual(int nozzle, qlonglong dispensedX100, qlonglong 
         reason = tr("Choose a nozzle first.");
     } else if (dispensedX100 <= 0 || litersX100 <= 0) {
         reason = tr("Enter the weight and the litres that were dispensed.");
+    } else if (!Clock::behindRecords(db_, now).isEmpty()) {
+        reason = Clock::behindRecords(db_, now);
     } else if (when > now.addSecs(60)) {
         reason = tr("The time is in the future.");
     } else if (when < QDateTime(now.date().addDays(-days), QTime(0, 0, 0))) {

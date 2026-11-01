@@ -4,113 +4,113 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="191"/>
-        <location filename="../src/sales/SpotSale.cpp" line="50"/>
+        <location filename="../src/sales/TicketSale.cpp" line="192"/>
+        <location filename="../src/sales/SpotSale.cpp" line="51"/>
         <source>Log in first.</source>
         <translation>Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="194"/>
-        <location filename="../src/sales/SpotSale.cpp" line="53"/>
+        <location filename="../src/sales/TicketSale.cpp" line="199"/>
+        <location filename="../src/sales/SpotSale.cpp" line="58"/>
         <source>Choose what the fuel is for.</source>
         <translation>Choose what the fuel is for.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSale.cpp" line="56"/>
+        <location filename="../src/sales/SpotSale.cpp" line="61"/>
         <source>Choose the fuel type.</source>
         <translation>Choose the fuel type.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="206"/>
-        <location filename="../src/sales/SpotSale.cpp" line="59"/>
+        <location filename="../src/sales/TicketSale.cpp" line="211"/>
+        <location filename="../src/sales/SpotSale.cpp" line="64"/>
         <source>Choose the customer.</source>
         <translation>Choose the customer.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSale.cpp" line="62"/>
+        <location filename="../src/sales/SpotSale.cpp" line="67"/>
         <source>Enter the weight in kg, above 0 and up to 999999.</source>
         <translation>Enter the weight in kg, above 0 and up to 999999.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="209"/>
-        <location filename="../src/sales/SpotSale.cpp" line="65"/>
+        <location filename="../src/sales/TicketSale.cpp" line="214"/>
+        <location filename="../src/sales/SpotSale.cpp" line="70"/>
         <source>Enter the price per kg.</source>
         <translation>Enter the price per kg.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="244"/>
-        <location filename="../src/sales/SpotSale.cpp" line="72"/>
+        <location filename="../src/sales/TicketSale.cpp" line="249"/>
+        <location filename="../src/sales/SpotSale.cpp" line="77"/>
         <source>The amount is not allowed.</source>
         <translation>The amount is not allowed.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="312"/>
-        <location filename="../src/sales/SpotSale.cpp" line="139"/>
+        <location filename="../src/sales/TicketSale.cpp" line="317"/>
+        <location filename="../src/sales/SpotSale.cpp" line="144"/>
         <source>The sale could not be saved.</source>
         <translation>The sale could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketNumbers.cpp" line="29"/>
+        <location filename="../src/sales/TicketNumbers.cpp" line="102"/>
         <source>The ticket numbers are not known yet. Download from the server first.</source>
         <translation>The ticket numbers are not known yet. Download from the server first.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketNumbers.cpp" line="62"/>
+        <location filename="../src/sales/TicketNumbers.cpp" line="135"/>
         <source>The ticket numbers of this terminal are used up.</source>
         <translation>The ticket numbers of this terminal are used up.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="31"/>
+        <location filename="../src/sales/TicketSale.cpp" line="32"/>
         <source>This ticket was already sold.</source>
         <translation>This ticket was already sold.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="33"/>
+        <location filename="../src/sales/TicketSale.cpp" line="34"/>
         <source>This ticket was already used.</source>
         <translation>This ticket was already used.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="36"/>
+        <location filename="../src/sales/TicketSale.cpp" line="37"/>
         <source>This ticket is restricted and cannot be sold.</source>
         <translation>This ticket is restricted and cannot be sold.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="47"/>
+        <location filename="../src/sales/TicketSale.cpp" line="48"/>
         <source>That is not a ticket barcode (16 digits).</source>
         <translation>That is not a ticket barcode (16 digits).</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="56"/>
+        <location filename="../src/sales/TicketSale.cpp" line="57"/>
         <source>This ticket is not known on this terminal.</source>
         <translation>This ticket is not known on this terminal.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="68"/>
+        <location filename="../src/sales/TicketSale.cpp" line="69"/>
         <source>This ticket is another fuel type than the tickets already scanned.</source>
         <translation>This ticket is another fuel type than the tickets already scanned.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="197"/>
+        <location filename="../src/sales/TicketSale.cpp" line="202"/>
         <source>Scan the tickets first.</source>
         <translation>Scan the tickets first.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="200"/>
+        <location filename="../src/sales/TicketSale.cpp" line="205"/>
         <source>Too many tickets for one sale.</source>
         <translation>Too many tickets for one sale.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="225"/>
+        <location filename="../src/sales/TicketSale.cpp" line="230"/>
         <source>Ticket %1 cannot be sold: %2</source>
         <translation>Ticket %1 cannot be sold: %2</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="226"/>
+        <location filename="../src/sales/TicketSale.cpp" line="231"/>
         <source>it is twice in the list.</source>
         <translation>it is twice in the list.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="235"/>
+        <location filename="../src/sales/TicketSale.cpp" line="240"/>
         <source>The tickets are not of the chosen fuel type.</source>
         <translation>The tickets are not of the chosen fuel type.</translation>
     </message>
@@ -160,55 +160,62 @@
         <translation>The sale could not be deleted.</translation>
     </message>
     <message>
-        <location filename="../src/sales/Checkout.cpp" line="229"/>
+        <location filename="../src/sales/Checkout.cpp" line="247"/>
         <source>This day was not checked out on this terminal.</source>
         <translation>This day was not checked out on this terminal.</translation>
     </message>
     <message>
-        <location filename="../src/sales/Checkout.cpp" line="233"/>
+        <location filename="../src/sales/Checkout.cpp" line="251"/>
         <source>The day can only be moved for one day after its checkout.</source>
         <translation>The day can only be moved for one day after its checkout.</translation>
     </message>
     <message>
-        <location filename="../src/sales/Checkout.cpp" line="242"/>
+        <location filename="../src/sales/Checkout.cpp" line="260"/>
         <source>Some records of this day were already uploaded.</source>
         <translation>Some records of this day were already uploaded.</translation>
     </message>
     <message>
-        <location filename="../src/sales/Checkout.cpp" line="252"/>
+        <location filename="../src/sales/Checkout.cpp" line="270"/>
         <source>A day can be moved by one day.</source>
         <translation>A day can be moved by one day.</translation>
     </message>
     <message>
-        <location filename="../src/sales/Checkout.cpp" line="288"/>
+        <location filename="../src/sales/Checkout.cpp" line="306"/>
         <source>The day could not be moved.</source>
         <translation>The day could not be moved.</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="66"/>
         <source>spot sale</source>
         <translation>spot sale</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="69"/>
         <source>self use</source>
         <translation>self use</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="72"/>
         <source>other use</source>
         <translation>other use</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="75"/>
         <source>ticket loan</source>
         <translation>ticket loan</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="78"/>
         <source>card</source>
         <translation>card</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="81"/>
         <source>remainder</source>
         <translation>remainder</translation>
     </message>
     <message>
+        <location filename="../src/sales/TicketNumbers.cpp" line="84"/>
         <source>press</source>
         <translation>press</translation>
     </message>
@@ -221,22 +228,22 @@
         <translation>Spot sale</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="42"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="43"/>
         <source>Sale</source>
         <translation>Sale</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="43"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="44"/>
         <source>Self use</source>
         <translation>Self use</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="44"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="45"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="45"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="46"/>
         <source>Ticket loan</source>
         <translation>Ticket loan</translation>
     </message>
@@ -306,57 +313,55 @@
         <translation>Print again</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="49"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="50"/>
         <source>Print ticket</source>
         <translation>Print ticket</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="50"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="51"/>
         <source>Set directly</source>
         <translation>Set directly</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="127"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="129"/>
         <source>Choose the customer</source>
         <translation>Choose the customer</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="259"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="261"/>
         <source>Saved: %1 kg, amount %2. Ticket %3</source>
         <translation>Saved: %1 kg, amount %2. Ticket %3</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="260"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="262"/>
         <source>Saved: %1 kg. Ticket %2</source>
         <translation>Saved: %1 kg. Ticket %2</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="280"/>
         <source>No nozzle was chosen, so nothing was sent. Print again prints the ticket.</source>
-        <translation>No nozzle was chosen, so nothing was sent. Print again prints the ticket.</translation>
+        <translation type="vanished">No nozzle was chosen, so nothing was sent. Print again prints the ticket.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="290"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="281"/>
         <source>Print again prints the ticket.</source>
         <translation>Print again prints the ticket.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="294"/>
         <source>Nozzle %1: %2 kg are set. Take the gun up to start the fill.</source>
-        <translation>Nozzle %1: %2 kg are set. Take the gun up to start the fill.</translation>
+        <translation type="vanished">Nozzle %1: %2 kg are set. Take the gun up to start the fill.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="306"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="293"/>
         <source>Printing...</source>
         <translation>Printing...</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="323"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="310"/>
         <source>The ticket was sent to the printer.</source>
         <translation>The ticket was sent to the printer.</translation>
     </message>
     <message>
-        <location filename="../src/sales/SpotSalePage.cpp" line="323"/>
+        <location filename="../src/sales/SpotSalePage.cpp" line="310"/>
         <source>It was not printed: %1</source>
         <translation>It was not printed: %1</translation>
     </message>

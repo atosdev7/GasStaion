@@ -1,4 +1,5 @@
 #include "LoanSettlement.h"
+#include "Clock.h"
 #include "Checkout.h"
 
 #include "Barcode.h"
@@ -106,6 +107,10 @@ LoanSettlement::Result LoanSettlement::create(QSqlDatabase db, const QString &lo
 {
     if (userId <= 0) {
         return refused(QObject::tr("Log in first."));
+    }
+    const QString behind = Clock::behindRecords(db, now);
+    if (!behind.isEmpty()) {
+        return refused(behind);
     }
     if (barcodes.isEmpty()) {
         return refused(QObject::tr("Scan the tickets first."));

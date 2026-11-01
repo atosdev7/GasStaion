@@ -1,4 +1,5 @@
 #include "Cards.h"
+#include "Clock.h"
 #include "Checkout.h"
 
 #include "Barcode.h"
@@ -252,6 +253,10 @@ Cards::TopUpResult Cards::topUp(QSqlDatabase db, const QString &cardId, qlonglon
 
         return result;
     }
+    result.error = Clock::behindRecords(db, now);
+    if (!result.error.isEmpty()) {
+        return result;
+    }
     if (kgX100 < 1 || kgX100 > SpotSale::MaxKgX100) {
         result.error = QObject::tr("Enter the weight in kg, above 0 and up to 999999.");
 
@@ -338,6 +343,10 @@ Cards::TicketResult Cards::issueTicket(QSqlDatabase db, const QString &cardId, q
     if (userId <= 0) {
         result.error = QObject::tr("Log in first.");
 
+        return result;
+    }
+    result.error = Clock::behindRecords(db, now);
+    if (!result.error.isEmpty()) {
         return result;
     }
     if (kgX100 < 1 || kgX100 > SpotSale::MaxKgX100) {

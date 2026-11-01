@@ -365,6 +365,7 @@ private slots:
     void ownUseAndOtherHaveNoAmountAndALoanMakesATicketLoan();
     void ticketNumbersNeverRepeatEvenAfterAPurgeOrOnANewBoard();
     void aSpotSaleThatIsNotAllowedWritesNothing();
+    void aClockBehindTheLastRecordRefusesNewRecords();
     void withoutTheTicketNumbersFromTheServerNothingIsSold();
     void theCodeOfATicketIsTheFuelTypeAndTheKindAndTheSerialCountsPerCode();
     void theConfigDownloadBringsTheTicketNumbering();
@@ -4128,6 +4129,29 @@ void Smart210Test::ticketNumbersNeverRepeatEvenAfterAPurgeOrOnANewBoard()
     Settings(db).setValue("serial_floor_21", "500000000");
     run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000050, 'D', 100, 2, 1)");
     QCOMPARE(SpotSale::create(db, saleInput(100), 7, QDateTime::currentDateTime()).barcode, QString("0000021500000051"));
+}
+
+// A clock that is behind the newest record the terminal stamped (a power cut with a flat RTC battery) makes no new sale, top-up, ticket or supply entry, until it
+// is set right; a few minutes of difference (a clock a download corrected) are tolerated.
+void Smart210Test::aClockBehindTheLastRecordRefusesNewRecords()
+{
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now(QDate(2026, 10, 7), QTime(12, 0, 0));
+
+    QVERIFY(Clock::behindRecords(db, now).isEmpty());                                   // nothing made yet
+    QVERIFY(SpotSale::create(db, saleInput(1050), 7, now).ok);
+    QVERIFY(Clock::behindRecords(db, now).isEmpty());
+    QVERIFY(Clock::behindRecords(db, now.addSecs(-Clock::TolerateSeconds)).isEmpty());
+
+    const QDateTime behind = now.addSecs(-3600);                                           // the clock fell back an hour
+    QVERIFY(Clock::behindRecords(db, behind).contains("2026-10-07 12:00"));
+    const SpotSale::Result refused = SpotSale::create(db, saleInput(1050), 7, behind);
+    QVERIFY(!refused.ok);
+    QVERIFY(refused.error.contains("behind"));
+    QCOMPARE(countRows("sales"), 1);
+
+    QVERIFY(SpotSale::create(db, saleInput(1050), 7, now.addSecs(60)).ok);              // set right again
 }
 
 void Smart210Test::aSpotSaleThatIsNotAllowedWritesNothing()

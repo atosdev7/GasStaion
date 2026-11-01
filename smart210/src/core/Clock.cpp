@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QProcess>
+#include <QSqlQuery>
 #include <QStringList>
 
 #include <stdlib.h>
@@ -34,6 +35,31 @@ qint64 Clock::record(Settings &settings, const QString &serverTime, const QDateT
 bool Clock::isOff(qint64 offsetSeconds)
 {
     return offsetSeconds > WarnSeconds || offsetSeconds < -WarnSeconds;
+}
+
+static bool behindCheckOn = true;
+
+void Clock::setBehindCheck(bool on)
+{
+    behindCheckOn = on;
+}
+
+QString Clock::behindRecords(QSqlDatabase db, const QDateTime &now)
+{
+    if (!behindCheckOn) {
+        return QString();
+    }
+    QSqlQuery query(db);
+    query.exec("SELECT MAX(t) FROM (SELECT MAX(created_at) AS t FROM sales UNION ALL SELECT MAX(created_at) FROM remainders UNION ALL SELECT MAX(started_at) FROM supply_sessions)");
+    if (!query.next() || query.value(0).toString().isEmpty()) {
+        return QString();
+    }
+    const QDateTime newest = QDateTime::fromString(query.value(0).toString(), "yyyy-MM-dd HH:mm:ss");
+    if (!newest.isValid() || now.secsTo(newest) <= TolerateSeconds) {
+        return QString();
+    }
+
+    return QObject::tr("The clock of this terminal is behind: the last record was made at %1. Set the clock right (a download from the server sets it) before you go on.").arg(newest.toString("yyyy-MM-dd HH:mm"));
 }
 
 bool Clock::setSystemClock(const QDateTime &serverTime)

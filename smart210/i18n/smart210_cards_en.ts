@@ -525,136 +525,136 @@ The card holds %5 kg.</translation>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="251"/>
-        <location filename="../src/cards/Cards.cpp" line="339"/>
+        <location filename="../src/cards/Cards.cpp" line="252"/>
+        <location filename="../src/cards/Cards.cpp" line="344"/>
         <source>Log in first.</source>
         <translation>Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="148"/>
+        <location filename="../src/cards/Cards.cpp" line="149"/>
         <source>Choose the fuel type.</source>
         <translation>Choose the fuel type.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="124"/>
+        <location filename="../src/cards/Cards.cpp" line="125"/>
         <source>Read the card first.</source>
         <translation>Read the card first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="129"/>
+        <location filename="../src/cards/Cards.cpp" line="130"/>
         <source>Enter the name of the customer.</source>
         <translation>Enter the name of the customer.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="134"/>
+        <location filename="../src/cards/Cards.cpp" line="135"/>
         <source>The phone number is too long.</source>
         <translation>The phone number is too long.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="139"/>
-        <location filename="../src/cards/Cards.cpp" line="209"/>
+        <location filename="../src/cards/Cards.cpp" line="140"/>
+        <location filename="../src/cards/Cards.cpp" line="210"/>
         <source>The PIN is 4 to 8 digits.</source>
         <translation>The PIN is 4 to 8 digits.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="157"/>
+        <location filename="../src/cards/Cards.cpp" line="158"/>
         <source>This card is registered already.</source>
         <translation>This card is registered already.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="178"/>
+        <location filename="../src/cards/Cards.cpp" line="179"/>
         <source>The card could not be saved.</source>
         <translation>The card could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="194"/>
-        <location filename="../src/cards/Cards.cpp" line="281"/>
-        <location filename="../src/cards/Cards.cpp" line="357"/>
+        <location filename="../src/cards/Cards.cpp" line="195"/>
+        <location filename="../src/cards/Cards.cpp" line="286"/>
+        <location filename="../src/cards/Cards.cpp" line="366"/>
         <source>This card is not known.</source>
         <translation>This card is not known.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="199"/>
-        <location filename="../src/cards/Cards.cpp" line="363"/>
+        <location filename="../src/cards/Cards.cpp" line="200"/>
+        <location filename="../src/cards/Cards.cpp" line="372"/>
         <source>This card is blocked (lost).</source>
         <translation>This card is blocked (lost).</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="204"/>
-        <location filename="../src/cards/Cards.cpp" line="363"/>
+        <location filename="../src/cards/Cards.cpp" line="205"/>
+        <location filename="../src/cards/Cards.cpp" line="372"/>
         <source>This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.</source>
         <translation>This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="239"/>
+        <location filename="../src/cards/Cards.cpp" line="240"/>
         <source>Wrong PIN. The card is locked now: the manager or the accountant unlocks it on the web app.</source>
         <translation>Wrong PIN. The card is locked now: the manager or the accountant unlocks it on the web app.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="240"/>
+        <location filename="../src/cards/Cards.cpp" line="241"/>
         <source>Wrong PIN. %1 tries left.</source>
         <translation>Wrong PIN. %1 tries left.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="256"/>
-        <location filename="../src/cards/Cards.cpp" line="344"/>
+        <location filename="../src/cards/Cards.cpp" line="261"/>
+        <location filename="../src/cards/Cards.cpp" line="353"/>
         <source>Enter the weight in kg, above 0 and up to 999999.</source>
         <translation>Enter the weight in kg, above 0 and up to 999999.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="261"/>
-        <location filename="../src/cards/Cards.cpp" line="294"/>
+        <location filename="../src/cards/Cards.cpp" line="266"/>
+        <location filename="../src/cards/Cards.cpp" line="299"/>
         <source>Enter the price per kg.</source>
         <translation>Enter the price per kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="267"/>
-        <location filename="../src/cards/Cards.cpp" line="294"/>
+        <location filename="../src/cards/Cards.cpp" line="272"/>
+        <location filename="../src/cards/Cards.cpp" line="299"/>
         <source>The amount is not allowed.</source>
         <translation>The amount is not allowed.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="287"/>
+        <location filename="../src/cards/Cards.cpp" line="292"/>
         <source>This card is blocked (lost): it cannot be topped up.</source>
         <translation>This card is blocked (lost): it cannot be topped up.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="322"/>
+        <location filename="../src/cards/Cards.cpp" line="327"/>
         <source>The top-up could not be saved.</source>
         <translation>The top-up could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="369"/>
+        <location filename="../src/cards/Cards.cpp" line="378"/>
         <source>The card holds only %1 kg.</source>
         <translation>The card holds only %1 kg.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="395"/>
+        <location filename="../src/cards/Cards.cpp" line="404"/>
         <source>The ticket could not be saved.</source>
         <translation>The ticket could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="415"/>
+        <location filename="../src/cards/Cards.cpp" line="424"/>
         <source>This is not a ticket made for a card.</source>
         <translation>This is not a ticket made for a card.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="423"/>
+        <location filename="../src/cards/Cards.cpp" line="432"/>
         <source>This ticket was used already: it cannot be cancelled.</source>
         <translation>This ticket was used already: it cannot be cancelled.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="432"/>
+        <location filename="../src/cards/Cards.cpp" line="441"/>
         <source>This ticket is in the queue of a nozzle: take it out first.</source>
         <translation>This ticket is in the queue of a nozzle: take it out first.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="437"/>
+        <location filename="../src/cards/Cards.cpp" line="446"/>
         <source>This ticket was uploaded already: the manager cancels it on the web app by restricting it, and the kg go back to the card.</source>
         <translation>This ticket was uploaded already: the manager cancels it on the web app by restricting it, and the kg go back to the card.</translation>
     </message>
     <message>
-        <location filename="../src/cards/Cards.cpp" line="452"/>
+        <location filename="../src/cards/Cards.cpp" line="461"/>
         <source>The ticket could not be cancelled.</source>
         <translation>The ticket could not be cancelled.</translation>
     </message>

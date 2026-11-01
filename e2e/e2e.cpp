@@ -24,6 +24,7 @@
 #include <QTimer>
 #include <functional>
 
+#include "Clock.h"
 #include "Barcode.h"
 #include "BoardBus.h"
 #include "BoardProtocol.h"
@@ -379,6 +380,7 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     ApiClient::setMinIntervalMs(0); // a test does not wait a second between calls
+    Clock::setBehindCheck(false);   // its simulated days carry times ahead of this PC's clock
     if (argc < 5) {
         out << "usage: e2e <scenario> <server host> <server port> <facts.json>\n";
 

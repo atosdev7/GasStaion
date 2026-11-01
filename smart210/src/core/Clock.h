@@ -2,6 +2,7 @@
 #define CLOCK_H
 
 #include <QDateTime>
+#include <QSqlDatabase>
 #include <QString>
 
 class Settings;
@@ -27,6 +28,14 @@ public:
     static qint64 record(Settings &settings, const QString &serverTime, const QDateTime &local);
 
     static bool isOff(qint64 offsetSeconds);
+
+    // A clock that is earlier than the newest record this terminal stamped itself (a sale or card top-up, a started fill, a remainder) is wrong (a power cut
+    // with a flat RTC battery, or a clock set back): a record made now would be dated before the ones it follows. Empty when the clock is fine, else the text for
+    // the cashier, which says what to do. TolerateSeconds: a clock that was corrected by a download may be a little behind.
+    static const int TolerateSeconds = 120;
+    static QString behindRecords(QSqlDatabase db, const QDateTime &now);
+    // The end-to-end program writes records of whole simulated days with times ahead of the clock of the PC: it switches the check off.
+    static void setBehindCheck(bool on);
 
     // Sets the system clock to the server's local time. False when it is not possible (not Linux, or no permission). The way of an older server.
     static bool setSystemClock(const QDateTime &serverTime);

@@ -1,4 +1,5 @@
 #include "SpotSale.h"
+#include "Clock.h"
 #include "Checkout.h"
 
 #include "Barcode.h"
@@ -48,6 +49,10 @@ SpotSale::Result SpotSale::create(QSqlDatabase db, const Input &in, int userId, 
 
     if (userId <= 0) {
         return refused(QObject::tr("Log in first."));
+    }
+    const QString behind = Clock::behindRecords(db, now);
+    if (!behind.isEmpty()) {
+        return refused(behind);
     }
     if (!(counts || in.usage == "self" || in.usage == "other" || in.usage == "ticket_loan")) {
         return refused(QObject::tr("Choose what the fuel is for."));
