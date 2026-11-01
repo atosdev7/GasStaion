@@ -366,6 +366,7 @@ private slots:
     void ticketNumbersNeverRepeatEvenAfterAPurgeOrOnANewBoard();
     void aSpotSaleThatIsNotAllowedWritesNothing();
     void aClockBehindTheLastRecordRefusesNewRecords();
+    void aGunPutDownEndsTheFillThatRunsAfterThreeSeconds();
     void withoutTheTicketNumbersFromTheServerNothingIsSold();
     void theCodeOfATicketIsTheFuelTypeAndTheKindAndTheSerialCountsPerCode();
     void theConfigDownloadBringsTheTicketNumbering();
@@ -4129,6 +4130,33 @@ void Smart210Test::ticketNumbersNeverRepeatEvenAfterAPurgeOrOnANewBoard()
     Settings(db).setValue("serial_floor_21", "500000000");
     run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000050, 'D', 100, 2, 1)");
     QCOMPARE(SpotSale::create(db, saleInput(100), 7, QDateTime::currentDateTime()).barcode, QString("0000021500000051"));
+}
+
+// The gun on its hook ends a fill that runs after 3 seconds (PROTOCOL.md, no-flow); taken up again before that, the fill goes on.
+void Smart210Test::aGunPutDownEndsTheFillThatRunsAfterThreeSeconds()
+{
+    BoardSimulator sim;
+    sim.add(2);
+    BoardProtocol::BoardConfig config = sim.board(2).config;
+    config.mode = BoardProtocol::ModeManual;
+    sim.board(2).config = config;
+    QVERIFY(sim.typeAmount(2, 50000));
+    QVERIFY(sim.liftGun(2));
+    sim.tick(2000);
+    QCOMPARE(sim.board(2).state, int(BoardProtocol::StateDispensing));
+
+    sim.putGunDown(2);
+    QVERIFY(!sim.board(2).gunUp);
+    sim.tick(2000);                                                       // not yet 3 seconds
+    QCOMPARE(sim.board(2).state, int(BoardProtocol::StateDispensing));
+    QVERIFY(sim.liftGun(2));                                              // taken up again: the fill goes on
+    sim.tick(5000);
+    QCOMPARE(sim.board(2).state, int(BoardProtocol::StateDispensing));
+
+    sim.putGunDown(2);
+    sim.tick(3000);
+    QCOMPARE(sim.board(2).state, int(BoardProtocol::StateIdle));          // a manual board holds no result
+    QCOMPARE(sim.board(2).reason, int(BoardProtocol::ReasonTankFullOrNoFlow));
 }
 
 // A clock that is behind the newest record the terminal stamped (a power cut with a flat RTC battery) makes no new sale, top-up, ticket or supply entry, until it

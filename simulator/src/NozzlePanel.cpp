@@ -7,7 +7,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
+#include <QFontDatabase>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSpinBox>
@@ -27,6 +27,31 @@ QString litres(quint32 millilitres)
     return QString::number(millilitres / 1000.0, 'f', 2);
 }
 
+// What a display of the dispenser shows: `digits` digits and `decimals` of them after the point, the leading zeros left blank (a 6-digit display with 2
+// decimals shows 15.00 as "  15.00"); a number too big for the display shows dashes.
+QString shown(double value, int digits, int decimals)
+{
+    const QString text = QString::number(value, 'f', decimals);
+    if (text.size() - (decimals > 0 ? 1 : 0) > digits) {
+        return QString(digits + (decimals > 0 ? 1 : 0), '-');
+    }
+
+    return text.rightJustified(digits + (decimals > 0 ? 1 : 0), ' ');
+}
+
+// The density has 4 digits: 0.8333 kg/L shows as ".8333", 1.2500 as "1.250"; a board that holds no config shows "----".
+QString densityText(quint32 densityX10000)
+{
+    if (densityX10000 == 0) {
+        return "----";
+    }
+    if (densityX10000 < 10000) {
+        return QString::number(densityX10000 / 10000.0, 'f', 4).mid(1);
+    }
+
+    return QString::number(densityX10000 / 10000.0, 'f', 3).left(5);
+}
+
 QString colorOf(int state)
 {
     switch (state) {
@@ -79,17 +104,49 @@ NozzlePanel::NozzlePanel(int address, BoardSimulator *simulator, QWidget *parent
     result_ = new QLabel;
     result_->setWordWrap(true);
 
-    select_ = new QPushButton("Select key");
-    clear_ = new QPushButton("Clear key");
-    gun_ = new QPushButton("Lift the gun");
-    gun_->setToolTip("The board reports the gun (GUN_UP); the Smart210 sends START when it has tickets queued");
-    select_->setToolTip("The cashier presses the nozzle's select key (auto mode)");
-    amount_ = new QLineEdit;
-    amount_->setPlaceholderText("kg");
-    amount_->setMaximumWidth(70);
-    type_ = new QPushButton("Type amount + start");
-    type_->setToolTip("Manual mode: the supplier types the amount on the dispenser's keyboard and the fill starts");
-    stop_ = new QPushButton("Stop fill");
+    select_ = new QPushButton("Select");
+    clear_ = new QPushButton("Clear");
+    enter_ = new QPushButton("Enter");
+    gunUp_ = new QPushButton("Gun up");
+    gunDown_ = new QPushButton("Gun down");
+    gunUp_->setToolTip("The supplier takes the gun up: the board reports it (GUN_UP); the Smart210 sends START when it has tickets queued (a manual board starts by itself)");
+    gunDown_->setToolTip("The gun goes back on its hook: a fill that runs ends 3 seconds later");
+    select_->setToolTip("The select key of the dispenser (auto mode): the board reports it, the Smart210 chooses the nozzle");
+    clear_->setToolTip("Auto mode: the clear key of the dispenser (reported to the Smart210). Manual mode: clears the amount that is being typed");
+    enter_->setToolTip("Manual mode: the amount typed is the preset; the fill starts when the gun is up");
+
+    // the three displays of the dispenser, like the real one: 6 digits (kg), 6 digits (litres), 4 digits (density)
+    QHBoxLayout *displays = new QHBoxLayout;
+    const char *captions[] = { "kg", "litres", "density" };
+    QLabel **targets[] = { &kgDisplay_, &litresDisplay_, &densityDisplay_ };
+    for (int i = 0; i < 3; ++i) {
+        QVBoxLayout *one = new QVBoxLayout;
+        QLabel *caption = new QLabel(QString("%1 (%2 digits)").arg(captions[i]).arg(i == 2 ? 4 : 6));
+        caption->setAlignment(Qt::AlignHCenter);
+        one->addWidget(caption);
+        one->addWidget(makeDisplay(targets[i]));
+        displays->addLayout(one, i == 2 ? 2 : 3);
+    }
+
+    // the keypad of the dispenser: the digits and the point type the amount of a manual fill; Select and Clear are the keys of an auto dispenser
+    QGridLayout *keypad = new QGridLayout;
+    const char *keys[] = { "7", "8", "9", "4", "5", "6", "1", "2", "3", "0", "." };
+    for (int i = 0; i < 11; ++i) {
+        QPushButton *key = new QPushButton(keys[i]);
+        key->setMinimumWidth(34);
+        digits_ << key;
+        connect(key, SIGNAL(clicked()), this, SLOT(digitKey()));
+        if (i < 9) {
+            keypad->addWidget(key, i / 3, i % 3);
+        } else {
+            keypad->addWidget(key, 3, i - 9);
+        }
+    }
+    keypad->addWidget(select_, 0, 3);
+    keypad->addWidget(clear_, 1, 3);
+    keypad->addWidget(enter_, 2, 3, 2, 1);
+    keypad->addWidget(gunUp_, 4, 0, 1, 2);
+    keypad->addWidget(gunDown_, 4, 2, 1, 2);    stop_ = new QPushButton("Stop fill");
     flow_ = new QSpinBox;
     flow_->setRange(1, 5000);
     flow_->setSuffix(" g/s");
@@ -107,14 +164,8 @@ NozzlePanel::NozzlePanel(int address, BoardSimulator *simulator, QWidget *parent
     QPushButton *reset = new QPushButton("Factory reset");
     reset->setToolTip("The board forgets its config (as a new board)");
 
-    QHBoxLayout *manual = new QHBoxLayout;
-    manual->addWidget(amount_);
-    manual->addWidget(type_, 1);
-
     QGridLayout *buttons = new QGridLayout;
-    buttons->addWidget(select_, 0, 0);
-    buttons->addWidget(stop_, 0, 1);
-    buttons->addLayout(manual, 1, 0, 1, 2);
+    buttons->addWidget(stop_, 0, 0, 1, 2);
     buttons->addWidget(new QLabel("Flow"), 2, 0);
     buttons->addWidget(flow_, 2, 1);
     buttons->addWidget(fault_, 3, 0);
@@ -123,8 +174,6 @@ NozzlePanel::NozzlePanel(int address, BoardSimulator *simulator, QWidget *parent
     buttons->addWidget(reset, 4, 1);
     buttons->addWidget(lose, 5, 0);
     buttons->addWidget(spoil, 5, 1);
-    buttons->addWidget(clear_, 6, 0);
-    buttons->addWidget(gun_, 6, 1);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addWidget(state_);
@@ -132,14 +181,16 @@ NozzlePanel::NozzlePanel(int address, BoardSimulator *simulator, QWidget *parent
     layout->addWidget(progress_);
     layout->addWidget(fill_);
     layout->addWidget(result_);
+    layout->addLayout(displays);
+    layout->addLayout(keypad);
     layout->addLayout(buttons);
 
     connect(select_, SIGNAL(clicked()), this, SLOT(selectKey()));
-    connect(type_, SIGNAL(clicked()), this, SLOT(typeAmount()));
-    connect(amount_, SIGNAL(returnPressed()), this, SLOT(typeAmount()));
+    connect(enter_, SIGNAL(clicked()), this, SLOT(enterKey()));
     connect(stop_, SIGNAL(clicked()), this, SLOT(stopFill()));
     connect(clear_, SIGNAL(clicked()), this, SLOT(clearKey()));
-    connect(gun_, SIGNAL(clicked()), this, SLOT(liftGun()));
+    connect(gunUp_, SIGNAL(clicked()), this, SLOT(gunUp()));
+    connect(gunDown_, SIGNAL(clicked()), this, SLOT(gunDown()));
     connect(fault_, SIGNAL(activated(int)), this, SLOT(faultPicked(int)));
     connect(cut, SIGNAL(clicked()), this, SLOT(powerCut()));
     connect(silent_, SIGNAL(toggled(bool)), this, SLOT(silentToggled(bool)));
@@ -188,14 +239,35 @@ void NozzlePanel::refresh()
         result_->setText("No result yet");
     }
 
-    const bool manual = b.config.mode == ModeManual;
-    select_->setEnabled(!manual && (b.state == StateIdle || b.state == StateArmed));
-    type_->setEnabled(manual && b.state == StateIdle);
-    amount_->setEnabled(manual && b.state == StateIdle);
-    stop_->setEnabled(b.state == StateDispensing);
-    clear_->setEnabled(!manual && b.state == StateArmed);
-    gun_->setEnabled(b.state == StateIdle || b.state == StateArmed);
-    flow_->setValue(b.flowGramsPerSecond);
+    const bool manual = b.config.mode == ModeManual;
+    if (!manual || b.state != StateIdle) {
+        typed_.clear(); // what was being typed is gone when the board is not waiting for an amount
+    }
+
+    // display 1, the kg: what is being typed, a fill's weight (it runs or is held as a result), the preset, or a card's balance; display 2, the litres of the fill
+    double kgShown = 0;
+    if (!typed_.isEmpty()) {
+        kgShown = typed_.toDouble();
+    } else if (b.state == StateDispensing || b.state == StateResult) {
+        kgShown = b.dispensedG / 1000.0;
+    } else if (b.state == StateSelected || b.state == StateArmed) {
+        kgShown = b.presetG / 1000.0;
+    } else if (b.shownG > 0) {
+        kgShown = b.shownG / 1000.0;
+    }
+    kgDisplay_->setText(typed_.isEmpty() ? shown(kgShown, 6, 2) : typed_.rightJustified(7, ' '));
+    litresDisplay_->setText(shown((b.state == StateDispensing || b.state == StateResult) ? b.dispensedMl / 1000.0 : 0, 6, 2));
+    densityDisplay_->setText(densityText(b.config.density));
+
+    select_->setEnabled(!manual && (b.state == StateIdle || b.state == StateArmed));
+    clear_->setEnabled(manual ? (b.state == StateIdle && !typed_.isEmpty()) : b.state == StateArmed);
+    enter_->setEnabled(manual && b.state == StateIdle && !typed_.isEmpty());
+    for (int i = 0; i < digits_.size(); ++i) {
+        digits_.at(i)->setEnabled(manual && b.state == StateIdle);
+    }
+    stop_->setEnabled(b.state == StateDispensing);
+    gunUp_->setEnabled(!b.gunUp && (b.state == StateIdle || b.state == StateArmed || b.state == StateDispensing));
+    gunDown_->setEnabled(b.gunUp || (b.state == StateDispensing && b.hookDownMsLeft == 0));    flow_->setValue(b.flowGramsPerSecond);
     fault_->setCurrentIndex(fault_->findData(b.fault));
     silent_->setChecked(b.silent);
 
@@ -209,29 +281,52 @@ void NozzlePanel::selectKey()
 
 void NozzlePanel::clearKey()
 {
-    sim_->pressClearKey(address_);
-}
-
-void NozzlePanel::liftGun()
-{
-    sim_->liftGun(address_);
-}
-
-void NozzlePanel::typeAmount()
-{
-    bool ok = false;
-    const double kilograms = amount_->text().trimmed().replace(',', '.').toDouble(&ok);
-    if (!ok || kilograms <= 0 || kilograms > 4000000) {
-        amount_->setStyleSheet("background: #fecaca;");
+    if (sim_->board(address_).config.mode == ModeManual) {
+        typed_.clear(); // a manual dispenser: the key clears what is being typed
+        refresh();
 
         return;
     }
-    amount_->setStyleSheet(QString());
-    if (sim_->typeAmount(address_, quint32(kilograms * 1000 + 0.5))) {
-        amount_->clear();
-    }
+    sim_->pressClearKey(address_);
 }
 
+void NozzlePanel::gunUp()
+{
+    sim_->liftGun(address_);
+}
+
+void NozzlePanel::gunDown()
+{
+    sim_->putGunDown(address_);
+}
+
+// A digit or the point of the keypad: the amount (kg, 6 digits, up to 2 after the point) shows on display 1 as it is typed.
+void NozzlePanel::digitKey()
+{
+    QPushButton *key = qobject_cast<QPushButton *>(sender());
+    if (key == 0) {
+        return;
+    }
+    QString next = typed_ + key->text();
+    const int point = next.indexOf('.');
+    const int digitCount = next.size() - (point >= 0 ? 1 : 0);
+    if (next.count('.') > 1 || digitCount > 6 || (point >= 0 && next.size() - point - 1 > 2)) {
+        return; // the display has no room for it
+    }
+    typed_ = next;
+    refresh();
+}
+
+// Enter: the amount that was typed is the preset (the board is SET); the gun then starts the fill.
+void NozzlePanel::enterKey()
+{
+    bool ok = false;
+    const double kilograms = typed_.toDouble(&ok);
+    if (ok && kilograms > 0 && sim_->typeAmount(address_, quint32(kilograms * 1000 + 0.5))) {
+        typed_.clear();
+    }
+    refresh();
+}
 void NozzlePanel::stopFill()
 {
     sim_->stopFill(address_);
@@ -280,4 +375,20 @@ void NozzlePanel::flowChanged(int gramsPerSecond)
     if (!refreshing_) {
         sim_->board(address_).flowGramsPerSecond = gramsPerSecond;
     }
+}
+
+// A display of the dispenser: green digits on black, in a fixed-width font.
+QLabel *NozzlePanel::makeDisplay(QLabel **target)
+{
+    QLabel *label = new QLabel;
+    QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    font.setPointSize(18);
+    font.setBold(true);
+    label->setFont(font);
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    label->setStyleSheet("background: #111827; color: #4ade80; padding: 4px 8px; border-radius: 4px;");
+    label->setMinimumHeight(40);
+    *target = label;
+
+    return label;
 }

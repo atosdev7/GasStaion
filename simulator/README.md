@@ -20,8 +20,9 @@ Six nozzle panels (boards 1 to 6, as configured on the Smart210). Each shows the
 
 | Control | What it does |
 |---|---|
-| Select key | The cashier presses the nozzle's select key (auto mode); the Smart210 sees it as a poll flag |
-| Type amount + start | Manual mode: the supplier types the amount (kg) on the dispenser's keyboard and the fill starts by itself |
+| Three displays | Like the dispenser: **kg** (6 digits), **litres** (6 digits) and **density** (4 digits, ".8300"). The kg display shows what is typed, the weight of a fill (while it runs, and the result that is held), the preset, or a card's balance (SHOW_BALANCE); litres show the volume of the fill; density is the board's config ("----" for a new board) |
+| Keypad | Digits 0 to 9 and the point type an amount (up to 6 digits, 2 after the point; manual mode only), **Enter** makes it the preset, **Clear** clears what is typed. **Select** and **Clear** are also the keys of an auto dispenser: the board reports them in its next POLL answer (SELECT_KEY, CLEAR_KEY), the Smart210 answers |
+| Gun up / Gun down | The supplier takes the gun up (the board reports GUN_UP; the Smart210 sends START when tickets are queued; a manual board with a preset starts by itself) and puts it back on its hook; a fill that runs ends 3 seconds after the gun is down (reason 1), unless it is taken up again before |
 | Stop fill | The fill ends early: the result is held (reason: tank full or no flow) |
 | Flow (g/s) | How fast a fill runs |
 | Fault | A flow sensor, valve, memory or other fault (a fill that runs ends with reason fault); "No fault" clears it |

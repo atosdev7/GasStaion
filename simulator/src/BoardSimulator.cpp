@@ -414,6 +414,7 @@ bool BoardSimulator::liftGun(int address)
         return false;
     }
     Board &b = boards_[address];
+    b.hookDownMsLeft = 0; // the gun is up again: the fill goes on
     if (b.config.mode == ModeManual) {
         // a manual board is not worked by the Smart210: with the preset typed at its keyboard it starts by itself when the gun is taken up
         b.gunUp = true;
@@ -433,7 +434,11 @@ bool BoardSimulator::liftGun(int address)
 void BoardSimulator::putGunDown(int address)
 {
     if (boards_.contains(address)) {
-        boards_[address].gunUp = false;
+        Board &b = boards_[address];
+        b.gunUp = false;
+        if (b.state == StateDispensing) {
+            b.hookDownMsLeft = HookDownMs; // the nozzle on its hook ends the fill after a few seconds
+        }
         emit changed(address);
     }
 }
@@ -532,6 +537,14 @@ void BoardSimulator::tick(int milliseconds)
             if (b.silentMsLeft <= 0) {
                 b.silentMsLeft = 0;
                 b.silent = false;
+                any = true;
+            }
+        }
+        if (b.hookDownMsLeft > 0 && b.state == StateDispensing && !b.silent) {
+            b.hookDownMsLeft -= milliseconds;
+            if (b.hookDownMsLeft <= 0) {
+                b.hookDownMsLeft = 0;
+                endFill(b, ReasonTankFullOrNoFlow); // the gun stayed on its hook: the fill ends with what came out
                 any = true;
             }
         }
