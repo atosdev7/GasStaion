@@ -173,6 +173,15 @@ struct Terminal {
         QObject::connect(&uploader, &Uploader::uploadFinished, [&](bool o, const QString &m) { ok = o; text = m; done = true; });
         uploader.upload(date);
         waitFor([&]() { return done; }, 120000);
+        // What the app does on its beat (MainWindow::reportNothingWaiting): when no record of a business day that is over waits for an upload, the web app is told so: its backup
+        // and the dump of a confirmed day wait for that call.
+        if (ok) {
+            const QString running = Checkout::businessDay(QDateTime::currentDateTime()) + QString(" %1:00:00").arg(Checkout::startHour(), 2, 10, QChar('0'));
+            if (Uploader::unsentBefore(db(), running) == 0) {
+                uploader.reportNothingWaiting();
+                waitFor([]() { return false; }, 500);      // (the call is made and answered in the background)
+            }
+        }
         if (message) {
             *message = text;
         }

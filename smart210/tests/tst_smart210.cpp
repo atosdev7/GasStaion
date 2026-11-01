@@ -2228,6 +2228,7 @@ void Smart210Test::theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload()
     run(sup + "('sup-card', 'D', 2, 100, 100, 100, '2026-10-07 10:15:00', 1, 'card-1')");
     run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, printed_at, synced) VALUES ('rem-printed', 'sup-done', 21500000001, 'D', 10, '2026-10-07 10:00:00', '2026-10-07 10:01:00', 1)");
     run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, printed_at, synced) VALUES ('rem-unprinted', 'sup-done2', 21500000002, 'D', 10, '2026-10-07 10:05:00', NULL, 1)");
+    run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, synced) VALUES (21500000002, 'D', 1000, 1, 1)");     // the remainder ticket is sold and nobody has used it: the remainder stays
     run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, sale_id, supplement_id, synced) VALUES (3000000021, 'D', 500, 2, 'x', 'sup-done', 1)");     // supplied by a confirmed supply: goes
     run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, sale_id, supplement_id, synced) VALUES (3000000022, 'D', 500, 1, 'done', NULL, 1)");        // sold, not supplied: the supplier still needs it
     run("INSERT INTO tickets (barcode, fuel_type, amount_kg, status, sale_id, supplement_id, synced) VALUES (3000000023, 'D', 500, 2, 'x', 'sup-open', 1)");     // its supply is not confirmed: stays
@@ -2269,7 +2270,7 @@ void Smart210Test::theRecordsTheAccountantConfirmedAreRemovedAtTheNextDownload()
     QCOMPARE(ReviewData::supplements(db, "2026-10-07").size(), 1);                          // sup-open, not the card's
     QVERIFY(!Purger::keptSaleIds(db, 100).contains("topup"));                              // and it is not asked about again
     QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-printed'").toInt(), 0);
-    QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-unprinted'").toInt(), 1);   // not printed yet: it may still be printed
+    QCOMPARE(one("SELECT COUNT(*) FROM remainders WHERE id = 'rem-unprinted'").toInt(), 1);   // its ticket is still sold and unused: the remainder stays, printed or not
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000021").toInt(), 0);
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000022").toInt(), 1);
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000023").toInt(), 1);
@@ -11438,7 +11439,9 @@ void Smart210Test::theKgOfACardFillAreHeldOnTheCard()
     QCOMPARE(Cards::heldX100(db, card), qlonglong(1000));
 
     // the nozzle: its fuel type, no tickets in its queue, no fill started, no hold of another card
+    run("INSERT OR IGNORE INTO fuel_types (fuel_type, name, price) VALUES ('A', 'Gasoline', 800)");   // (this setup has diesel only: a gasoline card needs its fuel type)
     const QString gasoline = makeCard(db, "AA02", 4000, "A");
+    QVERIFY(!gasoline.isEmpty());
     QVERIFY(Cards::beginHold(db, 2, gasoline, 100, now).contains("another fuel type"));
     const QString other = makeCard(db, "AA03", 4000);
     QVERIFY(Cards::beginHold(db, 1, other, 100, now).contains("another card"));
@@ -11632,7 +11635,7 @@ void Smart210Test::theCardSupplyDialogChecksThePinShowsTheBalanceAndSetsTheAmoun
     QPushButton *set = dialog.findChild<QPushButton *>("cardSupplySet");
     QLabel *status = dialog.findChild<QLabel *>("cardSupplyStatus");
     QVERIFY(nozzle != 0 && pin != 0 && show != 0 && kg != 0 && set != 0 && status != 0);
-    QCOMPARE(nozzle->count(), 2);                                           // the automatic nozzles of diesel
+    QCOMPARE(nozzle->count(), 3);                                           // the automatic nozzles of diesel: 1, 2 and 4 (3 is manual; the board of 4 does not answer, the start says so)
     QVERIFY(!kg->isEnabled() && !set->isEnabled());                         // the PIN and the balance come first
 
     pin->setText("9999");

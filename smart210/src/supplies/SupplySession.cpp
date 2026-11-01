@@ -222,10 +222,13 @@ bool SupplySession::cancelCardFill(int nozzle, QString *why)
         return true;
     }
 
+    // a preset that was sent, or is on its way, may be on the board although the last status still says IDLE (the answer or the next poll has not come yet)
+    const bool presetOut = presetSent_.contains(nozzle) || presetPending_.contains(nozzle);
     Cards::releaseHold(db_, nozzle);
     presetSent_.remove(nozzle);
-    // the board forgets its preset (IDLE again), or loses the balance it shows
-    if (bus_->isOnline(nozzle) && bus_->lastStatus(nozzle).state == StateIdle) {
+    presetPending_.remove(nozzle);
+    // the board forgets its preset (IDLE again: the next poll that shows it ARMED sends the zero), or loses the balance it shows
+    if (!presetOut && bus_->isOnline(nozzle) && bus_->lastStatus(nozzle).state == StateIdle) {
         bus_->showBalance(nozzle, 0);
     } else if (!forgetPreset_.contains(nozzle)) {
         forgetPreset_.append(nozzle);
