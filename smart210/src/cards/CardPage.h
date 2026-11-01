@@ -63,7 +63,6 @@ public slots:
 private slots:
     void idEntered();
     void historyClicked();
-    void supplyClicked();
     void registerClicked();
     void topUpClicked();
     void topUpEdited();
@@ -81,6 +80,7 @@ private:
     void showInfo(const Cards::Card &card);
     void showAction(int page);
     void showTicket();
+    void showBalanceOnDispenser(const Cards::Card &card);
     void startPrint(const QString &barcode);
     void showStatus(const QString &message, bool ok);
 

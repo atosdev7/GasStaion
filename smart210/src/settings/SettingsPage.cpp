@@ -1,6 +1,7 @@
 #include "SettingsPage.h"
 #include "ui_SettingsPage.h"
 
+#include "MachineConfig.h"
 #include "Settings.h"
 
 #include <QComboBox>
@@ -31,11 +32,18 @@ SettingsPage::SettingsPage(Settings *settings, QWidget *parent)
     cardResult_ = ui_->cardResultCombo;
     fillResults(spotResult_);
     fillResults(cardResult_);
+    cardBalance_ = ui_->cardBalanceCombo;
+    cardBalance_->addItem(tr("Automatic"), "auto");
+    cardBalance_->addItem(tr("Off"), "off");
+    for (int nozzle = 1; nozzle <= MachineConfig::NozzleCount; ++nozzle) {
+        cardBalance_->addItem(tr("Nozzle %1").arg(nozzle), QString::number(nozzle));
+    }
     reload();
 
     connect(ui_->logoutButton, SIGNAL(clicked()), this, SIGNAL(logoutRequested()));
     connect(spotResult_, SIGNAL(currentIndexChanged(int)), this, SLOT(resultChanged()));
     connect(cardResult_, SIGNAL(currentIndexChanged(int)), this, SLOT(resultChanged()));
+    connect(cardBalance_, SIGNAL(currentIndexChanged(int)), this, SLOT(resultChanged()));
 }
 
 SettingsPage::~SettingsPage()
@@ -58,10 +66,14 @@ void SettingsPage::reload()
 {
     spotResult_->blockSignals(true);
     cardResult_->blockSignals(true);
+    cardBalance_->blockSignals(true);
+    const int shown = cardBalance_->findData(settings_->value(SettingKey::CardBalanceNozzle, "auto"));
+    cardBalance_->setCurrentIndex(shown >= 0 ? shown : 0);
     spotResult_->setCurrentIndex(settings_->resultIsDirect(SettingKey::SpotSaleResult) ? ResultDirect : ResultPrint);
     cardResult_->setCurrentIndex(settings_->resultIsDirect(SettingKey::CardFillResult) ? ResultDirect : ResultPrint);
     spotResult_->blockSignals(false);
     cardResult_->blockSignals(false);
+    cardBalance_->blockSignals(false);
 }
 
 // A choice is saved at once: the sale screens read it when they save.
@@ -69,4 +81,5 @@ void SettingsPage::resultChanged()
 {
     settings_->setValue(SettingKey::SpotSaleResult, spotResult_->itemData(spotResult_->currentIndex()).toString());
     settings_->setValue(SettingKey::CardFillResult, cardResult_->itemData(cardResult_->currentIndex()).toString());
+    settings_->setValue(SettingKey::CardBalanceNozzle, cardBalance_->itemData(cardBalance_->currentIndex()).toString());
 }

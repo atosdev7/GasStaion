@@ -16,6 +16,7 @@ const char *const DeviceName = "device_name";
 const char *const UploadMode = "upload_mode";
 const char *const BusinessDayStartHour = "business_day_start_hour";
 const char *const SaleBackdateDays = "sale_backdate_days";
+const char *const CardBalanceNozzle = "card_balance_nozzle";
 const char *const SpotSaleResult = "spot_sale_result";
 const char *const CardFillResult = "card_fill_result";
 const char *const ShowSalesWithoutReceipt = "show_sales_without_receipt";
@@ -86,7 +87,7 @@ bool Settings::isDeviceBound(const QString &key)
         || key == SettingKey::CardReaderPort || key == SettingKey::CardReaderBaud || key == SettingKey::CardReaderFormat
         || key == SettingKey::CardReaderLength || key == SettingKey::CardReaderEncoding || key == SettingKey::CardReaderPrefix
         || key == SettingKey::UploadMode || key == SettingKey::ShowSalesWithoutReceipt || key == SettingKey::ManualSupplyDays
-        || key == SettingKey::SpotSaleResult || key == SettingKey::CardFillResult;
+        || key == SettingKey::SpotSaleResult || key == SettingKey::CardFillResult || key == SettingKey::CardBalanceNozzle;
 }
 
 QString Settings::deviceValue(const QString &name)

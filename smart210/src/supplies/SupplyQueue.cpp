@@ -264,9 +264,4 @@ void SupplyQueue::end(QSqlDatabase db, int nozzle)
 {
     release(db, nozzle);
     clear(db, nozzle);
-
-    QSqlQuery hold(db); // the kg a card held back for this fill: the fill is over
-    hold.prepare("DELETE FROM card_holds WHERE nozzle_number = ?");
-    hold.addBindValue(nozzle);
-    hold.exec();
 }

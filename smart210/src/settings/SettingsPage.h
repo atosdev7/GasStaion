@@ -12,7 +12,8 @@ class SettingsPage;
 }
 
 // The Settings page, open to the cashier: who is logged in, what the Result box of the spot sale and of the card fill starts with (the ticket on paper, or the weight set straight on a
-// nozzle: SettingKey::SpotSaleResult and CardFillResult, saved when the choice changes), the Machine Config button (which asks for the PIN first) and the
+// nozzle: SettingKey::SpotSaleResult and CardFillResult, saved when the choice changes), and which dispenser shows the balance of a card that was read
+// (SettingKey::CardBalanceNozzle: automatic, off, or a nozzle), the Machine Config button (which asks for the PIN first) and the
 // Log out button. Log out is here and not on the main screen on purpose.
 class SettingsPage : public QWidget
 {
@@ -39,6 +40,7 @@ private:
     QLabel *cashier_;
     QComboBox *spotResult_;
     QComboBox *cardResult_;
+    QComboBox *cardBalance_;
     QLabel *about_;
 };
 

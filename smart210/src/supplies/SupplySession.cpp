@@ -1,7 +1,6 @@
 #include "SupplySession.h"
 
 #include "Barcode.h"
-#include "Cards.h"
 #include "Decimal.h"
 #include "MachineConfig.h"
 #include "Session.h"
@@ -58,8 +57,6 @@ bool SupplySession::add(int nozzle, const QString &barcode, QString *why)
         reason = tr("Nozzle %1 is in manual mode: the supplier types the amount at the dispenser, the cashier enters the tickets afterwards.").arg(nozzle);
     } else if (isLocked(nozzle)) {
         reason = tr("Nozzle %1 has started: its tickets cannot be changed.").arg(nozzle);
-    } else if (isHeld(nozzle)) {
-        reason = tr("Nozzle %1 is held for a fill with a card: cancel it first.").arg(nozzle);
     } else {
         const SupplyQueue::Scan scan = SupplyQueue::add(db_, nozzle, barcode, info.fuelType, QDateTime::currentDateTime());
         if (scan.ok) {
@@ -151,90 +148,8 @@ bool SupplySession::clear(int nozzle, QString *why)
 
         return false;
     }
-    if (isHeld(nozzle)) {
-        return cancelCardFill(nozzle, why); // the card fill of the nozzle is the "queue" that is cleared
-    }
     SupplyQueue::clear(db_, nozzle);
     emit queueChanged(nozzle);
-
-    return true;
-}
-
-bool SupplySession::isHeld(int nozzle) const
-{
-    return Cards::holdOfNozzle(db_, nozzle).exists;
-}
-
-bool SupplySession::startCardFill(int nozzle, const QString &cardId, qlonglong kgX100, QString *why)
-{
-    QString reason;
-    const MachineConfig::Nozzle info = config_->nozzle(nozzle);
-
-    if (nozzle < 1 || nozzle > MachineConfig::NozzleCount) {
-        reason = tr("Choose a nozzle first.");
-    } else if (!info.seen()) {
-        reason = tr("The config of nozzle %1 has not been read yet.").arg(nozzle);
-    } else if (info.mode == ModeManual) {
-        reason = tr("Nozzle %1 is in manual mode: a fill with a card needs an automatic nozzle.").arg(nozzle);
-    } else if (isLocked(nozzle)) {
-        reason = tr("Nozzle %1 has started: wait for its result.").arg(nozzle);
-    } else if (!bus_->canTalk(nozzle) || !bus_->isOnline(nozzle)) {
-        reason = tr("The board of nozzle %1 does not answer.").arg(nozzle);
-    } else if (bus_->lastStatus(nozzle).state != StateIdle && bus_->lastStatus(nozzle).state != StateArmed) {
-        reason = tr("Nozzle %1 is busy.").arg(nozzle);
-    } else if (session_->userId() <= 0) {
-        reason = tr("Log in first.");
-    } else {
-        reason = Cards::beginHold(db_, nozzle, cardId, kgX100, QDateTime::currentDateTime());
-        if (reason.isEmpty()) {
-            // the nozzle becomes the chosen one (the board beeps): its preset is sent by the next poll, like the total of a queue
-            QString chosen;
-            if (!selection_->select(nozzle, &chosen)) {
-                Cards::releaseHold(db_, nozzle);
-                reason = chosen;
-            } else {
-                presetSent_.remove(nozzle);
-                emit queueChanged(nozzle);
-                emit message(tr("Nozzle %1: %2 kg are held on the card. Take the gun up to start the fill.").arg(nozzle).arg(kg(kgX100)), true);
-
-                return true;
-            }
-        }
-    }
-
-    if (why) {
-        *why = reason;
-    }
-
-    return false;
-}
-
-bool SupplySession::cancelCardFill(int nozzle, QString *why)
-{
-    if (isLocked(nozzle)) {
-        if (why) {
-            *why = tr("Nozzle %1 has started: the fill cannot be cancelled.").arg(nozzle);
-        }
-
-        return false;
-    }
-    if (!isHeld(nozzle)) {
-        return true;
-    }
-
-    // a preset that was sent, or is on its way, may be on the board although the last status still says IDLE (the answer or the next poll has not come yet)
-    const bool presetOut = presetSent_.contains(nozzle) || presetPending_.contains(nozzle);
-    Cards::releaseHold(db_, nozzle);
-    presetSent_.remove(nozzle);
-    presetPending_.remove(nozzle);
-    // the board forgets its preset (IDLE again: the next poll that shows it ARMED sends the zero), or loses the balance it shows
-    if (!presetOut && bus_->isOnline(nozzle) && bus_->lastStatus(nozzle).state == StateIdle) {
-        bus_->showBalance(nozzle, 0);
-    } else if (!forgetPreset_.contains(nozzle)) {
-        forgetPreset_.append(nozzle);
-    }
-    emit queueChanged(nozzle);
-    emit message(tr("Nozzle %1: the fill with the card was cancelled.").arg(nozzle), true);
 
     return true;
 }
@@ -242,7 +157,7 @@ bool SupplySession::cancelCardFill(int nozzle, QString *why)
 bool SupplySession::showCardBalance(int nozzle, qlonglong balanceX100)
 {
     const MachineConfig::Nozzle info = config_->nozzle(nozzle);
-    if (balanceX100 < 0 || !info.seen() || info.mode == ModeManual || isLocked(nozzle) || isHeld(nozzle) || !bus_->isOnline(nozzle)
+    if (balanceX100 < 0 || !info.seen() || info.mode == ModeManual || isLocked(nozzle) || !bus_->isOnline(nozzle)
         || bus_->lastStatus(nozzle).state != StateIdle) {
         return false;
     }
@@ -269,8 +184,6 @@ bool SupplySession::recordManual(int nozzle, qlonglong dispensedX100, qlonglong 
         reason = days > 0 ? tr("The time cannot be more than %1 days back (Machine Config, Options).").arg(days) : tr("The time must be today (Machine Config, Options).");
     } else if (state == StateDispensing || state == StateResult) {
         reason = tr("Nozzle %1 has a fill running or a result waiting: the app reads it by itself.").arg(nozzle);
-    } else if (isHeld(nozzle) && !isLocked(nozzle)) {
-        reason = tr("Nozzle %1 is held for a fill with a card that has not started: cancel it first.").arg(nozzle);
     } else if (isLocked(nozzle) && SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::session(db_, nozzle).presetX100) {
         reason = tr("More than was asked for (%1 kg). Check the reading.").arg(kg(SupplyQueue::session(db_, nozzle).presetX100));
     } else if (isLocked(nozzle) && !SupplyQueue::session(db_, nozzle).byCard() && dispensedX100 > SupplyQueue::totalX100(db_, nozzle)) {
@@ -351,11 +264,6 @@ void SupplySession::followTheSupplier(int address, const Status &status)
             emit queueChanged(address);
             emit message(tr("Nozzle %1: the queue was cleared at the dispenser.").arg(address), true);
         }
-        if (isHeld(address)) {
-            Cards::releaseHold(db_, address); // the supplier drops the fill with the card
-            emit queueChanged(address);
-            emit message(tr("Nozzle %1: the fill with the card was cancelled at the dispenser.").arg(address), true);
-        }
         if (status.state == StateArmed && !forgetPreset_.contains(address)) {
             forgetPreset_.append(address);
         }
@@ -369,10 +277,7 @@ void SupplySession::followTheSupplier(int address, const Status &status)
         return;
     }
 
-    // the kg of a fill with a card are held on the card (Cards::beginHold); otherwise the total of the queue is the preset
-    const Cards::Hold hold = Cards::holdOfNozzle(db_, address);
-    const qlonglong total = hold.exists ? hold.presetX100 : SupplyQueue::totalX100(db_, address);
-    const QString holdCard = hold.exists ? hold.cardId : QString();
+    const qlonglong total = SupplyQueue::totalX100(db_, address);
     if ((status.flags & FlagGunUp) && status.state != StateDispensing && status.state != StateResult && status.state != StateFault) {
         // The gun is up (the board reports it, it never starts by itself). With the tickets of the queue and their preset on the board the Smart210
         // sends START; when the queue was cleared it does not, and sets the preset to zero (the board is IDLE).
@@ -384,7 +289,7 @@ void SupplySession::followTheSupplier(int address, const Status &status)
             return;
         }
         if (status.state == StateArmed && presetSent_.value(address, -1) == total && !presetPending_.contains(address)) {
-            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime(), holdCard); // saved before START: after a crash the session is still known
+            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime()); // saved before START: after a crash the session is still known
             if (bus_->startFill(address)) {
                 startStep_[address] = Starting;
                 emit queueChanged(address);
@@ -398,7 +303,7 @@ void SupplySession::followTheSupplier(int address, const Status &status)
     if (status.state == StateDispensing) {
         if (total > 0) {
             // the gun was taken up: the fill runs with the preset the board has, so the queue is the session from now on
-            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime(), holdCard);
+            SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime());
             if (status.resultId != 0) {
                 SupplyQueue::setResultId(db_, address, status.resultId);
             }
@@ -487,9 +392,6 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         if (!outcome.duplicate) {
             if (outcome.tickets == 0 && outcome.kgX100 == 0) {
                 emit message(tr("Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.").arg(address).arg(kg(reading.dispensedX100)), false);
-            } else if (!outcome.chargedCardId.isEmpty()) {
-                const Cards::Card card = Cards::findById(db_, outcome.chargedCardId);
-                emit message(tr("Nozzle %1: %2 kg dispensed and charged to the card of %3. The card holds %4 kg.").arg(address).arg(kg(reading.dispensedX100)).arg(card.holderName).arg(kg(card.balanceX100)), true);
             } else if (outcome.refundKgX100 > 0) {
                 emit message(tr("Nozzle %1: %2 kg dispensed. %3 kg of the card's ticket went back to the card.").arg(address).arg(kg(reading.dispensedX100)).arg(kg(outcome.refundKgX100)), true);
             } else if (outcome.remainderKgX100 > 0) {

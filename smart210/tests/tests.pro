@@ -64,7 +64,6 @@ SOURCES += \
     ../src/supplies/ManualSupplyPage.cpp \
     ../src/remainders/RemainderTicketsPage.cpp \
     ../src/cards/CardLedger.cpp \
-    ../src/cards/CardSupplyDialog.cpp \
     ../src/cards/CardHistoryDialog.cpp \
     ../src/ticket_debt/LoanSettleDialog.cpp \
     ../src/dispensers/NozzleDialog.cpp \
@@ -149,7 +148,6 @@ HEADERS += \
     ../src/supplies/ManualSupplyPage.h \
     ../src/remainders/RemainderTicketsPage.h \
     ../src/cards/CardLedger.h \
-    ../src/cards/CardSupplyDialog.h \
     ../src/cards/CardHistoryDialog.h \
     ../src/ticket_debt/LoanSettleDialog.h \
     ../src/dispensers/NozzleDialog.h \

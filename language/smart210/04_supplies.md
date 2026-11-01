@@ -126,13 +126,3 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | The supply was recorded with %1 tickets, and %2 kg went back to the card. It will be uploaded. | SupplySession / ManualSupplyPage |
 | Tickets: %1 kg, dispensed: %2 kg. No remainder. | SupplySession / ManualSupplyPage |
 | A remainder ticket goes with press and spot sale tickets only, not with %1 tickets. | SupplyQueue |
-| Nozzle %1 is held for a fill with a card: cancel it first. | SupplySession / SupplyPage |
-| Nozzle %1 is in manual mode: a fill with a card needs an automatic nozzle. | SupplySession / SupplyPage |
-| Nozzle %1 has started: wait for its result. | SupplySession / SupplyPage |
-| Nozzle %1: %2 kg are held on the card. Take the gun up to start the fill. | SupplySession / SupplyPage |
-| Nozzle %1 has started: the fill cannot be cancelled. | SupplySession / SupplyPage |
-| Nozzle %1: the fill with the card was cancelled. | SupplySession / SupplyPage |
-| Nozzle %1: the fill with the card was cancelled at the dispenser. | SupplySession / SupplyPage |
-| Nozzle %1 is held for a card fill that has not started: cancel it first. | SupplySession / SupplyPage |
-| Nozzle %1: %2 kg dispensed and charged to the card of %3. The card holds %4 kg. | SupplySession / SupplyPage |
-| A fill with a card waits for the gun: %1 kg are held on the card. Clear it to cancel. | SupplySession / SupplyPage |

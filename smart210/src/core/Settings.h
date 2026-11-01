@@ -16,6 +16,7 @@ extern const char *const UploadMode;    // "manual", "close" (at the close of th
 extern const char *const NozzlesNotOnBoard; // the numbers ("1,3") of the nozzles whose saved config the board has not confirmed yet (Update that failed or was not sent)
 extern const char *const BusinessDayStartHour; // the hour a business day starts (the web app's, default 9; see Checkout::startHour)
 extern const char *const SaleBackdateDays;    // how many days back a record may be dated on the Review screen (the web app's, default 3)
+extern const char *const CardBalanceNozzle; // "auto" (default: the first automatic nozzle of the card's fuel type that answers), "off" or a nozzle number: the dispenser that shows the balance of a card that was read (Settings page)
 extern const char *const SpotSaleResult; // "print" (default) or "direct": what a spot sale gives, the ticket on paper or the weight set straight on a nozzle (Settings page)
 extern const char *const CardFillResult; // the same for the ticket of a card fill
 extern const char *const ShowSalesWithoutReceipt; // "1" (default) or "0": the Review screen lists the sales without a receipt or leaves them out, Machine Config

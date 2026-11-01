@@ -40,7 +40,6 @@ SOURCES += \
     src/core/Migrator.cpp \
     src/dispensers/NozzleConfigSync.cpp \
     src/cards/CardLedger.cpp \
-    src/cards/CardSupplyDialog.cpp \
     src/cards/CardHistoryDialog.cpp \
     src/ticket_debt/LoanSettleDialog.cpp \
     src/dispensers/NozzleDialog.cpp \
@@ -119,7 +118,6 @@ HEADERS += \
     src/core/Migrator.h \
     src/dispensers/NozzleConfigSync.h \
     src/cards/CardLedger.h \
-    src/cards/CardSupplyDialog.h \
     src/cards/CardHistoryDialog.h \
     src/ticket_debt/LoanSettleDialog.h \
     src/dispensers/NozzleDialog.h \

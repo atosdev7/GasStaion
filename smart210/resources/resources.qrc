@@ -28,7 +28,6 @@
         <file alias="010_ticket_legacy.sql">migrations/010_ticket_legacy.sql</file>
         <file alias="011_hidden_confirmed.sql">migrations/011_hidden_confirmed.sql</file>
         <file alias="012_card_free_payment.sql">migrations/012_card_free_payment.sql</file>
-        <file alias="013_card_holds.sql">migrations/013_card_holds.sql</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="sales.png">icons/sales.png</file>
