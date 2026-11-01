@@ -32,18 +32,20 @@ class TankController extends CrudController
     // A capacity below what the tank holds is allowed (it may be a typing mistake, or the stock may be wrong): the save goes through with a warning.
     public function store(Request $request)
     {
-        return $this->withCapacityWarning(parent::store($request));
+        $response = parent::store($request);
+
+        return $this->withCapacityWarning($response, Tank::where('name', $request->input('name'))->first());
     }
 
     public function update(Request $request, $id)
     {
-        return $this->withCapacityWarning(parent::update($request, $id));
+        $response = parent::update($request, $id);
+
+        return $this->withCapacityWarning($response, Tank::find($id));  // the tank that was changed, not the one that has the name typed now
     }
 
-    private function withCapacityWarning($response)
+    private function withCapacityWarning($response, $tank)
     {
-        $name = request()->input('name');
-        $tank = Tank::where('name', $name)->first();
         $capacity = request()->input('capacity_kg');
         if (!$tank || $capacity === null || $capacity === '') {
             return $response;

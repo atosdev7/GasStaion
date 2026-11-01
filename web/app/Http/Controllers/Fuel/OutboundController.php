@@ -81,7 +81,7 @@ class OutboundController extends Controller
 
         Audit::log('outbound_create', '#' . $outbound->id . ' tank ' . $outbound->tank_id . ', ' . $outbound->amount_kg . ' kg' . ($outbound->to_name ? ', to ' . $outbound->to_name : ''));
 
-        return redirect()->route('outbound.index')->with('status', __('fuel.outbound_created'));
+        return $this->withStockWarning(redirect()->route('outbound.index')->with('status', __('fuel.outbound_created')), $outbound->tank_id);
     }
 
     public function edit($id)
@@ -112,7 +112,7 @@ class OutboundController extends Controller
 
         Audit::log('outbound_update', $before . ' -> ' . $data['outbound_date'] . ', tank ' . $data['tank_id'] . ', ' . $data['amount_kg'] . ' kg');
 
-        return redirect()->route('outbound.index')->with('status', __('fuel.outbound_saved'));
+        return $this->withStockWarning(redirect()->route('outbound.index')->with('status', __('fuel.outbound_saved')), $outbound->tank_id);
     }
 
     public function destroy($id)
@@ -138,11 +138,25 @@ class OutboundController extends Controller
     }
 
     // The cost is the cost of the layer the fuel is taken from (a user who may see costs chooses it); with none, the oldest fuel goes first.
+    // An outbound by hand may take more than the tank holds (the stock may be wrong, or an inbound not entered yet): it is saved and the staff are told, as for a tank
+    // capacity below its stock.
+    private function withStockWarning($response, $tankId)
+    {
+        $level = \App\Support\Dashboard\TankLevels::all()->first(function ($row) use ($tankId) {
+            return $row->tank->id === (int) $tankId;
+        });
+        if ($level && $level->current < -0.004) {
+            $response->with('warning', __('fuel.outbound_over_stock', ['tank' => $level->tank->name, 'stock' => number_format($level->current, 2)]));
+        }
+
+        return $response;
+    }
+
     private function validated(Request $request)
     {
         $rules = [
             'tank_id' => 'required|integer|exists:tanks,id,deleted_at,NULL',
-            'outbound_date' => 'required|date',
+            'outbound_date' => 'required|date|before_or_equal:today',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'to_name' => 'nullable|string|max:100',
             'note' => 'nullable|string|max:255',

@@ -137,6 +137,7 @@ return [
 
     // Labels and messages
     'created' => 'Created.',
+    'payment_twice' => 'The same payment was just entered: it was not entered twice.',
     'settled_loan' => 'Settled :kg kg against the loan.',
     'payment_cash' => 'Cash',
     'payment_bank' => 'Bank',

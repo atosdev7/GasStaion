@@ -45,6 +45,14 @@ class FuelInboundTest extends TestCase
         ]);
     }
 
+    public function testAnInboundCannotBeDatedInTheFuture()
+    {
+        $this->as('manager');
+
+        $this->inbound($this->tankD, '6.1000', ['inbound_date' => now()->addDay()->toDateString()])->assertSessionHasErrors('inbound_date');
+        $this->assertSame(0, FuelInbound::count());
+    }
+
     // the default cost is a value of its own (App\Support\Fuel\DefaultCost): the first cost of a fuel type, or the button of a record, sets it
     public function testFirstInboundOfAFuelTypeSetsTheDefaultCost()
     {

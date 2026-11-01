@@ -218,6 +218,22 @@ class PushApiTest extends TestCase
         $this->assertEquals(0.8333, Supplement::find($none['id'])->density);                     // 10 / 12
     }
 
+    public function testASaleOfADayThatWasBackedUpAndClearedIsNotMadeAgain()
+    {
+        $kept = $this->sale();
+        $this->push('sales', [$kept]);
+        \Illuminate\Support\Facades\DB::table('backups')->insert(['up_to_date' => '2026-10-06', 'file' => 'x.zip', 'cleared' => '{}', 'user_id' => $this->cashier->id, 'created_at' => now(), 'updated_at' => now()]);
+        Sale::query()->forceDelete();                                       // the backup cleared it, or the web deleted it before
+        $late = $this->sale();
+        $next = $this->sale(['sale_date' => '2026-10-07', 'created_at' => '2026-10-07 09:00:00']);
+
+        $result = $this->push('sales', [$late, $next]);
+
+        $this->assertSame([$next['id']], $result['saved']);
+        $this->assertStringContainsString('backed up and cleared', $result['rejected'][0]['error']);
+        $this->assertNull(Sale::find($late['id']));
+    }
+
     public function testATicketIsTheRemainderOfOneFillOnly()
     {
         $supplement = $this->supplement();

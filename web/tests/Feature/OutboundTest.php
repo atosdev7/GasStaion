@@ -283,6 +283,19 @@ class OutboundTest extends TestCase
         $this->assertSame(1, FuelOutbound::withTrashed()->count());                // kept as deleted
     }
 
+    public function testAnOutboundByHandCannotBeDatedInTheFutureAndTellsWhenItTakesMoreThanTheTankHolds()
+    {
+        $this->as('manager');
+        $this->post('/outbound', $this->byHand(10, ['outbound_date' => now()->addDays(2)->toDateString()]))->assertSessionHasErrors('outbound_date');
+        $this->assertSame(0, FuelOutbound::count());
+
+        FuelInbound::forceCreate(['tank_id' => $this->tankA->id, 'fuel_type' => 'D', 'amount_kg' => 20, 'cost' => 5, 'inbound_date' => '2026-09-01', 'user_id' => 1]);
+        $this->post('/outbound', $this->byHand(10))->assertSessionMissing('warning');
+        $this->post('/outbound', $this->byHand(30))->assertSessionHas('warning');     // saved all the same: the tank is at -20 now
+        $this->assertSame(2, FuelOutbound::count());
+        $this->assertEquals(-20, $this->current($this->tankA));
+    }
+
     public function testTheFormChecksWhatIsEntered()
     {
         $this->as('manager');

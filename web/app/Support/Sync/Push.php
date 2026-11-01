@@ -244,6 +244,11 @@ class Push
 
             return; // confirmed by the accountant: final, so a repeated push changes nothing
         }
+        // A day that was backed up and cleared is closed: the backup refuses while a sale of those days is unconfirmed, so a sale that is not on the server and belongs
+        // to such a day was deleted there (and cleared) or never existed: it is not made again by a late push
+        if (!$sale->exists && $d['sale_date'] <= (string) DB::table('backups')->max('up_to_date')) {
+            throw new RejectedRow('conflict: the day ' . $d['sale_date'] . ' was backed up and cleared on the server, this sale is not stored');
+        }
         if (!$sale->exists) {
             // The cost is the web's to fill, never the device's: the default cost of the fuel type when the row arrives (it may come days after the sale). The
             // accountant can change the cost of a sale (and of a supply) before confirming it, so a changed default costs nothing but that look.

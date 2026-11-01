@@ -185,6 +185,14 @@ class DebtController extends Controller
             }
         }
 
+        // The form pressed twice (or sent again by the browser) must not pay the debt twice: the same payment of the same user in the last 10 seconds is refused.
+        $again = DebtPayment::where('customer_id', $data['customer_id'])->where('user_id', auth()->id())->where('amount', $data['amount'])
+            ->where('payment_method', $data['payment_method'])->where('paid_date', $data['paid_date'])->where('created_at', '>=', now()->subSeconds(10))
+            ->when(!empty($data['debt_id']), function ($q) use ($data) { $q->where('debt_id', $data['debt_id']); }, function ($q) { $q->whereNull('debt_id'); })->exists();
+        if ($again) {
+            throw ValidationException::withMessages(['amount' => __('debts.payment_twice')]);
+        }
+
         $payment = DebtPayment::forceCreate($data + [
             'debt_id' => $data['debt_id'] ?? null,
             'date' => $data['paid_date'],

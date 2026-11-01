@@ -116,6 +116,20 @@ class DebtTest extends TestCase
         ]);
     }
 
+    public function testTheSamePaymentSentTwiceInARowIsEnteredOnce()
+    {
+        $this->as('accountant');
+
+        $this->recordPayment(['amount' => 25])->assertRedirect('/payments');
+        $this->recordPayment(['amount' => 25])->assertSessionHasErrors('amount');
+        $this->recordPayment(['amount' => 26])->assertRedirect('/payments');            // another amount is another payment
+        $this->assertSame(2, DebtPayment::count());
+
+        DebtPayment::query()->update(['created_at' => now()->subMinute()]);
+        $this->recordPayment(['amount' => 25])->assertRedirect('/payments');            // a minute later the same one is a new payment
+        $this->assertSame(3, DebtPayment::count());
+    }
+
     public function testRecordPaymentAgainstASpecificDebt()
     {
         $sale = $this->sale(100);

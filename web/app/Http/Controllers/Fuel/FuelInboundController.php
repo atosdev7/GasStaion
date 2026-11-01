@@ -57,7 +57,7 @@ class FuelInboundController extends Controller
     {
         $data = $request->validate([
             'tank_id' => 'required|exists:tanks,id',
-            'inbound_date' => 'required|date',
+            'inbound_date' => 'required|date|before_or_equal:today',
             'from_name' => 'nullable|string|max:100',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'cost' => 'required|numeric|min:0|max:999999',
@@ -121,7 +121,7 @@ class FuelInboundController extends Controller
         }
         $data = $request->validate([
             'tank_id' => 'required|exists:tanks,id',
-            'inbound_date' => 'required|date',
+            'inbound_date' => 'required|date|before_or_equal:today',
             'from_name' => 'nullable|string|max:100',
             'amount_kg' => 'required|numeric|min:0.01|max:999999999',
             'cost' => 'required|numeric|min:0|max:999999',

@@ -23,6 +23,7 @@ return [
     'outbound_cost_hint' => 'The fuel is taken from the layer of this cost in the tank. With none (-), the oldest fuel goes first. * is the default cost.',
     'outbound_created' => 'The outbound was added.',
     'outbound_saved' => 'The outbound was saved.',
+    'outbound_over_stock' => 'Tank :tank holds :stock kg now: the outbound is more than it held. Check the inbounds and the other outbounds.',
     'outbound_deleted' => 'The outbound was deleted.',
     'outbound_delete_confirm' => 'Delete this fuel outbound record? The tank stock goes up by its amount.',
     'outbound_of_supply' => 'This row follows a supply: change or delete the supply instead.',

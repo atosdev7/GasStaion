@@ -102,11 +102,13 @@ class TicketPublishController extends Controller
         $endSerial = (int) $data['end_serial'];
         $date = Carbon::parse($data['date'] ?? today())->toDateString();
         $quantity = $this->quantityOf($startSerial, $endSerial);
-        if ($quantity > TicketStock::available($fuelType, $spec)) {
-            throw ValidationException::withMessages(['end_serial' => __('tickets.not_enough_stock')]);
-        }
-
         $publish = DB::transaction(function () use ($fuelType, $spec, $code, $startSerial, $endSerial, $quantity, $date) {
+            // The stock is checked inside the transaction, with the received batches of the item locked: two publishes of the same item at the same moment run one after
+            // the other, so together they cannot publish more than was received.
+            \App\Models\Tickets\TicketInbound::where('fuel_type', $fuelType)->where('spec', $spec)->lockForUpdate()->get();
+            if ($quantity > TicketStock::available($fuelType, $spec)) {
+                throw ValidationException::withMessages(['end_serial' => __('tickets.not_enough_stock')]);
+            }
             $this->refuseOverlap($fuelType, $spec, $startSerial, $endSerial, null);
 
             $publish = new TicketPublish;
