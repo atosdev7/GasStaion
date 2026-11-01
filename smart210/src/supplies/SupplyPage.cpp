@@ -106,6 +106,7 @@ SupplyPage::SupplyPage(QSqlDatabase db, BoardBus *bus, MachineConfig *config, Su
     ticketField_->setValidator(new QRegExpValidator(QRegExp("[0-9 -]*"), this));
     connect(ticketField_, SIGNAL(returnPressed()), this, SLOT(ticketEntered()));
     connect(ui_->supplyTicketButton, SIGNAL(clicked()), this, SLOT(ticketEntered()));
+    connect(ui_->supplyClearButton, SIGNAL(clicked()), this, SLOT(clearQueue()));
 
     timer_ = new QTimer(this);
     timer_->setInterval(RefreshMs);
@@ -359,6 +360,30 @@ void SupplyPage::ticketEntered()
     if (session_->typed(ticketField_->text())) {
         ticketField_->clear();
     }
+    ticketField_->setFocus();
+}
+
+// The Clear button: every ticket goes out of the queue of the nozzle the table shows (the tickets stay sold). A nozzle whose fill has started is refused.
+void SupplyPage::clearQueue()
+{
+    const int nozzle = viewedNozzle();
+    if (nozzle <= 0) {
+        showMessage(tr("Choose a nozzle first."), false);
+
+        return;
+    }
+    if (SupplyQueue::entries(db_, nozzle).isEmpty()) {
+        showMessage(tr("Nozzle %1: the queue is empty.").arg(nozzle), true);
+
+        return;
+    }
+    QString why;
+    if (!session_->clear(nozzle, &why)) {
+        showMessage(why, false);
+
+        return;
+    }
+    showMessage(tr("Nozzle %1: the queue was cleared.").arg(nozzle), true);
     ticketField_->setFocus();
 }
 

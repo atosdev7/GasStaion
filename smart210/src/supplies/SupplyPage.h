@@ -45,6 +45,7 @@ public:
 private slots:
     void rowClicked(int row);
     void ticketEntered();
+    void clearQueue();
     void sessionMessage(const QString &text, bool good);
     void supplyRecorded(int nozzle, const QString &supplementId);
     void refresh();

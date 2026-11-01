@@ -47,6 +47,13 @@
        <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
       </widget>
      </item>
+     <item>
+      <widget class="QPushButton" name="supplyClearButton">
+       <property name="text"><string>Clear</string></property>
+       <property name="toolTip"><string>Take all the tickets out of the queue of this nozzle</string></property>
+       <property name="minimumSize"><size><width>120</width><height>40</height></size></property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>

@@ -152,6 +152,11 @@ bool SupplySession::clear(int nozzle, QString *why)
         return false;
     }
     SupplyQueue::clear(db_, nozzle);
+    // a board that has the preset of the queue (SET) forgets it: SET_PRESET with zero, as after the clear key of the dispenser
+    presetSent_.remove(nozzle);
+    if (bus_->isOnline(nozzle) && bus_->lastStatus(nozzle).state == StateArmed && !forgetPreset_.contains(nozzle)) {
+        forgetPreset_.append(nozzle);
+    }
     emit queueChanged(nozzle);
 
     return true;
@@ -283,6 +288,13 @@ void SupplySession::followTheSupplier(int address, const Status &status)
     }
 
     const qlonglong total = SupplyQueue::totalX100(db_, address);
+    if (total <= 0 && status.state == StateArmed && !presetPending_.contains(address) && !(status.flags & FlagGunUp)) {
+        // no tickets are queued but the board still holds a preset (the queue was cleared while the preset was on its way): it forgets it
+        forgetPreset_.append(address);
+        presetSent_.remove(address);
+
+        return;
+    }
     if ((status.flags & FlagGunUp) && status.state != StateDispensing && status.state != StateResult && status.state != StateFault) {
         // The gun is up (the board reports it, it never starts by itself). With the tickets of the queue and their preset on the board the Smart210
         // sends START; when the queue was cleared it does not, and sets the preset to zero (the board is IDLE).

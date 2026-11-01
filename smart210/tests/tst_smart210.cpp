@@ -347,6 +347,7 @@ private slots:
     void aTicketSoldOnPaperBeforeGoLiveIsMadeWhenItIsUsed();
     void theConfigDownloadBringsTheRangesOfTheOldPublishes();
     void theEnterTicketBoxOfTheSessionsTabTypesTicketsIn();
+    void theClearButtonOfTheSessionsTabTakesTheTicketsOutOfTheQueue();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
     void aManualModeFillIsNotWorkedWithAtAll();
@@ -8956,7 +8957,7 @@ void Smart210Test::theSessionsTabListsTheNozzlesAndOnlyLooksAtThem()
     QCOMPARE(current->text(), QString("Click a nozzle to see its tickets."));
     QVERIFY(window.findChild<QPushButton *>("supplyStartButton") == 0);   // nothing here controls the supply
     QVERIFY(window.findChild<QPushButton *>("supplyRemoveButton") == 0);
-    QVERIFY(window.findChild<QPushButton *>("supplyClearButton") == 0);
+    QVERIFY(window.findChild<QPushButton *>("supplyClearButton") != 0);    // the one control of the tab: it takes the tickets out of a queue (no start, no stop)
     QVERIFY(window.findChild<QPushButton *>("supplyDeselectButton") == 0);
 
     // the supplier's select key at nozzle 1: the board and the table show it, and the tickets below follow it
@@ -10293,6 +10294,51 @@ void Smart210Test::theEnterTicketBoxOfTheSessionsTabTypesTicketsIn()
     QTest::keyClick(field, Qt::Key_Return);
     QVERIFY(message->text().contains("Type the 11 digits"));
     QCOMPARE(field->text(), QString("123"));
+}
+
+// The Clear button takes every ticket out of the queue of the nozzle the table shows, and the board forgets its preset; a fill that has started refuses it.
+void Smart210Test::theClearButtonOfTheSessionsTabTakesTheTicketsOutOfTheQueue()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
+    SupplyPage page(db, &bench.bus, &bench.config, &bench.selection, &bench.supply);
+    QPushButton *clear = page.findChild<QPushButton *>("supplyClearButton");
+    QLabel *message = page.findChild<QLabel *>("supplyMessage");
+    QVERIFY(clear != 0 && message != 0);
+
+    clear->click();                                                          // no nozzle shown yet
+    QVERIFY(message->text().contains("Choose a nozzle first"));
+
+    QMetaObject::invokeMethod(&page, "rowClicked", Q_ARG(int, 0));
+    clear->click();
+    QVERIFY(message->text().contains("queue is empty"));
+
+    QVERIFY(bench.selection.select(1));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.selection.isSelected(1), 3000);
+    bench.supply.scanned(code(3000000041));
+    bench.supply.scanned(code(3000000042));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 2);
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);   // the preset of the queue is on the board
+
+    clear->click();
+    QVERIFY2(message->text().contains("queue was cleared"), qPrintable(message->text()));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 0);
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).presetG, quint32(0), 3000);                       // the board forgot the preset
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
+    QCOMPARE(one("SELECT status FROM tickets WHERE barcode = " + QString::number(Barcode::toKey(code(3000000041)))).toInt(), 1);   // the tickets stay sold
+
+    // a fill that has started cannot be cleared
+    bench.supply.scanned(code(3000000043));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+    QVERIFY(bench.boards.simulator().liftGun(1));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.supply.isLocked(1), 3000);
+    clear->click();
+    QVERIFY(message->text().contains("has started"));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);
 }
 
 void Smart210Test::aResultIsRecordedWhileNobodyIsLoggedIn()
