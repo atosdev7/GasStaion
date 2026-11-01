@@ -29,12 +29,14 @@ public:
     // What happened, for the screen that opened the dialog: set when a fill was set or cancelled.
     QString message() const { return result_; }
 
+public slots:
+    void reject();   // closed without a fill set: the balance goes from the dispenser
+
 private slots:
     void showBalance();
     void setAmount();
     void cancelOpenFill();
     void nozzleChanged();
-    void reject();
 
 private:
     int nozzle() const;
