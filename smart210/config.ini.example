@@ -14,6 +14,10 @@ height=720
 ;ticketFont=/path/to/titlefont.ttf
 ;printEnd=cut
 ;ticketTitle_sale=Gas Station Fuel Ticket
+; the title and the footer of the ticket as ready black-and-white bitmaps (192 x 48 dots, printed at that size, centred): title.bmp and footer.bmp next to the program
+; are used when they exist. A title of one kind: ticketTitleBitmap_sale (also _self, _other, _ticket_loan, _remainder, _card). No file: the title text and the logo.
+;ticketTitleBitmap=/path/to/title.bmp
+;ticketFooterBitmap=/path/to/footer.bmp
 
 ; listen for the RS485 converter of the nozzle boards (the port is set on Machine Config); false for trying screens on a PC
 boards=true

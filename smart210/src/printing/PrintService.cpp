@@ -59,6 +59,16 @@ QString PrintService::titleFor(const QString &usage) const
     return tr("Gas Station Fuel Ticket");
 }
 
+// The bitmap file of the title of a use: its own file, else the one of every ticket (empty: none, the text is printed).
+QString PrintService::titleBitmapFor(const QString &usage) const
+{
+    if (options_.titleBitmaps.contains(usage) && !options_.titleBitmaps.value(usage).isEmpty()) {
+        return options_.titleBitmaps.value(usage);
+    }
+
+    return options_.titleBitmapPath;
+}
+
 bool PrintService::ticketOf(const QString &saleId, TicketData *ticket, QString *error) const
 {
     QSqlQuery query(db_);
@@ -73,7 +83,8 @@ bool PrintService::ticketOf(const QString &saleId, TicketData *ticket, QString *
     }
 
     ticket->title = titleFor(query.value(0).toString());
-    ticket->fuelName = query.value(2).toString();
+    ticket->titleBitmap = titleBitmapFor(query.value(0).toString());
+    ticket->fuelName = query.value(1).toString();   // the letter of the fuel type on the ticket: A (gasoline) or D (diesel), not its name
     ticket->kgX100 = query.value(3).toLongLong();
     ticket->when = QDateTime::fromString(query.value(4).toString(), "yyyy-MM-dd HH:mm:ss");
     ticket->barcode = Barcode::fromKey(query.value(5).toLongLong());
@@ -95,7 +106,8 @@ bool PrintService::remainderTicketOf(const QString &barcode, TicketData *ticket,
     }
 
     ticket->title = titleFor("remainder");
-    ticket->fuelName = query.value(1).toString();
+    ticket->titleBitmap = titleBitmapFor("remainder");
+    ticket->fuelName = query.value(0).toString();   // the letter of the fuel type: A (gasoline) or D (diesel)
     ticket->kgX100 = query.value(2).toLongLong();
     ticket->when = QDateTime::fromString(query.value(3).toString(), "yyyy-MM-dd HH:mm:ss");
     ticket->barcode = Barcode::fromKey(key);
@@ -109,6 +121,7 @@ bool PrintService::cardTicketOf(const QString &barcode, TicketData *ticket, QStr
         return false;
     }
     ticket->title = titleFor("card");
+    ticket->titleBitmap = titleBitmapFor("card");
 
     return true;
 }

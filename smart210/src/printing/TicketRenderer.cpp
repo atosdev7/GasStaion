@@ -122,6 +122,22 @@ QImage TicketRenderer::logoImage(const QString &path, int widthDots, int maxHeig
     return strip;
 }
 
+QImage TicketRenderer::bitmapStrip(const QString &path, int widthDots)
+{
+    QImage picture(path);
+    if (path.isEmpty() || picture.isNull()) {
+        return QImage();
+    }
+    // dots only: a grey picture is not dithered, so the 192 x 48 bitmap that was drawn for the printer comes out the way it was drawn
+    picture = picture.convertToFormat(QImage::Format_Mono, Qt::MonoOnly | Qt::ThresholdDither | Qt::AvoidDither).convertToFormat(QImage::Format_RGB32);
+
+    QImage strip = blank(widthDots, picture.height() + 8);
+    QPainter painter(&strip);
+    painter.drawImage((widthDots - picture.width()) / 2, 4, picture);
+
+    return strip;
+}
+
 // The symbols of the barcode: Start C, one symbol for every two digits (its value 0 to 99), the check symbol (Start C plus each symbol times its place, modulo 103), Stop.
 QList<int> TicketRenderer::barcodeModules(const QString &digits)
 {
@@ -200,7 +216,8 @@ QByteArray TicketRenderer::render(const TicketData &ticket, const PrintOptions &
     QByteArray job;
     job.append(EscPos::initialize());
     job.append(EscPos::align(EscPos::Center));
-    job.append(EscPos::raster(titleImage(ticket.title, font, options.widthDots)));
+    const QImage titleBitmap = bitmapStrip(ticket.titleBitmap, options.widthDots);
+    job.append(EscPos::raster(titleBitmap.isNull() ? titleImage(ticket.title, font, options.widthDots) : titleBitmap));
     job.append(EscPos::raster(detailsImage(ticket, font, options.widthDots)));
     job.append(EscPos::feed(1));
     if (options.barcodeMode == "printer") {
@@ -213,7 +230,8 @@ QByteArray TicketRenderer::render(const TicketData &ticket, const PrintOptions &
     }
     job.append(EscPos::feed(1));
 
-    const QImage logo = logoImage(options.logoPath, options.widthDots, 100);
+    const QImage footer = bitmapStrip(options.footerBitmapPath, options.widthDots);
+    const QImage logo = footer.isNull() ? logoImage(options.logoPath, options.widthDots, 100) : footer;
     if (!logo.isNull()) {
         job.append(EscPos::raster(logo));
     }

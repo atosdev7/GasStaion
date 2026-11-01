@@ -417,6 +417,7 @@ private slots:
     void theStatusAnswerSaysWhatIsWrongWithThePrinter();
     void theTicketHasTheTitleTheDetailsTheBarcodeAndTheLogoInThatOrder();
     void withoutALogoThereIsNothingAfterTheBarcode();
+    void theTitleAndTheFooterCanBeReadyMadeBlackAndWhiteBitmaps();
     void theTitleShrinksThenWrapsToFitThePaper();
     void theLogoIsScaledDownToFit();
     void aSpotSalesTicketIsReadFromTheSale();
@@ -5932,6 +5933,42 @@ void Smart210Test::theTicketHasTheTitleTheDetailsTheBarcodeAndTheLogoInThatOrder
     QCOMPARE(commandsOf(TicketRenderer::render(sampleTicket(), options)), QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "barcode" << "feed" << "raster" << "cut");
 }
 
+// The title and the footer as ready black-and-white bitmaps (192 x 48): printed at their own size, centred on a strip as wide as the paper, instead of the title text and
+// the logo; a missing file means the text and the logo as before.
+void Smart210Test::theTitleAndTheFooterCanBeReadyMadeBlackAndWhiteBitmaps()
+{
+    QTemporaryDir dir;
+    QImage title(192, 48, QImage::Format_Mono);
+    title.fill(1);
+    for (int x = 0; x < 192; ++x) {
+        title.setPixel(x, 10, 0);                                   // a black line
+    }
+    QVERIFY(title.save(dir.path() + "/title.bmp"));
+    QImage footer(192, 48, QImage::Format_Mono);
+    footer.fill(1);
+    QVERIFY(footer.save(dir.path() + "/footer.bmp"));
+
+    const QImage strip = TicketRenderer::bitmapStrip(dir.path() + "/title.bmp", 576);
+    QCOMPARE(strip.width(), 576);
+    QCOMPARE(strip.height(), 48 + 8);
+    QCOMPARE(QColor(strip.pixel((576 - 192) / 2, 4 + 10)), QColor(Qt::black));   // not scaled: the line is where it was drawn, centred
+    QCOMPARE(QColor(strip.pixel((576 - 192) / 2 - 1, 4 + 10)), QColor(Qt::white));
+    QCOMPARE(QColor(strip.pixel(576 / 2, 4 + 20)), QColor(Qt::white));
+    QVERIFY(TicketRenderer::bitmapStrip(dir.path() + "/none.bmp", 576).isNull());
+    QVERIFY(TicketRenderer::bitmapStrip(QString(), 576).isNull());
+
+    PrintOptions options;
+    options.logoPath = "/no/such/logo.png";
+    TicketData ticket = sampleTicket();
+    ticket.titleBitmap = dir.path() + "/title.bmp";
+    options.footerBitmapPath = dir.path() + "/footer.bmp";
+    const QByteArray withBitmaps = TicketRenderer::render(ticket, options);
+    QCOMPARE(commandsOf(withBitmaps), QStringList() << "init" << "align" << "raster" << "raster" << "feed" << "raster" << "feed" << "raster" << "cut");   // the footer is printed
+    ticket.titleBitmap = "/no/such/title.bmp";
+    options.footerBitmapPath.clear();
+    QVERIFY(TicketRenderer::render(ticket, options) != withBitmaps);                                                                                 // the text and no footer
+}
+
 void Smart210Test::withoutALogoThereIsNothingAfterTheBarcode()
 {
     PrintOptions options; // no logo file
@@ -6008,7 +6045,7 @@ void Smart210Test::aSpotSalesTicketIsReadFromTheSale()
     QString error;
     QVERIFY2(service.ticketOf(sale.saleId, &ticket, &error), qPrintable(error));
     QCOMPARE(ticket.title, QString("Gas Station Fuel Ticket"));  // the default for a sale
-    QCOMPARE(ticket.fuelName, QString("Diesel"));                  // the name, not the letter
+    QCOMPARE(ticket.fuelName, QString("D"));                       // the letter (A gasoline, D diesel), not the name
     QCOMPARE(ticket.kgX100, qlonglong(1050));
     QCOMPARE(ticket.when, QDateTime(QDate(2026, 10, 7), QTime(9, 30, 0)));
     QCOMPARE(ticket.barcode, QString("0000021500000001"));

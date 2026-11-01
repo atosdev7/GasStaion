@@ -35,17 +35,23 @@ AppConfig::AppConfig()
 
     printOptions_.widthDots = qBound(256, settings.value("printWidthDots", 576).toInt(), 832);
     printOptions_.logoPath = settings.value("logo", dir + "/logo.png").toString();
+    printOptions_.titleBitmapPath = settings.value("ticketTitleBitmap", dir + "/title.bmp").toString();
+    printOptions_.footerBitmapPath = settings.value("ticketFooterBitmap", dir + "/footer.bmp").toString();
     printOptions_.fontFamily = QString();
     printOptions_.barcodeMode = settings.value("printBarcode", "image").toString().toLower() == "printer" ? "printer" : "image";
     printOptions_.endMode = settings.value("printEnd", "cut").toString().toLower();
     if (printOptions_.endMode != "label" && printOptions_.endMode != "none") {
         printOptions_.endMode = "cut";
     }
-    const char *kinds[] = {"sale", "self", "other", "ticket_loan", "remainder"};
-    for (int i = 0; i < 5; ++i) {
+    const char *kinds[] = {"sale", "self", "other", "ticket_loan", "remainder", "card"};
+    for (int i = 0; i < 6; ++i) {
         const QString title = settings.value(QString("ticketTitle_") + kinds[i]).toString();
         if (!title.isEmpty()) {
             printOptions_.titles[kinds[i]] = title;
+        }
+        const QString bitmap = settings.value(QString("ticketTitleBitmap_") + kinds[i]).toString();
+        if (!bitmap.isEmpty()) {
+            printOptions_.titleBitmaps[kinds[i]] = bitmap;
         }
     }
     ticketFont_ = settings.value("ticketFont").toString();

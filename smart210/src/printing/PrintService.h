@@ -39,6 +39,7 @@ public:
 
     // The long title of the ticket of a sale made for this use (sale, self, other, ticket_loan, remainder, card).
     QString titleFor(const QString &usage) const;
+    QString titleBitmapFor(const QString &usage) const;
 
     static const int DefaultPort = 9100;
 
