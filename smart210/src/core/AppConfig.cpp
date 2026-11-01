@@ -3,6 +3,7 @@
 #include "Clock.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QSettings>
 #include <QStringList>
 
@@ -35,8 +36,9 @@ AppConfig::AppConfig()
 
     printOptions_.widthDots = qBound(256, settings.value("printWidthDots", 576).toInt(), 832);
     printOptions_.logoPath = settings.value("logo", dir + "/logo.png").toString();
-    printOptions_.titleBitmapPath = settings.value("ticketTitleBitmap", dir + "/title.bmp").toString();
-    printOptions_.footerBitmapPath = settings.value("ticketFooterBitmap", dir + "/footer.bmp").toString();
+    // the title and the footer bitmaps are part of the program (resources/ticket, in resources.qrc); config.ini can name other files
+    printOptions_.titleBitmapPath = settings.value("ticketTitleBitmap", ":/ticket/title.bmp").toString();
+    printOptions_.footerBitmapPath = settings.value("ticketFooterBitmap", ":/ticket/footer.bmp").toString();
     printOptions_.fontFamily = QString();
     printOptions_.barcodeMode = settings.value("printBarcode", "image").toString().toLower() == "printer" ? "printer" : "image";
     printOptions_.endMode = settings.value("printEnd", "cut").toString().toLower();
@@ -49,7 +51,9 @@ AppConfig::AppConfig()
         if (!title.isEmpty()) {
             printOptions_.titles[kinds[i]] = title;
         }
-        const QString bitmap = settings.value(QString("ticketTitleBitmap_") + kinds[i]).toString();
+        // a title of its own for a kind of ticket: resources/ticket/title_<kind>.bmp, when it is in resources.qrc, or the file config.ini names
+        const QString embedded = QString(":/ticket/title_%1.bmp").arg(kinds[i]);
+        const QString bitmap = settings.value(QString("ticketTitleBitmap_") + kinds[i], QFile::exists(embedded) ? embedded : QString()).toString();
         if (!bitmap.isEmpty()) {
             printOptions_.titleBitmaps[kinds[i]] = bitmap;
         }

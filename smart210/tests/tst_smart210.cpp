@@ -418,6 +418,7 @@ private slots:
     void theTicketHasTheTitleTheDetailsTheBarcodeAndTheLogoInThatOrder();
     void withoutALogoThereIsNothingAfterTheBarcode();
     void theTitleAndTheFooterCanBeReadyMadeBlackAndWhiteBitmaps();
+    void theTicketBitmapsOfTheProgramAre192By48AndOneBit();
     void theTitleShrinksThenWrapsToFitThePaper();
     void theLogoIsScaledDownToFit();
     void aSpotSalesTicketIsReadFromTheSale();
@@ -5967,6 +5968,21 @@ void Smart210Test::theTitleAndTheFooterCanBeReadyMadeBlackAndWhiteBitmaps()
     ticket.titleBitmap = "/no/such/title.bmp";
     options.footerBitmapPath.clear();
     QVERIFY(TicketRenderer::render(ticket, options) != withBitmaps);                                                                                 // the text and no footer
+}
+
+// The title and the footer that come with the program (resources/ticket, in resources.qrc) are the default of config.ini and fit the strip of the ticket.
+void Smart210Test::theTicketBitmapsOfTheProgramAre192By48AndOneBit()
+{
+    AppConfig config;
+    QCOMPARE(config.printOptions().titleBitmapPath, QString(":/ticket/title.bmp"));
+    QCOMPARE(config.printOptions().footerBitmapPath, QString(":/ticket/footer.bmp"));
+    foreach (const QString &path, QStringList() << ":/ticket/title.bmp" << ":/ticket/footer.bmp") {
+        const QImage bitmap(path);
+        QVERIFY2(!bitmap.isNull(), qPrintable(path));
+        QCOMPARE(bitmap.size(), QSize(192, 48));
+        QCOMPARE(bitmap.depth(), 1);
+        QVERIFY(!TicketRenderer::bitmapStrip(path, 576).isNull());
+    }
 }
 
 void Smart210Test::withoutALogoThereIsNothingAfterTheBarcode()

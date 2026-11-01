@@ -12,6 +12,10 @@
         <file alias="smart210_settings_en.qm">../i18n/smart210_settings_en.qm</file>
         <file alias="smart210_sync_en.qm">../i18n/smart210_sync_en.qm</file>
     </qresource>
+    <qresource prefix="/ticket">
+        <file alias="title.bmp">ticket/title.bmp</file>
+        <file alias="footer.bmp">ticket/footer.bmp</file>
+    </qresource>
     <qresource prefix="/theme">
         <file alias="theme.qss">theme.qss</file>
     </qresource>
