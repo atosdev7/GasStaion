@@ -194,9 +194,9 @@ class PullApiTest extends TestCase
 
     public function testUsersCarryLoginHashesAndTheDeletedFlag()
     {
-        User::forceCreate(['name' => 'Acc', 'username' => 'acc', 'password' => 'x', 'role' => 'accountant', 'active' => true]);
+        User::forceCreate(['name' => 'Acc', 'username' => 'acc', 'password' => 'x', 'role' => 'accountant', 'active' => true, 'pos_salt' => 'bb22', 'pos_hash' => hash('sha256', 'bb22' . 'secret2')]);
         foreach (['assistant', 'manager', 'admin'] as $role) {
-            User::forceCreate(['name' => $role, 'username' => $role . 'x', 'password' => 'x', 'role' => $role, 'active' => true]);
+            User::forceCreate(['name' => $role, 'username' => $role . 'x', 'password' => 'x', 'role' => $role, 'active' => true, 'pos_salt' => 'cc33', 'pos_hash' => hash('sha256', 'cc33' . 'secret3')]);
         }
         User::where('username', 'acc')->first()->delete();
 
@@ -210,6 +210,10 @@ class PullApiTest extends TestCase
         $this->assertFalse($rows['acc']['pos']); // an accountant has no Smart210 login
         foreach (['assistantx', 'managerx', 'adminx'] as $username) {
             $this->assertFalse($rows[$username]['pos']); // only the cashiers sign in on the terminal
+        }
+        foreach (['acc', 'assistantx', 'managerx', 'adminx'] as $username) {
+            $this->assertNull($rows[$username]['pos_salt']); // and only theirs go there: no other role's login hash leaves the server
+            $this->assertNull($rows[$username]['pos_hash']);
         }
         $this->assertTrue($rows['acc']['deleted']);
     }

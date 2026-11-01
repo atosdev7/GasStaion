@@ -22,7 +22,8 @@ enum Command {
     CmdGetConfig = 0x0A,
     CmdSetConfig = 0x0B,
     CmdSetTime = 0x0C,
-    CmdGetTime = 0x0D
+    CmdGetTime = 0x0D,
+    CmdShowBalance = 0x0E   // show the balance of a card on the dispenser (IDLE only; the data are the grams, like a preset; 0 clears it)
 };
 
 enum State { StateIdle = 0, StateSelected = 1, StateArmed = 2, StateDispensing = 3, StateResult = 4, StateFault = 5 };

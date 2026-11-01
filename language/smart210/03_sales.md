@@ -104,3 +104,10 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Spec | TicketSalePage |
 | Start serial | TicketSalePage |
 | Saved: %1 tickets, %2 kg | TicketSalePage |
+| spot sale | TicketNumbers |
+| self use | TicketNumbers |
+| other use | TicketNumbers |
+| ticket loan | TicketNumbers |
+| card | TicketNumbers |
+| remainder | TicketNumbers |
+| press | TicketNumbers |

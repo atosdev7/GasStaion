@@ -184,6 +184,34 @@
         <source>The day could not be moved.</source>
         <translation>The day could not be moved.</translation>
     </message>
+    <message>
+        <source>spot sale</source>
+        <translation>spot sale</translation>
+    </message>
+    <message>
+        <source>self use</source>
+        <translation>self use</translation>
+    </message>
+    <message>
+        <source>other use</source>
+        <translation>other use</translation>
+    </message>
+    <message>
+        <source>ticket loan</source>
+        <translation>ticket loan</translation>
+    </message>
+    <message>
+        <source>card</source>
+        <translation>card</translation>
+    </message>
+    <message>
+        <source>remainder</source>
+        <translation>remainder</translation>
+    </message>
+    <message>
+        <source>press</source>
+        <translation>press</translation>
+    </message>
 </context>
 <context>
     <name>SpotSalePage</name>

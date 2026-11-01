@@ -62,6 +62,8 @@ public:
 
     bool select(int address) { return send(address, BoardProtocol::CmdSelect); }
     bool setPreset(int address, quint32 presetG) { return send(address, BoardProtocol::CmdSetPreset, BoardProtocol::presetData(presetG)); }
+    // Shows a number (grams) on the dispenser's display without arming anything: the balance of a card. 0 clears it. IDLE boards only.
+    bool showBalance(int address, quint32 grams) { return send(address, BoardProtocol::CmdShowBalance, BoardProtocol::presetData(grams)); }
     bool startFill(int address) { return send(address, BoardProtocol::CmdStart); }
     bool getResult(int address) { return send(address, BoardProtocol::CmdGetResult); }
     bool ackResult(int address, quint32 resultId) { return send(address, BoardProtocol::CmdAckResult, BoardProtocol::resultIdData(resultId)); }

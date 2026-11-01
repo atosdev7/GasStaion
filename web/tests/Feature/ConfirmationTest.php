@@ -1184,7 +1184,7 @@ class ConfirmationTest extends TestCase
         };
         $supply(5, 5, 5);                  // agrees
         $supply(5, 3, 5, 2);               // agrees: 2 kg left, a remainder of 2 kg
-        $supply(5, 4.97, 5);               // 0.03 kg left: the station keeps it
+        $supply(5, 4.97, 5, 0.03);         // agrees: 0.03 kg left, a remainder of 0.03 kg (there is no tolerance)
         $short = $supply(10, 10, 5);       // the tickets add up to 5 kg but the preset is 10
         $lost = $supply(5, 3, 5);          // 2 kg left and nowhere
         $wrong = $supply(5, 3, 5, 1);      // 2 kg left but the remainder is 1 kg

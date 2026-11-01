@@ -63,6 +63,7 @@ public slots:
 private slots:
     void idEntered();
     void historyClicked();
+    void supplyClicked();
     void registerClicked();
     void topUpClicked();
     void topUpEdited();

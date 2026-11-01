@@ -4,6 +4,7 @@
 #include "BoardBus.h"
 #include "CardHistoryDialog.h"
 #include "CardReader.h"
+#include "CardSupplyDialog.h"
 #include "ConfirmDialog.h"
 #include "Decimal.h"
 #include "DirectSet.h"
@@ -107,6 +108,7 @@ CardPage::CardPage(QSqlDatabase db, Session *session, PrintService *printer, Car
     message_ = ui_->cardMessage;
 
     connect(ui_->cardHistoryButton, SIGNAL(clicked()), this, SLOT(historyClicked()));
+    connect(ui_->cardSupplyButton, SIGNAL(clicked()), this, SLOT(supplyClicked()));
     connect(ui_->registerButton, SIGNAL(clicked()), this, SLOT(registerClicked()));
     connect(ui_->topUpButton, SIGNAL(clicked()), this, SLOT(topUpClicked()));
     connect(topUpKg_, SIGNAL(textEdited(QString)), this, SLOT(topUpEdited()));
@@ -174,6 +176,7 @@ void CardPage::reload()
     }
 
     ui_->cardHistoryButton->setEnabled(false);
+    ui_->cardSupplyButton->setEnabled(false);
     switchButton_->setEnabled(false);
     showPanel(PanelNone);
     readerChanged();
@@ -214,6 +217,34 @@ void CardPage::historyClicked()
     dialog.exec();
 }
 
+// A fill paid with the card, without a ticket: the dialog takes the nozzle and the PIN, shows the balance on the dispenser and sets the kg (CardSupplyDialog).
+void CardPage::supplyClicked()
+{
+    const Cards::Card card = Cards::findById(db_, cardId_);
+    if (cardId_.isEmpty() || !card.exists) {
+        showStatus(tr("Read a card first."), false);
+
+        return;
+    }
+    if (session_->userId() <= 0) {
+        showStatus(tr("Log in first."), false);
+
+        return;
+    }
+    if (!card.isActive()) {
+        showStatus(card.status == "blocked" ? tr("This card is blocked (lost).") : tr("This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app."), false);
+
+        return;
+    }
+
+    CardSupplyDialog dialog(db_, session_, config_, supply_, cardId_, this);
+    dialog.exec();
+    showInfo(Cards::findById(db_, cardId_)); // the PIN tries, the balance may have changed
+    if (!dialog.message().isEmpty()) {
+        showStatus(dialog.message(), true);
+    }
+}
+
 // A card id (from the reader or typed): known cards are shown, others can be registered.
 void CardPage::showCard(const QString &id)
 {
@@ -242,6 +273,7 @@ void CardPage::showCard(const QString &id)
     if (!card.exists || card.deleted) {
         cardId_.clear();
         ui_->cardHistoryButton->setEnabled(false);
+        ui_->cardSupplyButton->setEnabled(false);
         switchButton_->setEnabled(false);
         holder_->clear();
         ui_->cardPhone->clear();
@@ -260,6 +292,7 @@ void CardPage::showCard(const QString &id)
 
     cardId_ = card.id;
     ui_->cardHistoryButton->setEnabled(true);
+    ui_->cardSupplyButton->setEnabled(true);
     switchButton_->setEnabled(true);
     showInfo(card);
     fillPin_->clear();

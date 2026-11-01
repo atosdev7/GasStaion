@@ -91,3 +91,25 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Choose the fuel type. | Cards, SpotSale |
 | Log in first. | Cards, TicketSale, SpotSale, LoanSettlement |
 | The PIN is 4 to 8 digits. | Cards |
+| Supply with a card | CardSupplyDialog / CardPage |
+| Show balance | CardSupplyDialog / CardPage |
+| kg to supply | CardSupplyDialog / CardPage |
+| Set amount | CardSupplyDialog / CardPage |
+| Cancel the open fill | CardSupplyDialog / CardPage |
+| Card of %1: %2 kg, %3 kg can be used. | CardSupplyDialog / CardPage |
+| A fill of %1 kg is open on nozzle %2: the supplier has not started it. | CardSupplyDialog / CardPage |
+| No automatic nozzle of this fuel type is set up. | CardSupplyDialog / CardPage |
+| Choose the nozzle first. | CardSupplyDialog / CardPage |
+| The balance of %1 kg is shown on the dispenser of nozzle %2. When the customer has confirmed it, type the kg. | CardSupplyDialog / CardPage |
+| The balance is %1 kg. The dispenser of nozzle %2 could not show it (it is busy or does not answer): the customer can read it here. | CardSupplyDialog / CardPage |
+| Show the balance first. | CardSupplyDialog / CardPage |
+| Nozzle %1: %2 kg are held on the card of %3 and set on the dispenser. Take the gun up to start the fill. | CardSupplyDialog / CardPage |
+| The fill of nozzle %1 with the card was cancelled. | CardSupplyDialog / CardPage |
+| Supply | CardSupplyDialog / CardPage |
+| This card has a fill open on nozzle %1. | Cards |
+| Nozzle %1 is held for the fill of another card. | Cards |
+| Nozzle %1 has a fill started. | Cards |
+| Tickets are queued on nozzle %1. | Cards |
+| Nozzle %1 is of another fuel type than the card. | Cards |
+| Nozzle %1 is not known. | Cards |
+| The fill could not be saved. | Cards |

@@ -153,7 +153,7 @@ QList<ReviewData::Record> ReviewData::supplements(QSqlDatabase db, const QString
     QSqlQuery query(db);
     query.prepare("SELECT s.id, s.supplied_at, COALESCE((SELECT COALESCE(NULLIF(name, ''), number) FROM nozzles WHERE id = s.nozzle_id), s.nozzle_id), s.fuel_type, "
                   "s.out_amount_lt, s.out_amount_kg, s.preset_kg, (s.mode = 'manual'), COALESCE(s.comment, ''), " + dateOf("s", "supplied_at", "supply_date") +
-                  ", s.synced, COALESCE(e.message, '') "
+                  ", s.synced, COALESCE(e.message, ''), COALESCE((SELECT ticket_barcode FROM remainders WHERE supplement_id = s.id LIMIT 1), 0) "
                   "FROM supplements s "
                   "LEFT JOIN upload_errors e ON e.table_name = 'supplements' AND e.row_key = s.id "
                   "WHERE s.hidden = 0 AND " + dateOf("s", "supplied_at", "supply_date") + " = ? ORDER BY s.supplied_at, s.id");
@@ -173,6 +173,9 @@ QList<ReviewData::Record> ReviewData::supplements(QSqlDatabase db, const QString
         r.comment = query.value(8).toString();
         r.date = query.value(9).toString();
         finish(&r, query.value(10).toInt(), query.value(11).toString());
+        if (query.value(12).toLongLong() > 0) {
+            r.remainderTicket = Barcode::fromKey(query.value(12).toLongLong());
+        }
         list.append(r);
     }
 

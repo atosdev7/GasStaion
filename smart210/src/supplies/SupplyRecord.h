@@ -23,9 +23,8 @@
 class SupplyRecord
 {
 public:
-    // The most the station may keep: 0.05 kg. The tolerance only ever favours the station. A fill that ends at its preset up to this far short
-    // gives no remainder, and neither does a supply typed in; more dispensed than the tickets cover is never accepted.
-    static const qlonglong ToleranceX100 = 5; // 0.05 kg
+    // There is no tolerance: whatever is left of the tickets is a remainder ticket, and more dispensed than the tickets cover is never accepted. (The firmware of the
+    // board makes it stop at the preset.)
 
     struct Reading {
         Reading() : resultId(0), dispensedX100(0), litersX100(0), presetX100(0), reason(-1), byHand(false) {}
@@ -41,7 +40,7 @@ public:
     };
 
     struct Outcome {
-        Outcome() : ok(false), duplicate(false), tickets(0), kgX100(0), remainderKgX100(0) {}
+        Outcome() : ok(false), duplicate(false), tickets(0), kgX100(0), remainderKgX100(0), refundKgX100(0), chargedKgX100(0) {}
 
         bool ok;
         QString error;
@@ -51,7 +50,15 @@ public:
         qlonglong kgX100;        // what the tickets add up to
         QString remainderBarcode; // the remainder ticket to print, 16 digits; empty when none
         qlonglong remainderKgX100;
+        QString refundCardId;     // the card that paid for the tickets when the unused part of them went back to it (no remainder ticket then); empty when none
+        qlonglong refundKgX100;
+        QString chargedCardId;    // a fill paid with a card (no tickets): the card that was charged what really came out; empty for a fill of tickets
+        qlonglong chargedKgX100;
     };
+
+    // The card that paid for all of these tickets (tickets made for a card, Cards::issueTicket): empty when one of them is no card's ticket or they are of several
+    // cards. The unused part of such tickets goes back to the card, not into a remainder ticket (the web app does the same: CardLedger::refund).
+    static QString cardOf(QSqlDatabase db, const QList<qlonglong> &barcodes);
 
     static Outcome record(QSqlDatabase db, int nozzle, const Reading &reading, const QDateTime &now);
 

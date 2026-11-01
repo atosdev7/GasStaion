@@ -19,5 +19,7 @@ Route::middleware('device')->group(function () {
 
         // Push: a batch of rows of one table; the reply says which were saved and which rejected.
         Route::post('push/{table}', 'Api\PushController@store')->where('table', App\Support\Sync\Push::pattern());
+        // The terminal reports that nothing of the days before the running business day is left to upload (the backup waits for it).
+        Route::post('sync/uploaded', 'Api\PushController@uploaded');
     });
 });

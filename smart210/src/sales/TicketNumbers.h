@@ -23,6 +23,13 @@ public:
     // The 2-digit code of this kind of ticket for this fuel type; empty when the digits are not known (the config was not downloaded).
     static QString code(QSqlDatabase db, const QString &type, const QString &fuelType);
 
+    // What the ticket with this barcode is: "press" (a ticket of the stock) or the kind of a ticket a terminal or the web app makes ("direct", "self", "other",
+    // "ticket_loan", "card", "remainder"), from the digits of its code. A press ticket is also the answer when the digits are not known.
+    static QString kindOf(QSqlDatabase db, qlonglong barcodeKey);
+
+    // The kind in words, for a message to the cashier.
+    static QString kindName(const QString &kind);
+
     // Are the numbers known (the config was downloaded)? When not, next() cannot give one.
     static bool available(QSqlDatabase db, const QString &type, const QString &fuelType);
 

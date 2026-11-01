@@ -12,6 +12,7 @@ int Purger::purge(QSqlDatabase db, int days, const QDateTime &now)
         days = 1;
     }
     const QString cutoff = now.addDays(-days).toString("yyyy-MM-dd HH:mm:ss");
+    const QString unusedTicket = QString("SELECT 1 FROM tickets WHERE tickets.barcode = remainders.ticket_barcode AND tickets.status = %1").arg(TicketStatus::Sale);
     const QString deletedSales = "SELECT id FROM sales WHERE deleted_at IS NOT NULL AND deleted_at < ?";
 
     QStringList statements;
@@ -21,7 +22,8 @@ int Purger::purge(QSqlDatabase db, int days, const QDateTime &now)
                << "DELETE FROM sales WHERE deleted_at IS NOT NULL AND deleted_at < ?"
                << "DELETE FROM sales WHERE synced = 1 AND card_id IS NULL AND created_at < ?"            // a card's history stays
                << "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND supplied_at < ?"
-               << "DELETE FROM remainders WHERE synced = 1 AND created_at < ?"
+               // (a remainder ticket that was not supplied yet stays for as long as it is unused: the cashier reprints it from the Remainder tickets list)
+               << QString("DELETE FROM remainders WHERE synced = 1 AND created_at < ? AND NOT EXISTS (%1)").arg(unusedTicket)
                << "DELETE FROM ticket_loan_settlements WHERE synced = 1 AND settled_at < ?"
                // (not the tickets of the old publishes: with no row they would count as sold on paper before go-live, so a used one would be accepted again)
                << QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND COALESCE(supply_date, sale_date) < ? "
@@ -115,7 +117,9 @@ int Purger::removeConfirmed(QSqlDatabase db, const QStringList &saleIds, const Q
     // the finished tickets and the printed remainders of the supplies go before the supplies (they are found through them)
     removed += run(db, QString("DELETE FROM tickets WHERE synced = 1 AND status IN (%1, %2) AND supplement_id IN (%3) "
                                "AND NOT EXISTS (SELECT 1 FROM ticket_legacy l WHERE tickets.barcode BETWEEN l.lo AND l.hi)").arg(TicketStatus::Supply).arg(TicketStatus::Restrict).arg("%1"), supplementIds);
-    removed += run(db, "DELETE FROM remainders WHERE synced = 1 AND printed_at IS NOT NULL AND supplement_id IN (%1)", supplementIds);
+    // (a remainder ticket that nobody has used yet stays, printed or not)
+    removed += run(db, QString("DELETE FROM remainders WHERE synced = 1 AND "
+                               "NOT EXISTS (SELECT 1 FROM tickets WHERE tickets.barcode = remainders.ticket_barcode AND tickets.status = %1) AND supplement_id IN (%2)").arg(TicketStatus::Sale).arg("%1"), supplementIds);
     removed += run(db, "DELETE FROM supplements WHERE synced = 1 AND card_id IS NULL AND id IN (%1)", supplementIds);
     removed += run(db, "DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE synced = 1 AND card_id IS NULL AND sale_type <> 'card' AND id IN (%1))", saleIds);
     removed += run(db, "DELETE FROM sales WHERE synced = 1 AND card_id IS NULL AND sale_type <> 'card' AND id IN (%1)", saleIds);

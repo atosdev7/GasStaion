@@ -16,6 +16,7 @@ use App\Support\Cards\CardLedger;
 use App\Support\Fuel\CostChoices;
 use App\Support\Supplements\RemainderMaker;
 use App\Support\Supplements\SupplementDeletion;
+use App\Support\Supplements\SupplyTickets;
 use App\Support\Tickets\LegacyTickets;
 use App\Support\Tickets\SerialCounter;
 use Carbon\Carbon;
@@ -135,6 +136,11 @@ class SupplementController extends Controller
                 throw ValidationException::withMessages([
                     'ticket_barcodes' => __('supplements.tickets_not_suppliable', ['barcodes' => implode(', ', $missing)]),
                 ]);
+            }
+
+            // One supply takes tickets of one kind (a remainder ticket also goes with press and spot sale tickets) and the tickets of a card are all of one card.
+            if ($why = SupplyTickets::problem($tickets)) {
+                throw ValidationException::withMessages(['ticket_barcodes' => __('supplements.' . $why)]);
             }
 
             $nozzle = Nozzle::findOrFail($data['nozzle_id']);

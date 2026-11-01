@@ -101,7 +101,7 @@ class DeviceApiTest extends TestCase
 
         foreach ([['GET', '/api/device'], ['GET', '/api/pull/config'], ['GET', '/api/pull/customers'],
                   ['POST', '/api/pull/customers/ack'], ['POST', '/api/push/sales'], ['POST', '/api/sync/begin'],
-                  ['POST', '/api/sync/initial-done']] as $call) {
+                  ['POST', '/api/sync/initial-done'], ['POST', '/api/sync/uploaded']] as $call) {
             $res = $this->fromAStranger($call[0], $call[1])->assertStatus(403);
             $this->assertSame('error', $this->payload($res)['status']);
             $this->assertSame('this IP address is not registered', $this->payload($res)['message']);

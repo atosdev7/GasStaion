@@ -119,6 +119,29 @@ public:
     // The newest ticket made for the card that is still sold (not supplied, not restricted), as its 16 digits; empty when there is none.
     static QString lastTicket(QSqlDatabase db, const QString &cardId);
 
+    // The kg a card holds back for a fill that is open (the cashier set the kg, the supplier has not finished): a card has at most one, on one nozzle.
+    // The card is charged what really came out when the result is recorded (SupplyRecord), and the hold goes with the session (SupplyQueue::end).
+    struct Hold {
+        Hold() : exists(false), nozzle(0), presetX100(0) {}
+
+        bool exists;
+        int nozzle;
+        QString cardId;
+        qlonglong presetX100;
+        QString createdAt;
+    };
+    static Hold holdOfNozzle(QSqlDatabase db, int nozzle);
+    static Hold holdOfCard(QSqlDatabase db, const QString &cardId);
+    static qlonglong heldX100(QSqlDatabase db, const QString &cardId);
+    // What a new fill or ticket may take: the balance less what is held.
+    static qlonglong availableX100(QSqlDatabase db, const QString &cardId);
+
+    // Holds kgX100 of the card for a fill on a nozzle. Empty when it is held, otherwise why not (the card is unknown, locked or blocked, the kg are more than it
+    // holds, it has a fill open on another nozzle, the nozzle is not known, is of another fuel type, has tickets queued or a fill started). A hold on the same nozzle
+    // for the same card is replaced (the cashier changes the kg before the fill starts).
+    static QString beginHold(QSqlDatabase db, int nozzle, const QString &cardId, qlonglong kgX100, const QDateTime &now);
+    static void releaseHold(QSqlDatabase db, int nozzle);
+
     // Moves the balance of a card, inside the transaction of whatever caused it (a top-up, a supply). False when there is no such card.
     static bool adjustBalance(QSqlDatabase db, const QString &cardId, qlonglong deltaX100);
 };

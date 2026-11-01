@@ -23,7 +23,7 @@ class BoardSimulator : public QObject
 public:
     struct Board {
         Board()
-            : state(0), flags(0), fault(0), gunUp(false), beeps(0), resultId(0), nextId(100), presetG(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
+            : state(0), flags(0), fault(0), gunUp(false), beeps(0), resultId(0), nextId(100), presetG(0), shownG(0), shownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
               haveSeq(false), lastSeq(0), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
               silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true),
               clockOffsetSecs(QDateTime::currentDateTime().secsTo(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0))))
@@ -34,6 +34,8 @@ public:
         bool gunUp;             // the gun is up (reported in POLL as GUN_UP, as long as it is)
         int beeps;              // how many times the board beeped (it is chosen by a SELECT for its address)
         quint32 resultId, nextId, presetG, dispensedG, dispensedMl;
+        quint32 shownG;         // the balance of a card the dispenser shows (SHOW_BALANCE), 0: none; it is not a preset
+        int shownMsLeft;        // it goes after this long (the real board takes 60 seconds)
         int reason;
         BoardProtocol::BoardConfig config; // what the board holds (a board never configured has density and pulses 0)
         quint32 lastAckedId;
@@ -55,6 +57,9 @@ public:
         QList<int> commands;    // every command run, in order (not POLL)
         QList<int> requestSeqs; // SEQ of every request that reached the board
     };
+
+    static const quint32 MaxShownG = 9999999; // the most the display can show as a balance (9999.999 kg); SHOW_BALANCE above it is BAD_VALUE
+    static const int ShownMs = 60000;         // a balance stays on the display this long
 
     explicit BoardSimulator(QObject *parent = 0);
 

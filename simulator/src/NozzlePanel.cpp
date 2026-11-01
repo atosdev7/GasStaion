@@ -174,6 +174,8 @@ void NozzlePanel::refresh()
     progress_->setValue(fillShown ? int(qMin<quint32>(b.dispensedG, 2000000000)) : 0);
     if (b.state == StateSelected || b.state == StateArmed || fillShown) {
         fill_->setText(QString("%1 of %2 kg  (%3 L)").arg(kg(b.dispensedG)).arg(b.presetG > 0 ? kg(b.presetG) : QString("-")).arg(litres(b.dispensedMl)));
+    } else if (b.shownG > 0) {
+        fill_->setText(QString("Display: balance %1 kg (not a preset)").arg(kg(b.shownG)));   // SHOW_BALANCE: a card's balance, for the customer to confirm
     } else {
         fill_->setText("No fill");
     }

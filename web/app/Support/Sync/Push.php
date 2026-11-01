@@ -201,6 +201,18 @@ class Push
         if (abs($d['paid_amount'] + $d['unpaid_amount'] - $d['total_amount']) > 0.01) {
             throw new RejectedRow('paid and unpaid amounts do not add up to the total');
         }
+        // The amount is the price times the weight. The terminal can also type the amount and work the weight out from it, which is rounded to 0.01 kg, so the two may
+        // differ by one cent and half a hundredth of a kg of fuel; more than that is a wrong row. Own use and other use have no amount.
+        if ($d['usage'] === 'sale' || $d['total_amount'] > 0) {
+            $expected = round($d['price'] * $d['amount_kg'], 2);
+            if (abs($d['total_amount'] - $expected) > 0.01 + 0.005 * $d['price']) {
+                throw new RejectedRow('the total amount is not the price times the weight (' . number_format($expected, 2, '.', '') . ')');
+            }
+        }
+        // The items of a ticket sale are the tickets that were sold: their kg make the weight of the sale.
+        if ($items && abs(array_sum(array_column($items, 'amount_kg')) - $d['amount_kg']) > 0.01) {
+            throw new RejectedRow('the weights of the tickets do not add up to the weight of the sale');
+        }
         // Debts are created on the web; a sale made at the pump is always paid in full.
         if ($d['unpaid_amount'] > 0.01) {
             throw new RejectedRow('a Smart210 sale cannot leave an unpaid amount');
@@ -233,8 +245,8 @@ class Push
             return; // confirmed by the accountant: final, so a repeated push changes nothing
         }
         if (!$sale->exists) {
-            // The cost is the web's to fill, from the inbound that was the default when the sale was made (it may arrive days later);
-            // the device never knows it.
+            // The cost is the web's to fill, never the device's: the default cost of the fuel type when the row arrives (it may come days after the sale). The
+            // accountant can change the cost of a sale (and of a supply) before confirming it, so a changed default costs nothing but that look.
             $sale->cost = \App\Support\Fuel\DefaultCost::get($d['fuel_type']);      // the default cost of the fuel type; the accountant can change it on the sale before confirming
         }
 
@@ -278,7 +290,7 @@ class Push
             'supply_date' => 'nullable|date_format:Y-m-d',
         ]);
 
-        // The tolerance of the Smart210 (0.05 kg) only ever favours the station: the tickets may exceed what was dispensed, never the other way.
+        // No tolerance: a fill may fall short of its tickets (what is left is a remainder), never go past them. (The firmware of the board makes it stop at the preset.)
         if (round($d['out_amount_kg'] - $d['preset_kg'], 2) > 0) {
             throw new RejectedRow('more was dispensed than the tickets cover');
         }
@@ -471,8 +483,13 @@ class Push
                 self::conflict($device, $d, 'the ticket is already ' . $names[$current] . ' on the server, the sale was not applied');
             }
         } elseif ($current === $s['supply']) {
-            if (!empty($d['supplement_id']) && !empty($ticket->supplement_id) && $ticket->supplement_id !== $d['supplement_id']) {
-                self::conflict($device, $d, 'the ticket was already supplied under another supplement, kept as it was');
+            // The same ticket used twice: at a nozzle under two supplements, or once at a nozzle and once for a ticket loan (that use has no supplement). Whichever
+            // came first stays; the staff see the case among the sync problems. (The same use sent again is quiet: the supplements are equal, or both are empty.)
+            $stored = (string) $ticket->supplement_id;
+            $pushed = (string) ($d['supplement_id'] ?? '');
+            if ($stored !== $pushed) {
+                self::conflict($device, $d, $stored === '' ? 'the ticket was already used for a ticket loan, kept as it was'
+                    : ($pushed === '' ? 'the ticket was already supplied at a nozzle, kept as it was' : 'the ticket was already supplied under another supplement, kept as it was'));
             }
         } else {
             if ($current === $s['restrict']) {
@@ -492,6 +509,24 @@ class Push
 
         if ($attributes) {
             $ticket->saveFromDevice($attributes + ['synced' => true]);
+        }
+
+        if ($status === $s['supply'] && !empty($d['supplement_id'])) {
+            self::checkSupplyMix($device, $d, $ticket);
+        }
+    }
+
+    // One supply takes tickets of one kind (a remainder ticket also goes with press and spot sale tickets) and, for a card, of one card (the terminal sees to it; the
+    // fuel is poured anyway, so an older terminal's mix is stored and shown among the sync problems).
+    private static function checkSupplyMix(Device $device, array $d, Ticket $ticket)
+    {
+        $tickets = Ticket::where('supplement_id', $d['supplement_id'])->get(['barcode', 'code', 'card_id']);
+        if ($tickets->count() < 2) {
+            return;
+        }
+        $why = \App\Support\Supplements\SupplyTickets::problem($tickets);
+        if ($why) {
+            self::conflict($device, $d, 'the supply mixes tickets that do not go together (' . str_replace('_', ' ', substr($why, 8)) . ')');
         }
     }
 

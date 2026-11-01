@@ -156,6 +156,12 @@
       </spacer>
      </item>
      <item>
+      <widget class="QPushButton" name="printTicketButton">
+       <property name="text"><string>Print ticket</string></property>
+       <property name="enabled"><bool>false</bool></property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="deleteSaleButton">
        <property name="text"><string>Delete sale</string></property>
        <property name="enabled"><bool>false</bool></property>

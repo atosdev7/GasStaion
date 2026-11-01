@@ -62,7 +62,28 @@ bool supplyTicket(QSqlDatabase db, qlonglong barcode, const QString &supplementI
 
 }
 
-const qlonglong SupplyRecord::ToleranceX100;
+QString SupplyRecord::cardOf(QSqlDatabase db, const QList<qlonglong> &barcodes)
+{
+    if (barcodes.isEmpty()) {
+        return QString();
+    }
+
+    QString card;
+    foreach (qlonglong barcode, barcodes) {
+        QSqlQuery query(db);
+        query.prepare("SELECT card_id FROM tickets WHERE barcode = ?");
+        query.addBindValue(barcode);
+        if (!query.exec() || !query.next() || query.value(0).isNull() || query.value(0).toString().isEmpty()) {
+            return QString();
+        }
+        if (!card.isEmpty() && card != query.value(0).toString()) {
+            return QString();
+        }
+        card = query.value(0).toString();
+    }
+
+    return card;
+}
 
 SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, const Reading &reading, const QDateTime &now)
 {
@@ -106,7 +127,15 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
     // The queue of a started fill goes with its result, if it still holds up. A fill paid with a card has no tickets: the card's balance falls
     // by what really came out (and no remainder is made: the card keeps what was not taken).
-    const SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    // A fill the cashier set for a card whose start was not seen (the session is saved when the gun is seen up): the hold says the same
+    const Cards::Hold hold = Cards::holdOfNozzle(db, nozzleNumber);
+    if (!session.exists && hold.exists) {
+        session.exists = true;
+        session.nozzle = nozzleNumber;
+        session.presetX100 = hold.presetX100;
+        session.cardId = hold.cardId;
+    }
     const bool byCard = session.byCard();
     QList<SupplyQueue::Entry> queue = (session.exists && !byCard) ? SupplyQueue::entries(db, nozzleNumber) : QList<SupplyQueue::Entry>();
     qlonglong total = 0;
@@ -115,12 +144,14 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         total += entry.kgX100;
         withTickets = withTickets && stillGood(db, entry.barcode, fuelType, nozzleNumber);
     }
+    // More came out than the tickets cover: the station never accepts that (the firmware of the board sees to the pulses, the terminal has no tolerance). The supply
+    // is saved without the tickets and the cashier sorts them out.
     if (withTickets && reading.dispensedX100 > total) {
-        withTickets = false; // more came out than the tickets cover: the station never accepts that, the cashier sorts the tickets out
+        withTickets = false;
     }
 
     // The tickets typed in with the reading replace the queue: each must pass the checks of a scan, and together they must cover what was
-    // dispensed. What is left of them is a remainder (a new ticket), unless it is within the tolerance: the station keeps that.
+    // dispensed. What is left of them is a remainder (a new ticket), whatever it is.
     const bool typed = !reading.tickets.isEmpty();
     if (typed) {
         queue.clear();
@@ -135,6 +166,16 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
                 db.rollback();
 
                 return refused(QObject::tr("Ticket %1 cannot be used: %2").arg(Barcode::fromKey(barcode)).arg(scan.ok ? QObject::tr("it is twice in the list.") : scan.error));
+            }
+            QList<qlonglong> have;
+            foreach (const SupplyQueue::Entry &taken, queue) {
+                have << taken.barcode;
+            }
+            const QString mixed = SupplyQueue::mixProblem(db, have, barcode);
+            if (!mixed.isEmpty()) {
+                db.rollback();
+
+                return refused(QObject::tr("Ticket %1 cannot be used: %2").arg(Barcode::fromKey(barcode)).arg(mixed));
             }
             SupplyQueue::Entry entry;
             entry.barcode = barcode;
@@ -151,11 +192,23 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         withTickets = true;
     }
 
+    // What is left of the tickets was paid for. When the tickets are a card's (the card paid for them when they were made) it goes back to the card; otherwise it is a
+    // remainder ticket for the customer.
     qlonglong remainder = 0;
+    qlonglong refund = 0;
+    QString payer;
     if (withTickets) {
         const qlonglong rest = total - reading.dispensedX100;
-        const bool atPreset = typed || (reading.reason == BoardProtocol::ReasonPresetReached); // a typed supply is as good as one that ended at its preset
-        remainder = (rest > 0 && !(atPreset && rest <= ToleranceX100)) ? rest : 0;
+        QList<qlonglong> used;
+        foreach (const SupplyQueue::Entry &entry, queue) {
+            used << entry.barcode;
+        }
+        payer = cardOf(db, used);
+        if (rest > 0 && !payer.isEmpty()) {
+            refund = rest;
+        } else {
+            remainder = rest > 0 ? rest : 0;
+        }
     }
 
     const QString when = now.toString("yyyy-MM-dd HH:mm:ss");
@@ -184,6 +237,8 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
     if (ok && byCard) {
         ok = Cards::adjustBalance(db, session.cardId, -reading.dispensedX100);
         outcome.kgX100 = reading.dispensedX100;
+        outcome.chargedCardId = session.cardId;
+        outcome.chargedKgX100 = reading.dispensedX100;
     }
 
     if (ok && withTickets) {
@@ -192,6 +247,12 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
         }
         outcome.tickets = queue.size();
         outcome.kgX100 = total;
+    }
+
+    if (ok && refund > 0) {
+        ok = Cards::adjustBalance(db, payer, refund);
+        outcome.refundCardId = payer;
+        outcome.refundKgX100 = refund;
     }
 
     if (ok && remainder > 0) {
@@ -249,7 +310,9 @@ QList<SupplyRecord::RemainderRow> SupplyRecord::remainders(QSqlDatabase db, int 
     query.prepare("SELECT r.created_at, COALESCE((SELECT COALESCE(NULLIF(name, ''), number) FROM nozzles WHERE id = s.nozzle_id), ''), r.fuel_type, r.amount_kg, r.ticket_barcode, "
                   "COALESCE(r.printed_at, ''), COALESCE(t.status, 1), r.id, COALESCE(r.comment, '') "
                   "FROM remainders r LEFT JOIN supplements s ON s.id = r.supplement_id LEFT JOIN tickets t ON t.barcode = r.ticket_barcode "
-                  "ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?");
+                  // every remainder ticket that was not supplied yet, however old, and the latest used ones up to the limit
+                  "WHERE COALESCE(t.status, 1) = 1 OR r.rowid IN (SELECT rowid FROM remainders ORDER BY created_at DESC, rowid DESC LIMIT ?) "
+                  "ORDER BY r.created_at DESC, r.rowid DESC");
     query.addBindValue(limit);
     query.exec();
     while (query.next()) {

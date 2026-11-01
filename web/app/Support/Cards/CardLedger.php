@@ -84,7 +84,7 @@ class CardLedger
     // The card pays for a ticket in full, so when less fuel came out than the ticket held, the unused part goes back to the card, not to the customer as
     // a paper remainder ticket. This is the [card id, kg] of that part for a supply, or null when it has none: the supply is deleted, was made with a card
     // directly (it took only what came out), already has a remainder, used a ticket that no card paid for (or tickets of several cards), or left no more
-    // than the tolerance (0.05 kg, the same as the terminal: the station keeps it).
+    // (no tolerance: any unused part goes back).
     public static function refund(Supplement $supplement)
     {
         $paid = self::paidByCard($supplement);
@@ -93,7 +93,7 @@ class CardLedger
         }
         $left = round($paid[1] - (float) $supplement->out_amount_kg, 2);
 
-        return $left > 0.05 ? [$paid[0], $left] : null;
+        return $left > 0 ? [$paid[0], $left] : null;
     }
 
     // [card id, kg] of the tickets of a supply when all of them are tickets one card paid for (the unused part of such a supply is the card's, never a

@@ -222,7 +222,7 @@ class ReportSheets
         $windows = $d['windows'];
         $rows = [];
         foreach ($d['rows'] as $r) {
-            $row = [isset($fuels[$r->fuel_type]) ? $fuels[$r->fuel_type] : $r->fuel_type, $r->tanks, $r->system_owed, $r->old_owed, $r->owed, $r->free];
+            $row = [isset($fuels[$r->fuel_type]) ? $fuels[$r->fuel_type] : $r->fuel_type, $r->tanks, $r->system_owed, $r->old_owed, $r->card_owed, $r->owed, $r->free];
             foreach (['supplied', 'sold'] as $kind) {
                 foreach ($windows as $days) {
                     $row[] = round($r->$kind[$days], 2);
@@ -234,7 +234,7 @@ class ReportSheets
             $rows[] = $row;
         }
 
-        $headings = [__('report.fuel_type'), __('report.ord_tanks'), __('report.ord_system_owed'), __('report.ord_old_owed'), __('report.ord_owed'), __('report.ord_free')];
+        $headings = [__('report.fuel_type'), __('report.ord_tanks'), __('report.ord_system_owed'), __('report.ord_old_owed'), __('report.ord_card_owed'), __('report.ord_owed'), __('report.ord_free')];
         foreach (['ord_supplied', 'ord_sold', 'ord_cover'] as $key) {
             foreach ($windows as $days) {
                 $headings[] = __('report.' . $key) . ' ' . $days . ' ' . __('report.ord_days_short');
@@ -245,7 +245,7 @@ class ReportSheets
             'title' => __('report.title_ordering'),
             'headings' => $headings,
             'rows' => $rows,
-            'money' => array_merge(range(1, 5), range(6, 5 + 2 * count($windows))),
+            'money' => array_merge(range(1, 6), range(7, 6 + 2 * count($windows))),
         ]];
     }
 

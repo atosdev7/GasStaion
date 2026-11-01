@@ -20,8 +20,6 @@ class PushController extends Controller
     public function store(Request $request, $table)
     {
         $device = $request->attributes->get('device');
-        $device->last_synced_at = now();
-        $device->save();
 
         $validator = Validator::make($request->all(), [
             'rows' => 'required|array|max:' . self::MAX_ROWS,
@@ -59,5 +57,16 @@ class PushController extends Controller
             'saved' => $saved,
             'rejected' => $rejected,
         ]);
+    }
+
+    // The terminal says it holds nothing that waits for an upload from before the running business day (no record, refused ones included): what lets a backup run and a
+    // confirmed day be dumped. It is the terminal that knows, so this is not stamped by a push: a push is only a batch, and an upload can stop between two tables.
+    public function uploaded(Request $request)
+    {
+        $device = $request->attributes->get('device');
+        $device->last_synced_at = now();
+        $device->save();
+
+        return Api::response(['status' => 'ok', 'server_time' => now()->format('Y-m-d H:i:s')]);
     }
 }

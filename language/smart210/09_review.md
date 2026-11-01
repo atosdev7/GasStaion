@@ -60,3 +60,10 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Set date | ReviewPage |
 | Delete sale | ReviewPage |
 | The record was moved to %1. It will be uploaded again. | ReviewPage |
+| Print ticket | ReviewPage |
+| This record has no ticket to print: a spot sale and a supply with a remainder ticket have one. | ReviewPage |
+| The printer is busy. Try again in a moment. | ReviewPage |
+| The remainder ticket %1 is being printed. | ReviewPage |
+| Printing... | ReviewPage |
+| The ticket was sent to the printer. | ReviewPage |
+| It was not printed: %1 | ReviewPage |

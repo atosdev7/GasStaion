@@ -227,6 +227,14 @@ void ManualSupplyPage::addTicket()
         return;
     }
 
+    const QString mixed = SupplyQueue::mixProblem(db_, barcodes_, scan.barcode);
+    if (!mixed.isEmpty()) {
+        status_->setText(mixed);
+        code_->selectAll();
+
+        return;
+    }
+
     barcodes_ << scan.barcode;
     weights_ << scan.kgX100;
     status_->clear();
@@ -287,8 +295,10 @@ void ManualSupplyPage::showSummary()
         Theme::setState(summary_, matches ? "ok" : "warning");
         if (barcodes_.isEmpty() || rest < 0) {
             summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. The tickets must cover everything that was dispensed.").arg(kg(total)).arg(kg(dispensed)));
-        } else if (rest == 0 || rest <= SupplyRecord::ToleranceX100) {
-            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).").arg(kg(total)).arg(kg(dispensed)).arg(kg(SupplyRecord::ToleranceX100)));
+        } else if (rest == 0) {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. No remainder.").arg(kg(total)).arg(kg(dispensed)));
+        } else if (!SupplyRecord::cardOf(db_, barcodes_).isEmpty()) {
+            summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. %3 kg go back to the card that paid for the tickets.").arg(kg(total)).arg(kg(dispensed)).arg(kg(rest)));
         } else {
             summary_->setText(tr("Tickets: %1 kg, dispensed: %2 kg. A remainder ticket of %3 kg is made and printed.").arg(kg(total)).arg(kg(dispensed)).arg(kg(rest)));
         }
@@ -310,6 +320,7 @@ void ManualSupplyPage::save()
     QString why;
     const int tickets = barcodes_.size();
     const qlonglong rest = ticketsX100() - dispensed;
+    const bool byCard = !SupplyRecord::cardOf(db_, barcodes_).isEmpty();      // (asked before the tickets are used)
     if (!session_->recordManual(nozzle(), dispensed, liters, barcodes_, time_->dateTime(), &why, comment_->text())) {
         status_->setText(why);
 
@@ -318,8 +329,10 @@ void ManualSupplyPage::save()
 
     clearForm();
     Theme::setState(status_, "ok");
-    status_->setText(rest > SupplyRecord::ToleranceX100
-                         ? tr("The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.").arg(tickets).arg(kg(rest))
-                         : tr("The supply was recorded with %1 tickets. It will be uploaded.").arg(tickets));
+    status_->setText(rest > 0 && byCard
+                         ? tr("The supply was recorded with %1 tickets, and %2 kg went back to the card. It will be uploaded.").arg(tickets).arg(kg(rest))
+                         : (rest > 0
+                                ? tr("The supply was recorded with %1 tickets, and a remainder ticket of %2 kg was made. It will be uploaded.").arg(tickets).arg(kg(rest))
+                                : tr("The supply was recorded with %1 tickets. It will be uploaded.").arg(tickets)));
     emit recorded();
 }

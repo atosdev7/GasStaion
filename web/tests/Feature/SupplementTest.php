@@ -915,8 +915,9 @@ class SupplementTest extends TestCase
         $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 15] + $form)->assertSessionHasNoErrors();      // all of it used
         $this->assertEquals(0, $refund->fresh()->kg);
         $this->assertEquals(25, $card->fresh()->balance());
-        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 14.97] + $form)->assertSessionHasNoErrors();   // 0.03 kg left: the station keeps it
-        $this->assertEquals(0, $refund->fresh()->kg);
+        $this->put('/supplements/' . $supplement->id, ['out_amount_lt' => 14.97] + $form)->assertSessionHasNoErrors();   // 0.03 kg left: it goes back too (no tolerance)
+        $this->assertEquals(0.03, $refund->fresh()->kg);
+        $this->assertEquals(25.03, $card->fresh()->balance());
         $this->assertSame(0, Remainder::count());
 
         // a remainder cannot be made by hand for it, and the form does not offer it
@@ -934,7 +935,8 @@ class SupplementTest extends TestCase
         $this->assertSame(config('ticket_statuses.sale'), (int) $ticket->fresh()->status);
     }
 
-    public function testTheUnusedPartGoesBackToTheCardOnlyWhenTheCardPaidForAllTheTickets()
+    // one supply takes tickets of one kind (press, spot, remainder, card ...) and, for a card, of one card
+    public function testASupplyTakesTicketsOfOneKindAndOfOneCardOnly()
     {
         $this->density(1);
         $nozzle = $this->nozzle('D');
@@ -942,10 +944,47 @@ class SupplementTest extends TestCase
         $paid = $this->cardTicket($card, 5, 1);
         $press = $this->soldTicket(1, 0);                                            // 5 kg paid by somebody else
 
-        $this->supply([$paid->barcode, $press->barcode], $nozzle, 8)->assertSessionHasNoErrors();
-        $this->assertSame(0, \App\Models\Cards\CardTransaction::where('type', 'refund')->count());
-        $this->assertSame(1, Remainder::count());                                    // 2 kg: an ordinary remainder ticket, as before
-        $this->assertEquals(35, $card->fresh()->balance());
+        $this->supply([$paid->barcode, $press->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(0, Supplement::count());                                   // nothing was made
+        $this->assertSame(config('ticket_statuses.sale'), (int) $paid->fresh()->status);
+
+        $other = \App\Models\Cards\Card::forceCreate(['uid' => 'AA02', 'holder_name' => 'Wang', 'fuel_type' => 'D'] + \App\Support\Cards\CardPin::make('1234'));
+        $foreign = $this->cardTicket($other, 5, 2);
+        $this->supply([$paid->barcode, $foreign->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(0, Supplement::count());
+
+        // two tickets of the same card are fine, and what is not used goes back to that card
+        $second = $this->cardTicket($card, 5, 3);
+        $this->supply([$paid->barcode, $second->barcode], $nozzle, 8)->assertSessionHasNoErrors();
+        $this->assertSame(1, Supplement::count());
+        $this->assertSame(0, Remainder::count());
+        $this->assertEquals(2, \App\Models\Cards\CardTransaction::where('type', 'refund')->first()->kg);
+    }
+
+    // a ticket made by a POS (code 21 a diesel spot sale, 29 a diesel remainder)
+    private function posTicket($code, $serial, $kg)
+    {
+        return Ticket::forceCreate([
+            'barcode' => \App\Support\Tickets\Barcode::makeReserved($code, config('ticket_serial.device_base') + $serial), 'fuel_type' => 'D', 'spec' => null, 'code' => $code,
+            'serial' => config('ticket_serial.device_base') + $serial, 'amount_kg' => $kg, 'status' => config('ticket_statuses.sale'), 'sale_date' => '2026-09-20 07:00:00',
+        ]);
+    }
+
+    // a remainder ticket may be in a supply with press tickets, or with spot sale tickets; press and spot sale tickets do not mix, and a remainder does not go with the rest
+    public function testARemainderTicketGoesWithPressAndSpotSaleTicketsOnly()
+    {
+        $this->density(1);
+        $nozzle = $this->nozzle('D');
+
+        $this->supply([$this->posTicket('29', 10, 2)->barcode, $this->soldTicket(1, 0)->barcode], $nozzle, 7)->assertSessionHasNoErrors();      // a remainder and a press ticket
+        $this->assertSame(1, Supplement::count());
+        $this->supply([$this->posTicket('21', 11, 3)->barcode, $this->posTicket('29', 12, 2)->barcode], $nozzle, 5)->assertSessionHasNoErrors(); // a spot sale ticket and a remainder
+        $this->assertSame(2, Supplement::count());
+
+        $this->supply([$this->soldTicket(2, 0)->barcode, $this->posTicket('21', 13, 3)->barcode], $nozzle, 8)->assertSessionHasErrors('ticket_barcodes');   // press and spot do not mix
+        $card = $this->cardWith40Kg();
+        $this->supply([$this->cardTicket($card, 5, 1)->barcode, $this->posTicket('29', 14, 2)->barcode], $nozzle, 7)->assertSessionHasErrors('ticket_barcodes');
+        $this->assertSame(2, Supplement::count());
     }
 
     public function testTheTimeOfASupplyChangedByTheAdminMovesItsTicketsAndItsRemainderWithIt()

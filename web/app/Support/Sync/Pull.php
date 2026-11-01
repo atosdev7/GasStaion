@@ -71,10 +71,14 @@ class Pull
     {
         switch ($table) {
             case 'users':
+                // Only a role that signs in on the terminal gets its login hash there: the others share their web password with the hash, and the terminal would
+                // keep it on its SD card for nothing.
+                $pos = in_array($m->role, config('permissions.pos_roles'), true);
+
                 return [
                     'id' => (int) $m->id, 'username' => $m->username, 'name' => $m->name, 'role' => $m->role,
-                    'pos' => in_array($m->role, config('permissions.pos_roles'), true), 'active' => (bool) $m->active,
-                    'pos_salt' => $m->pos_salt, 'pos_hash' => $m->pos_hash, 'deleted' => $m->trashed(),
+                    'pos' => $pos, 'active' => (bool) $m->active,
+                    'pos_salt' => $pos ? $m->pos_salt : null, 'pos_hash' => $pos ? $m->pos_hash : null, 'deleted' => $m->trashed(),
                 ];
             case 'customers':
                 return [

@@ -185,6 +185,8 @@ Route::middleware(SetLocale::class)->group(function () {
             Route::redirect('balances', '/balances/tanks')->name('balances.index');   // the old single page
             Route::get('balances/go-live', 'Initialize\BalanceController@goLive')->name('balances.golive')->middleware('can:golive.manage');
             Route::post('balances/go-live', 'Initialize\BalanceController@saveGoLive')->name('balances.golive.save')->middleware('can:golive.manage');
+            Route::post('balances/lock', 'Initialize\BalanceController@lock')->name('balances.lock')->middleware('can:golive.manage');
+            Route::post('balances/unlock', 'Initialize\BalanceController@unlock')->name('balances.unlock')->middleware('can:golive.manage');
             Route::get('balances/tanks', 'Initialize\BalanceController@tanks')->name('balances.tanks.index');
             Route::get('balances/debts', 'Initialize\BalanceController@debts')->name('balances.debts.index');
             Route::get('balances/loans', 'Initialize\BalanceController@loans')->name('balances.loans.index');

@@ -308,5 +308,33 @@ Settlements: %3 records, %4 kg</translation>
         <source>The record was moved to %1. It will be uploaded again.</source>
         <translation>The record was moved to %1. It will be uploaded again.</translation>
     </message>
+    <message>
+        <source>Print ticket</source>
+        <translation>Print ticket</translation>
+    </message>
+    <message>
+        <source>This record has no ticket to print: a spot sale and a supply with a remainder ticket have one.</source>
+        <translation>This record has no ticket to print: a spot sale and a supply with a remainder ticket have one.</translation>
+    </message>
+    <message>
+        <source>The printer is busy. Try again in a moment.</source>
+        <translation>The printer is busy. Try again in a moment.</translation>
+    </message>
+    <message>
+        <source>The remainder ticket %1 is being printed.</source>
+        <translation>The remainder ticket %1 is being printed.</translation>
+    </message>
+    <message>
+        <source>Printing...</source>
+        <translation>Printing...</translation>
+    </message>
+    <message>
+        <source>The ticket was sent to the printer.</source>
+        <translation>The ticket was sent to the printer.</translation>
+    </message>
+    <message>
+        <source>It was not printed: %1</source>
+        <translation>It was not printed: %1</translation>
+    </message>
 </context>
 </TS>

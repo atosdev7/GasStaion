@@ -133,8 +133,8 @@
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.cpp" line="291"/>
-        <source>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</source>
-        <translation>Tickets: %1 kg, dispensed: %2 kg. No remainder (up to %3 kg the station keeps).</translation>
+        <source>Tickets: %1 kg, dispensed: %2 kg. No remainder.</source>
+        <translation>Tickets: %1 kg, dispensed: %2 kg. No remainder.</translation>
     </message>
     <message>
         <location filename="../src/supplies/ManualSupplyPage.cpp" line="293"/>
@@ -223,6 +223,18 @@
         <location filename="../src/supplies/SupplyRecord.cpp" line="236"/>
         <source>The supply could not be saved.</source>
         <translation>The supply could not be saved.</translation>
+    </message>
+    <message>
+        <source>A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.</source>
+        <translation>A supply takes tickets of one kind only: this is a %1 ticket and the others are %2 tickets.</translation>
+    </message>
+    <message>
+        <source>A supply takes the tickets of one card only: this ticket was made for another card.</source>
+        <translation>A supply takes the tickets of one card only: this ticket was made for another card.</translation>
+    </message>
+    <message>
+        <source>A remainder ticket goes with press and spot sale tickets only, not with %1 tickets.</source>
+        <translation>A remainder ticket goes with press and spot sale tickets only, not with %1 tickets.</translation>
     </message>
 </context>
 <context>

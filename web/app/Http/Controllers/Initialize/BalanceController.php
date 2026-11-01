@@ -16,6 +16,7 @@ use App\Models\Debts\TicketLoanSettlement;
 use App\Models\Admin\Setting;
 use App\Models\Tickets\TicketPublish;
 use App\Support\Admin\Audit;
+use App\Support\Admin\OpeningLock;
 use App\Support\Dashboard\TankLevels;
 use App\Support\Fuel\DefaultCost;
 use App\Models\Tickets\OpeningTicket;
@@ -42,6 +43,7 @@ class BalanceController extends Controller
             'goLive' => $date,
             'oldPublishes' => $date ? TicketPublish::where('date', '<', $date)->count() : 0,
             'madeRows' => $date ? Ticket::whereIn('publish_id', TicketPublish::where('date', '<', $date)->select('id'))->count() : 0,
+            'lockedAt' => OpeningLock::lockedAt(),
         ]);
     }
 
@@ -54,6 +56,29 @@ class BalanceController extends Controller
         Audit::log('go_live_date', ($before ?: '-') . ' -> ' . $data['go_live_date']);
 
         return redirect()->route('balances.golive')->with('status', __('initialize.go_live_saved'));
+    }
+
+    // The opening balances are locked by the admin once the live setup is done (OpeningLock): from then on they are changed by the system only, not by hand.
+    public function lock()
+    {
+        OpeningLock::lock();
+        Audit::log('opening_lock', 'the opening balances are locked');
+
+        return redirect()->route('balances.golive')->with('status', __('initialize.opening_lock_done'));
+    }
+
+    public function unlock()
+    {
+        OpeningLock::unlock();
+        Audit::log('opening_unlock', 'the opening balances are open again');
+
+        return redirect()->route('balances.golive')->with('status', __('initialize.opening_unlock_done'));
+    }
+
+    // A change by hand of an opening balance is refused while they are locked: back to the list it came from, with the reason; null when it may go on.
+    private function refuseWhenLocked($route)
+    {
+        return OpeningLock::isLocked() ? redirect()->route($route)->withErrors(['balance' => __('initialize.opening_locked')]) : null;
     }
 
     // The balances of the tanks, like the list of the fuel inbounds: a row for every cost a tank holds (entered here, or left by a backup), and under it the
@@ -112,6 +137,9 @@ class BalanceController extends Controller
 
     public function storeRemainder(Request $request)
     {
+        if ($refused = $this->refuseWhenLocked('balances.remainders.index')) {
+            return $refused;
+        }
         $data = $request->validate([
             'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
             'amount_kg' => 'required|numeric|min:0.01|max:99999999',
@@ -132,6 +160,9 @@ class BalanceController extends Controller
     // and a note. A tank can have several, one for each cost. The cost is the cost of the sales until the first fuel inbound is entered.
     public function storeTank(Request $request)
     {
+        if ($refused = $this->refuseWhenLocked('balances.tanks.index')) {
+            return $refused;
+        }
         $data = $this->tankFields($request);
         $tank = Tank::findOrFail($data['tank_id']);
 
@@ -195,6 +226,9 @@ class BalanceController extends Controller
         $before = $row->tank_id . ' ' . $row->balance . ' kg, cost ' . $row->cost . ', ' . substr((string) $row->balance_date, 0, 10) . ', ' . $row->note;
 
         if ($row->isManual()) {
+            if ($refused = $this->refuseWhenLocked('balances.tanks.index')) {
+                return $refused;
+            }
             $data = $this->tankFields($request);
             // changed to a cost the tank already has: the balance goes into that row, and this one is gone (a tank has one row for each cost)
             $same = $this->sameCost($data['tank_id'], $data['cost'], $row->id);
@@ -235,6 +269,9 @@ class BalanceController extends Controller
     // Only a row entered by hand: the others are the stock a backup left, and the tank levels count them.
     public function destroyTank($id)
     {
+        if ($refused = $this->refuseWhenLocked('balances.tanks.index')) {
+            return $refused;
+        }
         $row = TankBalance::findOrFail($id);
         if (!$row->isManual()) {
             return redirect()->route('balances.tanks.index')->withErrors(['balance' => __('initialize.tank_balance_from_backup')]);
@@ -262,6 +299,9 @@ class BalanceController extends Controller
 
     public function storeDebt(Request $request)
     {
+        if ($refused = $this->refuseWhenLocked('balances.debts.index')) {
+            return $refused;
+        }
         $data = $request->validate([
             'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'amount' => 'required|numeric|min:0.01|max:99999999',
@@ -281,6 +321,9 @@ class BalanceController extends Controller
 
     public function storeLoan(Request $request)
     {
+        if ($refused = $this->refuseWhenLocked('balances.loans.index')) {
+            return $refused;
+        }
         $data = $request->validate([
             'customer_id' => ['required', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'fuel_type' => ['required', Rule::in(array_keys(config('fuel_types')))],
@@ -319,6 +362,9 @@ class BalanceController extends Controller
 
     public function updateDebt(Request $request, $id)
     {
+        if ($refused = $this->refuseWhenLocked('balances.debts.index')) {
+            return $refused;
+        }
         $debt = Debt::whereNull('sale_id')->findOrFail($id);
         $locked = DebtPayment::where('debt_id', $debt->id)->exists();
 
@@ -356,6 +402,9 @@ class BalanceController extends Controller
 
     public function updateLoan(Request $request, $id)
     {
+        if ($refused = $this->refuseWhenLocked('balances.loans.index')) {
+            return $refused;
+        }
         $loan = TicketLoan::whereNull('sale_id')->findOrFail($id);
         $locked = TicketLoanSettlement::where('loan_id', $loan->id)->exists();
 
@@ -387,6 +436,9 @@ class BalanceController extends Controller
     // breaking a payment or settlement that already points at the row.
     public function destroyDebt($id)
     {
+        if ($refused = $this->refuseWhenLocked('balances.debts.index')) {
+            return $refused;
+        }
         $debt = Debt::whereNull('sale_id')->findOrFail($id);
         if (DebtPayment::where('debt_id', $debt->id)->exists()) {
             return redirect()->route('balances.debts.index')->withErrors(['balance' => __('initialize.opening_debt_has_payments')]);
@@ -400,6 +452,9 @@ class BalanceController extends Controller
 
     public function destroyLoan($id)
     {
+        if ($refused = $this->refuseWhenLocked('balances.loans.index')) {
+            return $refused;
+        }
         $loan = TicketLoan::whereNull('sale_id')->findOrFail($id);
         if (TicketLoanSettlement::where('loan_id', $loan->id)->exists()) {
             return redirect()->route('balances.loans.index')->withErrors(['balance' => __('initialize.opening_loan_has_settlements')]);

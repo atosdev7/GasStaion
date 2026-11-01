@@ -87,12 +87,19 @@ class PushApiTest extends TestCase
         ];
     }
 
-    public function testPushingRecordsTheUploadTime()
+    public function testOnlyTheTerminalsReportMarksAnUpload()
     {
         $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));
 
+        // a push, of nozzles or of records, stored whole or with a refused row, is only a batch: an upload can stop between two tables
+        $this->push('nozzles', [['number' => 3, 'tank_id' => $this->nozzle->tank_id, 'board_address' => 3, 'name' => null, 'deleted' => false]]);
+        $this->push('sales', [$this->sale(), $this->sale(['paid_amount' => '15.00', 'unpaid_amount' => '5.00'])]);      // (the second cannot leave an unpaid amount)
         $this->push('sales', [$this->sale()]);
+        $this->assertNull(Device::where('name', 'POS1')->value('last_synced_at'));
 
+        // the terminal says that nothing of the days before the running business day waits
+        $reply = $this->payload($this->postJson('/api/sync/uploaded', [])->assertOk());
+        $this->assertSame('ok', $reply['status']);
         $this->assertNotNull(Device::where('name', 'POS1')->value('last_synced_at'));
     }
 
@@ -108,7 +115,7 @@ class PushApiTest extends TestCase
 
     public function testTheItemsOfASaleComeWithItAndAreReplacedWhenItIsSentAgain()
     {
-        $row = $this->sale(['sale_type' => 'ticket', 'items' => [
+        $row = $this->sale(['sale_type' => 'ticket', 'amount_kg' => '25.00', 'total_amount' => '50.00', 'paid_amount' => '50.00', 'items' => [
             ['spec' => 0, 'start_serial' => 11, 'end_serial' => 13, 'quantity' => 3, 'amount_kg' => '15.00'],
             ['spec' => 1, 'start_serial' => 5, 'end_serial' => 5, 'quantity' => 1, 'amount_kg' => '10.00'],
         ]]);
@@ -120,6 +127,8 @@ class PushApiTest extends TestCase
 
         // the same sale again (the cashier changed its comment): the items are replaced, not doubled
         $row['comment'] = 'changed';
+        $row['amount_kg'] = '15.00';
+        $row['total_amount'] = $row['paid_amount'] = '30.00';
         $row['items'] = [['spec' => 0, 'start_serial' => 11, 'end_serial' => 13, 'quantity' => 3, 'amount_kg' => '15.00']];
         $this->push('sales', [$row]);
         $this->assertSame(1, \App\Models\Sales\SaleItem::where('sale_id', $row['id'])->count());
@@ -127,7 +136,7 @@ class PushApiTest extends TestCase
         // a sale sent without items (a spot sale, or an older terminal) is stored as before; a bad item rejects the sale
         $spot = $this->sale();
         $this->assertSame([$spot['id']], $this->push('sales', [$spot])['saved']);
-        $bad = $this->sale(['items' => [['spec' => 0, 'start_serial' => 0, 'end_serial' => 3, 'quantity' => 3, 'amount_kg' => '15.00']]]);
+        $bad = $this->sale(['amount_kg' => '15.00', 'total_amount' => '30.00', 'paid_amount' => '30.00', 'items' => [['spec' => 0, 'start_serial' => 0, 'end_serial' => 3, 'quantity' => 3, 'amount_kg' => '15.00']]]);
         $result = $this->push('sales', [$bad]);
         $this->assertSame([], $result['saved']);
         $this->assertCount(1, $result['rejected']);
@@ -260,6 +269,22 @@ class PushApiTest extends TestCase
         $this->assertTrue($sale->synced);
     }
 
+    public function testTheTotalMustBeThePriceTimesTheWeightAndTheItemsMustAddUpToTheWeight()
+    {
+        $wrongTotal = $this->sale(['total_amount' => '25.00', 'paid_amount' => '25.00']);                     // 2.00 x 10.00 kg is 20.00
+        $wrongItems = $this->sale(['sale_type' => 'ticket', 'items' => [
+            ['spec' => 0, 'start_serial' => 11, 'end_serial' => 12, 'quantity' => 2, 'amount_kg' => '8.00'], // 8 kg of tickets for a 10 kg sale
+        ]]);
+        $typedAmount = $this->sale(['price' => '7.50', 'amount_kg' => '2.67', 'total_amount' => '20.00', 'paid_amount' => '20.00']); // 20.00 typed: 2.67 kg is its rounded weight (20.025)
+
+        $result = $this->push('sales', [$wrongTotal, $wrongItems, $typedAmount]);
+
+        $this->assertSame([$typedAmount['id']], $result['saved']);
+        $this->assertCount(2, $result['rejected']);
+        $this->assertNull(Sale::find($wrongTotal['id']));
+        $this->assertNull(Sale::find($wrongItems['id']));
+    }
+
     public function testOwnUseAndOtherUseFromTheTerminalAreTheIndividualCustomer()
     {
         $individual = Customer::where('is_default', true)->first();
@@ -297,7 +322,7 @@ class PushApiTest extends TestCase
         $this->push('sales', [$row]);
         Sale::whereKey($row['id'])->update(['confirmed_at' => now(), 'confirmed_by' => 1]);
 
-        $result = $this->push('sales', [array_merge($row, ['amount_kg' => '99.00'])]);
+        $result = $this->push('sales', [array_merge($row, ['amount_kg' => '99.00', 'total_amount' => '198.00', 'paid_amount' => '198.00'])]);      // (a consistent row: the total is price x kg)
 
         $this->assertSame([$row['id']], $result['saved']); // still acknowledged, so the device stops retrying
         $sale = Sale::find($row['id']);
@@ -533,12 +558,12 @@ class PushApiTest extends TestCase
 
     public function testASupplementMayFallShortOfItsTicketsButNeverExceedThem()
     {
-        $within = $this->supplement(['out_amount_kg' => '14.95']);   // the station keeps 0.05 kg: fine
-        $over = $this->supplement(['out_amount_kg' => '15.01']);     // more than the tickets cover: refused
+        $short = $this->supplement(['out_amount_kg' => '14.95']);    // short of its tickets: fine (what is left is a remainder)
+        $over = $this->supplement(['out_amount_kg' => '15.01']);     // more than the tickets cover: refused, there is no tolerance
 
-        $result = $this->push('supplements', [$within, $over]);
+        $result = $this->push('supplements', [$short, $over]);
 
-        $this->assertSame([$within['id']], $result['saved']);
+        $this->assertSame([$short['id']], $result['saved']);
         $this->assertSame($over['id'], $result['rejected'][0]['key']);
     }
 
@@ -927,6 +952,61 @@ class PushApiTest extends TestCase
         $this->assertSame([$ticket->barcode], $second['saved']);
         $this->assertSame(0, $this->conflicts());
         $this->assertSame($row['supplement_id'], Ticket::find($ticket->barcode)->supplement_id);
+    }
+
+    public function testFuelPouredForATicketThatWasUsedForALoanIsLoggedAndTheLoanUseKept()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.supply'));      // used for a ticket loan on the web: no supplement
+
+        $result = $this->push('tickets', [$this->supplyRow($ticket->barcode)]);
+
+        $this->assertSame([$ticket->barcode], $result['saved']);
+        $this->assertSame(1, $this->conflicts());
+        $this->assertNull(Ticket::find($ticket->barcode)->supplement_id);
+    }
+
+    public function testALoanUseOfATicketAlreadySuppliedAtANozzleIsLogged()
+    {
+        $ticket = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $first = $this->supplyRow($ticket->barcode);
+        $this->push('tickets', [$first]);
+        $this->assertSame(0, $this->conflicts());
+
+        $loan = $first;
+        $loan['supplement_id'] = null;                                          // the terminal used it to settle a loan
+        $this->push('tickets', [$loan]);
+
+        $this->assertSame(1, $this->conflicts());
+        $this->assertSame($first['supplement_id'], Ticket::find($ticket->barcode)->supplement_id);
+    }
+
+    public function testASupplyThatMixesKindsOfTicketsIsStoredAndShownAmongTheSyncProblems()
+    {
+        $press = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $spot = Ticket::forceCreate([
+            'barcode' => '0000021000000005', 'fuel_type' => 'D', 'spec' => null, 'code' => '21', 'serial' => 5, 'amount_kg' => 5, 'status' => config('ticket_statuses.sale'),
+        ]);
+        $same = (string) Str::uuid();
+
+        $result = $this->push('tickets', [$this->supplyRow($press->barcode, $same), $this->supplyRow($spot->barcode, $same)]);
+
+        $this->assertSame([$press->barcode, $spot->barcode], $result['saved']);        // the fuel is poured: both are stored
+        $this->assertSame(1, $this->conflicts());                                       // but the mix is shown
+        $this->assertSame($same, Ticket::find($spot->barcode)->supplement_id);
+    }
+
+    public function testARemainderTicketAndAPressTicketMayShareASupply()
+    {
+        $press = $this->pressTicket(1, config('ticket_statuses.sale'));
+        $remainder = Ticket::forceCreate([
+            'barcode' => '0000029000000005', 'fuel_type' => 'D', 'spec' => null, 'code' => '29', 'serial' => 5, 'amount_kg' => 2, 'status' => config('ticket_statuses.sale'),
+        ]);
+        $same = (string) Str::uuid();
+
+        $result = $this->push('tickets', [$this->supplyRow($press->barcode, $same), $this->supplyRow($remainder->barcode, $same)]);
+
+        $this->assertSame([$press->barcode, $remainder->barcode], $result['saved']);
+        $this->assertSame(0, $this->conflicts());                                       // they go together: nothing to show
     }
 
     public function testASecondSupplementForTheSameTicketIsLoggedAndTheFirstKept()

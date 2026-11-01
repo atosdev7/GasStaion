@@ -88,6 +88,7 @@ private slots:
     void startFirstDownload();
     void autoDownload();
     void autoUpload();
+    void reportNothingWaiting();
     void sendNozzles();
     void hangulModeChanged(bool on);
     void downloadFinished(bool ok, const QString &message);
@@ -168,6 +169,7 @@ private:
     QTimer *downloadTimer_;
     QTimer *uploadTimer_;
     QString lastDownloadError_;
+    qint64 lastReportMs_;   // when the web app was last told that nothing waits for an upload (reportNothingWaiting)
 };
 
 #endif
