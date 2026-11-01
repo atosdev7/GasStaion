@@ -108,7 +108,8 @@ QString beforeCondition(const QString &table, const QString &before)
 // every minute); Upload data tries it again.
 QString notRefused(const QString &table)
 {
-    const QString key = table == "tickets" ? QString("printf('%016d', %1.barcode)").arg(table) : table + ".id";
+    // (put together with +: arg() would read the %01 of the format '%016d' as the place of the table name and break the format)
+    const QString key = table == "tickets" ? "printf('%016d', " + table + ".barcode)" : table + ".id";
 
     return QString("NOT EXISTS (SELECT 1 FROM upload_errors e WHERE e.table_name = '%1' AND e.row_key = %2)").arg(table).arg(key);
 }

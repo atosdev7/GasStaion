@@ -304,6 +304,7 @@ private slots:
     void aNewRecordHasItsDateAtOnce();
     void theUploadModesSayUpToWhenRecordsGoByThemselves();
     void anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedOnes();
+    void theAutomaticUploadSkipsATicketTheServerRefused();
     void theUploadModeIsPickedAndSavedOnMachineConfig();
     void theTerminalUploadsByItselfInTheAutomaticModes();
     void aNozzleGoesToTheWebAppByItselfWhateverTheUploadMode();
@@ -3451,6 +3452,22 @@ void Smart210Test::theUploadModesSayUpToWhenRecordsGoByThemselves()
     QCOMPARE(AutoUpload::cutoff(AutoUpload::CloseOfDay, afternoon), QString("2026-10-07 09:00:00"));      // the running day began at 9
     QCOMPARE(AutoUpload::cutoff(AutoUpload::CloseOfDay, earlyMorning), QString("2026-10-06 09:00:00"));   // still the day before
     QCOMPARE(AutoUpload::cutoff(AutoUpload::Continuous, afternoon), QString("2026-10-07 14:30:00"));       // 30 minutes of grace
+}
+
+// A ticket the server refused is kept by its 16 digits (upload_errors.row_key); the automatic upload must leave it alone, as it does a sale.
+void Smart210Test::theAutomaticUploadSkipsATicketTheServerRefused()
+{
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_id, sale_date, synced) VALUES (3000000041, 'D', NULL, 500, 1, NULL, '2026-10-06 10:00:00', 0)");
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, sale_id, sale_date, synced) VALUES (3000000042, 'D', NULL, 500, 1, NULL, '2026-10-06 10:00:00', 0)");
+    run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, remainder_date, synced) VALUES ('r1', 's1', 3000000041, 'D', 500, '2026-10-06 10:00:00', '2026-10-06', 0)");
+    run("INSERT INTO remainders (id, supplement_id, ticket_barcode, fuel_type, amount_kg, created_at, remainder_date, synced) VALUES ('r2', 's1', 3000000042, 'D', 500, '2026-10-06 10:00:00', '2026-10-06', 0)");
+    QCOMPARE(Uploader::pending(db, QString(), "2026-10-07 09:00:00").value("tickets"), 2);
+
+    run("INSERT INTO upload_errors (table_name, row_key, message, created_at) VALUES ('tickets', '0000003000000041', 'refused', '2026-10-06 12:00:00')");
+    QCOMPARE(Uploader::pending(db, QString(), "2026-10-07 09:00:00").value("tickets"), 1);   // the refused one is left alone by the automatic upload
+    QCOMPARE(Uploader::pending(db).value("tickets"), 2);                                      // Upload data tries it again
 }
 
 void Smart210Test::anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedOnes()
