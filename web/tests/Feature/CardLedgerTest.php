@@ -68,6 +68,27 @@ class CardLedgerTest extends TestCase
         })->all();
     }
 
+    // Only the entries from the changed one on are walked, and the balances are the same as when all of them are: a top-up that is older than the fills after it, a
+    // fill that moves to an earlier day, and a deleted top-up.
+    public function testAnEntryInTheMiddleChangesOnlyTheBalancesFromItOn()
+    {
+        $card = $this->card();
+        $this->topUp($card, 100, '2026-10-01 09:00:00');
+        $fill = $this->fill($card, 30, '2026-10-03 10:00:00');
+        $this->fill($card, 20, '2026-10-04 10:00:00');
+        $this->assertSame([100.0, 70.0, 50.0], $this->floats($this->ledger($card)->pluck('balance_kg')));
+
+        $this->topUp($card, 10, '2026-10-02 09:00:00');                                         // between the first two entries
+        $this->assertSame([100.0, 110.0, 80.0, 60.0], $this->floats($this->ledger($card)->pluck('balance_kg')));
+
+        $fill->forceFill(['supplied_at' => '2026-10-01 12:00:00', 'supply_date' => '2026-10-01', 'out_amount_kg' => 35])->save();     // moves back and changes
+        $partial = $this->floats($this->ledger($card)->pluck('balance_kg'));
+        DB::table('card_transactions')->update(['balance_kg' => null]);
+        CardLedger::recompute($card->id);                                                           // all of them
+        $this->assertSame($this->floats($this->ledger($card)->pluck('balance_kg')), $partial);
+        $this->assertSame([100.0, 65.0, 75.0, 55.0], $partial);
+    }
+
     public function testEveryTopUpAndFillIsAnEntryWithTheRunningBalance()
     {
         $card = $this->card();

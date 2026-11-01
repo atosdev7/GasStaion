@@ -7,6 +7,7 @@ use App\Models\Cards\CardTransaction;
 use App\Models\Sales\Sale;
 use App\Models\Supplements\Supplement;
 use App\Models\Tickets\Ticket;
+use Carbon\Carbon;
 
 // The ledger of the cards (card_transactions): one entry for every top-up (a sale of type card) and every fill made with a card (a ticket made for the
 // card, tickets.card_id; before that, a supplement with a card_id), each with the running balance of the card after it, in the order of the moments they happened. The entries are made by the
@@ -29,8 +30,9 @@ class CardLedger
             'card_id' => $sale->card_id, 'kg' => round((float) $sale->amount_kg, 2), 'price' => $sale->price, 'total_amount' => $sale->total_amount,
             'occurred_at' => $sale->created_at ?: now(), 'user_id' => $sale->user_id,
         ]);
+        $from = self::earliest($entry);
         $entry->save();
-        self::recompute($sale->card_id);
+        self::recompute($sale->card_id, $from);
     }
 
     // A fill with a card: the kg that really came out of the nozzle.
@@ -46,8 +48,9 @@ class CardLedger
             'card_id' => $supplement->card_id, 'kg' => -round((float) $supplement->out_amount_kg, 2),
             'occurred_at' => $supplement->supplied_at ?: now(),
         ]);
+        $from = self::earliest($entry);
         $entry->save();
-        self::recompute($supplement->card_id);
+        self::recompute($supplement->card_id, $from);
     }
 
     // A ticket made for a card (tickets.card_id): the card paid for it with its kg, so a fill entry for its weight is made when the ticket is, once. A
@@ -66,6 +69,7 @@ class CardLedger
             'card_id' => $ticket->card_id, 'kg' => -$kg,
             'occurred_at' => $ticket->sale_date ?: now(), 'comment' => 'ticket ' . $ticket->barcode,
         ]);
+        $from = self::earliest($entry);
         $entry->save();
 
         $restricted = (int) $ticket->status === (int) config('ticket_statuses.restrict');
@@ -78,7 +82,8 @@ class CardLedger
         } elseif ($reversal && round((float) $reversal->kg, 2) !== ($restricted ? $kg : 0.0)) {
             $reversal->forceFill(['kg' => $restricted ? $kg : 0.0, 'comment' => $restricted ? 'ticket restricted' : 'restriction lifted'])->save();
         }
-        self::recompute($ticket->card_id);
+        $reversal = CardTransaction::where('type', 'reversal')->where('source_id', $ticket->barcode)->first();
+        self::recompute($ticket->card_id, self::min($from, $reversal ? $reversal->occurred_at : null));
     }
 
     // The card pays for a ticket in full, so when less fuel came out than the ticket held, the unused part goes back to the card, not to the customer as
@@ -137,8 +142,9 @@ class CardLedger
             'type' => 'refund', 'source_id' => $supplement->id, 'card_id' => $refund ? $refund[0] : $entry->card_id, 'kg' => $kg,
             'occurred_at' => $supplement->supplied_at ?: now(), 'comment' => 'unused part of the ticket',
         ]);
+        $from = self::earliest($entry);
         $entry->save();
-        self::recompute($entry->card_id);
+        self::recompute($entry->card_id, $from);
     }
 
     // The sale of a top-up was deleted: an entry that takes its kg back (once).
@@ -167,16 +173,24 @@ class CardLedger
             'card_id' => $cardId, 'type' => 'reversal', 'source_id' => $sourceId, 'kg' => -$original->kg, 'occurred_at' => $when,
             'comment' => $type === 'topup' ? 'top-up deleted' : 'fill deleted',
         ]);
-        self::recompute($cardId);
+        self::recompute($cardId, $when);
     }
 
     // The running balance of every entry of a card, in the order of the moments (then of their making: seq). An entry whose balance changed is sent to
-    // the terminals again, and so is the card (its balance goes down with it).
-    public static function recompute($cardId)
+    // the terminals again, and so is the card (its balance goes down with it). $from, when it is given, is the earliest moment of an entry that was made or
+    // changed: the entries before it keep their balance (the order is by moment), so only the ones from it on are walked, which keeps the work of a card
+    // that has years of entries small (null: all of them).
+    public static function recompute($cardId, $from = null)
     {
         $balance = 0.0;
         $changed = false;
-        foreach (CardTransaction::where('card_id', $cardId)->orderBy('occurred_at')->orderBy('seq')->get() as $entry) {
+        $entries = CardTransaction::where('card_id', $cardId);
+        if ($from !== null) {
+            $from = Carbon::parse($from)->toDateTimeString();
+            $balance = round((float) CardTransaction::where('card_id', $cardId)->where('occurred_at', '<', $from)->sum('kg'), 2);
+            $entries->where('occurred_at', '>=', $from);
+        }
+        foreach ($entries->orderBy('occurred_at')->orderBy('seq')->get() as $entry) {
             $balance = round($balance + (float) $entry->kg, 2);
             if ($entry->balance_kg === null || round((float) $entry->balance_kg, 2) !== $balance) {
                 $entry->balance_kg = $balance;
@@ -187,6 +201,21 @@ class CardLedger
         if ($changed) {
             Card::where('id', $cardId)->toBase()->update(['synced' => false, 'updated_at' => now()]);
         }
+    }
+
+    // The earlier of the moment an entry had in the database and the one it is about to get (before it is saved): where a recompute has to start.
+    private static function earliest(CardTransaction $entry)
+    {
+        return self::min($entry->getOriginal('occurred_at'), $entry->occurred_at);
+    }
+
+    private static function min($a, $b)
+    {
+        if ($a === null || $b === null) {
+            return $a === null ? $b : $a;
+        }
+
+        return Carbon::parse($a)->lt(Carbon::parse($b)) ? $a : $b;
     }
 
     // [card id => balance] of every card that has an entry.
