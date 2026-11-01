@@ -48,6 +48,7 @@
 #include "CardPage.h"
 #include "ConfirmDialog.h"
 #include "CardReader.h"
+#include "CardSupplyDialog.h"
 #include "Cards.h"
 #include "TicketLegacy.h"
 #include "TicketNumbers.h"
@@ -463,6 +464,11 @@ private slots:
     void theUnusedPartOfACardsTicketGoesBackToTheCard();
     void aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly();
     void aRemainderTicketGoesWithPressAndSpotTicketsOnly();
+    void theKgOfACardFillAreHeldOnTheCard();
+    void theShowBalanceCommandWorksInIdleOnlyAndNeverArmsTheBoard();
+    void aFillWithACardIsChargedWhatCameOut();
+    void aCardFillThatHasNotStartedCanBeCancelledByTheCashierOrTheSupplier();
+    void theCardSupplyDialogChecksThePinShowsTheBalanceAndSetsTheAmount();
     void anOldDatabaseGetsTheCardOfATicketAndKeepsItsTickets();
     void theConfirmDialogHasOkAsItsDefaultAndCancel();
     void theMachineConfigSavesTheCardReader();
@@ -3483,7 +3489,7 @@ void Smart210Test::cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait()
         ++checked;
     }
     QVERIFY(checked > 10);
-    QCOMPARE(Migrator::version(db), 12);                                  // the program still opens it
+    QCOMPARE(Migrator::version(db), 13);                                  // the program still opens it
     QVERIFY(!Session(db).isLoggedIn());                                    // the session is gone with the data
     QVERIFY(!Settings(db).contains(SettingKey::PinHash));                  // the PIN comes down again with the first download
 }
@@ -6032,7 +6038,7 @@ void Smart210Test::anOldDatabaseGetsThePrintCountOfATicket()
     run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, synced) VALUES (3000000041, 'D', 0, 1500, 1, 1)");
 
     QVERIFY2(Migrator::apply(db, all, &error), qPrintable(error));
-    QCOMPARE(Migrator::version(db), 12);
+    QCOMPARE(Migrator::version(db), 13);
     QVERIFY(migratedColumnsOf(db, "tickets").contains("print_count") && migratedColumnsOf(db, "tickets").contains("last_printed_at"));
     QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE barcode = 3000000041 AND amount_kg = 1500 AND print_count = 0 AND last_printed_at IS NULL").toInt(), 1);
 }
@@ -7137,7 +7143,7 @@ void Smart210Test::anOldDatabaseGetsTheNameOfANozzleAndKeepsItsRows()
 {
     QSqlDatabase db = openDatabase(false);
     const QStringList all = Migrator::bundled();
-    QCOMPARE(all.size(), 12);
+    QCOMPARE(all.size(), 13);
     QVERIFY(all.at(6).contains("ALTER TABLE nozzles ADD COLUMN name"));
 
     QString error;
@@ -11400,6 +11406,262 @@ void Smart210Test::aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly()
     QVERIFY2(SupplyRecord::record(db, 3, reading, now).ok, "two press tickets");
 }
 
+// the kg of a fill with a card are held on it from the moment the cashier sets them: nothing else may take them
+void Smart210Test::theKgOfACardFillAreHeldOnTheCard()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now = QDateTime::currentDateTime();
+    const QString card = makeCard(db, "AA01", 4000);
+
+    QVERIFY(Cards::beginHold(db, 1, card, 1500, now).isEmpty());
+    QCOMPARE(Cards::heldX100(db, card), qlonglong(1500));
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(2500));
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(4000));          // the card is charged when the fill is over, not now
+    QCOMPARE(Cards::holdOfNozzle(db, 1).cardId, card);
+    QCOMPARE(Cards::holdOfCard(db, card).nozzle, 1);
+
+    // a ticket takes only what is not held
+    QVERIFY(Cards::issueTicket(db, card, 3000, 7, now).error.contains("holds only 25.00"));
+    QVERIFY(Cards::issueTicket(db, card, 2500, 7, now).ok);
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(0));
+    QVERIFY(Cards::beginHold(db, 2, card, 100, now).contains("fill open on nozzle 1"));       // one open fill per card
+
+    // the same nozzle again: the kg are replaced; more than the card holds is refused
+    QVERIFY(Cards::beginHold(db, 1, card, 1000, now).isEmpty());
+    QCOMPARE(Cards::heldX100(db, card), qlonglong(1000));
+    QVERIFY(Cards::beginHold(db, 1, card, 5000, now).contains("holds only 15.00"));
+    QCOMPARE(Cards::heldX100(db, card), qlonglong(1000));
+
+    // the nozzle: its fuel type, no tickets in its queue, no fill started, no hold of another card
+    const QString gasoline = makeCard(db, "AA02", 4000, "A");
+    QVERIFY(Cards::beginHold(db, 2, gasoline, 100, now).contains("another fuel type"));
+    const QString other = makeCard(db, "AA03", 4000);
+    QVERIFY(Cards::beginHold(db, 1, other, 100, now).contains("another card"));
+    QVERIFY(SupplyQueue::add(db, 2, code(3000000041), "D", now).ok);
+    QVERIFY(Cards::beginHold(db, 2, other, 100, now).contains("Tickets are queued"));
+    SupplyQueue::clear(db, 2);
+    QVERIFY(SupplyQueue::begin(db, 2, 1500, now));
+    QVERIFY(Cards::beginHold(db, 2, other, 100, now).contains("fill started"));
+    SupplyQueue::release(db, 2);
+    QVERIFY(Cards::beginHold(db, 9, other, 100, now).contains("not known"));
+
+    // a locked or a blocked card holds nothing
+    run("UPDATE cards SET status = 'blocked' WHERE id = '" + other + "'");
+    QVERIFY(Cards::beginHold(db, 2, other, 100, now).contains("blocked"));
+
+    Cards::releaseHold(db, 1);
+    QCOMPARE(Cards::heldX100(db, card), qlonglong(0));
+    QVERIFY(!Cards::holdOfNozzle(db, 1).exists);
+}
+
+// SHOW_BALANCE (0x0E): the dispenser shows a number, nothing is armed; the board refuses it unless it is idle (and auto)
+void Smart210Test::theShowBalanceCommandWorksInIdleOnlyAndNeverArmsTheBoard()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1) && bench.bus.isOnline(3), 3000);
+    QSignalSpy done(&bench.bus, SIGNAL(commandDone(int,int,QByteArray)));
+    QSignalSpy failed(&bench.bus, SIGNAL(commandFailed(int,int,int)));
+
+    QVERIFY(bench.bus.showBalance(1, 40000));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+    QCOMPARE(done.at(0).at(1).toInt(), int(BoardProtocol::CmdShowBalance));
+    QCOMPARE(bench.boards.board(1).shownG, quint32(40000));
+    QCOMPARE(bench.boards.board(1).state, int(BoardProtocol::StateIdle));          // nothing is armed
+    QCOMPARE(bench.boards.board(1).presetG, quint32(0));
+    QVERIFY(bench.boards.simulator().liftGun(1));
+    QTest::qWait(200);
+    QCOMPARE(bench.boards.board(1).state, int(BoardProtocol::StateIdle));          // a gun taken up changes nothing: the Smart210 sends no START (it has no fill)
+    bench.boards.board(1).gunUp = false;
+
+    // more digits than the display can show
+    QVERIFY(bench.bus.showBalance(1, 10000000));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 3000);
+    QCOMPARE(failed.at(0).at(2).toInt(), int(BoardProtocol::ErrBadValue));
+    QCOMPARE(bench.boards.board(1).shownG, quint32(40000));                         // what was shown stays
+
+    // zero clears it
+    QVERIFY(bench.bus.showBalance(1, 0));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).shownG, quint32(0), 3000);
+
+    // it goes by itself after 60 seconds
+    QVERIFY(bench.bus.showBalance(1, 100));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).shownG, quint32(100), 3000);
+    bench.boards.simulator().tick(61000);
+    QCOMPARE(bench.boards.board(1).shownG, quint32(0));
+
+    // a preset replaces it, and then the board is SET: SHOW_BALANCE is refused
+    QVERIFY(bench.bus.showBalance(1, 500));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).shownG, quint32(500), 3000);
+    QVERIFY(bench.bus.setPreset(1, 1000));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+    QCOMPARE(bench.boards.board(1).shownG, quint32(0));
+    QVERIFY(bench.bus.showBalance(1, 500));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 2, 3000);
+    QCOMPARE(failed.at(1).at(2).toInt(), int(BoardProtocol::ErrWrongState));
+
+    // a manual board is refused too
+    QVERIFY(bench.bus.showBalance(3, 500));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 3, 3000);
+    QCOMPARE(failed.at(2).at(2).toInt(), int(BoardProtocol::ErrWrongState));
+    QCOMPARE(bench.boards.board(3).shownG, quint32(0));
+}
+
+// the whole fill: the dispenser shows the balance, the kg are set, the supplier fills, the card is charged what came out (no ticket, no remainder)
+void Smart210Test::aFillWithACardIsChargedWhatCameOut()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QSignalSpy messages(&bench.supply, SIGNAL(message(QString,bool)));
+    QSignalSpy recorded(&bench.supply, SIGNAL(recorded(int,QString)));
+    QSignalSpy remainders(&bench.supply, SIGNAL(remainderMade(QString)));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1) && bench.bus.isOnline(2) && bench.bus.isOnline(3), 3000);
+    const QString card = makeCard(db, "AA01", 4000);
+
+    // the balance is shown on the dispenser: nothing is armed, the board is still IDLE
+    QVERIFY(bench.supply.showCardBalance(1, 4000));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).shownG, quint32(40000), 3000);
+    QCOMPARE(bench.boards.board(1).state, int(BoardProtocol::StateIdle));
+    QCOMPARE(bench.boards.board(1).presetG, quint32(0));
+    QVERIFY(!bench.supply.showCardBalance(3, 4000));                       // a manual nozzle cannot
+
+    // the cashier sets 15 kg: held on the card, preset on the board (the display shows the preset, not the balance)
+    QString why;
+    QVERIFY2(bench.supply.startCardFill(1, card, 1500, &why), qPrintable(why));
+    QVERIFY(bench.supply.isHeld(1));
+    QVERIFY(!bench.supply.add(1, code(3000000041), &why));                 // no tickets on a held nozzle
+    QVERIFY(why.contains("held for a fill with a card"));
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(2500));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+    QCOMPARE(bench.boards.board(1).presetG, quint32(15000));
+    QCOMPARE(bench.boards.board(1).shownG, quint32(0));
+    QVERIFY(!bench.supply.startCardFill(3, card, 100, &why));              // manual nozzle
+    QVERIFY(!bench.supply.startCardFill(2, card, 100, &why));              // one open fill per card
+    QVERIFY(why.contains("fill open"));
+
+    // the supplier takes the gun up: the app starts the fill and saves the session with the card
+    QVERIFY(bench.boards.simulator().liftGun(1));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.supply.isLocked(1), 3000);
+    QCOMPARE(SupplyQueue::session(db, 1).cardId, card);
+    QCOMPARE(SupplyQueue::session(db, 1).presetX100, qlonglong(1500));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateDispensing), 3000);
+    QVERIFY(!bench.supply.cancelCardFill(1, &why));                        // started: it cannot be cancelled
+    QVERIFY(why.contains("started"));
+
+    // the fill stops after 10 kg (the nozzle is put back): the card is charged those 10 kg, the hold is gone, nothing else is made
+    bench.boards.simulator().tick(20000);
+    bench.boards.simulator().stopFill(1);
+    QTRY_COMPARE_WITH_TIMEOUT(recorded.size(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
+    QCOMPARE(one("SELECT out_amount_kg FROM supplements").toInt(), 1000);
+    QCOMPARE(one("SELECT preset_kg FROM supplements").toInt(), 1500);
+    QCOMPARE(one("SELECT card_id FROM supplements").toString(), card);
+    QCOMPARE(Cards::findById(db, card).balanceX100, qlonglong(3000));       // 40.00 less the 10.00 kg that came out
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(3000));
+    QCOMPARE(countRows("card_holds"), 0);
+    QCOMPARE(countRows("remainders"), 0);
+    QCOMPARE(remainders.size(), 0);
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id IS NOT NULL").toInt(), 0);   // no ticket
+    QVERIFY(!bench.supply.isLocked(1));
+    QVERIFY(messages.last().at(0).toString().contains("charged to the card of Li Wei"));
+    QCOMPARE(Uploader::pending(db).value("supplements"), 1);
+}
+
+void Smart210Test::aCardFillThatHasNotStartedCanBeCancelledByTheCashierOrTheSupplier()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1) && bench.bus.isOnline(2), 3000);
+    const QString card = makeCard(db, "AA01", 4000);
+    QString why;
+
+    // the cashier cancels: the hold goes, the board forgets the preset
+    QVERIFY2(bench.supply.startCardFill(1, card, 1500, &why), qPrintable(why));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+    QVERIFY2(bench.supply.cancelCardFill(1, &why), qPrintable(why));
+    QVERIFY(!bench.supply.isHeld(1));
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(4000));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
+    QCOMPARE(bench.boards.board(1).presetG, quint32(0));
+
+    // clearing the nozzle on the Supplies screen is the same
+    QVERIFY2(bench.supply.startCardFill(1, card, 1000, &why), qPrintable(why));
+    QVERIFY(bench.supply.clear(1, &why));
+    QVERIFY(!bench.supply.isHeld(1));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
+
+    // the supplier presses the clear key of the dispenser: the fill is dropped
+    QVERIFY2(bench.supply.startCardFill(1, card, 1000, &why), qPrintable(why));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+    bench.boards.simulator().pressClearKey(1);
+    QTRY_VERIFY_WITH_TIMEOUT(!bench.supply.isHeld(1), 3000);
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateIdle), 3000);
+    QCOMPARE(Cards::availableX100(db, card), qlonglong(4000));
+    QCOMPARE(countRows("supplements"), 0);                                  // nothing was dispensed, nothing is charged
+}
+
+// the dialog of the Cards screen: the PIN first (a wrong one counts), the balance on the dispenser, then the kg
+void Smart210Test::theCardSupplyDialogChecksThePinShowsTheBalanceAndSetsTheAmount()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1) && bench.bus.isOnline(2), 3000);
+    const QString card = makeCard(db, "AA01", 4000);
+
+    CardSupplyDialog dialog(db, &bench.session, &bench.config, &bench.supply, card);
+    QComboBox *nozzle = dialog.findChild<QComboBox *>("cardSupplyNozzle");
+    QLineEdit *pin = dialog.findChild<QLineEdit *>("cardSupplyPin");
+    QPushButton *show = dialog.findChild<QPushButton *>("cardSupplyShow");
+    QLineEdit *kg = dialog.findChild<QLineEdit *>("cardSupplyKg");
+    QPushButton *set = dialog.findChild<QPushButton *>("cardSupplySet");
+    QLabel *status = dialog.findChild<QLabel *>("cardSupplyStatus");
+    QVERIFY(nozzle != 0 && pin != 0 && show != 0 && kg != 0 && set != 0 && status != 0);
+    QCOMPARE(nozzle->count(), 2);                                           // the automatic nozzles of diesel
+    QVERIFY(!kg->isEnabled() && !set->isEnabled());                         // the PIN and the balance come first
+
+    pin->setText("9999");
+    show->click();
+    QVERIFY2(status->text().contains("Wrong PIN"), qPrintable(status->text()));
+    QVERIFY(!set->isEnabled());
+    QCOMPARE(bench.boards.board(1).shownG, quint32(0));
+
+    pin->setText("1234");
+    show->click();
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).shownG, quint32(40000), 3000);   // 40.00 kg on the dispenser of the first nozzle
+    QVERIFY(kg->isEnabled() && set->isEnabled());
+
+    kg->setText("55");
+    set->click();
+    QVERIFY2(status->text().contains("holds only"), qPrintable(status->text()));
+    QVERIFY(!Cards::holdOfCard(db, card).exists);
+    kg->setText("15");
+    set->click();                                                           // the dialog closes with the fill set
+    QVERIFY(Cards::holdOfCard(db, card).exists);
+    QCOMPARE(Cards::holdOfCard(db, card).presetX100, qlonglong(1500));
+    QVERIFY(dialog.message().contains("held on the card"));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).presetG, quint32(15000), 3000);
+
+    // a card with a fill open shows it, with a way to cancel it
+    CardSupplyDialog again(db, &bench.session, &bench.config, &bench.supply, card);
+    QPushButton *cancel = again.findChild<QPushButton *>("cardSupplyCancelOpen");
+    QVERIFY(cancel != 0);
+    QVERIFY(!cancel->isHidden());
+    cancel->click();
+    QVERIFY(!Cards::holdOfCard(db, card).exists);
+}
+
 // the history of a card lists the tickets made for it as fills until the web app has an entry for them
 void Smart210Test::theHistoryOfACardShowsTheFillsOfItsTickets()
 {
@@ -12127,8 +12389,8 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
 {
     QSqlDatabase db = openDatabase();
 
-    QCOMPARE(Migrator::bundled().size(), 12);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card
-    QCOMPARE(Migrator::version(db), 12);
+    QCOMPARE(Migrator::bundled().size(), 13);                               // the initial schema, the ledger of the cards, the comment of a remainder, the order of the ledger, the index of the stock, the phone of a card holder (for old databases), the name of a nozzle, the card of a ticket, the print count of a ticket, the ranges of the old publishes, the hidden flag of the confirmed records of a card, the free payment flag of a card, the kg held on a card for a fill
+    QCOMPARE(Migrator::version(db), 13);
     QCOMPARE(columnsOf(db, "card_transactions").join(" "), QString("id card_id type kg balance_kg price total_amount source_id occurred_at comment seq"));
 
     // the columns of the tables that travel to the web app, in the order of the web app's tables
@@ -12142,6 +12404,7 @@ void Smart210Test::theSchemaIsTheInitialMigrationAndTheCardLedgerWithTheColumnsI
     QCOMPARE(columnsOf(db, "ticket_loan_settlements").join(" "), QString("id loan_id ticket_barcode amount_kg settled_at date comment user_id synced uploaded_at"));
     QCOMPARE(columnsOf(db, "nozzles").join(" "), QString("id number tank_id fuel_type board_address mode density seen_at synced deleted name"));
     QCOMPARE(columnsOf(db, "supply_sessions").join(" "), QString("nozzle_number card_id preset_kg result_id started_at"));
+    QCOMPARE(columnsOf(db, "card_holds").join(" "), QString("nozzle_number card_id preset_kg created_at"));
     QCOMPARE(columnsOf(db, "checkouts").join(" "), QString("id date mode user_id performed_at records"));
 
     // none of the old names is left

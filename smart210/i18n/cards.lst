@@ -3,3 +3,4 @@ src/cards/CardPage.ui
 src/cards/Cards.cpp
 src/cards/CardHistoryDialog.cpp
 src/cards/CardHistoryDialog.ui
+src/cards/CardSupplyDialog.cpp

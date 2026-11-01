@@ -21,6 +21,8 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 
 **Supply rule (decided 2026-10-31):** one supply takes tickets of one kind only (press, spot sale, self use, other use, ticket loan, card); a remainder ticket may also go with press tickets or with spot sale tickets (not with the others, and press and spot sale tickets do not mix); and the tickets of a card are all of one card.
 
+**Card supply (decided 2026-11-01):** a fill paid with a card has no ticket: the cashier reads the card, types the PIN, the dispenser shows the balance (new protocol command SHOW_BALANCE), the cashier sets the kg (held on the card), the supplier fills, and the card is charged what came out. The ticket-based card fill stays as the second way.
+
 ## Open tasks
 
 | Phase | Done | # | Task | Size | Notes |
@@ -30,6 +32,7 @@ Stack: PHP 7.2, Laravel 6 LTS, AdminLTE 3 / Bootstrap 4.6 / jQuery, MariaDB (XAM
 | 0 | [ ] | 0.5 | Hand protocol v0.3 to the firmware developer and agree the STM32 delivery plan | S | Starts the firmware track early. The brief for the developer is written (2026-10-10): `FIRMWARE_BRIEF.md` (what the board does, the rules that matter, how to test against the simulator, six open questions, a suggested delivery order). Still to do: give it to the developer together with `PROTOCOL.md` and `simulator/`, and agree the plan |
 | 6 | [ ] | 6.1 | STM32 firmware implementing protocol v0.3 (firmware track) | L | Protocol v0.3 adds SET_TIME / GET_TIME (the terminal sets every board's clock); the board needs a battery-backed RTC**Built 2026-10-11 (not yet on a real board):** the CubeMX project `firmware/` (STM32F407VET6, 25 MHz not yet the system clock: it runs on the internal 16 MHz oscillator, RTC on the internal low-speed oscillator) holds the whole firmware in `Core/Src` and `Core/Inc`: `board` (protocol v0.3, both modes, pulse counting from the A/B flow meter on TIM1, the pump on relays 1+2 only while the nozzle is lifted, no-flow / hook-down / start-wait ends, recovery after a power cut, POWER_OFF save), `store` (ring of CRC-32 records in the 25Q32), `w25q`, `ui` (display and keys, amount entry), `port`, `app`; PC tests `firmware/Tests` (358 + 6689 + 52 checks pass: PROTOCOL.md examples, power cut at every byte of a flash write); it compiles and links with CubeIDE's ARM GCC (19 KB flash, 4 KB RAM). **Open (A1, a fill that overshoots its tickets, is left to the firmware by decision B1: the board must never go past its preset):** the LCD and keyboard drivers (`ui_drivers.h`, four functions, written by the user), the free area of the ROM (`NB_STORE_BASE`), LED and beeper polarity, bench tuning of the times (6.6), field firmware update (not designed) |
 | 6 | [ ] | 6.6 | Bench test with a real board and dispenser | M |  |
+| 6 | [ ] | 6.7 | Firmware: SHOW_BALANCE (0x0E) in the board and its display (PROTOCOL.md, change 11): show the grams as kg on the dispenser in IDLE without arming anything, clear it on SET_PRESET, on zero or after 60 s; refuse it with WRONG_STATE outside IDLE and in manual mode | S | The terminal, the test board and the simulator already follow it |
 | 9 | [ ] | 9.4 | Provision the server, Smart210, printer and boards | M |  |
 | 9 | [ ] | 9.5 | Enter opening balances and pre-existing paper data, train staff by role, then go live | M |  |
 

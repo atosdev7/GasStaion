@@ -42,6 +42,18 @@ public:
     // A fill was started on this nozzle and its result is not recorded yet: the queue cannot change.
     bool isLocked(int nozzle) const;
 
+    // A fill paid with a card, without tickets (the cashier read the card and the PIN, the dispenser showed the balance, the cashier sets the kg): the kg are held
+    // on the card, the nozzle becomes the chosen one and its preset is the kg; the supplier takes the gun up, the app starts the fill, and the card is charged what
+    // really came out when the result is recorded. False with the reason in `why` when it cannot be done.
+    bool startCardFill(int nozzle, const QString &cardId, qlonglong kgX100, QString *why = 0);
+    // The cashier or the supplier (the clear key of the dispenser) drops a card fill that has not started: the hold goes and the board forgets the preset.
+    bool cancelCardFill(int nozzle, QString *why = 0);
+    // The nozzle is held for a card fill that has not started yet.
+    bool isHeld(int nozzle) const;
+    // Shows the balance (kg x100) on the dispenser of the nozzle for the customer to confirm (SHOW_BALANCE). True when the command was handed to the board; false when
+    // the board is busy with another command or cannot take it (not idle): try again.
+    bool showCardBalance(int nozzle, qlonglong balanceX100);
+
     // The queue of a nozzle. False with the reason in `why` when it cannot be done.
     bool add(int nozzle, const QString &barcode, QString *why = 0);
     bool remove(int nozzle, qlonglong barcode, QString *why = 0);

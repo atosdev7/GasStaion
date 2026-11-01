@@ -127,7 +127,15 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
 
     // The queue of a started fill goes with its result, if it still holds up. A fill paid with a card has no tickets: the card's balance falls
     // by what really came out (and no remainder is made: the card keeps what was not taken).
-    const SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    SupplyQueue::Session session = SupplyQueue::session(db, nozzleNumber);
+    // A fill the cashier set for a card whose start was not seen (the session is saved when the gun is seen up): the hold says the same
+    const Cards::Hold hold = Cards::holdOfNozzle(db, nozzleNumber);
+    if (!session.exists && hold.exists) {
+        session.exists = true;
+        session.nozzle = nozzleNumber;
+        session.presetX100 = hold.presetX100;
+        session.cardId = hold.cardId;
+    }
     const bool byCard = session.byCard();
     QList<SupplyQueue::Entry> queue = (session.exists && !byCard) ? SupplyQueue::entries(db, nozzleNumber) : QList<SupplyQueue::Entry>();
     qlonglong total = 0;
@@ -229,6 +237,8 @@ SupplyRecord::Outcome SupplyRecord::record(QSqlDatabase db, int nozzleNumber, co
     if (ok && byCard) {
         ok = Cards::adjustBalance(db, session.cardId, -reading.dispensedX100);
         outcome.kgX100 = reading.dispensedX100;
+        outcome.chargedCardId = session.cardId;
+        outcome.chargedKgX100 = reading.dispensedX100;
     }
 
     if (ok && withTickets) {

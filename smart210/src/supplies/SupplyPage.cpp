@@ -214,6 +214,7 @@ void SupplyPage::refresh()
         }
 
         const SupplyQueue::Session session = SupplyQueue::session(db_, nozzle.number);
+        const Cards::Hold hold = Cards::holdOfNozzle(db_, nozzle.number);
         const QList<SupplyQueue::Entry> entries = SupplyQueue::entries(db_, nozzle.number);
         const DoneFill *done = doneOf(nozzle.number);
         const bool running = online && (status.state == StateDispensing || status.state == StateResult);
@@ -231,6 +232,10 @@ void SupplyPage::refresh()
                 ticketsKg = session.presetX100;
                 ticketCount = 0;
             }
+        } else if (hold.exists) {
+            state = (online && status.state == StateArmed) ? tr("Set") : tr("Queued");      // the kg of a fill with a card are held, the supplier has not started
+            ticketsKg = hold.presetX100;
+            ticketCount = 0;
         } else if (ticketCount > 0) {
             state = (online && status.state == StateArmed) ? tr("Set") : tr("Queued");
         } else if (done) {
@@ -285,6 +290,11 @@ void SupplyPage::showQueue()
             Row row = {tr("Card: %1").arg(Cards::findById(db_, session.cardId).holderName), session.presetX100};
             rows.append(row);
             total = tr("A fill with a card: %1 kg.").arg(kg(session.presetX100));
+        } else if (Cards::holdOfNozzle(db_, number).exists) {
+            const Cards::Hold hold = Cards::holdOfNozzle(db_, number);
+            Row row = {tr("Card: %1").arg(Cards::findById(db_, hold.cardId).holderName), hold.presetX100};
+            rows.append(row);
+            total = tr("A fill with a card waits for the gun: %1 kg are held on the card. Clear it to cancel.").arg(kg(hold.presetX100));
         } else {
             const QList<SupplyQueue::Entry> entries = SupplyQueue::entries(db_, number);
             foreach (const SupplyQueue::Entry &entry, entries) {

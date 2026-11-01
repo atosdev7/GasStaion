@@ -364,9 +364,10 @@ Cards::TicketResult Cards::issueTicket(QSqlDatabase db, const QString &cardId, q
 
         return result;
     }
-    if (kgX100 > card.balanceX100) {
+    const qlonglong available = card.balanceX100 - heldX100(db, card.id);   // (a fill that is open holds back its kg)
+    if (kgX100 > available) {
         db.rollback();
-        result.error = QObject::tr("The card holds only %1 kg.").arg(QString::number(card.balanceX100 / 100.0, 'f', 2));
+        result.error = QObject::tr("The card holds only %1 kg.").arg(QString::number(available / 100.0, 'f', 2));
 
         return result;
     }
@@ -478,4 +479,116 @@ bool Cards::adjustBalance(QSqlDatabase db, const QString &cardId, qlonglong delt
     query.addBindValue(cardId);
 
     return query.exec() && query.numRowsAffected() == 1;
+}
+
+Cards::Hold Cards::holdOfNozzle(QSqlDatabase db, int nozzle)
+{
+    Hold hold;
+    QSqlQuery query(db);
+    query.prepare("SELECT nozzle_number, card_id, preset_kg, created_at FROM card_holds WHERE nozzle_number = ?");
+    query.addBindValue(nozzle);
+    if (query.exec() && query.next()) {
+        hold.exists = true;
+        hold.nozzle = query.value(0).toInt();
+        hold.cardId = query.value(1).toString();
+        hold.presetX100 = query.value(2).toLongLong();
+        hold.createdAt = query.value(3).toString();
+    }
+
+    return hold;
+}
+
+Cards::Hold Cards::holdOfCard(QSqlDatabase db, const QString &cardId)
+{
+    Hold hold;
+    QSqlQuery query(db);
+    query.prepare("SELECT nozzle_number FROM card_holds WHERE card_id = ?");
+    query.addBindValue(cardId);
+    if (query.exec() && query.next()) {
+        return holdOfNozzle(db, query.value(0).toInt());
+    }
+
+    return hold;
+}
+
+qlonglong Cards::heldX100(QSqlDatabase db, const QString &cardId)
+{
+    QSqlQuery query(db);
+    query.prepare("SELECT COALESCE(SUM(preset_kg), 0) FROM card_holds WHERE card_id = ?");
+    query.addBindValue(cardId);
+
+    return query.exec() && query.next() ? query.value(0).toLongLong() : 0;
+}
+
+qlonglong Cards::availableX100(QSqlDatabase db, const QString &cardId)
+{
+    return findById(db, cardId).balanceX100 - heldX100(db, cardId);
+}
+
+QString Cards::beginHold(QSqlDatabase db, int nozzle, const QString &cardId, qlonglong kgX100, const QDateTime &now)
+{
+    const Card card = findById(db, cardId);
+    if (!card.exists || card.deleted) {
+        return QObject::tr("This card is not known.");
+    }
+    if (!card.isActive()) {
+        return card.status == "blocked" ? QObject::tr("This card is blocked (lost).") : QObject::tr("This card is locked after wrong PINs. The manager or the accountant unlocks it on the web app.");
+    }
+    if (kgX100 < 1 || kgX100 > SpotSale::MaxKgX100) {
+        return QObject::tr("Enter the weight in kg, above 0 and up to 999999.");
+    }
+
+    QSqlQuery nozzleRow(db);
+    nozzleRow.prepare("SELECT fuel_type FROM nozzles WHERE number = ? AND deleted = 0");
+    nozzleRow.addBindValue(nozzle);
+    if (!nozzleRow.exec() || !nozzleRow.next()) {
+        return QObject::tr("Nozzle %1 is not known.").arg(nozzle);
+    }
+    if (nozzleRow.value(0).toString() != card.fuelType) {
+        return QObject::tr("Nozzle %1 is of another fuel type than the card.").arg(nozzle);
+    }
+
+    QSqlQuery started(db);
+    started.prepare("SELECT 1 FROM supply_sessions WHERE nozzle_number = ?");
+    started.addBindValue(nozzle);
+    if (started.exec() && started.next()) {
+        return QObject::tr("Nozzle %1 has a fill started.").arg(nozzle);
+    }
+    QSqlQuery queued(db);
+    queued.prepare("SELECT 1 FROM supply_queue WHERE nozzle_number = ?");
+    queued.addBindValue(nozzle);
+    if (queued.exec() && queued.next()) {
+        return QObject::tr("Tickets are queued on nozzle %1.").arg(nozzle);
+    }
+    const Hold other = holdOfNozzle(db, nozzle);
+    if (other.exists && other.cardId != cardId) {
+        return QObject::tr("Nozzle %1 is held for the fill of another card.").arg(nozzle);
+    }
+    const Hold open = holdOfCard(db, cardId);
+    if (open.exists && open.nozzle != nozzle) {
+        return QObject::tr("This card has a fill open on nozzle %1.").arg(open.nozzle);
+    }
+
+    // (a hold on this nozzle for this card is replaced: what it held counts as free)
+    const qlonglong available = card.balanceX100 - (open.exists ? 0 : heldX100(db, cardId));
+    if (kgX100 > available) {
+        return QObject::tr("The card holds only %1 kg.").arg(QString::number(available / 100.0, 'f', 2));
+    }
+
+    QSqlQuery save(db);
+    save.prepare("INSERT OR REPLACE INTO card_holds (nozzle_number, card_id, preset_kg, created_at) VALUES (?, ?, ?, ?)");
+    save.addBindValue(nozzle);
+    save.addBindValue(cardId);
+    save.addBindValue(kgX100);
+    save.addBindValue(now.toString("yyyy-MM-dd HH:mm:ss"));
+
+    return save.exec() ? QString() : QObject::tr("The fill could not be saved.");
+}
+
+void Cards::releaseHold(QSqlDatabase db, int nozzle)
+{
+    QSqlQuery query(db);
+    query.prepare("DELETE FROM card_holds WHERE nozzle_number = ?");
+    query.addBindValue(nozzle);
+    query.exec();
 }
