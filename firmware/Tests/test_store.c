@@ -119,7 +119,6 @@ static Persist sample(uint32_t n)
     memcpy(p.config.fuel, "D\0\0\0", 4);
     p.config.density = 8300;
     p.config.pulses_x100 = 123450;
-    p.next_result_id = n;
     p.last_acked_id = n - 1;
     p.result.held = 1;
     p.result.id = n;
@@ -139,7 +138,7 @@ static Persist sample(uint32_t n)
 static int same(const Persist *a, const Persist *b)
 {
     return a->config.mode == b->config.mode && memcmp(a->config.fuel, b->config.fuel, 4) == 0 && a->config.density == b->config.density
-        && a->config.pulses_x100 == b->config.pulses_x100 && a->next_result_id == b->next_result_id && a->last_acked_id == b->last_acked_id
+        && a->config.pulses_x100 == b->config.pulses_x100 && a->last_acked_id == b->last_acked_id
         && a->result.held == b->result.held && a->result.id == b->result.id && a->result.preset_g == b->result.preset_g
         && a->result.dispensed_g == b->result.dispensed_g && a->result.dispensed_ml == b->result.dispensed_ml
         && a->result.reason == b->result.reason && a->inflight.active == b->inflight.active && a->inflight.id == b->inflight.id
@@ -259,7 +258,7 @@ static void test_ring_and_wear(void)
     }
     store_init(&s, &f, BASE, 0);
     CHECK_EQ(store_load(&s, &out), 1);
-    CHECK_EQ(out.next_result_id, 5000);
+    CHECK_EQ(out.result.id, 5000);
 
     /* the wear is spread: every sector of the ring is erased about the same number of times */
     for (i = 0; i < STORE_SECTORS; ++i) {
@@ -294,12 +293,12 @@ static void test_ring_and_wear(void)
                 c.dead = 0;
                 store_init(&s, &f, BASE, 0);
                 CHECK_EQ(store_load(&s, &out), 1);
-                CHECK_EQ(out.next_result_id, stored);
+                CHECK_EQ(out.result.id, stored);
             }
         }
         store_init(&s, &f, BASE, 0);
         CHECK_EQ(store_load(&s, &out), 1);
-        CHECK_EQ(out.next_result_id, stored);
+        CHECK_EQ(out.result.id, stored);
     }
 }
 
@@ -353,7 +352,7 @@ static void test_foreign_data_and_damage(void)
     c.mem[BASE + 64 + 30] ^= 0x01;
     store_init(&s, &f, BASE, 0);
     CHECK_EQ(store_load(&s, &out), 1);
-    CHECK_EQ(out.next_result_id, 1);
+    CHECK_EQ(out.result.id, 1);
 
     /* an erase that fails is reported */
     chip_new(&c);

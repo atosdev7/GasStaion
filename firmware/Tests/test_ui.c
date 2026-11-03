@@ -200,21 +200,21 @@ static void test_auto_screens(void)
     CHECK_TEXT(0, "N3 D AUTO");
     CHECK_TEXT(1, "Press SELECT");
 
-    /* the select key */
+    /* the select key only reports itself to the Smart210 (the state does not change); the key is heard */
     press(&rig, UI_KEY_SELECT);
     tick(&rig, 10);
-    CHECK_EQ(rig.board.state, STATE_SELECTED);
-    CHECK_TEXT(0, "Selected");
-    CHECK_TEXT(1, "Wait for POS");
-    CHECK_EQ(rig.led[0], 1);
+    CHECK_EQ(rig.board.state, STATE_IDLE);
+    CHECK_TEXT(1, "Press SELECT");
     CHECK_EQ(rig.beeps, 1);
+    CHECK(rig.board.key_events & FLAG_SELECT_KEY);
 
     /* the terminal sets the preset and starts */
     rig.board.preset_g = 15000;
-    rig.board.state = STATE_ARMED;
+    rig.board.state = STATE_SET;
     tick(&rig, 10);
     CHECK_TEXT(0, "Preset 15.00kg");
     CHECK_TEXT(1, "Lift the nozzle");
+    CHECK_EQ(rig.led[0], 1);                                  /* SET: a preset waits for START */
 
     rig.board.state = STATE_IDLE;
     rig.board.preset_g = 0;
@@ -223,16 +223,17 @@ static void test_auto_screens(void)
         uint8_t req[FRAME_MAX];
         size_t i, n;
         uint8_t data[4] = {0x98, 0x3A, 0x00, 0x00};
+        uint8_t session[4] = {0x01, 0x00, 0x00, 0x00};
         uint16_t crc;
         uint8_t cmds[3] = {CMD_SELECT, CMD_SET_PRESET, CMD_START};
         int c;
 
         for (c = 0; c < 3; ++c) {
-            const size_t len = cmds[c] == CMD_SET_PRESET ? 4 : 0;
+            const size_t len = (cmds[c] == CMD_SET_PRESET || cmds[c] == CMD_START) ? 4 : 0;   /* START carries the session id */
 
             req[0] = 2; req[1] = 3; req[2] = (uint8_t)(10 + c); req[3] = cmds[c]; req[4] = (uint8_t)len;
             if (len) {
-                memcpy(req + 5, data, 4);
+                memcpy(req + 5, cmds[c] == CMD_START ? session : data, 4);
             }
             crc = crc16(req + 1, 4 + len);
             req[5 + len] = (uint8_t)(crc & 0xFF);
@@ -252,7 +253,7 @@ static void test_auto_screens(void)
 
     flow(&rig, 60, 500);
     flow(&rig, 30, 0);
-    CHECK_EQ(rig.board.state, STATE_RESULT);
+    CHECK_EQ(rig.board.state, STATE_DONE);
     CHECK_TEXT(0, "Done 15.00 kg");
     CHECK_TEXT(1, "Wait for POS");
     CHECK_EQ(rig.led[2], 1);
@@ -345,30 +346,47 @@ static void test_manual_entry(void)
     tick(&rig, 2000);
     CHECK_TEXT(1, "_"); /* and it goes away */
 
-    /* ENTER starts the fill; the pump follows the hook */
+    /* ENTER makes the amount the preset (SET); the fill starts when the gun is up, and the pump follows the hook */
     press(&rig, UI_KEY_8);
     press(&rig, UI_KEY_POINT);
     press(&rig, UI_KEY_3);
     press(&rig, UI_KEY_ENTER);
     tick(&rig, 10); tick(&rig, 10); tick(&rig, 10); tick(&rig, 10);
-    CHECK_EQ(rig.board.state, STATE_DISPENSING);
+    CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_EQ(rig.board.preset_g, 8300);
+    CHECK_TEXT(0, "Preset 8.30kg");
+    CHECK_TEXT(1, "Lift the nozzle");
+    CHECK_EQ(rig.ui.entry_len, 0);
+    flow(&rig, 1, 0);                                         /* the gun is up (the rig's hook): the board starts by itself */
+    CHECK_EQ(rig.board.state, STATE_DISPENSING);
     CHECK_EQ(rig.fake.pump_on, 1);
     CHECK_TEXT(0, "Set 8.30 kg");
-    CHECK_EQ(rig.ui.entry_len, 0);
-    flow(&rig, 100, 100);
-    flow(&rig, 30, 0);
-    CHECK_EQ(rig.board.state, STATE_RESULT);
-    CHECK_TEXT(0, "Done 8.30 kg");
 
-    /* the keys do not type while a fill runs or a result waits */
+    /* the keys do not type while a fill runs */
     press(&rig, UI_KEY_5);
     tick(&rig, 10);
     CHECK_EQ(rig.ui.entry_len, 0);
 
+    /* the fill ends by itself: a manual board holds no result, it waits for the next amount */
+    flow(&rig, 100, 100);
+    flow(&rig, 30, 0);
+    CHECK_EQ(rig.board.state, STATE_IDLE);
+    CHECK_TEXT(0, "Enter amount kg");
+
     /* the select key does nothing in manual mode */
-    rig.board.state = STATE_IDLE;
     press(&rig, UI_KEY_SELECT);
+    tick(&rig, 10);
+    CHECK_EQ(rig.board.state, STATE_IDLE);
+    CHECK_EQ(rig.board.key_events, 0);   /* and it reports nothing */
+
+    /* the clear key with nothing typed and an amount waiting for the gun drops that amount */
+    rig.fake.hook = 0;
+    press(&rig, UI_KEY_4);
+    press(&rig, UI_KEY_ENTER);
+    tick(&rig, 10);
+    tick(&rig, 10);
+    CHECK_EQ(rig.board.state, STATE_SET);
+    press(&rig, UI_KEY_CLEAR);
     tick(&rig, 10);
     CHECK_EQ(rig.board.state, STATE_IDLE);
 }
@@ -387,7 +405,11 @@ static void test_redraw_only_what_changed(void)
 
     press(&rig, UI_KEY_SELECT);
     tick(&rig, 10);
-    CHECK_EQ(rig.prints, before + 2); /* both lines changed */
+    CHECK_EQ(rig.prints, before);     /* the select key only reports itself: the display does not change */
+
+    board_manual_amount(&rig.board, 1000);   /* (not for an auto board: nothing happens) */
+    tick(&rig, 10);
+    CHECK_EQ(rig.prints, before);
 }
 
 int main(void)

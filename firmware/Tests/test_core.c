@@ -1,4 +1,4 @@
-/* Tests of the nozzle-board core on the PC: PROTOCOL.md v0.3 against board.c with a fake board (no STM32 code). */
+/* Tests of the nozzle-board core on the PC: PROTOCOL.md (v0.4, SHOW_BALANCE, session ids) against board.c with a fake board (no STM32 code). */
 
 #include "../Core/Inc/board.h"
 #include "../Core/Inc/checksum.h"
@@ -39,6 +39,7 @@ typedef struct {
     int pump_on;
     int pump_changes;
     int hook;           /* 1 the nozzle is lifted */
+    int beeps;          /* SELECT beeps */
     DateTime rtc;
     int rtc_sets;
     uint32_t serial;
@@ -91,6 +92,11 @@ static int f_hook(void *ctx)
     return ((Fake *)ctx)->hook;
 }
 
+static void f_beep(void *ctx)
+{
+    ++((Fake *)ctx)->beeps;
+}
+
 static int f_rtc_get(void *ctx, DateTime *out)
 {
     *out = ((Fake *)ctx)->rtc;
@@ -121,6 +127,7 @@ static Hal hal_of(Fake *f)
     h.pulses = f_pulses;
     h.pump = f_pump;
     h.hook = f_hook;
+    h.beep = f_beep;
     h.rtc_get = f_rtc_get;
     h.rtc_set = f_rtc_set;
     h.serial = f_serial;
@@ -133,6 +140,7 @@ typedef struct {
     Hal hal;
     Board board;
     uint8_t seq;
+    uint32_t session;   /* the last session id START was given by start_auto() */
     uint8_t reply[FRAME_MAX];
     size_t reply_len;
 } Rig;
@@ -283,14 +291,17 @@ static void run(Rig *r, int steps, uint32_t pulses_per_step)
     }
 }
 
-/* auto mode with the usual calibration: density 0.8300, 1000.00 counts per litre; select, preset, start */
+/* auto mode with the usual calibration: density 0.8300, 1000.00 counts per litre; select (a beep), preset, start with the next session id (1, 2, ...) */
 static uint32_t start_auto(Rig *r, uint32_t grams)
 {
+    const uint32_t session = ++r->session;
+
     CHECK_EQ(ask0(r, CMD_SELECT), CMD_SELECT | 0x80);
     CHECK_EQ(ask_u32(r, CMD_SET_PRESET, grams), CMD_SET_PRESET | 0x80);
-    CHECK_EQ(ask0(r, CMD_START), CMD_START | 0x80);
+    CHECK_EQ(ask_u32(r, CMD_START, session), CMD_START | 0x80);
+    CHECK_EQ(u32at(DATA(r)), session);   /* the answer repeats the id */
 
-    return u32at(DATA(r));
+    return session;
 }
 
 /* ---------------------------------------------------------------- tests */
@@ -304,8 +315,8 @@ static void test_crc_and_examples(void)
     static const uint8_t time_ans[] = {0x02, 0x01, 0x07, 0x8C, 0x07, 0xEA, 0x07, 0x0A, 0x0A, 0x09, 0x1E, 0x0F, 0x8E, 0xE4};
     static const uint8_t config_req[] = {0x02, 0x03, 0x09, 0x0B, 0x0B, 0x00, 0x44, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x3A, 0xE2, 0x01, 0x00, 0x93, 0x33};
     static const uint8_t nak_ans[] = {0x02, 0x02, 0x07, 0xFF, 0x02, 0x03, 0x06, 0xA5, 0x1F};
-    static const uint8_t dispensing_ans[] = {0x02, 0x01, 0x05, 0x82, 0x0F, 0x03, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0xD4, 0x30, 0x00, 0x00,
-                                              0x6C, 0x5A, 0x00, 0x00, 0x57, 0x20};
+    static const uint8_t dispensing_ans[] = {0x02, 0x01, 0x05, 0x82, 0x13, 0x03, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0xD4, 0x30, 0x00, 0x00,
+                                              0x6C, 0x5A, 0x00, 0x00, 0x98, 0x3A, 0x00, 0x00, 0xCC, 0x8D};
     Rig r;
     size_t n;
 
@@ -336,12 +347,12 @@ static void test_crc_and_examples(void)
     rig_new(&r, 2);
     configure(&r, MODE_AUTO, 8300, 100000);
     r.seq = 6;
-    CHECK(ask0(&r, CMD_START) == CMD_NAK);
+    CHECK(ask_u32(&r, CMD_START, 42) == CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
     CHECK(r.reply_len == sizeof(nak_ans) && memcmp(r.reply, nak_ans, r.reply_len) == 0);
 
     /* the document's POLL answer of a running fill: built the same way */
-    n = frame(out, 1, 5, 0x82, dispensing_ans + 5, 15);
+    n = frame(out, 1, 5, 0x82, dispensing_ans + 5, 19);
     CHECK(n == sizeof(dispensing_ans) && memcmp(out, dispensing_ans, n) == 0);
 }
 
@@ -419,6 +430,7 @@ static void test_repeat_rule(void)
     Rig r;
     uint8_t req[FRAME_MAX];
     uint8_t first[FRAME_MAX];
+    uint8_t session[4];
     size_t first_len;
     size_t n;
 
@@ -428,17 +440,18 @@ static void test_repeat_rule(void)
     CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
 
     /* START twice with the same SEQ: it runs once, the same answer comes again */
-    n = frame(req, 1, 100, CMD_START, 0, 0);
+    put32(session, 7);
+    n = frame(req, 1, 100, CMD_START, session, 4);
     CHECK(feed_all(&r, req, n));
     memcpy(first, r.reply, r.reply_len);
     first_len = r.reply_len;
-    CHECK_EQ(u32at(first + 5), 1);
+    CHECK_EQ(u32at(first + 5), 7);
     CHECK(feed_all(&r, req, n));
     CHECK(r.reply_len == first_len && memcmp(r.reply, first, first_len) == 0);
-    CHECK_EQ(r.board.p.next_result_id, 1);
+    CHECK_EQ(r.board.p.inflight.id, 7);
 
     /* with a new SEQ it is refused */
-    n = frame(req, 1, 101, CMD_START, 0, 0);
+    n = frame(req, 1, 101, CMD_START, session, 4);
     CHECK(feed_all(&r, req, n));
     CHECK_EQ(r.reply[3], CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
@@ -456,9 +469,10 @@ static void test_auto_fill(void)
     /* not configured: START is refused */
     CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
     CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
-    CHECK_EQ(ask0(&r, CMD_START), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_START, 1), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_NOT_CONFIGURED);
-    CHECK_EQ(ask0(&r, CMD_DESELECT), CMD_DESELECT | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);   /* the cancel: a preset of zero */
+    CHECK_EQ(state_of(&r), STATE_IDLE);
 
     configure(&r, MODE_AUTO, 8300, 100000);
     CHECK_EQ(board_target_pulses(&r.board.p.config, 15000), 18072); /* 15 kg at 0.83 kg/L is 18.072 L, 1000 counts per litre */
@@ -478,17 +492,20 @@ static void test_auto_fill(void)
     CHECK_EQ(u32at(DATA(&r) + 11), 5000); /* ml */
     CHECK_EQ(board_live_grams(&r.board), 4150);
 
-    /* CANCEL and DESELECT are refused while it runs */
-    CHECK_EQ(ask0(&r, CMD_CANCEL), CMD_NAK);
+    /* the cancel (a preset of zero), a new preset, SELECT and a second START are refused while it runs */
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
-    CHECK_EQ(ask0(&r, CMD_DESELECT), CMD_NAK);
-    CHECK_EQ(ask0(&r, CMD_START), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 2000), CMD_NAK);
+    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask_u32(&r, CMD_START, 99), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
 
     run(&r, 40, 500); /* 20000 more counts: well past the 18072 */
     CHECK_EQ(r.fake.pump_on, 0);
     run(&r, 30, 0);   /* the settle time passes */
     poll(&r);
-    CHECK_EQ(DATA(&r)[0], STATE_RESULT);
+    CHECK_EQ(DATA(&r)[0], STATE_DONE);
     CHECK(DATA(&r)[1] & FLAG_RESULT);
     CHECK_EQ(u32at(DATA(&r) + 3), 1);
 
@@ -514,7 +531,7 @@ static void test_auto_fill(void)
     CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_NO_RESULT);
 
-    /* the next fill has the next id */
+    /* the next fill has the id its START carried */
     CHECK_EQ(start_auto(&r, 5000), 2);
 }
 
@@ -538,7 +555,7 @@ static void test_early_close(void)
     /* 60 more counts come while the pump stops: they are counted but the result is still the preset */
     r.fake.pulses += 60;
     run(&r, 40, 0);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.dispensed_g, 15000);
     CHECK_EQ(r.board.p.result.reason, REASON_PRESET);
 }
@@ -558,7 +575,7 @@ static void test_no_flow(void)
     run(&r, 2900, 0);  /* 29 s of quiet */
     CHECK_EQ(r.board.state, STATE_DISPENSING);
     run(&r, 200, 0); /* the 30 s are over, then the settle time */
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.reason, REASON_NO_FLOW);
     CHECK_EQ(r.board.p.result.dispensed_g, 8300); /* 10 L */
     CHECK_EQ(r.board.p.result.dispensed_ml, 10000);
@@ -570,7 +587,7 @@ static void test_no_flow(void)
     run(&r, 59990, 0);
     CHECK_EQ(r.board.state, STATE_DISPENSING);
     run(&r, 200, 0);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.dispensed_g, 0);
     CHECK_EQ(r.board.p.result.reason, REASON_NO_FLOW);
 }
@@ -611,7 +628,7 @@ static void test_hook(void)
     CHECK_EQ(r.board.state, STATE_DISPENSING);
     run(&r, 20, 0);  /* 3 s */
     run(&r, 30, 0);  /* the settle time */
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.reason, REASON_NO_FLOW);
     CHECK_EQ(r.board.p.result.dispensed_g, 8300);
     CHECK_EQ(r.fake.pump_on, 0);
@@ -668,7 +685,7 @@ static void test_backflow_and_wrap(void)
     CHECK_EQ(r.board.pulses_seen, 1000);
     run(&r, 40, 500);
     run(&r, 30, 0);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.reason, REASON_PRESET);
 }
 
@@ -729,7 +746,7 @@ static void test_config(void)
 
     /* only in IDLE */
     d[1] = 'D';
-    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 5000), CMD_SET_PRESET | 0x80);
     CHECK_EQ(ask(&r, CMD_SET_CONFIG, d, 11), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
 }
@@ -783,64 +800,125 @@ static void test_keys(void)
     rig_new(&r, 1);
     configure(&r, MODE_AUTO, 8300, 100000);
 
+    /* the select key only reports itself: the state does not change, the event comes once in the next POLL */
     board_key_select(&r.board);
-    CHECK_EQ(r.board.state, STATE_SELECTED);
+    CHECK_EQ(r.board.state, STATE_IDLE);
     n = frame(req, 1, 50, CMD_POLL, 0, 0);
     CHECK(feed_all(&r, req, n));
-    CHECK_EQ(DATA(&r)[0], STATE_SELECTED);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
     CHECK(DATA(&r)[1] & FLAG_SELECT_KEY);
     CHECK(feed_all(&r, req, n)); /* a repeated POLL gets the same flags */
     CHECK(DATA(&r)[1] & FLAG_SELECT_KEY);
     poll(&r);                    /* a new one does not */
     CHECK(!(DATA(&r)[1] & FLAG_SELECT_KEY));
 
-    board_key_select(&r.board); /* again: deselect */
+    /* the clear key too (bit 4); both together */
+    board_key_clear(&r.board);
+    board_key_select(&r.board);
     CHECK_EQ(r.board.state, STATE_IDLE);
     poll(&r);
-    CHECK(DATA(&r)[1] & FLAG_DESELECT_KEY);
+    CHECK(DATA(&r)[1] & FLAG_CLEAR_KEY);
+    CHECK(DATA(&r)[1] & FLAG_SELECT_KEY);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[1] & (FLAG_CLEAR_KEY | FLAG_SELECT_KEY), 0);
 
-    /* from ARMED it deselects too; during a fill the key does nothing */
-    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
+    /* with a preset on the board (SET) and during a fill the keys change nothing either */
     CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 5000), CMD_SET_PRESET | 0x80);
     board_key_select(&r.board);
-    CHECK_EQ(r.board.state, STATE_IDLE);
+    board_key_clear(&r.board);
+    CHECK_EQ(r.board.state, STATE_SET);
+    CHECK_EQ(r.board.preset_g, 5000);
     start_auto(&r, 5000);
     board_key_select(&r.board);
+    board_key_clear(&r.board);
     CHECK_EQ(r.board.state, STATE_DISPENSING);
 }
 
+/* Manual mode: the supplier types the amount, takes the gun up and the board runs by itself; nothing is held, nothing is reported. */
 static void test_manual_mode(void)
 {
     Rig r;
+    uint8_t d[11];
 
     rig_new(&r, 1);
     configure(&r, MODE_MANUAL, 8300, 100000);
 
+    /* the Smart210 only watches: these are refused */
     CHECK_EQ(ask0(&r, CMD_SELECT), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
     CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 5000), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
-    CHECK_EQ(ask0(&r, CMD_START), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_START, 1), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 1000), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    /* and these are answered */
+    CHECK_EQ(ask0(&r, CMD_INFO), CMD_INFO | 0x80);
+    CHECK_EQ(ask0(&r, CMD_GET_CONFIG), CMD_GET_CONFIG | 0x80);
+    CHECK_EQ(ask0(&r, CMD_GET_TIME), CMD_GET_TIME | 0x80);
+    CHECK_EQ(ask0(&r, CMD_GET_CONFIG), CMD_GET_CONFIG | 0x80);
+    memcpy(d, DATA(&r), 11);
+    CHECK_EQ(ask(&r, CMD_SET_CONFIG, d, 11), CMD_SET_CONFIG | 0x80);
+    CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_NAK);        /* it holds no result */
+    CHECK_EQ(NAK_ERROR(&r), ERR_NO_RESULT);
+
+    /* the keys report nothing */
     board_key_select(&r.board);
-    CHECK_EQ(r.board.state, STATE_IDLE);
+    board_key_clear(&r.board);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[1] & (FLAG_SELECT_KEY | FLAG_CLEAR_KEY), 0);
 
     CHECK(!board_manual_amount(&r.board, 0));
-    CHECK(board_manual_amount(&r.board, 8300)); /* 8.3 kg = 10 L = 10000 counts */
+    r.fake.hook = 0;                                     /* the gun is down */
+    CHECK(board_manual_amount(&r.board, 8300));          /* 8.3 kg = 10 L = 10000 counts: the preset only, the board is SET */
+    CHECK_EQ(r.board.state, STATE_SET);
+    run(&r, 20, 0);
+    CHECK_EQ(r.board.state, STATE_SET);                  /* it waits for the gun */
+    CHECK_EQ(r.fake.pump_on, 0);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_SET);
+    CHECK_EQ(u32at(DATA(&r) + 15), 8300);                /* the preset typed at the dispenser is in POLL */
+    CHECK(!(DATA(&r)[1] & FLAG_GUN_UP));
+    CHECK(!board_manual_amount(&r.board, 100));          /* not while it waits */
+
+    r.fake.hook = 1;                                     /* the gun is taken up: the fill starts by itself */
+    run(&r, 1, 0);
     CHECK_EQ(r.board.state, STATE_DISPENSING);
+    CHECK_EQ(r.board.p.inflight.id, 0);                  /* a manual fill has no session */
+    CHECK_EQ(r.fake.pump_on, 1);
+    poll(&r);
+    CHECK(DATA(&r)[1] & FLAG_GUN_UP);
+    CHECK_EQ(u32at(DATA(&r) + 3), 0);
     CHECK(!board_manual_amount(&r.board, 100));
     run(&r, 100, 100);
     run(&r, 30, 0);
-    CHECK_EQ(r.board.state, STATE_RESULT);
-    CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_GET_RESULT | 0x80);
-    CHECK_EQ(u32at(DATA(&r) + 4), 8300);  /* the amount typed at the dispenser */
-    CHECK_EQ(u32at(DATA(&r) + 8), 8300);
-    CHECK_EQ(DATA(&r)[16], REASON_PRESET);
-    CHECK(!board_manual_amount(&r.board, 100)); /* not before the result is acknowledged */
-    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, 1), CMD_ACK_RESULT | 0x80);
-    CHECK_EQ(r.board.state, STATE_IDLE);
 
-    /* a manual board that is not configured does not start */
+    /* the end of the fill is not reported: IDLE, no result, no flag, no preset */
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
+    CHECK_EQ(DATA(&r)[1] & (FLAG_RESULT | FLAG_SELECT_KEY | FLAG_CLEAR_KEY), 0);
+    CHECK_EQ(u32at(DATA(&r) + 7), 0);
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);
+    CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_NO_RESULT);
+    CHECK_EQ(r.board.p.result.held, 0);
+    CHECK_EQ(r.fake.pump_on, 0);
+
+    /* the clear key at the dispenser drops an amount that waits for the gun */
+    r.fake.hook = 0;
+    CHECK(board_manual_amount(&r.board, 5000));
+    board_key_clear(&r.board);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(r.board.preset_g, 0);
+
+    /* with the gun already up the fill starts as soon as the amount is confirmed */
+    r.fake.hook = 1;
+    CHECK(board_manual_amount(&r.board, 8300));
+    run(&r, 1, 0);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
+
+    /* a manual board that is not configured does not take an amount */
     rig_new(&r, 1);
     memset(&r.board.p.config, 0, sizeof(r.board.p.config));
     r.board.p.config.mode = MODE_MANUAL;
@@ -864,7 +942,7 @@ static void test_power_cut(void)
         CHECK(stored > 0 && stored <= r.board.pulses_seen);
 
         rig_power_cycle(&r);
-        CHECK_EQ(r.board.state, STATE_RESULT);
+        CHECK_EQ(r.board.state, STATE_DONE);
         CHECK_EQ(r.fake.pump_on, 0);
         CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_GET_RESULT | 0x80);
         CHECK_EQ(u32at(DATA(&r)), id);
@@ -875,30 +953,34 @@ static void test_power_cut(void)
 
     /* a power cut while the result waits: it is still there */
     rig_power_cycle(&r);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, id), CMD_ACK_RESULT | 0x80);
     CHECK_EQ(r.board.state, STATE_IDLE);
 
-    /* and after the acknowledgement the id counter has not gone back */
+    /* after the acknowledgement a restart leaves the board IDLE (the acknowledged id is remembered) */
     rig_power_cycle(&r);
     CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, id), CMD_ACK_RESULT | 0x80);
     CHECK_EQ(start_auto(&r, 5000), id + 1);
 
     /* a power cut right after START, before any count */
     rig_power_cycle(&r);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_GET_RESULT | 0x80);
     CHECK_EQ(u32at(DATA(&r) + 8), 0);
     CHECK_EQ(DATA(&r)[16], REASON_INTERRUPTED);
 
-    /* a manual fill is the same */
+    /* a manual fill holds no result: after the power cut the board is IDLE and nothing waits */
     ask_u32(&r, CMD_ACK_RESULT, id + 1);
     configure(&r, MODE_MANUAL, 8300, 100000);
     CHECK(board_manual_amount(&r.board, 8300));
     run(&r, 300, 10);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
     rig_power_cycle(&r);
-    CHECK_EQ(r.board.state, STATE_RESULT);
-    CHECK_EQ(r.board.p.result.reason, REASON_INTERRUPTED);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(r.board.p.result.held, 0);
+    CHECK_EQ(r.board.p.inflight.active, 0);
+    CHECK_EQ(r.fake.pump_on, 0);
 }
 
 static void test_power_fail_signal(void)
@@ -924,7 +1006,7 @@ static void test_power_fail_signal(void)
     CHECK_EQ(r.fake.pump_on, 0); /* and the pump does not start again while the supply is going */
 
     rig_power_cycle(&r);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.board.p.result.reason, REASON_INTERRUPTED);
     CHECK_EQ(r.board.p.result.dispensed_g, board_grams_of(&r.board.p.config, 15000));
 
@@ -949,7 +1031,7 @@ static void test_faults(void)
     start_auto(&r, 15000);
     run(&r, 10, 100);
     board_set_fault(&r.board, FAULT_FLOW_SENSOR);
-    CHECK_EQ(r.board.state, STATE_RESULT);
+    CHECK_EQ(r.board.state, STATE_DONE);
     CHECK_EQ(r.fake.pump_on, 0);
     poll(&r);
     CHECK_EQ(DATA(&r)[2], FAULT_FLOW_SENSOR);
@@ -963,7 +1045,9 @@ static void test_faults(void)
 
     CHECK_EQ(ask0(&r, CMD_SELECT), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
-    CHECK_EQ(ask0(&r, CMD_START), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 5000), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
+    CHECK_EQ(ask_u32(&r, CMD_START, 9), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
 
     board_set_fault(&r.board, FAULT_NONE);
@@ -986,7 +1070,7 @@ static void test_memory(void)
     CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
     CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
     r.fake.fail_save = 1;
-    CHECK_EQ(ask0(&r, CMD_START), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_START, 1), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
     CHECK_EQ(r.fake.pump_on, 0);
     poll(&r);
@@ -1015,11 +1099,6 @@ static void test_memory(void)
     CHECK_EQ(r.board.fault, FAULT_MEMORY);
     CHECK_EQ(r.fake.pump_on, 0);
 
-    /* the id is never 0, also after a wrap */
-    rig_new(&r, 1);
-    configure(&r, MODE_AUTO, 8300, 100000);
-    r.board.p.next_result_id = 0xFFFFFFFFUL;
-    CHECK_EQ(start_auto(&r, 5000), 1);
 }
 
 static void test_unknown_and_lengths(void)
@@ -1036,25 +1115,239 @@ static void test_unknown_and_lengths(void)
     CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
     CHECK_EQ(ask(&r, CMD_ACK_RESULT, 0, 0), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+    CHECK_EQ(ask(&r, CMD_START, 0, 0), CMD_NAK);                 /* START carries the session id */
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+    CHECK_EQ(ask(&r, CMD_SHOW_BALANCE, 0, 0), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
 
-    /* INFO */
+    /* INFO: protocol 4 */
     CHECK_EQ(ask0(&r, CMD_INFO), CMD_INFO | 0x80);
-    CHECK_EQ(DATA(&r)[0], 3);
+    CHECK_EQ(DATA(&r)[0], 4);
     CHECK_EQ(u32at(DATA(&r) + 3), 0xCAFE0001UL);
 
-    /* a preset of 0 is not a preset */
-    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
-    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_NAK);
-    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_VALUE);
+}
 
-    /* DESELECT / CANCEL / SET_PRESET in the states that refuse them */
-    CHECK_EQ(ask0(&r, CMD_CANCEL), CMD_CANCEL | 0x80);
-    CHECK_EQ(state_of(&r), STATE_IDLE);
-    CHECK_EQ(ask0(&r, CMD_CANCEL), CMD_NAK);
+/* The session id: START carries it (4 bytes, never 0), the board keeps it with the fill and the result and sends it back; it has no counter of its own. */
+static void test_session_ids(void)
+{
+    Rig r;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
+
+    CHECK_EQ(ask_u32(&r, CMD_START, 0), CMD_NAK);                 /* 0 is no session */
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_VALUE);
+    CHECK_EQ(r.board.state, STATE_SET);
+    CHECK_EQ(ask(&r, CMD_START, (const uint8_t *)"abc", 3), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+
+    /* any number is taken: the board does not count */
+    CHECK_EQ(ask_u32(&r, CMD_START, 987654321UL), CMD_START | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 987654321UL);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_DISPENSING);
+    CHECK_EQ(u32at(DATA(&r) + 3), 987654321UL);                    /* in POLL while the fill runs */
+    CHECK_EQ(r.fake.stored.inflight.id, 987654321UL);             /* kept in the memory with the fill */
+
+    run(&r, 200, 200);
+    run(&r, 30, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    poll(&r);
+    CHECK_EQ(u32at(DATA(&r) + 3), 987654321UL);                    /* and while the result waits */
+    CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_GET_RESULT | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 987654321UL);
+    CHECK_EQ(r.fake.stored.result.id, 987654321UL);
+
+    /* the result comes back with its id after a restart; ACK_RESULT takes that id and no other */
+    rig_power_cycle(&r);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(ask0(&r, CMD_GET_RESULT), CMD_GET_RESULT | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 987654321UL);
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, 1), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_ID_MISMATCH);
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, 987654321UL), CMD_ACK_RESULT | 0x80);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
+    CHECK_EQ(u32at(DATA(&r) + 3), 0);                              /* no fill, no result: 0 */
+
+    /* the same id again later (a new board, a reset counter of the Smart210) is just a new fill: nothing on the board stops it */
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 5000), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_START, 987654321UL), CMD_START | 0x80);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
+}
+
+/* SHOW_BALANCE: a number on the display, in IDLE only; it is not a preset and arms nothing. */
+static void test_show_balance(void)
+{
+    Rig r;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    CHECK_EQ(board_shown_grams(&r.board), 0);
+
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 40000), CMD_SHOW_BALANCE | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 40000);
+    CHECK_EQ(board_shown_grams(&r.board), 40000);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);                          /* the state stays IDLE */
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);                          /* and there is no preset */
+    CHECK_EQ(u32at(DATA(&r) + 3), 0);
+
+    /* a gun taken up changes nothing: the board starts nothing by itself */
+    r.fake.hook = 1;
+    run(&r, 50, 0);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(r.fake.pump_on, 0);
+    CHECK_EQ(board_shown_grams(&r.board), 40000);
+
+    /* the digits of the display: 9999.99 kg is the most */
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, MAX_SHOWN_G), CMD_SHOW_BALANCE | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, MAX_SHOWN_G + 1), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_VALUE);
+    CHECK_EQ(board_shown_grams(&r.board), MAX_SHOWN_G);          /* the refused number changed nothing */
+    CHECK_EQ(ask(&r, CMD_SHOW_BALANCE, (const uint8_t *)"abc", 3), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+
+    /* zero clears it */
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 0), CMD_SHOW_BALANCE | 0x80);
+    CHECK_EQ(board_shown_grams(&r.board), 0);
+
+    /* it goes by itself after 60 s */
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 12345), CMD_SHOW_BALANCE | 0x80);
+    run(&r, 5990, 0);
+    CHECK_EQ(board_shown_grams(&r.board), 12345);
+    run(&r, 20, 0);
+    CHECK_EQ(board_shown_grams(&r.board), 0);
+
+    /* a preset (and the cancel, a preset of zero) takes it off the display */
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_SHOW_BALANCE | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 3000), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(board_shown_grams(&r.board), 0);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_SHOW_BALANCE | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(board_shown_grams(&r.board), 0);
+
+    /* refused in SET, DISPENSING and DONE (WRONG_STATE) and in FAULT (FAULT) */
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 3000), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
-    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 1000), CMD_NAK);
+    CHECK_EQ(ask_u32(&r, CMD_START, 5), CMD_START | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    run(&r, 100, 100);
+    run(&r, 30, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, 5), CMD_ACK_RESULT | 0x80);
+    board_set_fault(&r.board, FAULT_VALVE);
+    CHECK_EQ(ask_u32(&r, CMD_SHOW_BALANCE, 500), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
+}
+
+/* The POLL answer of the v0.4 board: 19 bytes, the gun is a level, the preset is in it while the fill is SET, runs or waits as a result. */
+static void test_poll_status(void)
+{
+    Rig r;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+
+    poll(&r);
+    CHECK_EQ(r.reply[4], 19);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
+    CHECK(DATA(&r)[1] & FLAG_GUN_UP);                           /* the hook sensor says the gun is up */
+    r.fake.hook = 0;
+    poll(&r);
+    CHECK(!(DATA(&r)[1] & FLAG_GUN_UP));
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);
+
+    /* SET: the preset; the gun up with the preset on the board starts nothing in auto mode */
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
+    r.fake.hook = 1;
+    run(&r, 100, 0);
+    CHECK_EQ(r.board.state, STATE_SET);
+    poll(&r);
+    CHECK(DATA(&r)[1] & FLAG_GUN_UP);
+    CHECK_EQ(u32at(DATA(&r) + 15), 15000);
+    CHECK_EQ(r.fake.pump_on, 0);
+
+    /* DISPENSING: the preset stays, the gun is up */
+    CHECK_EQ(ask_u32(&r, CMD_START, 3), CMD_START | 0x80);
+    run(&r, 10, 100);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_DISPENSING);
+    CHECK_EQ(u32at(DATA(&r) + 15), 15000);
+    CHECK(DATA(&r)[1] & FLAG_GUN_UP);
+
+    /* DONE: the flag RESULT, the id, the preset of the fill; after ACK_RESULT nothing of it is left */
+    run(&r, 250, 100);
+    run(&r, 30, 0);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_DONE);
+    CHECK(DATA(&r)[1] & FLAG_RESULT);
+    CHECK_EQ(u32at(DATA(&r) + 3), 3);
+    CHECK_EQ(u32at(DATA(&r) + 15), 15000);
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, 3), CMD_ACK_RESULT | 0x80);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
+    CHECK_EQ(DATA(&r)[1] & FLAG_RESULT, 0);
+    CHECK_EQ(u32at(DATA(&r) + 3), 0);
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);
+}
+/* SELECT only makes the board beep; SET_PRESET works in IDLE and SET and a preset of zero is the cancel; DESELECT and CANCEL are gone. */
+static void test_select_and_preset(void)
+{
+    Rig r;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+
+    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);
+    CHECK_EQ(r.fake.beeps, 1);
+    CHECK_EQ(r.board.state, STATE_IDLE);               /* nothing changes but the beep */
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_IDLE);
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);                 /* no preset */
+
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);    /* accepted in IDLE */
+    CHECK_EQ(u32at(DATA(&r)), 15000);
+    poll(&r);
+    CHECK_EQ(DATA(&r)[0], STATE_SET);
+    CHECK_EQ(u32at(DATA(&r) + 15), 15000);              /* the preset is in POLL */
+    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_SELECT | 0x80);  /* accepted in SET too, the state stays */
+    CHECK_EQ(r.fake.beeps, 2);
+    CHECK_EQ(r.board.state, STATE_SET);
+
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 20000), CMD_SET_PRESET | 0x80);    /* again: the old preset is replaced */
+    CHECK_EQ(r.board.preset_g, 20000);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);        /* the cancel */
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    poll(&r);
+    CHECK_EQ(u32at(DATA(&r) + 15), 0);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);        /* also in IDLE */
+
+    /* DESELECT (0x04) and CANCEL (0x07) do not exist any more */
+    CHECK_EQ(ask0(&r, 0x04), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_COMMAND);
+    CHECK_EQ(ask0(&r, 0x07), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_COMMAND);
+
+    /* a result that waits (DONE): SELECT and SET_PRESET are refused */
+    start_auto(&r, 5000);
+    run(&r, 100, 100);
+    run(&r, 30, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(ask0(&r, CMD_SELECT), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 3000), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_NAK);
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
 }
+
 
 int main(void)
 {
@@ -1069,6 +1362,10 @@ int main(void)
     test_config();
     test_time();
     test_keys();
+    test_select_and_preset();
+    test_session_ids();
+    test_show_balance();
+    test_poll_status();
     test_manual_mode();
     test_power_cut();
     test_power_fail_signal();

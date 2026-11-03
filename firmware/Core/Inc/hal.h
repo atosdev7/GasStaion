@@ -30,7 +30,7 @@ typedef struct {
 /* The result of the last fill, held until the terminal acknowledges it. */
 typedef struct {
     uint8_t held;                  /* 1 while a result waits for ACK_RESULT */
-    uint32_t id;
+    uint32_t id;                   /* the session id the fill was started with (START carries it) */
     uint32_t preset_g;
     uint32_t dispensed_g;
     uint32_t dispensed_ml;
@@ -40,7 +40,7 @@ typedef struct {
 /* The fill in progress, saved while it runs so that a power cut can be recovered as a result with reason 2. */
 typedef struct {
     uint8_t active;
-    uint32_t id;
+    uint32_t id;                   /* the session id of START; 0 for a fill of a manual board (it has no session) */
     uint32_t preset_g;
     uint32_t target_pulses;
     uint32_t pulses;               /* counted so far */
@@ -52,8 +52,7 @@ typedef struct {
  */
 typedef struct {
     Config config;
-    uint32_t next_result_id;       /* the id of the last fill given; only grows, 0 is never used */
-    uint32_t last_acked_id;
+    uint32_t last_acked_id;        /* the session id of the last result that was acknowledged (a repeated ACK_RESULT is answered again) */
     Result result;
     Inflight inflight;
 } Persist;
@@ -73,6 +72,9 @@ typedef struct {
     void (*pump)(void *ctx, int on);
     /* The nozzle hook sensor: 1 when the nozzle is lifted from its holder. May be 0 (a board without the sensor: the nozzle counts as lifted). */
     int (*hook)(void *ctx);
+
+    /* The beeper: one short beep (SELECT). May be 0 (a board without a beeper). */
+    void (*beep)(void *ctx);
 
     /* The battery-backed clock; both return 1 when done. */
     int (*rtc_get)(void *ctx, DateTime *out);

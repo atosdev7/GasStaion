@@ -149,7 +149,11 @@ static void compose(const Ui *ui, char lines[UI_LCD_ROWS][UI_LCD_COLS + 1])
 
     switch (b->state) {
     case STATE_IDLE:
-        if (b->p.config.mode == MODE_MANUAL) {
+        if (board_shown_grams(b) > 0) {
+            out_text(&o0, "Balance");                      /* SHOW_BALANCE: a card's balance, not an amount to dispense */
+            out_kg(&o1, board_shown_grams(b));
+            out_text(&o1, " kg");
+        } else if (b->p.config.mode == MODE_MANUAL) {
             out_text(&o0, "Enter amount kg");
             out_text(&o1, ui->entry);
             out_char(&o1, '_');
@@ -162,11 +166,7 @@ static void compose(const Ui *ui, char lines[UI_LCD_ROWS][UI_LCD_COLS + 1])
             out_text(&o1, (b->p.config.density == 0 || b->p.config.pulses_x100 == 0) ? "Not configured" : "Press SELECT");
         }
         break;
-    case STATE_SELECTED:
-        out_text(&o0, "Selected");
-        out_text(&o1, "Wait for POS");
-        break;
-    case STATE_ARMED:
+    case STATE_SET:
         out_text(&o0, "Preset ");
         out_kg(&o0, b->preset_g);
         out_text(&o0, "kg");
@@ -180,7 +180,7 @@ static void compose(const Ui *ui, char lines[UI_LCD_ROWS][UI_LCD_COLS + 1])
         out_kg(&o1, board_live_grams(b));
         out_text(&o1, " kg");
         break;
-    case STATE_RESULT:
+    case STATE_DONE:
         out_text(&o0, "Done ");
         out_kg(&o0, b->p.result.dispensed_g);
         out_text(&o0, " kg");
@@ -229,9 +229,9 @@ static void leds(const Ui *ui)
 {
     const uint8_t s = ui->board->state;
 
-    ui->hal->led(ui->hal->ctx, 0, s == STATE_SELECTED || s == STATE_ARMED);
+    ui->hal->led(ui->hal->ctx, 0, s == STATE_SET);
     ui->hal->led(ui->hal->ctx, 1, s == STATE_DISPENSING);
-    ui->hal->led(ui->hal->ctx, 2, s == STATE_RESULT);
+    ui->hal->led(ui->hal->ctx, 2, s == STATE_DONE);
     ui->hal->led(ui->hal->ctx, 3, s == STATE_FAULT || ui->board->fault != 0);
 }
 
@@ -249,6 +249,11 @@ static void on_key(Ui *ui, int key)
 
     if (key == UI_KEY_SELECT) {
         board_key_select(b);
+
+        return;
+    }
+    if (key == UI_KEY_CLEAR && (!manual || (b->state == STATE_IDLE && ui->entry_len == 0) || b->state == STATE_SET)) {
+        board_key_clear(b);   /* auto: reported to the Smart210; manual: drops an amount that waits for the gun */
 
         return;
     }
@@ -297,7 +302,7 @@ void ui_tick(Ui *ui, uint32_t elapsed_ms)
     }
     if (ui->board->state != ui->last_state) {
         /* a change the person at the dispenser should notice */
-        if (ui->board->state == STATE_RESULT) {
+        if (ui->board->state == STATE_DONE) {
             ui->hal->beep(ui->hal->ctx, 400);
         } else if (ui->board->state == STATE_FAULT) {
             ui->hal->beep(ui->hal->ctx, 800);

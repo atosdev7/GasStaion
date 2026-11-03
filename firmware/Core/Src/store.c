@@ -33,7 +33,7 @@ static uint32_t get32(const uint8_t *at)
     return (uint32_t)at[0] | ((uint32_t)at[1] << 8) | ((uint32_t)at[2] << 16) | ((uint32_t)at[3] << 24);
 }
 
-/* the record: magic(2) seq(4) payload(54) crc32(4) */
+/* the record: magic(2) seq(4) payload(50, then zeros) crc32(4) */
 static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
 {
     uint8_t *q = rec + PAYLOAD_AT;
@@ -49,8 +49,6 @@ static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
     put16(q, p->config.density);
     q += 2;
     put32(q, p->config.pulses_x100);
-    q += 4;
-    put32(q, p->next_result_id);
     q += 4;
     put32(q, p->last_acked_id);
     q += 4;
@@ -86,8 +84,6 @@ static void unpack(const uint8_t *rec, Persist *p)
     p->config.density = get16(q);
     q += 2;
     p->config.pulses_x100 = get32(q);
-    q += 4;
-    p->next_result_id = get32(q);
     q += 4;
     p->last_acked_id = get32(q);
     q += 4;

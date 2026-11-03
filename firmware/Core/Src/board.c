@@ -215,6 +215,15 @@ static void hold_result(Board *b, uint32_t id, uint32_t preset_g, uint32_t g, ui
 {
     Result *r = &b->p.result;
 
+    if (b->p.config.mode == MODE_MANUAL) {
+        /* a manual board holds no result and tells nothing about the end of a fill */
+        b->p.inflight.active = 0;
+        b->p.result.held = 0;
+        save(b);
+
+        return;
+    }
+
     r->held = 1;
     r->id = id;
     r->preset_g = preset_g;
@@ -244,7 +253,7 @@ uint32_t board_live_grams(const Board *b)
 {
     uint32_t g, ml;
 
-    if (b->state == STATE_RESULT) {
+    if (b->state == STATE_DONE) {
         return b->p.result.dispensed_g;
     }
     if (b->state != STATE_DISPENSING) {
@@ -271,7 +280,12 @@ static void finish_fill(Board *b, uint8_t reason)
     }
     b->closing = 0;
     hold_result(b, b->p.inflight.id, b->preset_g, g, ml, reason);
-    b->state = STATE_RESULT;
+    if (b->p.config.mode == MODE_MANUAL) {
+        b->preset_g = 0;                  /* the fill is over and nothing waits: the dispenser is free for the next amount */
+        b->state = STATE_IDLE;
+    } else {
+        b->state = STATE_DONE;
+    }
 }
 
 /* The pump stops; the counts that still come are counted, then the result is held. */
@@ -284,22 +298,19 @@ static void begin_closing(Board *b, uint8_t reason)
     b->quiet_ms = 0;
 }
 
-static int start_fill(Board *b)
+/* The fill starts with the session id of START (0 for a manual board, which has no session). */
+static int start_fill(Board *b, uint32_t session_id)
 {
     Inflight *f = &b->p.inflight;
 
-    b->p.next_result_id += 1;
-    if (b->p.next_result_id == 0) {
-        b->p.next_result_id = 1;
-    }
     f->active = 1;
-    f->id = b->p.next_result_id;
+    f->id = session_id;
     f->preset_g = b->preset_g;
     f->target_pulses = board_target_pulses(&b->p.config, b->preset_g);
     f->pulses = 0;
     b->p.result.held = 0;
     if (!save(b)) {
-        return 0; /* the id is not promised before it is stored */
+        return 0; /* the session id is not promised before it is stored */
     }
     b->pulse_base = b->hal->pulses(b->hal->ctx);
     b->pulses_seen = 0;
@@ -386,6 +397,7 @@ void board_default_params(Params *params)
     params->settle_max_ms = 1000;
     params->save_ms = 2000;
     params->early_close_pulses = 0;
+    params->balance_show_ms = 60000;
 }
 
 void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)
@@ -412,7 +424,13 @@ void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)
         return;
     }
     if (loaded == 0) {
-        memset(&b->p, 0, sizeof(b->p)); /* a new board: not configured, the first result id will be 1 */
+        memset(&b->p, 0, sizeof(b->p)); /* a new board: not configured */
+    }
+    if (b->p.inflight.active && b->p.config.mode == MODE_MANUAL) {
+        /* a manual board holds no result: a fill that a power cut interrupted is dropped */
+        b->p.inflight.active = 0;
+        b->p.result.held = 0;
+        save(b);
     }
     if (b->p.inflight.active) {
         /* a power cut in the middle of a fill: it comes back as a result holding the last stored value */
@@ -425,7 +443,7 @@ void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)
     }
     if (b->p.result.held) {
         b->preset_g = b->p.result.preset_g;
-        b->state = STATE_RESULT;
+        b->state = STATE_DONE;
     } else {
         b->state = STATE_IDLE;
     }
@@ -457,21 +475,28 @@ static void config_from_bytes(const uint8_t *in, Config *c)
 
 static void do_poll(Board *b, uint8_t seq)
 {
-    uint8_t d[15];
-    uint8_t flags = (uint8_t)(b->key_events & (FLAG_SELECT_KEY | FLAG_DESELECT_KEY));
-    uint32_t id = 0, g = 0, ml = 0;
+    uint8_t d[19];
+    uint8_t flags = (uint8_t)(b->key_events & (FLAG_SELECT_KEY | FLAG_CLEAR_KEY));
+    uint32_t id = 0, g = 0, ml = 0, preset = 0;
 
-    if (b->state == STATE_RESULT) {
+    if (b->state == STATE_DONE) {
         flags |= FLAG_RESULT;
         id = b->p.result.id;
         g = b->p.result.dispensed_g;
         ml = b->p.result.dispensed_ml;
+        preset = b->p.result.preset_g;
     } else if (b->state == STATE_DISPENSING) {
         id = b->p.inflight.id;
         partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
+        preset = b->preset_g;
+    } else if (b->state == STATE_SET) {
+        preset = b->preset_g;
     }
     if (b->state == STATE_FAULT || b->fault != 0) {
         flags |= FLAG_FAULT;
+    }
+    if (hook_lifted(b)) {
+        flags |= FLAG_GUN_UP;     /* a level: set as long as the gun is up */
     }
     d[0] = b->state;
     d[1] = flags;
@@ -479,6 +504,7 @@ static void do_poll(Board *b, uint8_t seq)
     put32(d + 3, id);
     put32(d + 7, g);
     put32(d + 11, ml);
+    put32(d + 15, preset);
     b->key_events = 0; /* raised once */
     answer(b, seq, CMD_POLL, d, sizeof(d));
 }
@@ -487,10 +513,9 @@ static void do_poll(Board *b, uint8_t seq)
 static int data_length(uint8_t cmd)
 {
     switch (cmd) {
-    case CMD_INFO: case CMD_POLL: case CMD_SELECT: case CMD_DESELECT: case CMD_START: case CMD_CANCEL:
-    case CMD_GET_RESULT: case CMD_GET_CONFIG: case CMD_GET_TIME:
+    case CMD_INFO: case CMD_POLL: case CMD_SELECT: case CMD_GET_RESULT: case CMD_GET_CONFIG: case CMD_GET_TIME:
         return 0;
-    case CMD_SET_PRESET: case CMD_ACK_RESULT:
+    case CMD_SET_PRESET: case CMD_START: case CMD_ACK_RESULT: case CMD_SHOW_BALANCE:
         return 4;
     case CMD_SET_CONFIG:
         return CONFIG_SIZE;
@@ -503,7 +528,7 @@ static int data_length(uint8_t cmd)
 
 static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, size_t len)
 {
-    const int manual = b->p.config.mode == MODE_MANUAL;
+    const int manual = b->p.config.mode == MODE_MANUAL;     /* a manual board answers POLL, INFO, the config and the time; the rest is WRONG_STATE */
     const int want = data_length(cmd);
     uint8_t d[17];
 
@@ -532,31 +557,39 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
     case CMD_SELECT:
         if (b->state == STATE_FAULT) {
             nak(b, seq, cmd, ERR_FAULT);
-        } else if (manual || (b->state != STATE_IDLE && b->state != STATE_SELECTED)) {
+        } else if (manual || (b->state != STATE_IDLE && b->state != STATE_SET)) {
             nak(b, seq, cmd, ERR_WRONG_STATE);
         } else {
-            b->state = STATE_SELECTED;
-            answer(b, seq, cmd, 0, 0);
-        }
-        break;
-    case CMD_DESELECT:
-        if (b->state > STATE_ARMED) {
-            nak(b, seq, cmd, ERR_WRONG_STATE);
-        } else {
-            b->state = STATE_IDLE;
+            /* the board only beeps: its state does not change, the choice of the nozzle is kept by the Smart210 */
+            if (b->hal->beep) {
+                b->hal->beep(b->hal->ctx);
+            }
             answer(b, seq, cmd, 0, 0);
         }
         break;
     case CMD_SET_PRESET:
         if (b->state == STATE_FAULT) {
             nak(b, seq, cmd, ERR_FAULT);
-        } else if (manual || (b->state != STATE_SELECTED && b->state != STATE_ARMED)) {
+        } else if (manual || (b->state != STATE_IDLE && b->state != STATE_SET)) {
             nak(b, seq, cmd, ERR_WRONG_STATE);
-        } else if (get32(data) == 0) {
-            nak(b, seq, cmd, ERR_BAD_VALUE);
         } else {
             b->preset_g = get32(data);
-            b->state = STATE_ARMED;
+            b->shown_g = 0;                     /* the display shows the preset now, not a balance */
+            b->shown_left_ms = 0;
+            b->state = b->preset_g == 0 ? STATE_IDLE : STATE_SET;   /* a preset of zero is the cancel */
+            answer(b, seq, cmd, data, 4);
+        }
+        break;
+    case CMD_SHOW_BALANCE:
+        if (b->state == STATE_FAULT) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else if (manual || b->state != STATE_IDLE) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else if (get32(data) > MAX_SHOWN_G) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);    /* more digits than the display has */
+        } else {
+            b->shown_g = get32(data);           /* it arms nothing: no preset, the state stays IDLE, a gun taken up changes nothing */
+            b->shown_left_ms = b->shown_g ? b->params.balance_show_ms : 0;
             answer(b, seq, cmd, data, 4);
         }
         break;
@@ -565,27 +598,21 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
             nak(b, seq, cmd, ERR_NOT_CONFIGURED);
         } else if (b->state == STATE_FAULT) {
             nak(b, seq, cmd, ERR_FAULT);
-        } else if (manual || b->state != STATE_ARMED) {
+        } else if (manual || b->state != STATE_SET) {
             nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else if (get32(data) == 0) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);    /* 0 is no session */
         } else if (board_target_pulses(&b->p.config, b->preset_g) == 0) {
-            nak(b, seq, cmd, ERR_BAD_VALUE); /* less than one count */
-        } else if (!start_fill(b)) {
+            nak(b, seq, cmd, ERR_BAD_VALUE);    /* less than one count */
+        } else if (!start_fill(b, get32(data))) {
             nak(b, seq, cmd, ERR_FAULT);
         } else {
             put32(d, b->p.inflight.id);
             answer(b, seq, cmd, d, 4);
         }
         break;
-    case CMD_CANCEL:
-        if (b->state != STATE_SELECTED && b->state != STATE_ARMED) {
-            nak(b, seq, cmd, ERR_WRONG_STATE);
-        } else {
-            b->state = STATE_IDLE;
-            answer(b, seq, cmd, 0, 0);
-        }
-        break;
     case CMD_GET_RESULT:
-        if (b->state != STATE_RESULT) {
+        if (b->state != STATE_DONE) {
             nak(b, seq, cmd, ERR_NO_RESULT);
         } else {
             put32(d, b->p.result.id);
@@ -599,16 +626,17 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
     case CMD_ACK_RESULT: {
         const uint32_t id = get32(data);
 
-        if (b->state == STATE_RESULT && id == b->p.result.id) {
+        if (b->state == STATE_DONE && id == b->p.result.id) {
             b->p.last_acked_id = id;
             b->p.result.held = 0;
             save(b);
+            b->preset_g = 0;
             b->state = b->fault != 0 ? STATE_FAULT : STATE_IDLE;
             answer(b, seq, cmd, data, 4);
         } else if (id == b->p.last_acked_id && id != 0) {
             answer(b, seq, cmd, data, 4); /* already done: a lost answer is repeated */
         } else {
-            nak(b, seq, cmd, b->state == STATE_RESULT ? ERR_ID_MISMATCH : ERR_NO_RESULT);
+            nak(b, seq, cmd, b->state == STATE_DONE ? ERR_ID_MISMATCH : ERR_NO_RESULT);
         }
         break;
     }
@@ -779,25 +807,48 @@ void board_tick(Board *b, uint32_t elapsed_ms)
             b->rx_idle_ms = 0;
         }
     }
+    if (b->shown_left_ms) {
+        b->shown_left_ms = b->shown_left_ms > elapsed_ms ? b->shown_left_ms - elapsed_ms : 0;
+        if (b->shown_left_ms == 0) {
+            b->shown_g = 0;               /* the balance goes from the display by itself */
+        }
+    }
+    if (b->p.config.mode == MODE_MANUAL && b->state == STATE_SET && hook_lifted(b) && !b->powering_down && !start_fill(b, 0)) {
+        b->state = STATE_FAULT;           /* the memory refused: the board stops working */
+    }
     if (b->state == STATE_DISPENSING) {
         run_fill(b, elapsed_ms);
     }
 }
 
+/* The keys of the dispenser only report themselves (auto mode): the Smart210 sees the event in its next POLL and acts. */
 void board_key_select(Board *b)
 {
     if (b->p.config.mode == MODE_MANUAL) {
         return; /* the select key is not used in manual mode */
     }
-    if (b->state == STATE_IDLE) {
-        b->state = STATE_SELECTED;
-        b->key_events |= FLAG_SELECT_KEY;
-    } else if (b->state == STATE_SELECTED || b->state == STATE_ARMED) {
-        b->state = STATE_IDLE;
-        b->key_events |= FLAG_DESELECT_KEY;
-    }
+    b->key_events |= FLAG_SELECT_KEY;
 }
 
+void board_key_clear(Board *b)
+{
+    if (b->p.config.mode == MODE_MANUAL) {
+        if (b->state == STATE_SET) {
+            b->preset_g = 0;              /* the amount that waited for the gun is dropped */
+            b->state = STATE_IDLE;
+        }
+
+        return; /* a manual board reports no keys */
+    }
+    b->key_events |= FLAG_CLEAR_KEY;
+}
+
+uint32_t board_shown_grams(const Board *b)
+{
+    return b->shown_g;
+}
+
+/* Manual mode: the amount the supplier confirmed is the preset (the dispenser is SET); the fill starts when the gun is up. */
 int board_manual_amount(Board *b, uint32_t grams)
 {
     if (b->p.config.mode != MODE_MANUAL || b->state != STATE_IDLE || grams == 0 || !configured(&b->p.config)
@@ -805,8 +856,9 @@ int board_manual_amount(Board *b, uint32_t grams)
         return 0;
     }
     b->preset_g = grams;
+    b->state = STATE_SET;
 
-    return start_fill(b);
+    return 1;
 }
 
 void board_set_fault(Board *b, uint8_t code)
@@ -815,7 +867,10 @@ void board_set_fault(Board *b, uint8_t code)
     if (code != 0) {
         if (b->state == STATE_DISPENSING) {
             finish_fill(b, REASON_FAULT); /* the result is held; the board is in fault after it is acknowledged */
-        } else if (b->state != STATE_RESULT) {
+            if (b->p.config.mode == MODE_MANUAL) {
+                b->state = STATE_FAULT;   /* a manual board holds no result to acknowledge */
+            }
+        } else if (b->state != STATE_DONE) {
             b->state = STATE_FAULT;
         }
     } else if (b->state == STATE_FAULT) {

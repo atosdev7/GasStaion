@@ -213,6 +213,12 @@ static void port_led(void *ctx, uint8_t index, int on)
     }
 }
 
+/* the beep of the SELECT command (the Smart210 chose this nozzle) */
+static void port_select_beep(void *ctx)
+{
+    port_beep(ctx, 150);
+}
+
 /* ---------------------------------------------------------------- the display and the keyboard (ui_drivers.h) */
 
 static void port_lcd_clear(void *ctx)
@@ -255,6 +261,7 @@ void port_init(Hal *hal, UiHal *ui)
     hal->pulses = port_pulses;
     hal->pump = port_pump;
     hal->hook = port_hook;
+    hal->beep = port_select_beep;
     hal->rtc_get = port_rtc_get;
     hal->rtc_set = port_rtc_set;
     hal->serial = port_serial;
