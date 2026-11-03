@@ -389,6 +389,7 @@ private slots:
     void ticketSalesOfOwnUseAndLoanHaveNoAmountAndALoanMakesAnEntry();
     void aTicketSaleThatIsNotAllowedChangesNothing();
     void aTicketSaleCanBeUploadedAsItIs();
+    void theItemsOfATicketSaleMustBeItsTickets();
     void theItemsOfASaleTakeTheirSerialsLikeOnTheWeb();
     void aReceiptIsKeptWithTheTicketSale();
     void theTicketSaleScreenBuildsTheSaleFromItemsAndSaveSellsThem();
@@ -4806,6 +4807,48 @@ void Smart210Test::aTicketSaleThatIsNotAllowedChangesNothing()
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 5); // all five stock tickets are as they were
     QVERIFY(TicketSale::create(db, ticketInput(two), 7, now).ok); // and a good sale still works
+}
+
+// The items of a ticket sale are the tickets that were sold (the web app refuses a sale whose items do not add up to its weight): a list that does not match is refused
+// here and nothing is saved.
+void Smart210Test::theItemsOfATicketSaleMustBeItsTickets()
+{
+    setUpSelling();
+    addStockTickets();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QDateTime now(QDate(2026, 10, 7), QTime(10, 0, 0));
+    const QList<qlonglong> two = QList<qlonglong>() << 3000000011LL << 3000000012LL;
+
+    TicketSale::Line line;
+    line.spec = 0; line.quantity = 2; line.start = 11; line.end = 12; line.kgX100 = 1000;
+
+    TicketSale::Input wrongKg = ticketInput(two);
+    TicketSale::Line less = line;
+    less.kgX100 = 500;                                            // 5 kg of items for 10 kg of tickets
+    wrongKg.lines << less;
+    const TicketSale::Result refusedKg = TicketSale::create(db, wrongKg, 7, now);
+    QVERIFY(!refusedKg.ok);
+    QVERIFY(refusedKg.error.contains("do not match its tickets"));
+
+    TicketSale::Input wrongCount = ticketInput(two);
+    TicketSale::Line one3 = line;
+    one3.quantity = 3;                                            // three tickets in the items, two sold
+    wrongCount.lines << one3;
+    QVERIFY(!TicketSale::create(db, wrongCount, 7, now).ok);
+
+    TicketSale::Input wrongRange = ticketInput(two);
+    TicketSale::Line backwards = line;
+    backwards.start = 12; backwards.end = 11;
+    wrongRange.lines << backwards;
+    QVERIFY(!TicketSale::create(db, wrongRange, 7, now).ok);
+
+    QCOMPARE(countRows("sales"), 0);                                // nothing was saved
+    QCOMPARE(countRows("sale_items"), 0);
+
+    TicketSale::Input good = ticketInput(two);                    // the same tickets with items that match, or with no items, are sold
+    good.lines << line;
+    QVERIFY(TicketSale::create(db, good, 7, now).ok);
+    QVERIFY(TicketSale::create(db, ticketInput(QList<qlonglong>() << 3000000013LL), 7, now.addSecs(60)).ok);
 }
 
 void Smart210Test::aTicketSaleCanBeUploadedAsItIs()

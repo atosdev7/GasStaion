@@ -111,3 +111,4 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | card | TicketNumbers |
 | remainder | TicketNumbers |
 | press | TicketNumbers |
+| The items of the sale do not match its tickets (%1 kg in %2 tickets): check the list. | TicketSale |

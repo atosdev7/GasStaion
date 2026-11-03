@@ -4,13 +4,13 @@
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="192"/>
+        <location filename="../src/sales/TicketSale.cpp" line="193"/>
         <location filename="../src/sales/SpotSale.cpp" line="51"/>
         <source>Log in first.</source>
         <translation>Log in first.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="199"/>
+        <location filename="../src/sales/TicketSale.cpp" line="200"/>
         <location filename="../src/sales/SpotSale.cpp" line="58"/>
         <source>Choose what the fuel is for.</source>
         <translation>Choose what the fuel is for.</translation>
@@ -21,7 +21,7 @@
         <translation>Choose the fuel type.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="211"/>
+        <location filename="../src/sales/TicketSale.cpp" line="212"/>
         <location filename="../src/sales/SpotSale.cpp" line="64"/>
         <source>Choose the customer.</source>
         <translation>Choose the customer.</translation>
@@ -32,19 +32,24 @@
         <translation>Enter the weight in kg, above 0 and up to 999999.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="214"/>
+        <location filename="../src/sales/TicketSale.cpp" line="215"/>
         <location filename="../src/sales/SpotSale.cpp" line="70"/>
         <source>Enter the price per kg.</source>
         <translation>Enter the price per kg.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="249"/>
+        <location filename="../src/sales/TicketSale.cpp" line="258"/>
+        <source>The items of the sale do not match its tickets (%1 kg in %2 tickets): check the list.</source>
+        <translation>The items of the sale do not match its tickets (%1 kg in %2 tickets): check the list.</translation>
+    </message>
+    <message>
+        <location filename="../src/sales/TicketSale.cpp" line="268"/>
         <location filename="../src/sales/SpotSale.cpp" line="77"/>
         <source>The amount is not allowed.</source>
         <translation>The amount is not allowed.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="317"/>
+        <location filename="../src/sales/TicketSale.cpp" line="336"/>
         <location filename="../src/sales/SpotSale.cpp" line="144"/>
         <source>The sale could not be saved.</source>
         <translation>The sale could not be saved.</translation>
@@ -60,57 +65,57 @@
         <translation>The ticket numbers of this terminal are used up.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="32"/>
+        <location filename="../src/sales/TicketSale.cpp" line="33"/>
         <source>This ticket was already sold.</source>
         <translation>This ticket was already sold.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="34"/>
+        <location filename="../src/sales/TicketSale.cpp" line="35"/>
         <source>This ticket was already used.</source>
         <translation>This ticket was already used.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="37"/>
+        <location filename="../src/sales/TicketSale.cpp" line="38"/>
         <source>This ticket is restricted and cannot be sold.</source>
         <translation>This ticket is restricted and cannot be sold.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="48"/>
+        <location filename="../src/sales/TicketSale.cpp" line="49"/>
         <source>That is not a ticket barcode (16 digits).</source>
         <translation>That is not a ticket barcode (16 digits).</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="57"/>
+        <location filename="../src/sales/TicketSale.cpp" line="58"/>
         <source>This ticket is not known on this terminal.</source>
         <translation>This ticket is not known on this terminal.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="69"/>
+        <location filename="../src/sales/TicketSale.cpp" line="70"/>
         <source>This ticket is another fuel type than the tickets already scanned.</source>
         <translation>This ticket is another fuel type than the tickets already scanned.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="202"/>
+        <location filename="../src/sales/TicketSale.cpp" line="203"/>
         <source>Scan the tickets first.</source>
         <translation>Scan the tickets first.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="205"/>
+        <location filename="../src/sales/TicketSale.cpp" line="206"/>
         <source>Too many tickets for one sale.</source>
         <translation>Too many tickets for one sale.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="230"/>
+        <location filename="../src/sales/TicketSale.cpp" line="231"/>
         <source>Ticket %1 cannot be sold: %2</source>
         <translation>Ticket %1 cannot be sold: %2</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="231"/>
+        <location filename="../src/sales/TicketSale.cpp" line="232"/>
         <source>it is twice in the list.</source>
         <translation>it is twice in the list.</translation>
     </message>
     <message>
-        <location filename="../src/sales/TicketSale.cpp" line="240"/>
+        <location filename="../src/sales/TicketSale.cpp" line="241"/>
         <source>The tickets are not of the chosen fuel type.</source>
         <translation>The tickets are not of the chosen fuel type.</translation>
     </message>

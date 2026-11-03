@@ -1,5 +1,6 @@
 #include "TicketSale.h"
 #include "Clock.h"
+#include "Decimal.h"
 #include "Checkout.h"
 
 #include "Barcode.h"
@@ -238,6 +239,24 @@ TicketSale::Result TicketSale::create(QSqlDatabase db, const Input &in, int user
         db.rollback();
 
         return refused(QObject::tr("The tickets are not of the chosen fuel type."));
+    }
+
+    // The items of the sale (as entered: spec, serial range, quantity, kg) must be the tickets that are sold: the web app refuses the whole sale when their kg are not the
+    // weight of the sale, and a refused sale could not go up. Checked here, where the cashier can still correct the list.
+    if (!in.lines.isEmpty()) {
+        qlonglong lineKg = 0;
+        int lineTickets = 0;
+        bool linesOk = in.lines.size() <= 200;
+        foreach (const Line &line, in.lines) {
+            linesOk = linesOk && line.quantity >= 1 && line.start >= 1 && line.end >= line.start && line.kgX100 >= 0;
+            lineKg += line.kgX100;
+            lineTickets += line.quantity;
+        }
+        if (!linesOk || lineKg != kg || lineTickets != in.barcodes.size()) {
+            db.rollback();
+
+            return refused(QObject::tr("The items of the sale do not match its tickets (%1 kg in %2 tickets): check the list.").arg(Decimal::format(kg, 2)).arg(in.barcodes.size()));
+        }
     }
 
     qlonglong total = 0;
