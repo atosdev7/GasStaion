@@ -132,3 +132,5 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Nozzle %1: the queue is empty. | SupplyPage |
 | Nozzle %1: the queue was cleared. | SupplyPage |
 | Nozzle %1: the board started a fill with another session id. | SupplySession |
+| Nozzle %1: the start is sent again. | SupplySession |
+| Nozzle %1: the fill did not start. Its tickets are free again. | SupplySession |

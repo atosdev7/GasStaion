@@ -61,6 +61,10 @@ public:
     // is also said by `message`.
     bool typed(const QString &text);
 
+    // A started session whose START did not get through is taken up again: while the board is still SET with the gun up, START is sent again (after `startAgainMs`);
+    // when the board has been IDLE for `idleCancelMs` the fill is not running and no result will come, so the session is cancelled and its tickets are free. Tests shorten both.
+    void setRecoveryMs(int startAgainMs, int idleCancelMs) { startAgainMs_ = startAgainMs; idleCancelMs_ = idleCancelMs; }
+
 public slots:
     // A barcode from the supplier's scanner: it goes to the queue of the chosen nozzle.
     void scanned(const QString &barcode);
@@ -85,6 +89,7 @@ private:
 
     void saved(int nozzle, const SupplyRecord::Outcome &outcome);
     void followTheSupplier(int address, const BoardProtocol::Status &status);
+    void recoverStart(int address, const BoardProtocol::Status &status);
     qint64 nowMs() const;
 
     QSqlDatabase db_;
@@ -99,6 +104,11 @@ private:
     QList<int> forgetPreset_;             // nozzles whose board is to forget its preset (SET_PRESET zero) after the clear key
     QMap<int, qlonglong> presetPending_;  // nozzle -> the total of a SET_PRESET that waits for its answer
     QMap<int, qint64> retryAfter_; // nozzle -> time (ms since epoch) before which a result is not read again after a failure
+    QMap<int, qint64> lastStartMs_; // nozzle -> when START was last sent for its session
+    QMap<int, qint64> idleSince_;   // nozzle -> when its board began to report IDLE while a session is started
+    QList<int> startAgain_;         // nozzles whose START in flight is a repeat (a refusal because the fill runs already is not a failure)
+    int startAgainMs_;
+    int idleCancelMs_;
 };
 
 #endif

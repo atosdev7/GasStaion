@@ -26,7 +26,7 @@ QString kg(qlonglong x100)
 }
 
 SupplySession::SupplySession(QSqlDatabase db, BoardBus *bus, MachineConfig *config, SupplySelection *selection, Session *session, QObject *parent)
-    : QObject(parent), db_(db), bus_(bus), config_(config), selection_(selection), session_(session), chosen_(0)
+    : QObject(parent), db_(db), bus_(bus), config_(config), selection_(selection), session_(session), chosen_(0), startAgainMs_(2000), idleCancelMs_(5000)
 {
     connect(selection_, SIGNAL(currentChanged(int)), this, SLOT(choiceChanged(int)));
     connect(bus_, SIGNAL(polled(int,BoardProtocol::Status)), this, SLOT(polled(int,BoardProtocol::Status)));
@@ -263,6 +263,8 @@ void SupplySession::polled(int address, const Status &status)
 void SupplySession::followTheSupplier(int address, const Status &status)
 {
     if (isLocked(address)) {
+        recoverStart(address, status);
+
         return;
     }
 
@@ -310,6 +312,7 @@ void SupplySession::followTheSupplier(int address, const Status &status)
             const quint32 sessionId = SupplyQueue::begin(db_, address, total, QDateTime::currentDateTime());
             if (sessionId != 0 && bus_->startFill(address, sessionId)) {
                 startStep_[address] = Starting;
+                lastStartMs_[address] = nowMs();
                 emit queueChanged(address);
             } else {
                 SupplyQueue::release(db_, address); // the board is busy: the next poll tries again
@@ -334,6 +337,46 @@ void SupplySession::followTheSupplier(int address, const Status &status)
     if (total > 0 && selection_->current() == address && (status.state == StateArmed || status.state == StateIdle) && presetSent_.value(address, -1) != total
         && !presetPending_.contains(address) && session_->userId() > 0 && bus_->setPreset(address, quint32(total * 10))) {
         presetPending_[address] = total;
+    }
+}
+
+// A session is saved before START is sent. When START never ran on the board (a lost command, a restart in between) nothing would end the session: the board stays SET and
+// no result comes. So, for a started session whose START is not on its way:
+//   - the board is SET and the gun is up: START is sent again with the same session id (after startAgainMs; the first answer may only have been lost, then the board
+//     is DISPENSING and refuses the repeat, which is not a failure);
+//   - the board is IDLE for idleCancelMs: the preset is gone and no fill runs, so no result will come: the session is cancelled and its tickets are free;
+//   - anything else (the fill runs, a result waits, the board is SET with the gun down): the session goes on.
+void SupplySession::recoverStart(int address, const Status &status)
+{
+    const SupplyQueue::Session started = SupplyQueue::session(db_, address);
+    if (!started.exists || started.sessionId == 0 || startStep_.contains(address) || resultStep_.contains(address)) {
+        idleSince_.remove(address);
+
+        return;
+    }
+
+    if (status.state != StateIdle) {
+        idleSince_.remove(address);
+    }
+    if (status.state == StateArmed && (status.flags & FlagGunUp)) {
+        if (nowMs() - lastStartMs_.value(address, 0) >= startAgainMs_ && bus_->startFill(address, started.sessionId)) {
+            startStep_[address] = Starting;
+            startAgain_.append(address);
+            lastStartMs_[address] = nowMs();
+            emit message(tr("Nozzle %1: the start is sent again.").arg(address), true);
+        }
+
+        return;
+    }
+    if (status.state == StateIdle) {
+        if (!idleSince_.contains(address)) {
+            idleSince_[address] = nowMs();
+        } else if (nowMs() - idleSince_.value(address) >= idleCancelMs_ && nowMs() - lastStartMs_.value(address, 0) >= idleCancelMs_) {
+            idleSince_.remove(address);
+            SupplyQueue::release(db_, address);
+            emit queueChanged(address);
+            emit message(tr("Nozzle %1: the fill did not start. Its tickets are free again.").arg(address), false);
+        }
     }
 }
 
@@ -373,6 +416,7 @@ void SupplySession::commandDone(int address, int command, const QByteArray &data
         presetSent_[address] = presetPending_.take(address);
     } else if (command == CmdStart && startStep_.value(address) == Starting) {
         startStep_.remove(address);
+        startAgain_.removeAll(address);
         quint32 echoed = 0;
         if (parseSessionId(data, &echoed) && echoed != SupplyQueue::session(db_, address).sessionId) {
             emit message(tr("Nozzle %1: the board started a fill with another session id.").arg(address), false);
@@ -438,6 +482,10 @@ void SupplySession::commandFailed(int address, int command, int error)
         }
     } else if (command == CmdStart && startStep_.value(address) == Starting) {
         startStep_.remove(address);
+        const bool repeat = startAgain_.removeAll(address) > 0;
+        if (repeat && error == ErrWrongState) {
+            return; // the first START had run: the fill is running already (the next poll shows it), the session goes on
+        }
         if (error < ErrNoAnswer) {
             SupplyQueue::release(db_, address); // the board refused: nothing runs, the tickets stay
             emit queueChanged(address);

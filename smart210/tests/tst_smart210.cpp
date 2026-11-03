@@ -348,6 +348,8 @@ private slots:
     void theConfigDownloadBringsTheRangesOfTheOldPublishes();
     void theEnterTicketBoxOfTheSessionsTabTypesTicketsIn();
     void theClearButtonOfTheSessionsTabTakesTheTicketsOutOfTheQueue();
+    void aStartThatNeverReachedTheBoardIsSentAgain();
+    void aStartedSessionOfABoardThatStaysIdleIsCancelled();
     void aStoppedFillMakesARemainderTicket();
     void aResultSeenAgainAfterALostAcknowledgementIsNotRecordedTwice();
     void aManualModeFillIsNotWorkedWithAtAll();
@@ -10340,6 +10342,64 @@ void Smart210Test::theEnterTicketBoxOfTheSessionsTabTypesTicketsIn()
 }
 
 // The Clear button takes every ticket out of the queue of the nozzle the table shows, and the board forgets its preset; a fill that has started refuses it.
+// T7 of the terminal audit: the session is saved before START; when START never ran on the board (the board is SET, the gun is up) nothing would start it or end the
+// session. START is sent again with the same session id, and the fill runs.
+void Smart210Test::aStartThatNeverReachedTheBoardIsSentAgain()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    bench.supply.setRecoveryMs(300, 600);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
+    QVERIFY(bench.selection.select(1));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.selection.isSelected(1), 3000);
+    bench.supply.scanned(code(3000000041));
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateArmed), 3000);
+
+    // the session is saved and START was on its way, but it never reached the board (the terminal had restarted, a frame was lost): the board is SET
+    const quint32 session = SupplyQueue::begin(db, 1, 1500, QDateTime::currentDateTime());
+    QVERIFY(bench.boards.simulator().liftGun(1));
+
+    QTRY_COMPARE_WITH_TIMEOUT(bench.boards.board(1).state, int(BoardProtocol::StateDispensing), 5000);   // START was sent again
+    QCOMPARE(bench.boards.board(1).sessionId, session);                                                 // with the id of the session
+    QCOMPARE(bench.boards.board(1).commands.count(BoardProtocol::CmdStart), 1);
+    QCOMPARE(SupplyQueue::session(db, 1).sessionId, session);
+    QVERIFY(bench.supply.isLocked(1));
+
+    bench.boards.simulator().tick(40000);                                                                // the fill ends and is recorded with its tickets
+    QTRY_COMPARE_WITH_TIMEOUT(one("SELECT COUNT(*) FROM supplements").toInt(), 1, 5000);
+    QCOMPARE(one("SELECT status FROM supply_sessions WHERE session_id = " + QString::number(session)).toString(), QString("completed"));
+}
+
+// The board has no preset any more (it lost its power, or never got it) and nothing runs: no result will come, so the session is cancelled and the tickets are free.
+void Smart210Test::aStartedSessionOfABoardThatStaysIdleIsCancelled()
+{
+    setUpSupplying();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SupplyBench bench(db);
+    bench.supply.setRecoveryMs(300, 600);
+    QVERIFY(bench.session.login(7, "secret1"));
+    QVERIFY(startBus(&bench.bus, &bench.boards));
+    QTRY_VERIFY_WITH_TIMEOUT(bench.bus.isOnline(1), 3000);
+    QVERIFY(SupplyQueue::add(db, 1, code(3000000041), "D", QDateTime::currentDateTime()).ok);
+    const quint32 session = SupplyQueue::begin(db, 1, 1500, QDateTime::currentDateTime());
+    QVERIFY(bench.supply.isLocked(1));
+    QCOMPARE(bench.boards.board(1).state, int(BoardProtocol::StateIdle));
+
+    QTRY_VERIFY_WITH_TIMEOUT(!bench.supply.isLocked(1), 5000);
+    QCOMPARE(one("SELECT status FROM supply_sessions WHERE session_id = " + QString::number(session)).toString(), QString("cancelled"));
+    QCOMPARE(SupplyQueue::entries(db, 1).size(), 1);                           // the tickets are still in the queue, free to be changed
+    QVERIFY(bench.supply.clear(1));
+
+    // a board that does not answer is not an idle board: its fill may be running, so its session stays
+    SupplyQueue::begin(db, 1, 1500, QDateTime::currentDateTime());
+    bench.boards.board(1).silent = true;
+    QTest::qWait(2500);
+    QVERIFY(bench.supply.isLocked(1));
+}
+
 void Smart210Test::theClearButtonOfTheSessionsTabTakesTheTicketsOutOfTheQueue()
 {
     setUpSupplying();

@@ -551,7 +551,17 @@
         <translation>Choose a nozzle first.</translation>
     </message>
     <message>
+        <location filename="../src/supplies/SupplySession.cpp" line="366"/>
+        <source>Nozzle %1: the start is sent again.</source>
+        <translation>Nozzle %1: the start is sent again.</translation>
+    </message>
+    <message>
         <location filename="../src/supplies/SupplySession.cpp" line="378"/>
+        <source>Nozzle %1: the fill did not start. Its tickets are free again.</source>
+        <translation>Nozzle %1: the fill did not start. Its tickets are free again.</translation>
+    </message>
+    <message>
+        <location filename="../src/supplies/SupplySession.cpp" line="422"/>
         <source>Nozzle %1: the board started a fill with another session id.</source>
         <translation>Nozzle %1: the board started a fill with another session id.</translation>
     </message>
@@ -656,13 +666,13 @@
         <translation type="vanished">The supply could not be saved.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="275"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="277"/>
         <source>Nozzle %1: the queue was cleared at the dispenser.</source>
         <translation>Nozzle %1: the queue was cleared at the dispenser.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="327"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="381"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="330"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="425"/>
         <source>Nozzle %1 started: %2 kg.</source>
         <translation>Nozzle %1 started: %2 kg.</translation>
     </message>
@@ -675,8 +685,8 @@
         <translation type="vanished">Nozzle %1 does not answer. The tickets stay: press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="365"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="448"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="408"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="496"/>
         <source>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</source>
         <translation>Nozzle %1: no answer to the start. If the fill runs, its result is recorded by itself.</translation>
     </message>
@@ -685,33 +695,33 @@
         <translation type="vanished">Nozzle %1: the board is busy. Press Start again.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="402"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="446"/>
         <source>Nozzle %1: the result could not be saved: %2</source>
         <translation>Nozzle %1: the result could not be saved: %2</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="409"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="453"/>
         <source>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</source>
         <translation>Nozzle %1: %2 kg dispensed, but its tickets could not be matched: the supply is saved without them.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="411"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="455"/>
         <source>Nozzle %1: %2 kg dispensed. %3 kg of the card&apos;s ticket went back to the card.</source>
         <translation>Nozzle %1: %2 kg dispensed. %3 kg of the card&apos;s ticket went back to the card.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="413"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="457"/>
         <source>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</source>
         <translation>Nozzle %1: %2 kg dispensed. A remainder ticket of %3 kg is made.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="415"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="459"/>
         <source>Nozzle %1: %2 kg dispensed.</source>
         <translation>Nozzle %1: %2 kg dispensed.</translation>
     </message>
     <message>
-        <location filename="../src/supplies/SupplySession.cpp" line="437"/>
-        <location filename="../src/supplies/SupplySession.cpp" line="444"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="481"/>
+        <location filename="../src/supplies/SupplySession.cpp" line="492"/>
         <source>Nozzle %1: %2</source>
         <translation>Nozzle %1: %2</translation>
     </message>
