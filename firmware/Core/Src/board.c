@@ -264,6 +264,21 @@ uint32_t board_live_grams(const Board *b)
     return g;
 }
 
+uint32_t board_live_ml(const Board *b)
+{
+    uint32_t g, ml;
+
+    if (b->state == STATE_DONE) {
+        return b->p.result.dispensed_ml;
+    }
+    if (b->state != STATE_DISPENSING) {
+        return 0;
+    }
+    partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
+
+    return ml;
+}
+
 /* The fill is over: the result is held (in the memory first), then the state shows it. */
 static void finish_fill(Board *b, uint8_t reason)
 {

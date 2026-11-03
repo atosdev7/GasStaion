@@ -140,4 +140,7 @@ uint32_t board_ml_of_grams(const Config *c, uint32_t grams);
 /* What the display shows while a fill runs: the grams so far (never more than the preset). */
 uint32_t board_live_grams(const Board *b);
 
+/* The same in millilitres: what the litres display shows (the fill that runs, or the result that waits). */
+uint32_t board_live_ml(const Board *b);
+
 #endif

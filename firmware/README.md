@@ -8,16 +8,16 @@ The board of one nozzle: it talks to the Smart210 over RS-485 by [PROTOCOL.md](.
 |---|---|
 | `board.c/h`, `hal.h`, `checksum.c/h` | The core, with no STM32 code: frame parser, answers, state machine, both modes, the fill (counts, pump, hook, no flow), the held result, recovery after a power cut. `hal.h` is the table of what it needs from the hardware (it now has `beep`, for SELECT). |
 | `store.c/h` | The state over a power cut: a ring of 64-byte records with CRC-32 in the SPI flash. A write that the power cut interrupts is ignored at the next start. |
-| `ui.c/h` | What the display shows in each state, the select key, the entry of the amount in manual mode. |
+| `ui.c/h` | What the four displays show in each state (kg, litres, density, and the keyboard board's display), the keys (select and clear are reported, digits and ENTER type the amount in manual mode), and the pass of the main loop that scans the keyboard and refreshes the display board. |
 | `w25q.c/h` | The 25Q32 on SPI3 (`ROM_CS`) as the flash of `Store`. |
 | `port.c/h` | The board under the core: flow meter counter (TIM1), relays 1 and 2 (pump), the hook (`SWITCH`), RTC, serial number, RS-485 (USART6, receive interrupt, `RS485_RE`), beeper, LEDs. |
 | `app.c/h` | `app_init()` and `app_loop()`, called from `main.c` (in its USER CODE regions). |
 | `board_config.h` | The address of the board, the polarity of relays, hook, beeper and LEDs, where the state lives in the flash. |
-| `ui_drivers.h`, `ui_drivers_weak.c` | **The four functions you write**: `ui_lcd_init`, `ui_lcd_clear`, `ui_lcd_print(row, col, text)`, `ui_key_read()`. The weak versions in `ui_drivers_weak.c` do nothing, so the project builds before yours are in; yours replace them. |
+| `ui_drivers.h`, `ui_drivers_weak.c` | **The three functions of your display and keyboard drivers** (only declared here): `UpdateDisplay(kg, litres, density, keypad)` stores the texts of the four displays, `RefreshDisplay()` sends them to the display board (2 x 6 digits and 1 x 4 digits; blocks 8 to 10 ms), `ScanKeyboardAndRefreshDisplay()` scans the keys and refreshes the keyboard board's own display of 6 to 8 digits (blocks about 20 ms) and returns a `UI_KEY_*` code for a new press. The weak versions in `ui_drivers_weak.c` do nothing, so the project builds before yours are in; yours replace them. |
 
 ## What you have to do
 
-1. Write the four functions of `ui_drivers.h` with your LCD and keyboard code. Key codes are in `ui.h` (`UI_KEY_0` to `UI_KEY_9`, point, enter, clear, select). Set `UI_LCD_ROWS` and `UI_LCD_COLS` in `ui.h` to the size of the display (2 x 16 now).
+1. Your display and keyboard drivers must provide the three functions of `ui_drivers.h`. The text of a display has one character per digit, right aligned (a `.` after a digit lights its point, it takes no digit); the characters are `0`-`9`, blank, `-` and the letters `E`, `r`, `b`, `A`, `L` ("Err", "bAL"). Key codes are in `ui.h` (`UI_KEY_0` to `UI_KEY_9`, point, enter, clear, select). `UI_KEYPAD_DIGITS` in `ui_drivers.h` is 8: set it to the digits of the keyboard board's display.
 2. In `board_config.h`: the address of this board (`BOARD_ADDRESS`, now 1), and check the levels that switch the beeper and the LEDs on (`BEEP_ON_LEVEL`, `LED_ON_LEVEL`; the LEDs are assumed lit by a low level).
 3. **The ROM:** the board writes its state into the last 8 sectors (32 KB, from `0x3F8000`) of the 25Q32. If the ROM holds anything else there (fonts?), change `STORE_BASE`. A region that holds data that is not ours is not touched: the board reports a memory fault (fault 3 in POLL). After checking that the region is free, set `STORE_AUTOFORMAT` to 1 for the first start and back to 0.
 4. Calibrate: `pulses per litre` set from the terminal's Machine Config is in **counts of the TIM1 encoder**, which counts all four edges of A/B (4 counts per cycle).
@@ -44,3 +44,10 @@ builds and runs `test_core.c` (the protocol, the examples of PROTOCOL.md section
 ## Build
 
 Open the folder in STM32CubeIDE as an existing project and build. The same files were compiled and linked with the ARM GCC of CubeIDE against the generated HAL (about 19 KB of flash and 4 KB of RAM).
+
+## Time that the display and keyboard calls take
+
+`ui_tick` calls `ScanKeyboardAndRefreshDisplay()` (about 20 ms) and `RefreshDisplay()` (8 to 10 ms) at every pass of the main loop, and both block, so a pass takes about 30 ms. Two things follow, to be dealt with on the bench (work plan 6.6):
+
+- **The answer to a request** goes out from the main loop, so a request that arrives while a call blocks is answered up to about 20 ms late (the bytes are not lost: the receive interrupt keeps them). PROTOCOL.md says 20 ms and the Smart210 waits 100 ms, so it works, but the 20 ms of the document is not kept; either the document says 30 ms or the display work moves out of the way of the line.
+- **The end of a fill** is decided in `board_tick`, which now runs about every 30 ms. At a flow of F counts per second the pump stops up to F x 0.03 counts late (at 1000 counts per litre and 0.5 L/s that is 15 counts, 15 ml, about 12 g) and the fill goes past its preset by that: the station never accepts that (the board must never give more than the preset). `early_close_pulses` (the coasting) can be tuned on the bench for one flow, but the safe way is to stop the pump in an interrupt: the compare channel of TIM1 at `target - early_close_pulses` switches the relay off in its interrupt, and `board_tick` only finishes the result. The same goes for the POWER_OFF input (an EXTI interrupt that stops the pump at once instead of a read in the main loop). Neither is written yet.

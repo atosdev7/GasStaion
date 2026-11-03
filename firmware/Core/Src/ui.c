@@ -41,17 +41,6 @@ static void out_uint(Out *o, uint32_t v)
     }
 }
 
-/* grams as kilograms with two decimals: 12340 -> "12.34" (the third decimal is dropped) */
-static void out_kg(Out *o, uint32_t grams)
-{
-    const uint32_t hundredths = grams / 10;
-
-    out_uint(o, hundredths / 100);
-    out_char(o, '.');
-    out_char(o, (char)('0' + (hundredths / 10) % 10));
-    out_char(o, (char)('0' + hundredths % 10));
-}
-
 /* ---------------------------------------------------------------- the entry of an amount */
 
 /* "12.5" is 12 kg 500 g. At most 3 digits before the point and 2 after. Returns 0 for nothing or a lone point. */
@@ -118,109 +107,171 @@ static void entry_add(Ui *ui, char c)
     }
 }
 
-static void note(Ui *ui, const char *text)
+/* a key that is refused: "Err" on the kg display for a moment */
+static void note(Ui *ui)
 {
-    strncpy(ui->note, text, UI_LCD_COLS);
-    ui->note[UI_LCD_COLS] = 0;
     ui->note_ms = NOTE_MS;
 }
 
 /* ---------------------------------------------------------------- what is shown */
 
-static void compose(const Ui *ui, char lines[UI_LCD_ROWS][UI_LCD_COLS + 1])
+/* a number with two decimals in `digits` digits, right aligned, leading zeros blank: 15.00 in 6 digits is "  15.00"; too big for the digits: "----.--" */
+static void text_fixed2(char *out, uint8_t digits, uint32_t hundredths)
+{
+    const uint8_t whole_digits = (uint8_t)(digits - 2);
+    uint32_t cap = 1;
+    uint32_t whole = hundredths / 100;
+    uint32_t frac = hundredths % 100;
+    uint8_t used = 1;
+    uint32_t t;
+    uint8_t i;
+    Out o;
+
+    o.at = out;
+    o.left = UI_TEXT_MAX + 1;
+    out[0] = 0;
+    for (i = 0; i < whole_digits; ++i) {
+        cap *= 10;
+    }
+    if (whole >= cap) {
+        for (i = 0; i < whole_digits; ++i) {
+            out_char(&o, '-');
+        }
+        out_text(&o, ".--");
+
+        return;
+    }
+    for (t = whole; t >= 10; t /= 10) {
+        ++used;
+    }
+    for (i = used; i < whole_digits; ++i) {
+        out_char(&o, ' ');
+    }
+    out_uint(&o, whole);
+    out_char(&o, '.');
+    out_char(&o, (char)('0' + frac / 10));
+    out_char(&o, (char)('0' + frac % 10));
+}
+
+/* the grams as kg with two decimals (the third decimal is dropped) */
+static void text_kg(char *out, uint8_t digits, uint32_t grams)
+{
+    text_fixed2(out, digits, grams / 10);
+}
+
+/* a text right aligned in `digits` digits (a '.' takes no digit) */
+static void text_right(char *out, uint8_t digits, const char *text)
+{
+    uint8_t used = 0;
+    const char *p;
+    Out o;
+
+    for (p = text; *p; ++p) {
+        if (*p != '.') {
+            ++used;
+        }
+    }
+    o.at = out;
+    o.left = UI_TEXT_MAX + 1;
+    out[0] = 0;
+    while (used < digits) {
+        out_char(&o, ' ');
+        ++used;
+    }
+    out_text(&o, text);
+}
+
+/* the density, kg per litre x 10000, in 4 digits: 8300 is "0.830" */
+static void text_density(char *out, const Config *c)
+{
+    Out o;
+    uint32_t v;
+
+    o.at = out;
+    o.left = UI_TEXT_MAX + 1;
+    out[0] = 0;
+    if (c->density == 0) {
+        out_text(&o, "----");
+
+        return;
+    }
+    v = ((uint32_t)c->density + 5) / 10;       /* thousandths */
+    out_uint(&o, v / 1000);
+    out_char(&o, '.');
+    out_char(&o, (char)('0' + (v / 100) % 10));
+    out_char(&o, (char)('0' + (v / 10) % 10));
+    out_char(&o, (char)('0' + v % 10));
+}
+
+enum { SHOW_KG = 0, SHOW_LITRES, SHOW_DENSITY, SHOW_KEYPAD };
+
+static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
 {
     const Board *b = ui->board;
-    Out o0, o1;
-    char fuel[2];
-    uint8_t r;
+    const int manual = b->p.config.mode == MODE_MANUAL;
+    char tmp[UI_TEXT_MAX + 1];
 
-    for (r = 0; r < UI_LCD_ROWS; ++r) {
-        lines[r][0] = 0;
-    }
-    o0.at = lines[0];
-    o0.left = UI_LCD_COLS + 1;
-    o1.at = lines[UI_LCD_ROWS > 1 ? 1 : 0];
-    o1.left = UI_LCD_COLS + 1;
-    if (UI_LCD_ROWS < 2) {
-        return; /* a one-line display shows the state only */
-    }
-    fuel[0] = b->p.config.fuel[0] ? (char)b->p.config.fuel[0] : '-';
-    fuel[1] = 0;
+    text_fixed2(text[SHOW_KG], UI_KG_DIGITS, 0);
+    text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, 0);
+    text_density(text[SHOW_DENSITY], &b->p.config);
+    text_right(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, "");
 
     switch (b->state) {
     case STATE_IDLE:
         if (board_shown_grams(b) > 0) {
-            out_text(&o0, "Balance");                      /* SHOW_BALANCE: a card's balance, not an amount to dispense */
-            out_kg(&o1, board_shown_grams(b));
-            out_text(&o1, " kg");
-        } else if (b->p.config.mode == MODE_MANUAL) {
-            out_text(&o0, "Enter amount kg");
-            out_text(&o1, ui->entry);
-            out_char(&o1, '_');
-        } else {
-            out_char(&o0, 'N');
-            out_uint(&o0, b->address);
-            out_char(&o0, ' ');
-            out_text(&o0, fuel);
-            out_text(&o0, " AUTO");
-            out_text(&o1, (b->p.config.density == 0 || b->p.config.pulses_x100 == 0) ? "Not configured" : "Press SELECT");
+            text_kg(text[SHOW_KG], UI_KG_DIGITS, board_shown_grams(b));      /* SHOW_BALANCE: a card's balance, not an amount to dispense */
+            text_right(text[SHOW_LITRES], UI_LITRES_DIGITS, "bAL");
+        } else if (manual) {
+            text_right(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, ui->entry);       /* the amount that is being typed */
         }
         break;
     case STATE_SET:
-        out_text(&o0, "Preset ");
-        out_kg(&o0, b->preset_g);
-        out_text(&o0, "kg");
-        out_text(&o1, "Lift the nozzle");
+        text_kg(text[SHOW_KG], UI_KG_DIGITS, b->preset_g);
+        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, b->preset_g);
         break;
     case STATE_DISPENSING:
-        out_text(&o0, "Set ");
-        out_kg(&o0, b->preset_g);
-        out_text(&o0, " kg");
-        out_text(&o1, "Now ");
-        out_kg(&o1, board_live_grams(b));
-        out_text(&o1, " kg");
+        text_kg(text[SHOW_KG], UI_KG_DIGITS, board_live_grams(b));
+        text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_live_ml(b) / 10);
+        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, b->preset_g);
         break;
     case STATE_DONE:
-        out_text(&o0, "Done ");
-        out_kg(&o0, b->p.result.dispensed_g);
-        out_text(&o0, " kg");
-        out_text(&o1, b->p.config.mode == MODE_MANUAL ? "Wait for POS" : "Wait for POS");
+        text_kg(text[SHOW_KG], UI_KG_DIGITS, b->p.result.dispensed_g);
+        text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_live_ml(b) / 10);
         break;
     default:
-        out_text(&o0, "FAULT");
-        out_text(&o1, "Code ");
-        out_uint(&o1, b->fault);
+        text_right(text[SHOW_KG], UI_KG_DIGITS, "Err");
+        tmp[0] = 0;
+        {
+            Out o;
+
+            o.at = tmp;
+            o.left = sizeof(tmp);
+            out_uint(&o, b->fault);
+        }
+        text_right(text[SHOW_LITRES], UI_LITRES_DIGITS, tmp);               /* the fault code */
         break;
     }
 
-    if (ui->note_ms > 0 && ui->note[0]) {
-        o1.at = lines[1];
-        o1.left = UI_LCD_COLS + 1;
-        lines[1][0] = 0;
-        out_text(&o1, ui->note);
+    if (ui->note_ms > 0) {
+        text_right(text[SHOW_KG], UI_KG_DIGITS, "Err");                     /* a key was refused */
     }
 }
 
 static void draw(Ui *ui)
 {
-    char lines[UI_LCD_ROWS][UI_LCD_COLS + 1];
-    uint8_t r;
-    uint8_t c;
+    char text[UI_DISPLAYS][UI_TEXT_MAX + 1];
+    int changed = !ui->drawn;
+    uint8_t d;
 
-    compose(ui, lines);
-    for (r = 0; r < UI_LCD_ROWS; ++r) {
-        char padded[UI_LCD_COLS + 1];
-        size_t len = strlen(lines[r]);
-
-        memset(padded, ' ', UI_LCD_COLS);
-        padded[UI_LCD_COLS] = 0;
-        for (c = 0; c < len && c < UI_LCD_COLS; ++c) {
-            padded[c] = lines[r][c];
+    compose(ui, text);
+    for (d = 0; d < UI_DISPLAYS; ++d) {
+        if (strcmp(text[d], ui->shown[d]) != 0) {
+            changed = 1;
         }
-        if (!ui->drawn || strcmp(padded, ui->shown[r]) != 0) {
-            ui->hal->lcd_print(ui->hal->ctx, r, 0, padded);
-            memcpy(ui->shown[r], padded, UI_LCD_COLS + 1);
-        }
+    }
+    if (changed) {
+        ui->hal->update(ui->hal->ctx, text[SHOW_KG], text[SHOW_LITRES], text[SHOW_DENSITY], text[SHOW_KEYPAD]);
+        memcpy(ui->shown, text, sizeof(ui->shown));
     }
     ui->drawn = 1;
 }
@@ -234,7 +285,6 @@ static void leds(const Ui *ui)
     ui->hal->led(ui->hal->ctx, 2, s == STATE_DONE);
     ui->hal->led(ui->hal->ctx, 3, s == STATE_FAULT || ui->board->fault != 0);
 }
-
 /* ---------------------------------------------------------------- keys */
 
 static void on_key(Ui *ui, int key)
@@ -271,10 +321,8 @@ static void on_key(Ui *ui, int key)
     } else if (key == UI_KEY_ENTER) {
         const uint32_t grams = ui_entry_grams(ui);
 
-        if (grams == 0) {
-            note(ui, "Enter an amount");
-        } else if (!board_manual_amount(b, grams)) {
-            note(ui, b->p.config.density == 0 ? "Not configured" : "Cannot start");
+        if (grams == 0 || !board_manual_amount(b, grams)) {
+            note(ui);                 /* no amount, or a board that cannot take it (not configured) */
         } else {
             entry_clear(ui);
             ui->hal->beep(ui->hal->ctx, 100);
@@ -288,14 +336,13 @@ void ui_init(Ui *ui, Board *board, const UiHal *hal)
     ui->hal = hal;
     ui->board = board;
     ui->last_state = board->state;
-    hal->lcd_clear(hal->ctx);
     draw(ui);
     leds(ui);
 }
 
 void ui_tick(Ui *ui, uint32_t elapsed_ms)
 {
-    on_key(ui, ui->hal->key(ui->hal->ctx));
+    on_key(ui, ui->hal->scan(ui->hal->ctx));      /* about 20 ms: the keys are scanned and the keyboard board's display refreshed */
 
     if (ui->note_ms > 0) {
         ui->note_ms = ui->note_ms > elapsed_ms ? ui->note_ms - elapsed_ms : 0;
@@ -311,4 +358,5 @@ void ui_tick(Ui *ui, uint32_t elapsed_ms)
     }
     draw(ui);
     leds(ui);
+    ui->hal->refresh(ui->hal->ctx);                /* 8 to 10 ms: the display board gets its digits */
 }

@@ -221,23 +221,23 @@ static void port_select_beep(void *ctx)
 
 /* ---------------------------------------------------------------- the display and the keyboard (ui_drivers.h) */
 
-static void port_lcd_clear(void *ctx)
+static void port_display_update(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad)
 {
     (void)ctx;
-    ui_lcd_clear();
+    UpdateDisplay(kg, litres, density, keypad);
 }
 
-static void port_lcd_print(void *ctx, uint8_t row, uint8_t col, const char *text)
+static void port_display_refresh(void *ctx)
 {
     (void)ctx;
-    ui_lcd_print(row, col, text);
+    RefreshDisplay();
 }
 
 static int port_key(void *ctx)
 {
     (void)ctx;
 
-    return ui_key_read();
+    return ScanKeyboardAndRefreshDisplay();
 }
 
 /* ---------------------------------------------------------------- start up */
@@ -267,9 +267,9 @@ void port_init(Hal *hal, UiHal *ui)
     hal->serial = port_serial;
 
     ui->ctx = 0;
-    ui->lcd_clear = port_lcd_clear;
-    ui->lcd_print = port_lcd_print;
-    ui->key = port_key;
+    ui->update = port_display_update;
+    ui->refresh = port_display_refresh;
+    ui->scan = port_key;
     ui->beep = port_beep;
     ui->led = port_led;
 }

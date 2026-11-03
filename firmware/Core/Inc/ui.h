@@ -2,25 +2,22 @@
 #define UI_H
 
 /*
- * The dispenser's own display and keyboard: what is shown in each state of the board, the select key (auto mode) and the entry of the
- * amount (manual mode). No hardware in here: the LCD, the keyboard, the beeper and the LEDs come in through UiHal (port.c fills it
- * in; the LCD and keyboard drivers are the ones in ui_drivers.h).
+ * The dispenser's own displays and keyboard: what is shown in each state of the board, the keys (select and clear are reported to the Smart210,
+ * the digits and ENTER type the amount in manual mode). No hardware in here: the displays, the keyboard, the beeper and the LEDs come in through
+ * UiHal (port.c fills it in; the display and keyboard drivers are the three functions of ui_drivers.h).
  *
- * Auto mode:    IDLE "Press SELECT"; SELECTED "Wait for POS"; ARMED "Preset .. kg / Lift the nozzle"; DISPENSING "Set .. kg / Now .. kg";
- *               RESULT "Done .. kg"; FAULT "FAULT / Code n".
- * Manual mode:  IDLE "Enter amount kg" and the digits typed (0-9, the point, CLEAR deletes the last, ENTER starts the fill); the rest as above.
+ * The four displays (texts as ui_drivers.h describes them):
+ *   kg (6 digits):       0.00 when idle; the balance of SHOW_BALANCE; the preset (SET); the kg so far (DISPENSING); the kg of the result (DONE);
+ *                        "Err" for a moment when a key is refused and while the board is in FAULT
+ *   litres (6 digits):   0.00 when idle; "bAL" while a balance is shown; the litres so far / of the result; the fault code in FAULT
+ *   density (4 digits):  the density of the config, 0.830 for 0.8300 kg/L; "----" for a board that was never configured
+ *   keypad (8 digits):   manual mode, idle: the amount being typed; the preset while SET and DISPENSING; blank otherwise
  */
 
 #include "board.h"
+#include "ui_drivers.h"
 
 #include <stdint.h>
-
-#ifndef UI_LCD_ROWS
-#define UI_LCD_ROWS 2
-#endif
-#ifndef UI_LCD_COLS
-#define UI_LCD_COLS 16
-#endif
 
 /* The key codes the keyboard driver returns (one per press). */
 enum {
@@ -32,11 +29,14 @@ enum {
     UI_KEY_SELECT
 };
 
+#define UI_TEXT_MAX (UI_KEYPAD_DIGITS + UI_KEYPAD_DIGITS + 1)   /* the characters of a text: a digit each and, at most, a point each */
+#define UI_DISPLAYS 4                                           /* kg, litres, density, keypad */
+
 typedef struct {
     void *ctx;
-    void (*lcd_clear)(void *ctx);
-    void (*lcd_print)(void *ctx, uint8_t row, uint8_t col, const char *text);   /* writes the text at the position */
-    int (*key)(void *ctx);                                                      /* a UI_KEY_* code, UI_KEY_NONE when no new press */
+    void (*update)(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad);   /* UpdateDisplay */
+    void (*refresh)(void *ctx);                                                                              /* RefreshDisplay: 8 to 10 ms */
+    int (*scan)(void *ctx);                                                                                  /* ScanKeyboardAndRefreshDisplay: 20 ms; a UI_KEY_* code, UI_KEY_NONE when no new press */
     void (*beep)(void *ctx, uint16_t ms);
     void (*led)(void *ctx, uint8_t index, int on);                              /* 0 selected/armed, 1 dispensing, 2 result, 3 fault */
 } UiHal;
@@ -46,18 +46,18 @@ typedef struct {
 typedef struct {
     const UiHal *hal;
     Board *board;
-    char shown[UI_LCD_ROWS][UI_LCD_COLS + 1];
+    char shown[UI_DISPLAYS][UI_TEXT_MAX + 1];   /* what the displays were last given */
     int drawn;
     char entry[UI_ENTRY_MAX + 1];
     uint8_t entry_len;
-    char note[UI_LCD_COLS + 1];     /* a short message on the second line (for example "Not ready") */
-    uint32_t note_ms;
+    uint32_t note_ms;               /* while it runs the kg display says "Err": a key was refused */
     uint8_t last_state;
 } Ui;
 
 void ui_init(Ui *ui, Board *board, const UiHal *hal);
 
-/* Polls the keyboard, reacts, and redraws what changed. Call it in the main loop with the milliseconds since the last call. */
+/* Scans the keyboard (about 20 ms), reacts, gives the displays what changed and refreshes the display board (8 to 10 ms): one call takes about 30 ms. Call it in
+   the main loop with the milliseconds since the last call. */
 void ui_tick(Ui *ui, uint32_t elapsed_ms);
 
 /* The amount typed so far in grams (0 when it is not a valid amount); for the tests. */

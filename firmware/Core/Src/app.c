@@ -16,7 +16,6 @@ void app_init(void)
 {
     port_init(&hal_, &ui_hal_);
     board_init(&board_, &hal_, BOARD_ADDRESS, 0);
-    ui_lcd_init();
     ui_init(&ui_, &board_, &ui_hal_);
     last_ms_ = HAL_GetTick();
 }
