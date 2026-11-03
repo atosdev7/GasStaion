@@ -41,3 +41,19 @@ Read in this pass: `SyncClient`, `SyncStore` (config and ticket rows), `Migrator
 | T9 | Info | **A newer database than the program is refused with a plain message** ("version 13 but this program only knows 12") and the program does not start; this happens when an older build is run on a database a newer one migrated (it hit the dev database on 2026-11-01). Nothing to fix; keep the migrations forward only, and never run an older build on a station database. | `Migrator::apply` |
 
 Looked at and found right in this pass: the download applies each page in one transaction and acknowledges only what it stored; a row that waits for its upload is never overwritten by a download; the purge never removes a started session, an unused remainder ticket or a card's history; a card top-up and a card ticket check the card, the balance and the clock inside one transaction; the PIN of a card is checked before a fill, wrong tries are counted and uploaded; the scanner decoder drops keys that come too slowly to be one scan.
+
+## Third pass (2026-11-02)
+
+Read in this pass: `NozzleConfigSync` (all), `BoardProtocol` (frames, CRC, parsers), `TicketSalePage::save`, `ManualSupplyPage` (the ticket list, the summary and the save), `ReviewPage` (delete, comment, date, upload), the card reader (the line and frame formats, `Cards::normalizeUid`), `SupplierScanner` / `ScannerReader` (thread and device handling).
+
+No new finding that needs a change. What I checked:
+
+- The frame parser drops bytes until an STX, ignores a header that claims more than the largest frame, and skips a frame whose CRC is wrong one byte at a time, so noise on the bus cannot wedge it or run it past a buffer.
+- A config sent to a board is saved here first and only counted as verified when the board answers with the same values; a board that is not answering or holds a different config leaves the nozzle marked "Board differs" and the message says so.
+- The ticket sale page builds the items from the tickets it resolved (spec, range, quantity, kg), so the new check of `TicketSale::create` agrees with it.
+- The manual supply page takes a ticket only through the same checks as a scan (`SupplyQueue::check`, `mixProblem`), keeps no ticket twice, and Save is enabled only when the tickets cover what was dispensed and the litres are there; the cashier's chosen time reaches `supplied_at` and the business day, the clock guard looks at the records the terminal stamped itself, not at that time.
+- The Review screen asks twice before it deletes a sale (the second press within 6 s), refuses a sale that was uploaded, made by another cashier, used, queued or settled against, and a change of a comment or a date marks the record to be uploaded again (the web app refuses it when the accountant has confirmed the record).
+- A card id read from the reader is cleaned (spaces and unprintable characters removed, upper case) in one place before it is looked up or stored; a line of another kind than the card line is ignored.
+- The scanner is read in its own thread and its barcode reaches the session through a queued signal; stopping it waits for the thread.
+
+Not read: the layout and theme code (`AppShell`, the `.ui` files, `Theme`), `SupplyPage`, `DispensersPage`, `SettingsPage`, `MachineConfigPage` (the page code around the logic above), `HangulInput`. They hold no business rule that the pages read above do not already call. The terminal audit is complete at this level; the next useful check is on the real hardware (task 6.6): the START repeat, a power cut in the middle of a fill, the converter dropping, and a board that is replaced.
