@@ -1,4 +1,6 @@
 #include "LoanSettlement.h"
+
+#include "Decimal.h"
 #include "Clock.h"
 #include "Checkout.h"
 
@@ -101,6 +103,19 @@ LoanSettlement::Scan LoanSettlement::scan(QSqlDatabase db, const QString &barcod
     scan.kgX100 = query.value(1).toLongLong();
 
     return scan;
+}
+
+QString LoanSettlement::resultText(const Result &result)
+{
+    const QString settled = QObject::tr("Settled %1 tickets, %2 kg.").arg(result.tickets).arg(Decimal::format(result.kgX100, 2));
+    if (result.balanceX100 > 1) {
+        return settled + " " + QObject::tr("Still owed: %1 kg").arg(Decimal::format(result.balanceX100, 2));
+    }
+    if (result.balanceX100 < -1) {
+        return settled + " " + QObject::tr("The loan is paid off. The tickets were worth %1 kg more than was owed.").arg(Decimal::format(-result.balanceX100, 2));
+    }
+
+    return settled + " " + QObject::tr("The loan is paid off.");
 }
 
 LoanSettlement::Result LoanSettlement::create(QSqlDatabase db, const QString &loanId, const QList<qlonglong> &barcodes, int userId, const QDateTime &now)

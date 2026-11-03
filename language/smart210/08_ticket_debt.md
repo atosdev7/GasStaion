@@ -42,3 +42,7 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | This ticket is not known on this terminal. | TicketSale, SupplyQueue, LoanSettlement |
 | Scan the tickets first. | TicketSale, LoanSettlement |
 | it is twice in the list. | TicketSale, SupplyRecord, LoanSettlement |
+| Settled %1 tickets, %2 kg. | LoanSettlement |
+| Still owed: %1 kg | LoanSettlement |
+| The loan is paid off. The tickets were worth %1 kg more than was owed. | LoanSettlement |
+| The loan is paid off. | LoanSettlement |

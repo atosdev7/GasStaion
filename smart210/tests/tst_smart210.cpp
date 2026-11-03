@@ -409,6 +409,7 @@ private slots:
     void aSettlementCanBeUploadedAsItIs();
     void aDownloadDoesNotUndoASettlementThatIsNotUploadedYet();
     void theLoanScreenListsTheDebtsAndSettlesTheChosenOneInADialog();
+    void aLoanThatWasOverSettledSaysSoAfterTheSettlement();
 
     void theBusinessDayRunsFromNineToNine();
     void theCheckoutStampsOpenRecordsByTheirOwnDay();
@@ -5493,6 +5494,26 @@ void Smart210Test::aDownloadDoesNotUndoASettlementThatIsNotUploadedYet()
     QCOMPARE(query.value(0).toLongLong(), qlonglong(500));
 }
 
+
+// What the cashier is told after a settlement: still owed, paid off, or paid off with the surplus the tickets were worth (0.01 kg is rounding).
+void Smart210Test::aLoanThatWasOverSettledSaysSoAfterTheSettlement()
+{
+    LoanSettlement::Result result;
+    result.ok = true;
+    result.tickets = 2;
+    result.kgX100 = 2500;
+
+    result.balanceX100 = 1500;
+    QCOMPARE(LoanSettlement::resultText(result), QString("Settled 2 tickets, 25.00 kg. Still owed: 15.00 kg"));
+    result.balanceX100 = 1;
+    QCOMPARE(LoanSettlement::resultText(result), QString("Settled 2 tickets, 25.00 kg. The loan is paid off."));
+    result.balanceX100 = 0;
+    QCOMPARE(LoanSettlement::resultText(result), QString("Settled 2 tickets, 25.00 kg. The loan is paid off."));
+    result.balanceX100 = -1;
+    QCOMPARE(LoanSettlement::resultText(result), QString("Settled 2 tickets, 25.00 kg. The loan is paid off."));
+    result.balanceX100 = -500;
+    QCOMPARE(LoanSettlement::resultText(result), QString("Settled 2 tickets, 25.00 kg. The loan is paid off. The tickets were worth 5.00 kg more than was owed."));
+}
 
 void Smart210Test::theLoanScreenListsTheDebtsAndSettlesTheChosenOneInADialog()
 {

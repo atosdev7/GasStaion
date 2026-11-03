@@ -42,6 +42,10 @@ public:
         qlonglong balanceX100; // what is still owed on the loan afterwards (negative when more was surrendered than lent)
     };
 
+    // What the cashier is told after a settlement: what is still owed, that the loan is paid off, or that it is paid off and the tickets were worth more than was owed (the
+    // web app keeps that surplus as a credit of the loan and warns about it; 0.01 kg is rounding).
+    static QString resultText(const Result &result);
+
     // The loans that still have a balance, oldest first (what the web app calls open loans).
     static QList<Loan> openLoans(QSqlDatabase db);
 

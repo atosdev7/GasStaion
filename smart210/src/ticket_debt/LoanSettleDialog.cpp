@@ -60,6 +60,7 @@ void LoanSettleDialog::showStatus(const QString &message, bool ok)
 void LoanSettleDialog::showTotals()
 {
     totals_->setText(tr("%1 tickets, %2 kg, balance after: %3 kg").arg(list_->rowCount()).arg(Decimal::format(kgX100_, 2)).arg(Decimal::format(balanceX100_ - kgX100_, 2)));
+    Theme::setState(totals_, balanceX100_ - kgX100_ < -1 ? "warning" : "");   // the tickets are worth more than the loan owes
     ui_->settleButton->setEnabled(list_->rowCount() > 0);
 }
 
@@ -138,8 +139,6 @@ void LoanSettleDialog::settle()
         return;
     }
 
-    message_ = result.balanceX100 > 1
-        ? tr("Settled %1 tickets, %2 kg. Still owed: %3 kg").arg(result.tickets).arg(Decimal::format(result.kgX100, 2)).arg(Decimal::format(result.balanceX100, 2))
-        : tr("Settled %1 tickets, %2 kg. The loan is paid off.").arg(result.tickets).arg(Decimal::format(result.kgX100, 2));
+    message_ = LoanSettlement::resultText(result);
     accept();
 }
