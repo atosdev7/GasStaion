@@ -341,8 +341,8 @@ static void on_key(Ui *ui, int key)
     ui->hal->beep(ui->hal->ctx, 30);
 
     if (key == UI_KEY_TOTAL) {
-        /* manual mode, when no fill runs: the total of the board for a few seconds; the key does nothing in auto mode */
-        if (manual && (b->state == STATE_IDLE || b->state == STATE_SET)) {
+        /* both modes, when no fill runs and no result waits: the total of the board for a few seconds */
+        if ((b->state == STATE_IDLE || b->state == STATE_SET)) {
             ui->total_ms = UI_TOTAL_SHOW_MS;
         }
 

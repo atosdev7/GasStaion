@@ -3,7 +3,7 @@
 
 /*
  * The dispenser's own displays and keyboard: what is shown in each state of the board, the keys (select and clear are reported to the Smart210,
- * the digits, Dot and Set type and take the amount in manual mode, Total shows the total). No hardware in here: the displays, the keyboard, the beeper and the LEDs come in through
+ * the digits, Dot and Set type and take the amount in manual mode, Total shows the total in both modes). No hardware in here: the displays, the keyboard, the beeper and the LEDs come in through
  * UiHal (port.c fills it in; the display and keyboard drivers are the three functions of ui_drivers.h).
  *
  * The four displays (texts as ui_drivers.h describes them):

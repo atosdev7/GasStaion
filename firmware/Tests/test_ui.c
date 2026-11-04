@@ -479,10 +479,17 @@ static void test_total_key(void)
     CHECK_EQ(rig.board.state, STATE_DISPENSING);
     CHECK_DISPLAY(KG, "   0.00");
 
-    /* the auto board: the Total key does nothing, Function is the select key */
+    /* the auto board: the Total key works too (not while a fill runs or a result waits), Function is the select key */
     rig_new(&rig);
     boot(&rig, MODE_AUTO, 2);
+    rig.board.p.total_g = 4567891ULL * 1000;
     type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(KG, "     4");
+    CHECK_DISPLAY(LITRES, "567891");
+    tick(&rig, 5100);
+    CHECK_DISPLAY(LITRES, "   0.00");
+    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_FUNCTION);                 /* any other key puts the usual display back, and works as usual */
     CHECK_DISPLAY(LITRES, "   0.00");
     type(&rig, UI_KEY_FUNCTION);
     CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
