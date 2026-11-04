@@ -267,6 +267,7 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
         break;
     case STATE_SET:
         text_kg(text[SHOW_KG], UI_KG_DIGITS, b->preset_g);
+        text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_ml_of_grams(&b->p.config, b->preset_g) / 10);   /* the same amount in litres, by the density */
         text_kg(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, b->preset_g);
         break;
     case STATE_DISPENSING:

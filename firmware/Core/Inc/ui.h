@@ -9,7 +9,7 @@
  * The four displays (texts as display.h and keyboard.h describe them):
  *   kg (6 digits):       0.00 when idle; the balance of SHOW_BALANCE; the preset (SET); the kg so far (DISPENSING); the kg of the result (DONE);
  *                        "Err" for a moment when a key is refused and while the board is in FAULT
- *   litres (6 digits):   0.00 when idle; "bAL" while a balance is shown; the litres so far / of the result; the fault code in FAULT
+ *   litres (6 digits):   0.00 when idle; "bAL" while a balance is shown; the preset in litres by the density (SET); the litres so far / of the result; the fault code in FAULT
  *   density (4 digits):  the density of the config, 0.830 for 0.8300 kg/L; "----" for a board that was never configured
  *   keypad (8 digits):   manual mode, idle: the amount being typed; the preset while SET and DISPENSING; blank otherwise
  */

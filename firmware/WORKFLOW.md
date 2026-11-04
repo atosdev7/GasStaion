@@ -278,7 +278,7 @@ flowchart TD
     B --> C{"Set key"}
     C -- "nothing typed or zero" --> X["Err on the kg display for 1.5 s<br/>nothing changes"]
     X --> B
-    C -- "an amount" --> D["Preset waits, state SET<br/>long beep, the typed text is cleared<br/>LCD: P and the preset"]
+    C -- "an amount" --> D["Preset waits, state SET<br/>long beep, the typed text is cleared<br/>kg and litres show the preset together, by the density<br/>LCD: P and the preset"]
     D -- "Clear key" --> A
     D -- "gun up, 10 picks agree, about 100 ms" --> E["Fill runs, state DISPENSING<br/>pump on while the gun is up<br/>LCD: F and the preset, kg and litres count up"]
     E -- "gun hung" --> P["Pump stops, the fill waits<br/>3 s on the hook after the flow began ends it"]

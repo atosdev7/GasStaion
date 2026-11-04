@@ -276,6 +276,7 @@ static void test_auto_screens(void)
     tick(&rig, 10);
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_DISPLAY(KG, "  15.00");
+    CHECK_DISPLAY(LITRES, "  18.07");     /* the same amount in litres by the density: 15 kg at 0.830 */
     CHECK_KEYPAD("   15.00");
     CHECK_EQ(rig.led[1], 1);
 
@@ -407,6 +408,7 @@ static void test_manual_entry(void)
     CHECK_KEYPAD("   12.57");
     CHECK_EQ(ui_entry_grams(&rig.ui), 12570);
     CHECK_DISPLAY(KG, "   0.00");   /* the kg display waits for the fill */
+    CHECK_DISPLAY(LITRES, "   0.00");   /* and so does the litres display: the typed digits are only on the keyboard's LCD */
 
     type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_CLEAR);
@@ -445,6 +447,7 @@ static void test_manual_entry(void)
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_EQ(rig.board.preset_g, 8300);
     CHECK_DISPLAY(KG, "   8.30");
+    CHECK_DISPLAY(LITRES, "  10.00");     /* kg and litres together by the density: 8.30 kg is 10 litres */
     CHECK_KEYPAD("    8.30");
     CHECK_EQ(rig.ui.entry_len, 0);
     flow(&rig, 1, 0);                                        /* the gun is up (the rig's hook): the board starts by itself */
