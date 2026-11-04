@@ -39,6 +39,16 @@ It is a manual test (people at the screens) that uses the same data and rules as
 
 Every table below has a **Result** column: write P (pass), F (fail) or N (not run), and the defect number from 4.2 for an F. Keep one copy of this file per run (`TEST_RUN_<date>.md`). Take a screenshot of every F.
 
+### 0.4 The size of a business day
+
+A business day of this station is **100 to 120 spot sales, 1 to 3 card sales (top-ups) and 180 to 250 supplies**, besides the ticket sales, the debt payments and the loans. Every simulated day of part 3 stays inside these ranges (3.1). The records of part 2 are the **checked** records inside a full day: they are made by hand and followed to the end; the rest of the day is filler of the same kinds.
+
+- **Spot sales** (100 to 120): typed on the terminal's Spot sale tab, about 20 seconds each, so 40 minutes by hand; a mix of 60% diesel and 40% gasoline, 1 to 40 kg, mostly *Sale* with a few *Self use*, *Other* and *Ticket loan* (about 1 in 12).
+- **Card sales** (1 to 3): top-ups, 20 to 100 kg, each followed by a card fill on a nozzle.
+- **Supplies** (180 to 250): scan tickets at a nozzle, lift the gun, fill: about 2 minutes by hand, so 6 to 8 hours of one person's time a day. They need the boards (the simulator) and the ticket stock: about 2 tickets a supply, so 400 to 500 of the 47,700 tickets a day. Mix: 5 nozzles (1 and 2 gasoline, 3 and 4 diesel auto, 5 diesel manual), about 85% filled to the preset, 10% stopped short (a remainder ticket), 5% with a remainder ticket used again.
+- **Fuel:** at 30 kg a supply the day takes about 6,000 kg out of the tanks (4,000 diesel, 2,000 gasoline), so the week takes about 43 tonnes (about 28 diesel and 14 gasoline). The tanks start full (T2 40 t, T1 25 t) and last the week; to test the limits take a tank low with outbounds on Day 5 and deliver once in the middle of the week, into a tank that is partly full (L4).
+
+**The volume is made by a generator, not by hand.** Typing 200 supplies a day is not a realistic test of anything but patience. `e2e.exe devrun` (Dev.inc) already runs a working day on the terminal classes with the simulated boards, but only with 100 spot sales and a few dozen supplies: it has to be given the three counts (spot, card, supplies) and the mix above before it can run the days of this plan. Until then, run the checked records by hand and the filler with the generator as it is, and write the day's counts down in the ledger (3.9).
 ---
 
 ## 1. Initialize the data of the web app
@@ -64,40 +74,69 @@ Do this in order; the later steps use the earlier ones. All values are test valu
 | 1.2.4 | admin | **POS devices**: add the terminal with the IP address it calls from (127.0.0.1 for the PC build); set its PIN if the form asks for one | The device is listed; a call from another address is refused | |
 | 1.2.5 | manager | **Customers**: `Acme Transport`, `Blue Taxi` and `North Farm` (credit customers, with a phone number); the built-in `Individual` stays | Three customers + Individual | |
 
-### 1.3 Opening balances and go-live (the day the system starts)
+### 1.3 The old tickets (before go-live): the history of the blank tickets received and published
+
+The station has been selling press tickets for a year, so the web app starts with the **history of the blank tickets received (ticket inbounds)** and of the **tickets published** from them, all dated before go-live: 50,000 blank tickets received in 40 deliveries over the 12 months before 2026-10-31, 47,700 of them published (the rest is blank stock). Do this **before** the go-live date is set (1.4.1), and with the web app running (the `gasstation-web` launch configuration, port 8123).
+
+```
+php e2e\oldtickets.php --end=2026-10-31          (add --dry-run to see the 40 batches first)
+```
+
+It signs in as `admin` and uses the Ticket Inbound and Ticket Publish pages, so the rules and the audit log are the real ones. It stops without doing anything if the database already has ticket inbounds or tickets. The numbers are fixed, so every fresh install gets the same history.
+
+| Kind (fuel : size) | Received | Published | Blank stock left |
+|---|---|---|---|
+| Diesel 5 kg | 8,000 | 7,620 | 380 |
+| Diesel 10 kg | 12,000 | 11,620 | 380 |
+| Diesel 15 kg | 4,000 | 3,750 | 250 |
+| Diesel 50 kg | 1,000 | 870 | 130 |
+| Gasoline 5 kg | 6,000 | 5,750 | 250 |
+| Gasoline 10 kg | 14,000 | 13,470 | 530 |
+| Gasoline 15 kg | 4,000 | 3,750 | 250 |
+| Gasoline 50 kg | 1,000 | 870 | 130 |
+| **Total** | **50,000** | **47,700** | **2,300** |
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 1.3.1 | admin | **Go-live**: set the go-live date to the first business day of the test | Saved; the page says how many publishes are dated before go-live (0) | |
-| 1.3.2 | admin | Opening tank stock: T1 gasoline 20,000.00 kg at cost 600; T2 diesel 30,000.00 kg at cost 550, dated the day before go-live | **Tank Stock Summary** shows T1 20,000.00 and T2 30,000.00; the cost layers show one layer each | |
-| 1.3.3 | admin | Opening debts: `Acme Transport` 60,000.00 (dated 10 days before go-live), `North Farm` 12,000.00 (3 days before) | **Debts > Summary** shows 72,000.00; **Aging** puts them in the right columns | |
-| 1.3.4 | admin | Opening ticket loans: `Blue Taxi` 40.00 kg diesel (one loan, not settled) | Appears under **Ticket Loans** | |
-| 1.3.5 | admin | Opening remainders: 2 remainder tickets (diesel 3.50 kg and gasoline 1.20 kg) | Listed; usable on the terminal as tickets | |
-| 1.3.6 | admin | Old paper tickets: 10 press tickets of 20 kg diesel sold on paper before go-live | They are in the stock as sold; using one later is not an error | |
-| 1.3.7 | admin | **Lock the opening balances** | Every opening entry becomes read-only; the banner says "locked since ..."; the cashier / accountant cannot change them | |
-
-### 1.4 Stock the station
+| 1.3.1 | admin | Run the script (above) | "88 checks, 0 failed"; 40 inbounds, 47,700 ticket rows | |
+| 1.3.2 | assistant | **Ticket Management > Blank ticket inbound**: look at the history, filter by a month | 40 records between 2025-11-24 and 2026-10-04, each with a printing cost per ticket and a note (printer, order number); no record is dated after 2026-10-31 | |
+| 1.3.3 | assistant | **Ticket Publish**: look at the history | 40 batches (the newest of each kind only partly published), each two days after its inbound; the serials of a kind follow one another without a gap | |
+| 1.3.4 | assistant | **Summary Tickets** (Ticket Management) | The table above: received, published, blank stock for the 8 kinds; every published ticket is "in stock" (nothing sold or used) | |
+| 1.3.5 | assistant | **Ticket Lookup**: a ticket of the first batch (diesel 10 kg, serial 1) and one of the last (gasoline 10 kg, serial 13470) | Both found, status in stock, with the publish batch and date | |
+| 1.3.6 | accountant | **Daily Confirmation > Ticket stock**: look at an old date, e.g. 2026-01-07 | The old inbound and publish are listed as not confirmed (the history is not confirmed: decide whether the accountant confirms the old dates now or leaves them; write it down) | |
+### 1.4 Opening balances and go-live (the day the system starts)
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 1.4.1 | assistant | **Ticket Management > Blank ticket inbound**: 400 blank tickets of 20 kg diesel and 400 of 20 kg gasoline (the sizes the form offers) | Blank stock shows the two inbounds | |
-| 1.4.2 | assistant | **Ticket Publish**: publish 200 + 200 tickets (serial numbers shown) | Success message with the serial range; the tickets are "in stock"; blank stock goes down by the same | |
-| 1.4.3 | accountant | **Fuel Inbound**: diesel 10,000.00 kg at cost 560 into T2 (supplier invoice DN-001) and gasoline 5,000.00 kg at cost 610 into T1 | **Tank Stock Summary**: T2 40,000.00 kg (full: capacity 40,000), T1 25,000.00 kg | |
-| 1.4.4 | accountant | Try an inbound of 1 kg more into T2 | Refused, or a clear warning that the tank would be over its capacity (write down which) | |
+| 1.4.1 | admin | **Go-live**: set the go-live date to the first business day of the test | Saved; the page says that 40 publishes are dated before go-live and that 47,700 of their tickets have a record (in the stock) | |
+| 1.4.2 | admin | Opening tank stock: T1 gasoline 20,000.00 kg at cost 600; T2 diesel 30,000.00 kg at cost 550, dated the day before go-live | **Tank Stock Summary** shows T1 20,000.00 and T2 30,000.00; the cost layers show one layer each | |
+| 1.4.3 | admin | Opening debts: `Acme Transport` 60,000.00 (dated 10 days before go-live), `North Farm` 12,000.00 (3 days before) | **Debts > Summary** shows 72,000.00; **Aging** puts them in the right columns | |
+| 1.4.4 | admin | Opening ticket loans: `Blue Taxi` 40.00 kg diesel (one loan, not settled) | Appears under **Ticket Loans** | |
+| 1.4.5 | admin | Opening remainders: 2 remainder tickets (diesel 3.50 kg and gasoline 1.20 kg) | Listed; usable on the terminal as tickets | |
+| 1.4.6 | admin | Old paper tickets: write down 10 diesel 10 kg tickets of the old history (serials 11,611 to 11,620) as the ones customers hold, sold on paper | They are in the stock; when one is scanned at a nozzle on the terminal it is accepted and becomes *supplied* | |
+| 1.4.7 | admin | **Lock the opening balances** | Every opening entry becomes read-only; the banner says "locked since ..."; the cashier / accountant cannot change them | |
 
-Baseline of the web app after part 1: T1 25,000.00 kg, T2 40,000.00 kg; tickets in stock 200 gasoline + 200 diesel (20 kg); debts 72,000.00; one open ticket loan 40.00 kg. **Take a dump now** (`mysqldump -uroot gasstation > baseline-web.sql`) so that every later run can start from here (4.3).
-
-### 1.5 First run of the terminal
+### 1.5 Stock the station
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 1.5.1 | cashier | Start the terminal with an empty `data` folder | The server-address page opens | |
-| 1.5.2 | cashier | Enter the server address; press **Ping** | "Connected" with the server time, time zone and offset | |
-| 1.5.3 | cashier | Sign in as `cash1` (the cashier registers the device) | The login succeeds; the first sync starts and finishes ("Waiting for upload: 0") | |
-| 1.5.4 | cashier | Look at the downloaded config: Sales page prices; ticket stock | Gasoline 820, diesel 750; the published tickets are available | |
-| 1.5.5 | admin | On the terminal: Settings > PIN > **Machine Config**: set the printer; **add nozzles 1 to 5** with their fuel and tank; press Update and Read on each | Each board answers ("Verified"); nozzle 6 is not in the list; the table shows Online | |
-| 1.5.6 | admin | Set nozzle 5 to **manual** mode (Update) | It is no longer polled ("Not polled"); the web app receives the nozzles on the next upload | |
-| 1.5.7 | admin | Check the footer clock against the web server time; check the terminal clock guard (see 3.0) | They agree within a minute | |
+| 1.5.1 | assistant | **Ticket Management > Blank ticket stock**: look at what is left of the old history | 2,300 blank tickets (the table in 1.3) | |
+| 1.5.2 | assistant | **Ticket Publish**: publish 200 diesel 10 kg and 200 gasoline 10 kg, dated the day before go-live (the form proposes the next serials: 11,621 and 13,471) | Success message with the serial range; the tickets are "in stock"; blank stock goes down by the same (diesel 10 kg 180 left, gasoline 10 kg 330) | |
+| 1.5.3 | accountant | **Fuel Inbound**: diesel 10,000.00 kg at cost 560 into T2 (supplier invoice DN-001) and gasoline 5,000.00 kg at cost 610 into T1 | **Tank Stock Summary**: T2 40,000.00 kg (full: capacity 40,000), T1 25,000.00 kg | |
+| 1.5.4 | accountant | Try an inbound of 1 kg more into T2 | Refused, or a clear warning that the tank would be over its capacity (write down which) | |
+
+Baseline of the web app after part 1: T1 25,000.00 kg, T2 40,000.00 kg; tickets in stock (A / D) **24,040 / 24,060**: gasoline 5,750 + 13,470 + 3,750 + 870 + 200 = 24,040; diesel 7,620 + 11,620 + 3,750 + 870 + 200 = 24,060; blank stock 1,900; debts 72,000.00; one open ticket loan 40.00 kg. **Take a dump now** (`mysqldump -uroot gasstation > baseline-web.sql`) so that every later run can start from here (4.3).
+### 1.6 First run of the terminal
+
+| # | Who | Action | Expected | Result |
+|---|---|---|---|---|
+| 1.6.1 | cashier | Start the terminal with an empty `data` folder | The server-address page opens | |
+| 1.6.2 | cashier | Enter the server address; press **Ping** | "Connected" with the server time, time zone and offset | |
+| 1.6.3 | cashier | Sign in as `cash1` (the cashier registers the device) | The login succeeds; the first sync starts and finishes ("Waiting for upload: 0") | |
+| 1.6.4 | cashier | Look at the downloaded config: Sales page prices; ticket stock | Gasoline 820, diesel 750; the published tickets are available | |
+| 1.6.5 | admin | On the terminal: Settings > PIN > **Machine Config**: set the printer; **add nozzles 1 to 5** with their fuel and tank; press Update and Read on each | Each board answers ("Verified"); nozzle 6 is not in the list; the table shows Online | |
+| 1.6.6 | admin | Set nozzle 5 to **manual** mode (Update) | It is no longer polled ("Not polled"); the web app receives the nozzles on the next upload | |
+| 1.6.7 | admin | Check the footer clock against the web server time; check the terminal clock guard (see 3.0) | They agree within a minute | |
 
 **Exit of part 1:** every row passes; the baseline dump exists.
 
@@ -109,7 +148,7 @@ Use **Day 1** of the week plan (3.1). The times are the order, not the clock. Ro
 
 ### 2.1 The script of the day
 
-The numbers are fixed so that the totals can be checked at the end (2.5). `kg` are net kg.
+The numbers are fixed so that the totals can be checked at the end (2.5). `kg` are net kg. These are the checked records inside a full day (0.4: 100 to 120 spot sales, 1 to 3 card sales, 180 to 250 supplies): the rest of the day is made by the generator and is counted in the ledger, not followed one by one.
 
 | # | Who | Where | Action | Expected | Result |
 |---|---|---|---|---|---|
@@ -118,26 +157,26 @@ The numbers are fixed so that the totals can be checked at the end (2.5). `kg` a
 | 2.1.2 | cashier | terminal, Sales > Spot sale | **S1** diesel 10.00 kg, use *Sale*, Individual, cash | Amount 7,500.00; a ticket prints (diesel, letter D); the sale is in the list | |
 | 2.1.3 | cashier | terminal | **S2** gasoline 5.00 kg, use *Sale* | Amount 4,100.00; letter A on the ticket | |
 | 2.1.4 | cashier | terminal | **S3** diesel 2.00 kg use *Self use*; **S4** gasoline 1.00 kg use *Other*; **S5** diesel 3.00 kg use *Ticket loan* for `Blue Taxi` | Each sale prints its own ticket kind; S5 creates a ticket loan of 3.00 kg for Blue Taxi | |
-| 2.1.5 | cashier | terminal, Sales > Ticket sale | **T1** `Acme Transport`: 3 diesel tickets of 20 kg (60.00 kg), receipt on | Amount 45,000.00, paid in full; the 3 tickets are marked sold | |
-| 2.1.6 | cashier | terminal, Sales > Ticket sale | **T2** `Individual`: 1 gasoline ticket of 20 kg, receipt **off** | Amount 16,400.00; the sale has no receipt (see 2.4 for F8) | |
+| 2.1.5 | cashier | terminal, Sales > Ticket sale | **T1** `Acme Transport`: 6 diesel tickets of 10 kg (60.00 kg), receipt on | Amount 45,000.00, paid in full; the 6 tickets are marked sold | |
+| 2.1.6 | cashier | terminal, Sales > Ticket sale | **T2** `Individual`: 2 gasoline tickets of 10 kg (20.00 kg), receipt **off** | Amount 16,400.00; the sale has no receipt (see 2.4 for F8) | |
 | **Supplies** | | | | | |
-| 2.1.7 | cashier + simulator | terminal, Supply | **P1** nozzle 3 (diesel, auto): press the select key on board 3 (or Select on screen); scan the two diesel tickets of T1 (40 kg); lift the gun on the simulator; wait for the fill | Preset 40.00 kg; the board starts when the gun is up; the fill ends at 40.00 kg (dispensed = preset); no remainder | |
-| 2.1.8 | cashier + simulator | terminal, Supply | **P2** nozzle 1 (gasoline, auto): scan 1 gasoline ticket (20 kg); lift the gun; **hang the gun at about 18.50 kg** | The fill ends after 3 s on the hook; result 18.50 kg; a **remainder ticket of 1.50 kg** prints | |
-| 2.1.9 | cashier + simulator | terminal, Supply | **P3** nozzle 1 again: scan the remainder ticket of P2 (1.50 kg) and 1 new gasoline ticket; fill to the preset | The remainder ticket is accepted as a ticket; the preset is the sum; no new remainder | |
+| 2.1.7 | cashier + simulator | terminal, Supply | **P1** nozzle 3 (diesel, auto): press the select key on board 3 (or Select on screen); scan four of the diesel tickets of T1 (4 x 10 kg = 40 kg); lift the gun on the simulator; wait for the fill | Preset 40.00 kg; the board starts when the gun is up; the fill ends at 40.00 kg (dispensed = preset); no remainder | |
+| 2.1.8 | cashier + simulator | terminal, Supply | **P2** nozzle 1 (gasoline, auto): scan the 2 gasoline tickets of T2 (2 x 10 kg = 20 kg); lift the gun; **hang the gun at about 18.50 kg** | The fill ends after 3 s on the hook; result 18.50 kg; a **remainder ticket of 1.50 kg** prints | |
+| 2.1.9 | cashier + simulator | terminal, Supply | **P3** nozzle 1 again: scan the remainder ticket of P2 (1.50 kg) and 1 gasoline ticket of 10 kg (preset 11.50 kg); fill to the preset | The remainder ticket is accepted as a ticket; the preset is the sum; no new remainder | |
 | 2.1.10 | cashier + simulator | boards | **P4** nozzle 5 (manual): type 15 on the keyboard, press Set; lift the gun; fill | Keyboard LCD: `H` then the typed text; after Set: kg and litres show the preset (litres by the density); fuel counts up from zero; at the end the displays **keep 15.00 kg** until the next preset; the terminal shows the dispenser, but records nothing | |
-| 2.1.11 | cashier | terminal, Manual supply | Type in the reading of P4: nozzle 5, 15.00 kg, litres by the density, with one 20 kg diesel ticket | The supply is saved with its ticket; a **remainder of 5.00 kg** prints | |
+| 2.1.11 | cashier | terminal, Manual supply | Type in the reading of P4: nozzle 5, 15.00 kg, litres by the density, with two 10 kg diesel tickets (20 kg) | The supply is saved with its tickets; a **remainder of 5.00 kg** prints | |
 | 2.1.12 | cashier | terminal, Review | Look at the Supplies tab | One total line + a line for **Gasoline** and one for **Diesel**; remainders counted | |
 | **Cards** | | | | | |
 | 2.1.13 | cashier | terminal, Cards | Register a card (UID, holder, PIN); top it up with 50.00 kg diesel (cash, 37,500.00) | The balance is 50.00 kg; a top-up record exists | |
-| 2.1.14 | cashier + simulator | terminal, Cards + Supply | Read the card: the dispenser shows the **balance**; make a card fill with one 20 kg diesel ticket on nozzle 3 | The card pays for the ticket; the unused part of the ticket goes back to the card; no paper remainder; the card ledger shows top-up and fill | |
+| 2.1.14 | cashier + simulator | terminal, Cards + Supply | Read the card: the dispenser shows the **balance**; make a card fill with two 10 kg diesel tickets on nozzle 3 | The card pays for the tickets; the unused part goes back to the card; no paper remainder; the card ledger shows top-up and fill | |
 | **Loans** | | | | | |
-| 2.1.15 | cashier | terminal, Ticket debt | Settle the open loan of Blue Taxi (40.00 kg opening + 3.00 kg from S5) with 1 diesel ticket of 20 kg | The loan's settled amount is 20.00 kg; a ticket cannot settle twice | |
+| 2.1.15 | cashier | terminal, Ticket debt | Settle the open loan of Blue Taxi (40.00 kg opening + 3.00 kg from S5) with 2 diesel tickets of 10 kg | The loan's settled amount is 20.00 kg; a ticket cannot settle twice | |
 | **Check and upload** | | | | | |
 | 2.1.16 | cashier | terminal, Review | Pick today: look at Sales, Supplies and Ticket Debt tabs and their totals | The sales totals match 2.5; **Card sales** has its own line; every record has its time and type | |
 | 2.1.17 | cashier | terminal, Review | Edit the comment of S1 ("first sale"); try to move one record to a date 5 days back | The comment is saved and the record waits for the upload again; the 5-day move asks and is refused beyond the limit | |
 | 2.1.18 | cashier | terminal, Review | Press **Upload data** | "Uploaded N records"; waiting 0; no refusal | |
 | **Web, parallel to the morning** | | | | | |
-| 2.1.19 | assistant | web, Sales > Ticket sales | **W1** `Acme Transport`: 5 diesel tickets of 20 kg (100 kg), amount 75,000.00, paid 30,000.00 | A debt of 45,000.00 is made; the tickets are sold | |
+| 2.1.19 | assistant | web, Sales > Ticket sales | **W1** `Acme Transport`: 10 diesel tickets of 10 kg (100 kg), amount 75,000.00, paid 30,000.00 | A debt of 45,000.00 is made; the tickets are sold | |
 | 2.1.20 | assistant | web, Debts > Payments | Pay 15,000.00 for Acme Transport | The debt of this sale is 30,000.00; the customer's total debt goes down | |
 | 2.1.21 | assistant | web, Ticket Management > Ticket Lookup | Look up a ticket used in P1 | Status *supplied*, with the supply and the date | |
 | 2.1.22 | assistant | web, Sales | Return one ticket of W1 (a return entry); try to delete a sale made yesterday | The return is an entry, not a delete; the delete obeys the rules (only own, unconfirmed) | |
@@ -185,6 +224,7 @@ Do this after the terminal has made its checkout at 9:00 (or move the clock past
 |---|---|
 | Spot sales (S1 to S5) | 5 records; sale amounts 7,500.00 + 4,100.00 (+ the amounts the screen gives to the self / other / loan uses) |
 | Ticket sales on the terminal | T1 45,000.00 (60 kg), T2 16,400.00 (20 kg) |
+| Counts of the day | Spot sales 100 to 120; card sales 1 to 3; supplies 180 to 250 (Day 1: 104 / 2 / 196) |
 | Ticket sales on the web | W1 75,000.00; paid 30,000.00 + 15,000.00 payment; debt left 30,000.00 |
 | Supplies | P1 40.00 kg, P2 18.50 kg (remainder 1.50 kg), P3 = preset, manual 15.00 kg (remainder 5.00 kg), card fill = its preset |
 | Diesel tank T2 | 40,000.00 − 40.00 (P1) − 15.00 (manual) − card fill diesel = 39,945.00 − card fill |
@@ -211,24 +251,26 @@ In both cases start from the baseline of part 1 and run **Day 1 = 2.1 to 2.3**. 
 
 ### 3.1 The week at a glance
 
-| Day | Weekday | Focus | Special conditions |
-|---|---|---|---|
-| 1 | Mon | The baseline day (part 2) | none |
-| 2 | Tue | **Price change, dates, edits** | Diesel price 750 → 760 at 9:00 (accountant); records near 9:00; edit after upload |
-| 3 | Wed | **No network** | The terminal loses the server for the whole day; upload next morning |
-| 4 | Thu | **Boards and power** | Power cut in a fill; board silent; gun hung and lifted; fault code |
-| 5 | Fri | **Volume and limits** | Many sales and supplies; a tank nearly full / nearly empty; ticket stock low; loans and debts ageing |
-| 6 | Sat | **Corrections** | Returns, deletes, un-confirm, wrong tickets, a second cashier, a lost card |
-| 7 | Sun | **Quiet day and the week's close** | Few sales; the weekly reports, backup and restore rehearsal, reconciliation of the week |
+The three numbers of a day are drawn inside the ranges of 0.4; the week is **762 spot sales, 13 card sales and 1,446 supplies**.
+
+| Day | Weekday | Focus | Spot / card / supplies | Special conditions |
+|---|---|---|---|---|
+| 1 | Mon | The baseline day (part 2) | 104 / 2 / 196 | none |
+| 2 | Tue | **Price change, dates, edits** | 118 / 3 / 237 | Diesel price 750 → 760 at 9:00 (accountant); records near 9:00; edit after upload |
+| 3 | Wed | **No network** | 107 / 1 / 188 | The terminal loses the server for the whole day; upload next morning |
+| 4 | Thu | **Boards and power** | 112 / 2 / 214 | Power cut in a fill; board silent; gun hung and lifted; fault code |
+| 5 | Fri | **Volume and limits** | 120 / 3 / 250 | The top of every range; a tank nearly full / nearly empty; ticket stock low; loans and debts ageing |
+| 6 | Sat | **Corrections** | 101 / 1 / 181 | Returns, deletes, un-confirm, wrong tickets, a second cashier, a lost card |
+| 7 | Sun | **Lowest-volume day and the week's close** | 100 / 1 / 180 | The bottom of every range; the weekly reports, backup and restore rehearsal, reconciliation of the week |
 
 ### 3.2 The daily loop (every day)
 
 | # | Who | Action | Expected |
 |---|---|---|---|
 | L1 | cashier | Sign in; download; check the footer and the clock | connected, waiting 0 |
-| L2 | cashier | At least: 2 spot sales (one gasoline, one diesel), 1 ticket sale, 2 supplies (one auto, one manual nozzle), 1 remainder ticket used | all print and appear in Review |
+| L2 | cashier + generator | The day's volume from 3.1 (spot sales, card sales, supplies), with the mix of 0.4; at least one ticket sale, one manual-nozzle supply and one remainder ticket used among them | the counts of the Review screen equal the counts of 3.1; everything prints |
 | L3 | assistant | 1 ticket sale on credit, 1 debt payment, 1 ticket lookup, publish tickets when the stock is below 50 | debt and stock numbers move as expected |
-| L4 | accountant | A fuel inbound or outbound when the tank needs it; check prices | tank stock summary equals opening + inbounds − outbounds |
+| L4 | accountant | A fuel inbound when a tank is below 40% (about 6,000 kg leave the tanks a day, so no delivery is needed before Day 4); an outbound when needed; check prices | tank stock summary equals opening + inbounds − outbounds |
 | L5 | cashier | Review: check totals; **Upload data** at the end of the shift | waiting 0 |
 | L6 | accountant | Next morning: Daily Confirmation of the finished day; reports; Sync Status | all confirmed; no rejects |
 | L7 | accountant | Keep the **running ledger** (3.9): tank stock, tickets, debts, cash | it equals the web summary every morning |
@@ -275,7 +317,7 @@ In both cases start from the baseline of part 1 and run **Day 1 = 2.1 to 2.3**. 
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 3.6.1 | cashier | 30 spot sales and 10 ticket sales in the day, 10 supplies over the 5 nozzles | The lists stay fast; the totals add up | |
+| 3.6.1 | cashier + generator | The top of the ranges: 120 spot sales, 3 card sales, 250 supplies over the 5 nozzles, plus 40 ticket sales | The lists stay fast (Review, Sync Status, the web lists); the upload finishes in one go; the totals add up | |
 | 3.6.2 | accountant | Bring T2 to within 100 kg of full; try an inbound that goes over | Refused or warned (write down which) | |
 | 3.6.3 | accountant | Take T1 down to a low level with outbounds; sell a supply that needs more than the tank holds | Written down: does the stock go below zero, or is the supply refused? The Tank Stock Summary and the backup treat a level below zero (a row per cost) | |
 | 3.6.4 | assistant | Sell tickets until the stock is below the warning; publish more | The blank stock and the published stock follow | |
@@ -297,11 +339,11 @@ In both cases start from the baseline of part 1 and run **Day 1 = 2.1 to 2.3**. 
 | 3.7.8 | cashier | Card top-up with a wrong amount; the manager deletes the card sale | Only the manager (not the accountant) can delete it | |
 | 3.7.9 | accountant | A sale with a wrong customer: edit on the web | Sales edit allows date, comment, receipt only; a wrong customer needs a return and a new sale | |
 
-### 3.8 Day 7 (Sun): quiet day and the close of the week
+### 3.8 Day 7 (Sun): lowest-volume day and the close of the week
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 3.8.1 | cashier | A few sales only; upload | Normal | |
+| 3.8.1 | cashier + generator | The bottom of the ranges: 100 spot sales, 1 card sale, 180 supplies; upload | Normal | |
 | 3.8.2 | accountant | Confirm all days of the week; look at the **Overview** counts | Every date shows 0 unconfirmed | |
 | 3.8.3 | accountant | Weekly reports: sales by day and fuel, supplies by nozzle, tank stock, ticket stock, debts, cards | The sum of the seven daily figures equals the weekly figure | |
 | 3.8.4 | admin | **Backup** page: the dump of each confirmed day exists; the retention keeps the newest | Files present; sizes grow with the data | |
@@ -314,16 +356,16 @@ In both cases start from the baseline of part 1 and run **Day 1 = 2.1 to 2.3**. 
 
 One sheet, one line per day. The web app's own summaries must equal it each morning.
 
-| Day | T1 gasoline kg | T2 diesel kg | Press tickets in stock (A / D) | Sold not used | Cash in (sales + payments + top-ups) | Debts total | Card balances kg | Result |
-|---|---|---|---|---|---|---|---|---|
-| baseline | 25,000.00 | 40,000.00 | 200 / 200 | 0 | 0 | 72,000.00 | 0 | |
-| 1 | | | | | | | | |
-| 2 | | | | | | | | |
-| 3 | | | | | | | | |
-| 4 | | | | | | | | |
-| 5 | | | | | | | | |
-| 6 | | | | | | | | |
-| 7 | | | | | | | | |
+| Day | Spot / card / supplies | T1 gasoline kg | T2 diesel kg | Press tickets in stock (A / D) | Sold not used | Cash in (sales + payments + top-ups) | Debts total | Card balances kg | Result |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline | - | 25,000.00 | 40,000.00 | 24,040 / 24,060 | 0 | 0 | 72,000.00 | 0 | |
+| 1 | | | | | | | | | |
+| 2 | | | | | | | | | |
+| 3 | | | | | | | | | |
+| 4 | | | | | | | | | |
+| 5 | | | | | | | | | |
+| 6 | | | | | | | | | |
+| 7 | | | | | | | | | |
 
 Formulas: tank = previous + inbounds − supplies − outbounds; tickets in stock = published − sold on the web − sold on the terminal + remainders made − used; debts = previous + new credit − payments − returns; cash = sales paid + payments + top-ups − refunds.
 
@@ -350,6 +392,6 @@ Formulas: tank = previous + inbounds − supplies − outbounds; tickets in stoc
 1. Stop the terminal. Delete its `data` folder (and `device.ini` for a new terminal).
 2. Restore the web app: `mysql -uroot -e "DROP DATABASE gasstation; CREATE DATABASE gasstation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"` and `mysql -uroot gasstation < baseline-web.sql`.
 3. Set the clock back to the start (only here, never during a run).
-4. Run 1.5 again (first run of the terminal).
+4. Run 1.6 again (first run of the terminal). The old ticket history is part of the baseline dump, so it need not be generated again; after a fresh install run 1.3 first.
 
 A full fresh install instead: `php artisan migrate:fresh --seed --force` in `web/` (this deletes everything; the old data was saved on 2026-11-04 in `web/storage/app/reset-backup-2026-11-04/`).
