@@ -280,11 +280,32 @@ static void partial_amounts(const Config *c, uint32_t pulses, uint32_t preset_g,
     }
 }
 
+/* The tolerance of the board: a fill that ends this close to the preset (and has dispensed something) counts as the preset. The terminal and the web app have no tolerance of
+   their own: whatever the result says short of the preset is a remainder ticket, so a few grams are settled here, by this one rule. */
+static int within_tolerance(const Board *b, uint32_t grams)
+{
+    return grams > 0 && b->preset_g - grams <= b->params.preset_tolerance_g;
+}
+
 /* The preset is reached and the pump is stopping: the fill is the preset (the result will say so too), whatever the last counts are, so the display does not stop a few grams
-   short of it (the pump stops a little before the target: the lead, and the counts are whole). */
+   short of it (the pump stops a little before the target: the lead, and the counts are whole), and a fill that ends within the tolerance is the preset too. */
 static int reached_preset(const Board *b)
 {
-    return b->state == STATE_DISPENSING && b->closing && b->closing_reason == REASON_PRESET;
+    uint32_t g, ml;
+
+    if (b->state != STATE_DISPENSING || !b->closing) {
+        return 0;
+    }
+    if (b->closing_reason == REASON_PRESET) {
+        return 1;
+    }
+    if (b->closing_reason == REASON_NO_FLOW) {
+        partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
+
+        return within_tolerance(b, g);
+    }
+
+    return 0;
 }
 
 uint32_t board_live_grams(const Board *b)
@@ -337,6 +358,12 @@ static void finish_fill(Board *b, uint8_t reason)
         ml = board_ml_of_grams(c, g);
     } else {
         partial_amounts(c, b->pulses_seen, b->preset_g, &g, &ml);
+        if (reason == REASON_NO_FLOW && within_tolerance(b, g)) {
+            /* short of the preset by the tolerance or less (0.03 kg): the preset is taken as reached, and no remainder ticket is made for a few grams */
+            g = b->preset_g;
+            ml = board_ml_of_grams(c, g);
+            reason = REASON_PRESET;
+        }
     }
     b->closing = 0;
     hold_result(b, b->p.inflight.id, b->preset_g, g, ml, reason);
@@ -462,6 +489,7 @@ void board_default_params(Params *params)
     params->save_ms = 2000;
     params->early_close_pulses = 0;
     params->balance_show_ms = 60000;
+    params->preset_tolerance_g = 30;
 }
 
 void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)

@@ -43,6 +43,7 @@ One STM32F407 board per nozzle talks to the Smart210 cashier terminal over RS-48
 
 - No-flow time 30 s after the first count; the gun on its hook for 3 s after the flow began ends the fill; no count at all within 10 minutes of START also ends it. The fill in progress is stored every 2 s and at once at POWER_OFF.
 - The keyboard needs more keys than select: it has 17 (above); POLL flag bits 6 and 7 are still free, and no more were needed.
+- **Tolerance:** the board has the only tolerance of the system, 0.03 kg (`preset_tolerance_g`): a fill that ends within it of the preset is reported as the preset reached (reason 0, `dispensed_g` = `preset_g`). The terminal and the web app have none (any shortfall there is a remainder ticket).
 - A manual fill cut by the power is dropped (nothing is reported), but what it dispensed is added to the board's total.
 - Firmware update in the field: not designed yet.
 

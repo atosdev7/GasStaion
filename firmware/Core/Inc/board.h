@@ -68,6 +68,7 @@ typedef struct {
     uint32_t save_ms;              /* the fill in progress is written to the memory this often (flash wear against lost grams) */
     uint32_t early_close_pulses;   /* the pump is stopped this many counts before the target (the coasting after the stop) */
     uint32_t balance_show_ms;      /* a balance shown with SHOW_BALANCE goes from the display after this long (60 s) */
+    uint32_t preset_tolerance_g;   /* a fill that ends (reason 1: no flow, tank full, the gun hung) this many grams or less short of the preset counts as the preset reached (0.03 kg) */
 } Params;
 
 typedef struct {

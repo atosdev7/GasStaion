@@ -10,13 +10,13 @@
 //
 //   auto mode    the supplier's tickets are the nozzle's queue (SupplyQueue). They all go to the supplement (supplied); when less came out
 //                than the tickets cover, the rest is a remainder: a new ticket (a remainder code of the fuel type, e.g. 29 for diesel; sold, to be printed) and a
-//                remainders row. A fill that ended at the preset, within the tolerance of it, leaves no remainder.
+//                remainders row. A fill that ended at the preset leaves no remainder (the board takes a fill within 0.03 kg of the preset as the preset: PROTOCOL.md section 11).
 //                When the tickets of the queue no longer hold up (a download changed one) or more came out than they cover, the supplement is saved
 //                without tickets: nothing waits for them.
 //   manual mode  the program never records a supplement for a manual-mode nozzle: its result is only acknowledged (SupplySession).
 //   by hand      the cashier types a supply in on the Manual input screen: the nozzle, the kg and litres that came out, when, and the tickets
 //                that pay for it (Reading::tickets). Their total weight must cover the dispensed weight; what is left of it is a remainder
-//                (a new ticket, as in auto mode), unless it is within the tolerance. The supplement is saved with them at once (mode manual).
+//                (a new ticket, as in auto mode; the terminal has no tolerance). The supplement is saved with them at once (mode manual).
 //
 // A result of the board is recorded once: the result id is kept with the supplement, and a result seen again only reports "duplicate".
 // All weights are kg x100, litres x100.

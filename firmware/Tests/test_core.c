@@ -630,6 +630,55 @@ static void test_early_close(void)
     CHECK_EQ(r.board.p.result.reason, REASON_PRESET);
 }
 
+/* the tolerance of the board (0.03 kg): a fill that ends that close to the preset is the preset; further short it is what the counts say */
+static void test_preset_tolerance(void)
+{
+    Rig r;
+    int i;
+    int seen_preset = 0;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+
+    /* 21 g short (18048 counts of 18072): the gun is hung for good, the fill ends, the result is the preset */
+    start_auto(&r, 15000);
+    run(&r, 1, 18048);
+    r.fake.hook = 0;
+    for (i = 0; i < 330 && r.board.state == STATE_DISPENSING; ++i) {
+        run(&r, 1, 0);
+        if (r.board.state == STATE_DISPENSING && board_live_grams(&r.board) == 15000) {
+            seen_preset = 1;                                            /* the display says the preset while the pump is stopping */
+        }
+    }
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(r.board.p.result.reason, REASON_PRESET);
+    CHECK_EQ(r.board.p.result.dispensed_g, 15000);
+    CHECK_EQ(r.board.p.result.dispensed_ml, board_ml_of_grams(&r.board.p.config, 15000));
+    CHECK(seen_preset);
+    ask_u32(&r, CMD_ACK_RESULT, r.session);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+
+    /* 100 g short: no tolerance, the result is what the counts say, reason 1 */
+    r.fake.hook = 1;
+    r.fake.pulses = 0;
+    start_auto(&r, 15000);
+    run(&r, 1, 17951);
+    r.fake.hook = 0;
+    run(&r, 330, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(r.board.p.result.reason, REASON_NO_FLOW);
+    CHECK(r.board.p.result.dispensed_g >= 14890 && r.board.p.result.dispensed_g <= 14900);
+    ask_u32(&r, CMD_ACK_RESULT, r.session);
+
+    /* nothing came out at all of a tiny preset (20 g is inside the tolerance): still no fuel, still reason 1 and 0 g */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 20);
+    run(&r, 60100, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(r.board.p.result.reason, REASON_NO_FLOW);
+    CHECK_EQ(r.board.p.result.dispensed_g, 0);
+}
 static void test_no_flow(void)
 {
     Rig r;
@@ -1648,6 +1697,7 @@ int main(void)
     test_repeat_rule();
     test_auto_fill();
     test_early_close();
+    test_preset_tolerance();
     test_no_flow();
     test_hook();
     test_backflow_and_wrap();
