@@ -15,7 +15,9 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Uploaded | ReviewPage |
 | Made near 9:00: check that the date is right. | ReviewPage |
 | Spot sales: %1 records, %2 kg, amount %3 Ticket sales: %4 records, %5 kg, amount %6 Card sales: %7 records, %8 kg, amount %9 Total paid: %10, unpaid: %11 | ReviewPage |
-| Supplies: %1 records, %2 litres, %3 kg Remainders: %4 records, %5 kg | ReviewPage |
+| Supplies: %1 records, %2 litres, %3 kg | ReviewPage |
+| %1: %2 records, %3 litres, %4 kg | ReviewPage (one line for each fuel type) |
+| Remainders: %1 records, %2 kg | ReviewPage |
 | Ticket loans: %1 records, %2 kg Settlements: %3 records, %4 kg | ReviewPage |
 | %1 waiting, %2 refused | ReviewPage |
 | Nothing waits on this date | ReviewPage |

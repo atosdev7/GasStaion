@@ -318,6 +318,7 @@ private slots:
     void theReviewListsTheRecordsOfTheChosenDateWithTotals();
     void theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen();
     void theReviewSalesTotalsHaveALineForTheCardSales();
+    void theReviewSuppliesTotalsShowGasolineAndDieselSeparately();
     void cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait();
     void clearConfigErasesTheMachineSettingsAndKeepsTheData();
     void machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoResets();
@@ -3657,6 +3658,55 @@ void Smart210Test::machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoRese
     QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Reset: - -> clear config"));
     QVERIFY(restart.wait(4000));
     QVERIFY(window.restartWanted());
+}
+// the Supplies tab shows the totals of each fuel type (gasoline and diesel) under the total of all supplies
+void Smart210Test::theReviewSuppliesTotalsShowGasolineAndDieselSeparately()
+{
+    setUpLoggedInTerminalWithAPin();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    run("DELETE FROM fuel_types");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('D', 'Diesel', 750, 8300)");
+    run("INSERT INTO fuel_types (fuel_type, name, price, density) VALUES ('A', 'Gasoline', 820, 7400)");
+    const QString columns = "(id, fuel_type, nozzle_id, out_amount_lt, out_amount_kg, preset_kg, density, mode, supplied_at, supply_date) ";
+    run("INSERT INTO supplements " + columns + "VALUES ('d1', 'D', 2, 10000, 8300, 8300, 8300, 'auto', '2026-10-09 10:00:00', '2026-10-09')");
+    run("INSERT INTO supplements " + columns + "VALUES ('d2', 'D', 2, 5000, 4150, 4150, 8300, 'auto', '2026-10-09 11:00:00', '2026-10-09')");
+    run("INSERT INTO supplements " + columns + "VALUES ('a1', 'A', 1, 2000, 1480, 1480, 7400, 'auto', '2026-10-09 12:00:00', '2026-10-09')");
+    run("INSERT INTO supplements " + columns + "VALUES ('x1', 'K', 1, 1000, 800, 800, 8000, 'auto', '2026-10-09 13:00:00', '2026-10-09')");   // a type the config does not have
+    run("INSERT INTO supplements " + columns + "VALUES ('d9', 'D', 2, 9999, 9999, 9999, 8300, 'auto', '2026-10-10 10:00:00', '2026-10-10')");   // another day
+
+    const ReviewData::Totals t = ReviewData::totals(db, "2026-10-09");
+    QCOMPARE(t.supplements, 4);
+    QCOMPARE(t.supplementsByFuel.size(), 3);
+    QCOMPARE(t.supplementsByFuel.at(0).code, QString("A"));                       // by code: gasoline, diesel, then any other
+    QCOMPARE(t.supplementsByFuel.at(0).name, QString("Gasoline"));
+    QCOMPARE(t.supplementsByFuel.at(0).count, 1);
+    QCOMPARE(t.supplementsByFuel.at(0).litersX100, qlonglong(2000));
+    QCOMPARE(t.supplementsByFuel.at(0).kgX100, qlonglong(1480));
+    QCOMPARE(t.supplementsByFuel.at(1).name, QString("Diesel"));
+    QCOMPARE(t.supplementsByFuel.at(1).count, 2);
+    QCOMPARE(t.supplementsByFuel.at(1).litersX100, qlonglong(15000));
+    QCOMPARE(t.supplementsByFuel.at(1).kgX100, qlonglong(12450));
+    QCOMPARE(t.supplementsByFuel.at(2).code, QString("K"));
+    QCOMPARE(t.supplementsByFuel.at(2).name, QString("K"));
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
+    const QString text = window.findChild<QLabel *>("reviewSupplyTotals")->text();
+    QVERIFY2(text.contains("Supplies: 4 records, 180.00 litres, 147.30 kg"), qPrintable(text));
+    QVERIFY2(text.contains("Gasoline: 1 records, 20.00 litres, 14.80 kg"), qPrintable(text));
+    QVERIFY2(text.contains("Diesel: 2 records, 150.00 litres, 124.50 kg"), qPrintable(text));
+    QVERIFY2(text.indexOf("Gasoline") < text.indexOf("Diesel"), qPrintable(text));
+    QVERIFY2(text.contains("Remainders: 0 records, 0.00 kg"), qPrintable(text));
+
+    // a day with no supply still names the two fuel types of the config, at zero
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 20));
+    const QString empty = window.findChild<QLabel *>("reviewSupplyTotals")->text();
+    QVERIFY2(empty.contains("Gasoline: 0 records, 0.00 litres, 0.00 kg"), qPrintable(empty));
+    QVERIFY2(empty.contains("Diesel: 0 records, 0.00 litres, 0.00 kg"), qPrintable(empty));
 }
 // the Sales totals of the Review screen have a line of their own for the card fills; they are not counted with the ticket sales
 void Smart210Test::theReviewSalesTotalsHaveALineForTheCardSales()

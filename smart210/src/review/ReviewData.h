@@ -61,6 +61,16 @@ public:
         QString id;
     };
 
+    // The supplies of a date for one fuel type (the Supplies tab shows a line for each: gasoline and diesel).
+    struct FuelTotal {
+        FuelTotal() : count(0), litersX100(0), kgX100(0) {}
+        QString code;   // the fuel type, e.g. A or D
+        QString name;   // its name from the config download (the code when there is none)
+        int count;
+        qlonglong litersX100;
+        qlonglong kgX100;
+    };
+
     struct Totals {
         Totals() : spotCount(0), spotKgX100(0), spotAmountX100(0), ticketCount(0), ticketKgX100(0), ticketAmountX100(0), cardCount(0), cardKgX100(0), cardAmountX100(0), paidX100(0), unpaidX100(0),
                    supplements(0), litersX100(0), supplementKgX100(0), remainders(0), remainderKgX100(0), loans(0), loanKgX100(0), settlements(0),
@@ -86,6 +96,7 @@ public:
         qlonglong loanKgX100;
         int settlements;
         qlonglong settlementKgX100;
+        QList<FuelTotal> supplementsByFuel; // every fuel type of the config (also with no supply that day), by code, and any other type that a supply of the date has
         int waiting;  // records of this date that wait for an upload
         int refused;  // records of this date the web app refused
     };

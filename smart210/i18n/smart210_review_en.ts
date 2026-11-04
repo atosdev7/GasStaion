@@ -219,10 +219,16 @@ Total paid: %10, unpaid: %11</translation>
     </message>
     <message>
         <location filename="../src/review/ReviewPage.cpp" line="248"/>
-        <source>Supplies: %1 records, %2 litres, %3 kg
-Remainders: %4 records, %5 kg</source>
-        <translation>Supplies: %1 records, %2 litres, %3 kg
-Remainders: %4 records, %5 kg</translation>
+        <source>Supplies: %1 records, %2 litres, %3 kg</source>
+        <translation>Supplies: %1 records, %2 litres, %3 kg</translation>
+    </message>
+    <message>
+        <source>%1: %2 records, %3 litres, %4 kg</source>
+        <translation>%1: %2 records, %3 litres, %4 kg</translation>
+    </message>
+    <message>
+        <source>Remainders: %1 records, %2 kg</source>
+        <translation>Remainders: %1 records, %2 kg</translation>
     </message>
     <message>
         <location filename="../src/review/ReviewPage.cpp" line="250"/>

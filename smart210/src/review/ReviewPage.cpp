@@ -277,8 +277,13 @@ void ReviewPage::reload()
     if (hidden > 0) {
         salesTotals_->setText(salesTotals_->text() + "\n" + tr("%1 sales without a receipt are not listed (Machine Config).").arg(hidden));
     }
-    supplyTotals_->setText(tr("Supplies: %1 records, %2 litres, %3 kg\nRemainders: %4 records, %5 kg")
-                               .arg(t.supplements).arg(money(t.litersX100)).arg(money(t.supplementKgX100)).arg(t.remainders).arg(money(t.remainderKgX100)));
+    // the total of the supplies, then the total of each fuel type (gasoline and diesel), then the remainders
+    QString supplyText = tr("Supplies: %1 records, %2 litres, %3 kg").arg(t.supplements).arg(money(t.litersX100)).arg(money(t.supplementKgX100));
+    foreach (const ReviewData::FuelTotal &f, t.supplementsByFuel) {
+        supplyText += "\n" + tr("%1: %2 records, %3 litres, %4 kg").arg(f.name).arg(f.count).arg(money(f.litersX100)).arg(money(f.kgX100));
+    }
+    supplyText += "\n" + tr("Remainders: %1 records, %2 kg").arg(t.remainders).arg(money(t.remainderKgX100));
+    supplyTotals_->setText(supplyText);
     debtTotals_->setText(tr("Ticket loans: %1 records, %2 kg\nSettlements: %3 records, %4 kg")
                              .arg(t.loans).arg(money(t.loanKgX100)).arg(t.settlements).arg(money(t.settlementKgX100)));
 

@@ -277,10 +277,36 @@ ReviewData::Totals ReviewData::totals(QSqlDatabase db, const QString &date)
         t.refused += r.state == Refused ? 1 : 0;
     }
 
+    QSqlQuery fuels(db);
+    if (fuels.exec("SELECT fuel_type, COALESCE(NULLIF(name, ''), fuel_type) FROM fuel_types ORDER BY fuel_type")) {
+        while (fuels.next()) {
+            FuelTotal f;
+            f.code = fuels.value(0).toString();
+            f.name = fuels.value(1).toString();
+            t.supplementsByFuel.append(f);
+        }
+    }
+
     foreach (const Record &r, supplements(db, date)) {
         ++t.supplements;
         t.litersX100 += r.litersX100;
         t.supplementKgX100 += r.kgX100;
+        int at = -1;
+        for (int i = 0; i < t.supplementsByFuel.size(); ++i) {
+            if (t.supplementsByFuel.at(i).code == r.fuel) {
+                at = i;
+            }
+        }
+        if (at < 0) {
+            FuelTotal f;                    // a fuel type that the config does not have (any more): its code is its name
+            f.code = r.fuel;
+            f.name = r.fuel;
+            t.supplementsByFuel.append(f);
+            at = t.supplementsByFuel.size() - 1;
+        }
+        ++t.supplementsByFuel[at].count;
+        t.supplementsByFuel[at].litersX100 += r.litersX100;
+        t.supplementsByFuel[at].kgX100 += r.kgX100;
         t.waiting += r.state == Waiting ? 1 : 0;
         t.refused += r.state == Refused ? 1 : 0;
     }
