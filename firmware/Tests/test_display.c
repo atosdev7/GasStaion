@@ -1,5 +1,5 @@
 /*
- * The display driver (Core/Src/display.c) on the PC. The pins and the waits are two functions that record what the driver does, so the serial link can be
+ * The display driver (Core/Src/display.c) on the PC. The pins and the waits (delay_us) are two functions that record what the driver does, so the serial link can be
  * compared with the one the old, proven functions made, bit by bit and wait by wait, and the digits that are sent to the glass with the old numeric functions.
  *
  * The old functions are copied below as they were (ShowAmountKg, ShowAmountL, ShowDensity, WriteBlockToLcd, WriteByteToLcd, WriteChkToLcd, with their tables), only
@@ -34,7 +34,7 @@ void display_pin(int pin, int high)
     }
 }
 
-void display_wait_us(uint32_t us)
+void delay_us(uint32_t us)
 {
     if (event_count < EVENTS_MAX) {
         events[event_count++] = (int)us;
@@ -57,7 +57,6 @@ static void record_reset(void)
 #define GPIO_PIN_SET 1
 #define GPIO_PIN_RESET 0
 #define HAL_GPIO_WritePin(port, pin, state) display_pin((pin) - 4, (state))
-#define delay_us(us) display_wait_us(us)
 
 static uint8_t old_bcd_map[4][10] = {
     {0xf5, 0x05, 0xd3, 0x97, 0x27, 0xb6, 0xf6, 0x15, 0xf7, 0xb7},

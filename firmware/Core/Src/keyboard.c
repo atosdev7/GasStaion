@@ -1,5 +1,7 @@
 #include "keyboard.h"
 
+#include "delay.h"
+
 #include <string.h>
 
 /*
@@ -12,12 +14,12 @@
 
 #ifdef KEYBOARD_HOST_TEST
 
-/* the tests on the PC: the pins, the waits and the data line are functions that the test records and feeds */
+/* the tests on the PC: the pins, the data line and the milliseconds are functions that the test records and feeds (the microseconds are delay_us, which the test
+   provides too) */
 enum { KB_PIN_SEL = 0, KB_PIN_CLK = 1, KB_PIN_DATA = 2 };
 extern void keyboard_pin(int pin, int high);
 extern void keyboard_data_mode(int output);
 extern int keyboard_data_read(void);
-extern void keyboard_wait_us(uint32_t us);
 extern void keyboard_wait_ms(uint32_t ms);
 
 #else
@@ -58,21 +60,6 @@ static void keyboard_data_mode(int output)
 static int keyboard_data_read(void)
 {
     return HAL_GPIO_ReadPin(KEY_DATA_GPIO_Port, KEY_DATA_Pin) == GPIO_PIN_SET;
-}
-
-/* microseconds by TIM7, which main.c sets up as a free running 16 bit counter of the timer clock (no prescaler) and which nothing else uses (the display uses TIM6;
-   port.c leaves both to the display and the keyboard). The longest wait here is 500 us. */
-static void keyboard_wait_us(uint32_t us)
-{
-    const uint32_t ticks = us * (SystemCoreClock / 1000000u);
-    uint16_t start;
-
-    if (!(TIM7->CR1 & TIM_CR1_CEN)) {
-        TIM7->CR1 |= TIM_CR1_CEN;
-    }
-    start = (uint16_t)TIM7->CNT;
-    while ((uint16_t)((uint16_t)TIM7->CNT - start) < ticks) {
-    }
 }
 
 static void keyboard_wait_ms(uint32_t ms)
@@ -178,11 +165,11 @@ void WriteByteToKeyboard(uint8_t data)
 
     for (bit = 0; bit < 8; ++bit) {
         CLK(0);
-        keyboard_wait_us(1);
+        delay_us(1);
         DATA(data & 0x80);
-        keyboard_wait_us(1);
+        delay_us(1);
         CLK(1);
-        keyboard_wait_us(1);
+        delay_us(1);
         data = (uint8_t)(data << 1);
     }
 }
@@ -191,10 +178,10 @@ void WriteByteToKeyboard(uint8_t data)
 static void strobe(uint32_t high_us, uint32_t low_us)
 {
     SEL(1);
-    keyboard_wait_us(high_us);
+    delay_us(high_us);
     SEL(0);
     if (low_us > 0) {
-        keyboard_wait_us(low_us);
+        delay_us(low_us);
     }
 }
 
@@ -207,7 +194,7 @@ void SendLcdDataToKeyboard(void)
     keyboard_data_mode(1);
 
     WriteByteToKeyboard(0x02);
-    keyboard_wait_us(5);
+    delay_us(5);
 
     strobe(2, 3);
 
@@ -216,7 +203,7 @@ void SendLcdDataToKeyboard(void)
         WriteByteToKeyboard(keylcd_buf[i]);
     }
 
-    keyboard_wait_us(5);
+    delay_us(5);
     SEL(1);
 }
 
@@ -225,7 +212,7 @@ void SendCommand1ToKeyboard(void)
 {
     strobe(2, 2);
     WriteByteToKeyboard(0x3C);
-    keyboard_wait_us(5);
+    delay_us(5);
     strobe(2, 2);
     WriteByteToKeyboard(0x69);
 }
@@ -244,17 +231,17 @@ uint8_t ScanKeyColumn(uint8_t col)
     int bit;
 
     keyboard_data_mode(0);
-    keyboard_wait_us(10);
+    delay_us(10);
     for (bit = 0; bit < 8; ++bit) {
         data = (uint8_t)(data << 1);
         CLK(0);
-        keyboard_wait_us(1);
+        delay_us(1);
         if (keyboard_data_read()) {
             data |= 0x01;
         }
-        keyboard_wait_us(1);
+        delay_us(1);
         CLK(1);
-        keyboard_wait_us(1);
+        delay_us(1);
     }
     (void)col;
 
@@ -312,7 +299,7 @@ int ScanKeyboardAndRefreshDisplay(char code, const char *value)
     keyboard_wait_ms(2);
 
     SendCommand1ToKeyboard();
-    keyboard_wait_us(500);
+    delay_us(500);
     SendCommand2ToKeyboard();
 
     keyboard_wait_ms(5);

@@ -1,5 +1,7 @@
 #include "display.h"
 
+#include "delay.h"
+
 #include <string.h>
 
 /*
@@ -17,10 +19,9 @@
 
 #ifdef DISPLAY_HOST_TEST
 
-/* the tests on the PC: the pins and the waits are two functions that the test records */
+/* the tests on the PC: the pins are a function that the test records (the waits are delay_us, which the test provides too) */
 enum { DISPLAY_PIN_SEL = 0, DISPLAY_PIN_CLK = 1, DISPLAY_PIN_DATA = 2 };
 extern void display_pin(int pin, int high);
-extern void display_wait_us(uint32_t us);
 
 #else
 
@@ -42,21 +43,6 @@ static void display_pin(int pin, int high)
     default:
         HAL_GPIO_WritePin(LCD_DATA_GPIO_Port, LCD_DATA_Pin, level);
         break;
-    }
-}
-
-/* microseconds by TIM6, which main.c sets up as a free running 16 bit counter of the timer clock (no prescaler) and which nothing else uses (port.c leaves TIM6
-   and TIM7 to the display and the keyboard). The longest wait here is 150 us, far below the 4 ms the counter takes to turn round. */
-static void display_wait_us(uint32_t us)
-{
-    const uint32_t ticks = us * (SystemCoreClock / 1000000u);
-    uint16_t start;
-
-    if (!(TIM6->CR1 & TIM_CR1_CEN)) {
-        TIM6->CR1 |= TIM_CR1_CEN;
-    }
-    start = (uint16_t)TIM6->CNT;
-    while ((uint16_t)((uint16_t)TIM6->CNT - start) < ticks) {
     }
 }
 
@@ -293,14 +279,14 @@ void WriteByteToLcd(uint8_t data)
 {
     int bit;
 
-    display_wait_us(5);
+    delay_us(5);
     for (bit = 0; bit < 8; ++bit) {
         DATA(data & 0x80);
-        display_wait_us(5);
+        delay_us(5);
         CLK(0);
-        display_wait_us(1);
+        delay_us(1);
         CLK(1);
-        display_wait_us(5);
+        delay_us(5);
         data = (uint8_t)(data << 1);
     }
 }
@@ -312,11 +298,11 @@ void WriteChkToLcd(uint16_t chk)
 
     for (bit = 0; bit < 12; ++bit) {
         DATA(chk & 0x800);
-        display_wait_us(10);
+        delay_us(10);
         CLK(0);
-        display_wait_us(10);
+        delay_us(10);
         CLK(1);
-        display_wait_us(10);
+        delay_us(10);
         chk = (uint16_t)(chk << 1);
     }
 }
@@ -329,30 +315,30 @@ void WriteBlockToLcd(const uint8_t *block, uint8_t length)
     uint8_t i;
 
     SEL(0);
-    display_wait_us(50);
+    delay_us(50);
 
     DATA(1);
-    display_wait_us(10);
+    delay_us(10);
     CLK(0);
-    display_wait_us(1);
+    delay_us(1);
     CLK(1);
-    display_wait_us(10);
+    delay_us(10);
 
     WriteByteToLcd(0x40);
     for (i = 0; i < length; ++i) {
         WriteByteToLcd(block[i]);
     }
 
-    display_wait_us(10);
+    delay_us(10);
     SEL(1);
-    display_wait_us(150);
+    delay_us(150);
     for (i = 0; i < 5; ++i) {
         SEL(0);
-        display_wait_us(10);
+        delay_us(10);
         WriteChkToLcd(chk_buf[i]);
-        display_wait_us(10);
+        delay_us(10);
         SEL(1);
-        display_wait_us(3);
+        delay_us(3);
     }
 }
 

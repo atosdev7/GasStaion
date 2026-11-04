@@ -153,7 +153,7 @@ static int port_hook(void *ctx)
 }
 
 /* The timer: every INPUT_PICK_MS one pick of each pin goes into its buffer. It decides nothing and changes no state of the board (the state changes in check_*_status,
-   in the main loop, where the board can save). It is the 1 ms tick of the HAL (SysTick) counted to INPUT_PICK_MS, so TIM6 and TIM7 stay free for the display and
+   in the main loop, where the board can save). It is the 1 ms tick of the HAL (SysTick) counted to INPUT_PICK_MS, so TIM6 (delay_us, delay.c) and TIM7 (free) stay free for the display and
    keyboard drivers. HAL_IncTick is weak in the HAL: this one does what it does and the picks. */
 void HAL_IncTick(void)
 {

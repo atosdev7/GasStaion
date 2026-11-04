@@ -58,7 +58,7 @@ int keyboard_data_read(void)
     return level;
 }
 
-void keyboard_wait_us(uint32_t us)
+void delay_us(uint32_t us)
 {
     if (event_count < EVENTS_MAX) {
         events[event_count++] = (int)us;
@@ -121,7 +121,6 @@ typedef int GPIO_PinState;
 #define HAL_GPIO_Init(port, init) keyboard_data_mode((init)->Mode == GPIO_MODE_OUTPUT_PP)
 #define HAL_GPIO_ReadPin(port, pin) keyboard_data_read()
 #define HAL_Delay(ms) keyboard_wait_ms(ms)
-#define delay_us(us) keyboard_wait_us(us)
 
 static void old_SendLcdDataToKeyboard(void);
 static void old_SendCommand1ToKeyboard(void);
