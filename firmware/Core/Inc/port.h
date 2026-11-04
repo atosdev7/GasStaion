@@ -15,8 +15,15 @@ void port_init(Hal *hal, UiHal *ui);
 /* The next received byte of the RS-485 line, or -1 when there is none. */
 int port_rx_byte(void);
 
-/* Sends the answer: the line driver is switched on, the bytes go out, the line driver is switched off. Returns after the last bit. */
-void port_send(const uint8_t *data, size_t len);
+/* The answer is copied and sent by DMA: the line driver is switched on, the bytes go out without the main loop, and the driver is switched off by the transmit-complete
+   interrupt (after the last bit). Returns 1 when the answer is on its way, 0 when it could not be sent (the previous answer is still going, or the DMA refused): the
+   master asks again. */
+int port_send(const uint8_t *data, size_t len);
+
+/* How many answers could not be sent since the start (for the bench). */
+uint16_t port_tx_dropped(void);
+
+#define PORT_TX_MAX 71   /* the longest frame: STX ADDR SEQ CMD LEN 64 data CRC CRC */
 
 /* 1 while the POWER_OFF input says the supply is cut. */
 int port_power_cut(void);

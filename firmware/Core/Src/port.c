@@ -5,6 +5,8 @@
 #include "w25q.h"
 #include "ui_drivers.h"
 
+#include <string.h>
+
 extern TIM_HandleTypeDef htim1;
 extern RTC_HandleTypeDef hrtc;
 extern SPI_HandleTypeDef hspi3;
@@ -137,6 +139,9 @@ static int port_save(void *ctx, const Persist *in)
    (every board's requests and answers pass here). A power of two. */
 #define RX_RING 512
 
+static volatile uint8_t tx_busy_;       /* an answer is going out (see the transmit part below) */
+static void port_tx_finished(void);
+
 static uint8_t rx_byte_;
 static volatile uint8_t ring_[RX_RING];
 static volatile uint16_t head_;
@@ -159,6 +164,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART6) {
         HAL_UART_Receive_IT(&huart6, &rx_byte_, 1); /* an overrun or a framing error: the byte is lost, the receiver goes on */
+        if (tx_busy_ && huart->gState == HAL_UART_STATE_READY) {
+            port_tx_finished();                     /* a DMA error ended the answer: the driver is switched off, the master asks again */
+        }
     }
 }
 
@@ -175,11 +183,73 @@ int port_rx_byte(void)
     return byte;
 }
 
-void port_send(const uint8_t *data, size_t len)
+/* The answer goes out by DMA (USART6_TX is DMA2 stream 6, channel 5): the main loop is not held while the bytes go. The driver of the line (RE and DE are one pin) is
+   switched on before and off when the last bit has gone (the transmit-complete interrupt). The bytes are copied: the core reuses its answer buffer for the next frame. */
+static DMA_HandleTypeDef hdma_tx_;
+static uint8_t tx_buf_[PORT_TX_MAX];
+static volatile uint16_t tx_dropped_;
+
+static void port_tx_dma_init(void)
 {
-    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_SET); /* the driver on (RE and DE are one pin) */
-    HAL_UART_Transmit(&huart6, (uint8_t *)data, (uint16_t)len, 50);   /* returns after the last bit has gone */
-    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_RESET);
+    __HAL_RCC_DMA2_CLK_ENABLE();
+    hdma_tx_.Instance = DMA2_Stream6;
+    hdma_tx_.Init.Channel = DMA_CHANNEL_5;
+    hdma_tx_.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_tx_.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_tx_.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_tx_.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_tx_.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_tx_.Init.Mode = DMA_NORMAL;
+    hdma_tx_.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_tx_.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    HAL_DMA_Init(&hdma_tx_);
+    __HAL_LINKDMA(&huart6, hdmatx, hdma_tx_);
+    HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 1, 0);   /* below the receive interrupt of the line */
+    HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
+}
+
+/* (here and not in stm32f4xx_it.c: CubeMX writes that file again) */
+void DMA2_Stream6_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&hdma_tx_);
+}
+
+static void port_tx_finished(void)
+{
+    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_RESET);   /* the driver off: the line is listened to again */
+    tx_busy_ = 0;
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART6) {
+        port_tx_finished();
+    }
+}
+
+int port_send(const uint8_t *data, size_t len)
+{
+    if (len == 0 || len > sizeof(tx_buf_) || tx_busy_) {
+        ++tx_dropped_;           /* the master asks again, and a repeated request gets the same answer again */
+
+        return 0;
+    }
+    memcpy(tx_buf_, data, len);
+    tx_busy_ = 1;
+    HAL_GPIO_WritePin(RS485_RE_GPIO_Port, RS485_RE_Pin, GPIO_PIN_SET);
+    if (HAL_UART_Transmit_DMA(&huart6, tx_buf_, (uint16_t)len) != HAL_OK) {
+        port_tx_finished();
+        ++tx_dropped_;
+
+        return 0;
+    }
+
+    return 1;
+}
+
+uint16_t port_tx_dropped(void)
+{
+    return tx_dropped_;
 }
 
 /* ---------------------------------------------------------------- beeper, LEDs */
@@ -252,6 +322,7 @@ void port_init(Hal *hal, UiHal *ui)
     last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
     total_count_ = 0;
 
+    port_tx_dma_init();
     HAL_UART_Receive_IT(&huart6, &rx_byte_, 1);
 
     w25q_init(&hspi3);
