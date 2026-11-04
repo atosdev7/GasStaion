@@ -30,7 +30,7 @@ void UpdateDisplay(const char *kg, const char *litres, const char *density, cons
 void RefreshDisplay(void);
 
 /* Scans the keyboard and, in the same time, refreshes the display of the keyboard board (6 to 8 digits). Takes about 20 ms. Returns one key code of
-   ui.h (UI_KEY_0 .. UI_KEY_9, UI_KEY_POINT, UI_KEY_ENTER, UI_KEY_CLEAR, UI_KEY_SELECT) for each new press and UI_KEY_NONE (0) otherwise: it
+   ui.h (UI_KEY_0 .. UI_KEY_9, UI_KEY_POINT, UI_KEY_NEXT, UI_KEY_PREV, UI_KEY_TOTAL, UI_KEY_CLEAR, UI_KEY_SET, UI_KEY_FUNCTION: 17 keys) for each new press and UI_KEY_NONE (0) otherwise: it
    debounces itself, so a key that is held gives its code once. */
 int ScanKeyboardAndRefreshDisplay(void);
 

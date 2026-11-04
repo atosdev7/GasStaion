@@ -33,7 +33,18 @@ static uint32_t get32(const uint8_t *at)
     return (uint32_t)at[0] | ((uint32_t)at[1] << 8) | ((uint32_t)at[2] << 16) | ((uint32_t)at[3] << 24);
 }
 
-/* the record: magic(2) seq(4) payload(50, then zeros) crc32(4) */
+static void put48(uint8_t *at, uint64_t v)
+{
+    put32(at, (uint32_t)(v & 0xFFFFFFFFu));
+    put16(at + 4, (uint16_t)((v >> 32) & 0xFFFFu));
+}
+
+static uint64_t get48(const uint8_t *at)
+{
+    return (uint64_t)get32(at) | ((uint64_t)get16(at + 4) << 32);
+}
+
+/* the record: magic(2) seq(4) payload(53, then zeros) crc32(4); the first payload byte holds mode (bit 0), result.held (bit 1), inflight.active (bit 2) and result.reason (bits 3 and 4) */
 static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
 {
     uint8_t *q = rec + PAYLOAD_AT;
@@ -43,7 +54,7 @@ static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
     rec[1] = MAGIC1;
     put32(rec + 2, seq);
 
-    *q++ = p->config.mode;
+    *q++ = (uint8_t)((p->config.mode & 1) | ((p->result.held & 1) << 1) | ((p->inflight.active & 1) << 2) | ((p->result.reason & 3) << 3));
     memcpy(q, p->config.fuel, FUEL_LEN);
     q += FUEL_LEN;
     put16(q, p->config.density);
@@ -52,7 +63,6 @@ static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
     q += 4;
     put32(q, p->last_acked_id);
     q += 4;
-    *q++ = p->result.held;
     put32(q, p->result.id);
     q += 4;
     put32(q, p->result.preset_g);
@@ -61,8 +71,6 @@ static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
     q += 4;
     put32(q, p->result.dispensed_ml);
     q += 4;
-    *q++ = p->result.reason;
-    *q++ = p->inflight.active;
     put32(q, p->inflight.id);
     q += 4;
     put32(q, p->inflight.preset_g);
@@ -70,6 +78,8 @@ static void pack(uint8_t *rec, uint32_t seq, const Persist *p)
     put32(q, p->inflight.target_pulses);
     q += 4;
     put32(q, p->inflight.pulses);
+    q += 4;
+    put48(q, p->total_g);
 
     put32(rec + CRC_AT, crc32(rec, CRC_AT));
 }
@@ -78,7 +88,14 @@ static void unpack(const uint8_t *rec, Persist *p)
 {
     const uint8_t *q = rec + PAYLOAD_AT;
 
-    p->config.mode = *q++;
+    {
+        const uint8_t flags = *q++;
+
+        p->config.mode = flags & 1;
+        p->result.held = (flags >> 1) & 1;
+        p->inflight.active = (flags >> 2) & 1;
+        p->result.reason = (flags >> 3) & 3;
+    }
     memcpy(p->config.fuel, q, FUEL_LEN);
     q += FUEL_LEN;
     p->config.density = get16(q);
@@ -87,7 +104,6 @@ static void unpack(const uint8_t *rec, Persist *p)
     q += 4;
     p->last_acked_id = get32(q);
     q += 4;
-    p->result.held = *q++;
     p->result.id = get32(q);
     q += 4;
     p->result.preset_g = get32(q);
@@ -96,8 +112,6 @@ static void unpack(const uint8_t *rec, Persist *p)
     q += 4;
     p->result.dispensed_ml = get32(q);
     q += 4;
-    p->result.reason = *q++;
-    p->inflight.active = *q++;
     p->inflight.id = get32(q);
     q += 4;
     p->inflight.preset_g = get32(q);
@@ -105,6 +119,8 @@ static void unpack(const uint8_t *rec, Persist *p)
     p->inflight.target_pulses = get32(q);
     q += 4;
     p->inflight.pulses = get32(q);
+    q += 4;
+    p->total_g = get48(q);
 }
 
 static int record_good(const uint8_t *rec)

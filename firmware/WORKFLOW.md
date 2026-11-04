@@ -113,7 +113,7 @@ stateDiagram-v2
     DISPENSING --> DONE: the fill ends, the result is held (auto mode)
     DONE --> IDLE: ACK_RESULT with that session id
     IDLE --> IDLE: SHOW_BALANCE (the display shows a number for 60 s)
-    IDLE --> SET: ENTER at the keypad (manual mode, the amount is the preset)
+    IDLE --> SET: Set key at the keypad (manual mode, the amount is the preset)
     SET --> DISPENSING: the gun is up (manual mode, the board starts by itself)
     DISPENSING --> IDLE: the fill ends, nothing is held (manual mode)
     SET --> IDLE: CLEAR key (manual mode, drops the amount)

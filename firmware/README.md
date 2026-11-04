@@ -10,7 +10,7 @@ The board of one nozzle: it talks to the Smart210 over RS-485 by [PROTOCOL.md](.
 |---|---|
 | `board.c/h`, `hal.h`, `checksum.c/h` | The core, with no STM32 code: frame parser, answers, state machine, both modes, the fill (counts, pump, hook, no flow), the held result, recovery after a power cut. `hal.h` is the table of what it needs from the hardware (it now has `beep`, for SELECT). |
 | `store.c/h` | The state over a power cut: a ring of 64-byte records with CRC-32 in the SPI flash. A write that the power cut interrupts is ignored at the next start. |
-| `ui.c/h` | What the four displays show in each state (kg, litres, density, and the keyboard board's display), the keys (select and clear are reported, digits and ENTER type the amount in manual mode), and the pass of the main loop that scans the keyboard and refreshes the display board. |
+| `ui.c/h` | What the four displays show in each state (kg, litres, density, and the keyboard board's display), the keys (Function and Clear are reported in auto mode; the digits, Dot and Set type and take the amount in manual mode; Total shows the total), and the pass of the main loop that scans the keyboard and refreshes the display board. |
 | `w25q.c/h` | The 25Q32 on SPI3 (`ROM_CS`) as the flash of `Store`. |
 | `port.c/h` | The board under the core: flow meter counter (TIM1), relays 1 and 2 (pump), the hook (`SWITCH`), RTC, serial number, RS-485 (USART6: receive interrupt into a ring, transmit by DMA, `RS485_RE`), beeper, LEDs. |
 | `app.c/h` | `app_init()` and `app_loop()`, called from `main.c` (in its USER CODE regions). |
@@ -26,12 +26,29 @@ The board of one nozzle: it talks to the Smart210 over RS-485 by [PROTOCOL.md](.
 
 ## How a fill goes
 
-- Auto: the supplier presses the select key (it only shows up as SELECT_KEY in POLL; the Smart210 answers with SELECT and the board **beeps**, nothing else changes) -> the Smart210 sets the preset (SET_PRESET, the board is SET and shows it) -> the gun is taken up (GUN_UP in POLL, a level) -> the Smart210 sends **START with the session id** (4 bytes, never 0) -> the board keeps the id in the memory with the fill, runs, and the pump runs **while the nozzle is lifted** (`SWITCH` low) -> the preset is reached, the pump stops, the result (with that id) is held until ACK_RESULT. The board **never starts an auto fill by itself** and has **no counter of fills**: the id is the Smart210's. A preset of zero is the cancel (SET_PRESET 0 in IDLE or SET); there are no DESELECT and CANCEL commands.
-- The clear key is reported too (CLEAR_KEY); the Smart210 drops its queue and sets the preset to zero.
+- Auto: the supplier presses the select key (the **Function** key of the keyboard) (it only shows up as SELECT_KEY in POLL; the Smart210 answers with SELECT and the board **beeps**, nothing else changes) -> the Smart210 sets the preset (SET_PRESET, the board is SET and shows it) -> the gun is taken up (GUN_UP in POLL, a level) -> the Smart210 sends **START with the session id** (4 bytes, never 0) -> the board keeps the id in the memory with the fill, runs, and the pump runs **while the nozzle is lifted** (`SWITCH` low) -> the preset is reached, the pump stops, the result (with that id) is held until ACK_RESULT. The board **never starts an auto fill by itself** and has **no counter of fills**: the id is the Smart210's. A preset of zero is the cancel (SET_PRESET 0 in IDLE or SET); there are no DESELECT and CANCEL commands.
+- The **Clear** key is reported too (CLEAR_KEY); the Smart210 drops its queue and sets the preset to zero.
 - **SHOW_BALANCE** (IDLE only, 4 bytes of grams, at most 9999.99 kg = `MAX_SHOWN_G`): the display shows the number (a card's balance) for 60 s (`Params.balance_show_ms`) or until SHOW_BALANCE 0, SET_PRESET or a fill; it is not a preset and arms nothing (`board_shown_grams()` is what the display reads).
-- Manual: the supplier types the amount and presses ENTER -> the board is SET with that preset (`board_manual_amount`) -> when the gun is up the board starts, runs and ends the fill by itself. It reports no keys, **holds no result and reports no end of a fill** (back to IDLE, preset cleared), refuses SELECT, SET_PRESET, START and SHOW_BALANCE with WRONG_STATE and answers only POLL, INFO, the config and the time. The clear key drops an amount that waits for the gun. A power cut in the middle of a manual fill just drops the fill.
+- Manual: the supplier types the amount and presses **Set** -> the board is SET with that preset (`board_manual_amount`) -> when the gun is up the board starts, runs and ends the fill by itself. It reports no keys, **holds no result and reports no end of a fill** (back to IDLE, preset cleared), refuses SELECT, SET_PRESET, START and SHOW_BALANCE with WRONG_STATE and answers only POLL, INFO, the config and the time. The clear key drops an amount that waits for the gun. A power cut in the middle of a manual fill just drops the fill.
 - The fill ends by itself (result reason 1) when: no count for 30 s after the flow began; the nozzle is put back on its hook for 3 s after the flow began; or no count at all 10 minutes after START. The values are in `Params` (`board_default_params()`), to be tuned on the bench.
 - The result of a fill that reached its preset says exactly the preset (the calibration decides what was dispensed); a fill that stopped early says what the counts say, never more than the preset.
+### The keyboard (17 keys)
+
+The keyboard driver returns one code per press (`ui.h`): `UI_KEY_0` .. `UI_KEY_9`, `UI_KEY_POINT` (Dot), `UI_KEY_NEXT`, `UI_KEY_PREV`, `UI_KEY_TOTAL`, `UI_KEY_CLEAR`, `UI_KEY_SET`, `UI_KEY_FUNCTION`. A key beeps shortly when it is pressed.
+
+| Key | Auto mode | Manual mode |
+|---|---|---|
+| 0 to 9, Dot | nothing | IDLE: types the amount in kg on the keypad display (at most 3 digits before the point, 2 after, one point); a key that does not fit is ignored |
+| Clear | reported (CLEAR_KEY) | IDLE with an amount typed: removes the last character; IDLE with nothing typed: nothing; SET (the amount waits for the gun): drops the amount |
+| Set | nothing | IDLE: takes the typed amount as the preset (long beep, the keypad clears, the board is SET; with nothing typed or 0: "Err" on the kg display for 1.5 s). The fill starts when the gun is up |
+| Function | the select key: only beeps and is reported (SELECT_KEY) | nothing |
+| Total | nothing | IDLE or SET: shows the total of the board for 5 s (below) |
+| Next, Prev | not used yet | not used yet |
+
+In manual mode no key does anything while the fill runs (the gun down stops the pump, the gun up goes on) and in FAULT.
+
+**The total (Total key, manual mode):** the board keeps every gram it has dispensed (`Persist.total_g`: all fills, both modes, 48 bits in the flash record, added when a fill ends; a fill cut by the power adds what its last save of the count had). The Total key shows it in **whole kg** as one number of 12 digits over the two numeric displays: the kg display holds the upper six digits (blank while the total is shorter), the litres display the lower six (with zeros in front when the upper digits are lit). It goes back to the usual display after 5 s, with any other key and when the state changes (the gun up). The total has no reset and no key sets it. **A flash record written by older firmware (before 2026-11-03) has another layout: the flags `mode`, `held`, `active` and `reason` are in one byte now, and the board must be started with an erased flash.**
+
 - A power cut: the `POWER_OFF` input (read in the main loop) stops the pump at once and writes the counts so far; after the restart an auto fill is a result with reason 2 (a manual fill is dropped).
 - POLL answers 19 bytes: state, flags (SELECT_KEY, RESULT, FAULT, CLEAR_KEY, GUN_UP), fault, session id (while a fill runs or a result waits, else 0), grams, millilitres, and the preset (while SET, DISPENSING or DONE).
 

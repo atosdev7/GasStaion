@@ -3,7 +3,7 @@
 
 /*
  * The dispenser's own displays and keyboard: what is shown in each state of the board, the keys (select and clear are reported to the Smart210,
- * the digits and ENTER type the amount in manual mode). No hardware in here: the displays, the keyboard, the beeper and the LEDs come in through
+ * the digits, Dot and Set type and take the amount in manual mode, Total shows the total). No hardware in here: the displays, the keyboard, the beeper and the LEDs come in through
  * UiHal (port.c fills it in; the display and keyboard drivers are the three functions of ui_drivers.h).
  *
  * The four displays (texts as ui_drivers.h describes them):
@@ -24,9 +24,12 @@ enum {
     UI_KEY_NONE = 0,
     UI_KEY_0 = 1, UI_KEY_1, UI_KEY_2, UI_KEY_3, UI_KEY_4, UI_KEY_5, UI_KEY_6, UI_KEY_7, UI_KEY_8, UI_KEY_9,
     UI_KEY_POINT,
-    UI_KEY_ENTER,
+    UI_KEY_NEXT,       /* not used yet */
+    UI_KEY_PREV,       /* not used yet */
+    UI_KEY_TOTAL,      /* manual mode: shows the total the board has dispensed */
     UI_KEY_CLEAR,
-    UI_KEY_SELECT
+    UI_KEY_SET,        /* manual mode: takes the typed amount */
+    UI_KEY_FUNCTION    /* auto mode: the select key (beeps, reported to the Smart210) */
 };
 
 #define UI_TEXT_MAX (UI_KEYPAD_DIGITS + UI_KEYPAD_DIGITS + 1)   /* the characters of a text: a digit each and, at most, a point each */
@@ -42,6 +45,7 @@ typedef struct {
 } UiHal;
 
 #define UI_ENTRY_MAX 7   /* 999.99 */
+#define UI_TOTAL_SHOW_MS 5000   /* how long the Total key shows the total */
 
 typedef struct {
     const UiHal *hal;
@@ -51,6 +55,7 @@ typedef struct {
     char entry[UI_ENTRY_MAX + 1];
     uint8_t entry_len;
     uint32_t note_ms;               /* while it runs the kg display says "Err": a key was refused */
+    uint32_t total_ms;              /* while it runs the two numeric displays show the total of the board (the Total key) */
     uint8_t last_state;
 } Ui;
 

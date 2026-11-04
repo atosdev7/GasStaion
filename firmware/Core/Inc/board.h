@@ -129,6 +129,8 @@ int board_manual_amount(Board *b, uint32_t grams);
 
 /* The balance the display shows (SHOW_BALANCE), 0 when none. */
 uint32_t board_shown_grams(const Board *b);
+/* Everything this board has dispensed, in whole kg (what the Total key shows). */
+uint64_t board_total_kg(const Board *b);
 void board_set_fault(Board *b, uint8_t code);
 void board_power_fail(Board *b);
 

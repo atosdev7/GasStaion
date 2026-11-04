@@ -1049,6 +1049,43 @@ static void test_power_cut(void)
     CHECK_EQ(r.fake.pump_on, 0);
 }
 
+/* the total of the board: every gram of every fill, both modes, a fill cut by the power included; kept over a power cut */
+static void test_total(void)
+{
+    Rig r;
+    uint64_t before;
+    uint32_t id;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_MANUAL, 8300, 100000);
+    CHECK_EQ((long long)r.board.p.total_g, 0);
+    CHECK_EQ((long long)board_total_kg(&r.board), 0);
+
+    /* a manual fill that reaches the preset */
+    CHECK(board_manual_amount(&r.board, 8300));
+    run(&r, 1200, 10);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ((long long)r.board.p.total_g, 8300);
+    CHECK_EQ((long long)board_total_kg(&r.board), 8);
+
+    /* a manual fill cut by the power: what it dispensed is in the total (what the last save of the count had, about 1.65 kg), and the total survives the restart */
+    before = r.board.p.total_g;
+    CHECK(board_manual_amount(&r.board, 8300));
+    run(&r, 300, 10);
+    rig_power_cycle(&r);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK(r.board.p.total_g > before + 1000 && r.board.p.total_g < before + 2500);   /* the count of the last save (every 2 s) */
+
+    /* an auto fill counts when its result is held, once (the acknowledgement adds nothing) */
+    configure(&r, MODE_AUTO, 8300, 100000);
+    before = r.board.p.total_g;
+    id = start_auto(&r, 5000);
+    run(&r, 800, 10);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ((long long)r.board.p.total_g, (long long)(before + 5000));
+    ask_u32(&r, CMD_ACK_RESULT, id);
+    CHECK_EQ((long long)r.board.p.total_g, (long long)(before + 5000));
+}
 static void test_power_fail_signal(void)
 {
     Rig r;
@@ -1580,6 +1617,7 @@ int main(void)
     test_show_balance();
     test_poll_status();
     test_manual_mode();
+    test_total();
     test_power_cut();
     test_power_fail_signal();
     test_faults();

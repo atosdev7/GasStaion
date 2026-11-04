@@ -55,6 +55,7 @@ typedef struct {
     uint32_t last_acked_id;        /* the session id of the last result that was acknowledged (a repeated ACK_RESULT is answered again) */
     Result result;
     Inflight inflight;
+    uint64_t total_g;              /* every gram this board has ever dispensed (all fills, both modes, a fill cut by the power included); only 48 bits are stored */
 } Persist;
 
 typedef struct {

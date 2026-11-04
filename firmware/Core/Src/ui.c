@@ -205,6 +205,46 @@ static void text_density(char *out, const Config *c)
 
 enum { SHOW_KG = 0, SHOW_LITRES, SHOW_DENSITY, SHOW_KEYPAD };
 
+/* The total of the board in whole kg over the two numeric displays as one number of 12 digits: the kg display holds the upper 6 digits (blank while the number is
+   shorter), the litres display the lower 6 (zeros in front when the upper ones are lit). */
+static void text_total(char *kg, char *litres, uint64_t total_kg)
+{
+    uint64_t high = total_kg / 1000000u;
+    const uint32_t low = (uint32_t)(total_kg % 1000000u);
+    char digits[8];
+    Out o;
+    uint8_t n = 0;
+    uint8_t i;
+
+    if (high > 999999u) {
+        high = 999999u;                    /* 12 digits is all there is */
+    }
+    kg[0] = 0;
+    litres[0] = 0;
+    if (high > 0) {
+        uint32_t h = (uint32_t)high;
+
+        char hi[8];
+
+        o.at = hi;
+        o.left = sizeof(hi);
+        out_uint(&o, h);
+        text_right(kg, UI_KG_DIGITS, hi);
+    } else {
+        text_right(kg, UI_KG_DIGITS, "");
+    }
+    for (i = 0; i < 6; ++i) {
+        digits[i] = (char)('0' + (low / (i == 0 ? 100000u : i == 1 ? 10000u : i == 2 ? 1000u : i == 3 ? 100u : i == 4 ? 10u : 1u)) % 10);
+    }
+    digits[6] = 0;
+    if (high == 0) {
+        while (n < 5 && digits[n] == '0') {
+            digits[n++] = ' ';           /* no zeros in front of the first digit */
+        }
+    }
+    text_right(litres, UI_LITRES_DIGITS, digits);
+}
+
 static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
 {
     const Board *b = ui->board;
@@ -252,6 +292,9 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
         break;
     }
 
+    if (ui->total_ms > 0) {
+        text_total(text[SHOW_KG], text[SHOW_LITRES], board_total_kg(b));     /* the Total key */
+    }
     if (ui->note_ms > 0) {
         text_right(text[SHOW_KG], UI_KG_DIGITS, "Err");                     /* a key was refused */
     }
@@ -297,10 +340,22 @@ static void on_key(Ui *ui, int key)
     }
     ui->hal->beep(ui->hal->ctx, 30);
 
-    if (key == UI_KEY_SELECT) {
+    if (key == UI_KEY_TOTAL) {
+        /* manual mode, when no fill runs: the total of the board for a few seconds; the key does nothing in auto mode */
+        if (manual && (b->state == STATE_IDLE || b->state == STATE_SET)) {
+            ui->total_ms = UI_TOTAL_SHOW_MS;
+        }
+
+        return;
+    }
+    ui->total_ms = 0;                       /* any other key puts the usual display back */
+    if (key == UI_KEY_FUNCTION) {
         board_key_select(b);
 
         return;
+    }
+    if (key == UI_KEY_NEXT || key == UI_KEY_PREV) {
+        return;                             /* not used yet */
     }
     if (key == UI_KEY_CLEAR && (!manual || (b->state == STATE_IDLE && ui->entry_len == 0) || b->state == STATE_SET)) {
         board_key_clear(b);   /* auto: reported to the Smart210; manual: drops an amount that waits for the gun */
@@ -318,7 +373,7 @@ static void on_key(Ui *ui, int key)
         if (ui->entry_len > 0) {
             ui->entry[--ui->entry_len] = 0;
         }
-    } else if (key == UI_KEY_ENTER) {
+    } else if (key == UI_KEY_SET) {
         const uint32_t grams = ui_entry_grams(ui);
 
         if (grams == 0 || !board_manual_amount(b, grams)) {
@@ -347,7 +402,11 @@ void ui_tick(Ui *ui, uint32_t elapsed_ms)
     if (ui->note_ms > 0) {
         ui->note_ms = ui->note_ms > elapsed_ms ? ui->note_ms - elapsed_ms : 0;
     }
+    if (ui->total_ms > 0) {
+        ui->total_ms = ui->total_ms > elapsed_ms ? ui->total_ms - elapsed_ms : 0;
+    }
     if (ui->board->state != ui->last_state) {
+        ui->total_ms = 0;                   /* the gun is up, the fill is over: the display is for the fill */
         /* a change the person at the dispenser should notice */
         if (ui->board->state == STATE_DONE) {
             ui->hal->beep(ui->hal->ctx, 400);

@@ -244,6 +244,8 @@ static void hold_result(Board *b, uint32_t id, uint32_t preset_g, uint32_t g, ui
 {
     Result *r = &b->p.result;
 
+    b->p.total_g += g;                  /* the total of the board counts every fill, whatever the mode; it is saved with the result below */
+
     if (b->p.config.mode == MODE_MANUAL) {
         /* a manual board holds no result and tells nothing about the end of a fill */
         b->p.inflight.active = 0;
@@ -476,7 +478,11 @@ void board_init(Board *b, const Hal *hal, uint8_t address, const Params *params)
         memset(&b->p, 0, sizeof(b->p)); /* a new board: not configured */
     }
     if (b->p.inflight.active && b->p.config.mode == MODE_MANUAL) {
-        /* a manual board holds no result: a fill that a power cut interrupted is dropped */
+        /* a manual board holds no result: a fill that a power cut interrupted is dropped (what it dispensed is in the total) */
+        uint32_t g, ml;
+
+        partial_amounts(&b->p.config, b->p.inflight.pulses, b->p.inflight.preset_g, &g, &ml);
+        b->p.total_g += g;
         b->p.inflight.active = 0;
         b->p.result.held = 0;
         save(b);
@@ -901,6 +907,11 @@ void board_key_clear(Board *b)
 uint32_t board_shown_grams(const Board *b)
 {
     return b->shown_g;
+}
+
+uint64_t board_total_kg(const Board *b)
+{
+    return b->p.total_g / 1000;
 }
 
 /* Manual mode: the amount the supplier confirmed is the preset (the dispenser is SET); the fill starts when the gun is up. */

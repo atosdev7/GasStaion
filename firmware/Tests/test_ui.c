@@ -236,7 +236,7 @@ static void test_auto_screens(void)
     CHECK_DISPLAY(DENSITY, "0.830");
 
     /* the select key only reports itself to the Smart210 (the state does not change); the key is heard */
-    type(&rig, UI_KEY_SELECT);
+    type(&rig, UI_KEY_FUNCTION);
     CHECK_EQ(rig.board.state, STATE_IDLE);
     CHECK_EQ(rig.beeps, 1);
     CHECK(rig.board.key_events & FLAG_SELECT_KEY);
@@ -379,7 +379,7 @@ static void test_manual_entry(void)
     /* ENTER with nothing typed is refused: Err for a moment, no fill */
     rig_new(&rig);
     boot(&rig, MODE_MANUAL, 2);
-    type(&rig, UI_KEY_ENTER);
+    type(&rig, UI_KEY_SET);
     CHECK_DISPLAY(KG, "   Err");
     CHECK_EQ(rig.board.state, STATE_IDLE);
     tick(&rig, 2000);
@@ -389,7 +389,7 @@ static void test_manual_entry(void)
     type(&rig, UI_KEY_8);
     type(&rig, UI_KEY_POINT);
     type(&rig, UI_KEY_3);
-    type(&rig, UI_KEY_ENTER);
+    type(&rig, UI_KEY_SET);
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_EQ(rig.board.preset_g, 8300);
     CHECK_DISPLAY(KG, "   8.30");
@@ -411,19 +411,86 @@ static void test_manual_entry(void)
     CHECK_DISPLAY(KEYPAD, "        ");
 
     /* the select key does nothing in manual mode, and it reports nothing */
-    type(&rig, UI_KEY_SELECT);
+    type(&rig, UI_KEY_FUNCTION);
     CHECK_EQ(rig.board.state, STATE_IDLE);
     CHECK_EQ(rig.board.key_events, 0);
 
     /* the clear key with nothing typed and an amount waiting for the gun drops that amount */
     rig.fake.hook = 0;
     type(&rig, UI_KEY_4);
-    type(&rig, UI_KEY_ENTER);
+    type(&rig, UI_KEY_SET);
     CHECK_EQ(rig.board.state, STATE_SET);
     type(&rig, UI_KEY_CLEAR);
     CHECK_EQ(rig.board.state, STATE_IDLE);
 }
 
+/* the keyboard of 17 keys: the Total key shows the total of the board over the two numeric displays (manual mode), Function is the select key, Set takes an amount */
+static void test_total_key(void)
+{
+    Rig rig;
+
+    rig_new(&rig);
+    boot(&rig, MODE_MANUAL, 2);
+
+    /* nothing dispensed yet */
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(KG, "      ");
+    CHECK_DISPLAY(LITRES, "     0");
+    tick(&rig, 5100);
+    CHECK_DISPLAY(KG, "   0.00");              /* back to the usual display after 5 seconds */
+
+    /* a fill of 8.3 kg makes the total 8 kg (whole kg) */
+    type(&rig, UI_KEY_8);
+    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_3);
+    type(&rig, UI_KEY_SET);
+    flow(&rig, 1010, 10);
+    flow(&rig, 130, 0);
+    CHECK_EQ(rig.board.state, STATE_IDLE);
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(KG, "      ");
+    CHECK_DISPLAY(LITRES, "     8");
+
+    /* any other key puts the usual display back and works as usual */
+    type(&rig, UI_KEY_5);
+    CHECK_DISPLAY(KG, "   0.00");
+    CHECK_DISPLAY(KEYPAD, "       5");
+
+    /* 12 digits over the two displays: the kg display holds the upper six */
+    rig.board.p.total_g = 123456789012ULL * 1000 + 999;
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(KG, "123456");
+    CHECK_DISPLAY(LITRES, "789012");
+    rig.board.p.total_g = 1234ULL * 1000000 * 1000 + 5ULL * 1000;
+    type(&rig, UI_KEY_TOTAL);
+    tick(&rig, 10);
+    CHECK_DISPLAY(KG, "  1234");
+    CHECK_DISPLAY(LITRES, "000005");
+
+    /* an amount waiting for the gun: the total can be looked at, and the gun up puts the display of the fill back */
+    rig.fake.hook = 0;
+    type(&rig, UI_KEY_SET);                     /* the 5 that was typed: a 5 kg amount */
+    CHECK_EQ(rig.board.state, STATE_SET);
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(KG, "  1234");
+    CHECK_DISPLAY(LITRES, "000005");
+    rig.fake.hook = 1;
+    flow(&rig, 1, 0);
+    CHECK_EQ(rig.board.state, STATE_DISPENSING);
+    CHECK_DISPLAY(KG, "   0.00");
+
+    /* the auto board: the Total key does nothing, Function is the select key */
+    rig_new(&rig);
+    boot(&rig, MODE_AUTO, 2);
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_DISPLAY(LITRES, "   0.00");
+    type(&rig, UI_KEY_FUNCTION);
+    CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
+    type(&rig, UI_KEY_NEXT);
+    type(&rig, UI_KEY_PREV);
+    type(&rig, UI_KEY_SET);
+    CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
+}
 /* every pass of ui_tick scans the keyboard (20 ms) and refreshes the display board (8 to 10 ms); UpdateDisplay is only called when a text changed */
 static void test_scan_refresh_and_update(void)
 {
@@ -440,7 +507,7 @@ static void test_scan_refresh_and_update(void)
     CHECK_EQ(rig.scans, 2);
     CHECK_EQ(rig.refreshes, 2);        /* but the display board is refreshed at every pass, or the digits would go dark */
 
-    type(&rig, UI_KEY_SELECT);
+    type(&rig, UI_KEY_FUNCTION);
     CHECK_EQ(rig.updates, before);     /* the select key only reports itself: the displays do not change */
 
     request(&rig, 1, CMD_SET_PRESET, 3000, 1);
@@ -455,6 +522,7 @@ int main(void)
     test_auto_screens();
     test_numbers();
     test_manual_entry();
+    test_total_key();
     test_scan_refresh_and_update();
 
     printf("ui: %d checks, %d failed\n", checks, failures);

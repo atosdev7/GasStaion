@@ -131,6 +131,7 @@ static Persist sample(uint32_t n)
     p.inflight.preset_g = 20000;
     p.inflight.target_pulses = 24096;
     p.inflight.pulses = n * 3;
+    p.total_g = 123456789012ULL + n;
 
     return p;
 }
@@ -143,7 +144,7 @@ static int same(const Persist *a, const Persist *b)
         && a->result.dispensed_g == b->result.dispensed_g && a->result.dispensed_ml == b->result.dispensed_ml
         && a->result.reason == b->result.reason && a->inflight.active == b->inflight.active && a->inflight.id == b->inflight.id
         && a->inflight.preset_g == b->inflight.preset_g && a->inflight.target_pulses == b->inflight.target_pulses
-        && a->inflight.pulses == b->inflight.pulses;
+        && a->inflight.pulses == b->inflight.pulses && a->total_g == b->total_g;
 }
 
 static void test_blank_and_roundtrip(void)
