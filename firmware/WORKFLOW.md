@@ -268,7 +268,31 @@ flowchart TD
 | density (4 digits) | the density of the config, `0.830`; `----` when never configured |
 | keyboard board (8 digits) | the amount being typed (manual), the preset while SET and DISPENSING |
 
-## 10. Where the time goes in one pass of the main loop
+## 10. A fill, manual mode (the amount typed on the keyboard)
+
+The supplier does everything at the dispenser; the Smart210 only watches. The first digit of the keyboard's LCD (`code`) shows where the board is: `H` idle, `P` a preset waits, `F` a fill runs (`t` while the Total key shows the total, `E` for a fault); the other seven digits (`value`) show the amount.
+
+```mermaid
+flowchart TD
+    A["Idle, manual board<br/>LCD: H and blank"] --> B["Type the amount<br/>digits and Dot, Clear takes the last one off<br/>at most 3 digits before the point, 2 after<br/>LCD: H and the typed text"]
+    B --> C{"Set key"}
+    C -- "nothing typed or zero" --> X["Err on the kg display for 1.5 s<br/>nothing changes"]
+    X --> B
+    C -- "an amount" --> D["Preset waits, state SET<br/>long beep, the typed text is cleared<br/>LCD: P and the preset"]
+    D -- "Clear key" --> A
+    D -- "gun up, 10 picks agree, about 100 ms" --> E["Fill runs, state DISPENSING<br/>pump on while the gun is up<br/>LCD: F and the preset, kg and litres count up"]
+    E -- "gun hung" --> P["Pump stops, the fill waits<br/>3 s on the hook after the flow began ends it"]
+    P -- "gun up again" --> E
+    P -- "3 s on the hook" --> F
+    E -- "preset reached, TIM1 compare stops the pump<br/>or no flow 30 s, tank full, fault" --> F["Fill ends<br/>grams added to the total of the board<br/>no result held, nothing reported<br/>preset cleared"]
+    F --> A
+    T["Total key, idle or preset waits<br/>kg and litres show the total for 5 s<br/>LCD: t"] -.-> B
+```
+
+- No key does anything while a fill runs. There is no cancel: the supplier stops by hanging the gun.
+- A power cut in the middle of a manual fill drops the fill (nothing is reported), but what it dispensed up to the last save is added to the total.
+- The Function, Next and Prev keys do nothing in manual mode.
+## 11. Where the time goes in one pass of the main loop
 
 | Part | Takes | Notes |
 |---|---|---|
