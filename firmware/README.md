@@ -2,7 +2,7 @@
 
 The board of one nozzle: it talks to the Smart210 over RS-485 by [PROTOCOL.md](../PROTOCOL.md) v0.4 (firmware 1.2: four states, the gun in POLL, keys that only report, SHOW_BALANCE, the session id of START), measures the fuel with the flow meter, runs the pump and keeps its state in the SPI flash. The CubeMX project is `firmware.ioc` (CubeIDE); the code of the board is in `Core/Src` and `Core/Inc`, in files that CubeMX does not touch (it keeps them when it generates again).
 
-**Diagrams of how it works** (the parts, start-up, the main loop, a request and its answer, the states, a fill, how a fill ends, the memory over a power cut, the display and keyboard pass, and where the time goes): [WORKFLOW.md](WORKFLOW.md).
+**Diagrams of how it works** (the parts, start-up, the main loop, a request and its answer, the states, a fill, how a fill ends, the memory over a power cut, the display and keyboard pass, a manual fill typed on the keyboard, and where the time goes): [WORKFLOW.md](WORKFLOW.md).
 
 ## The files
 

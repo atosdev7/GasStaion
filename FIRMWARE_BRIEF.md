@@ -5,7 +5,7 @@ One STM32F407 board per nozzle talks to the Smart210 cashier terminal over RS-48
 **Status, 2026-11-04: the firmware is written.** `firmware/` is the CubeIDE project (`firmware.ioc`) with the whole logic of the board, checked on the PC and compiled and linked with CubeIDE's ARM GCC (about 49 KB of flash). **It has never run on a board.** What is left for you is the hardware side and the bench test (work plan 6.6). Read in this order:
 
 1. [firmware/README.md](firmware/README.md): the files, what you have to do, the timing, the memory.
-2. [firmware/WORKFLOW.md](firmware/WORKFLOW.md): nine diagrams (the parts, start-up, the main loop, a request and its answer, the states, a fill, how a fill ends, the memory over a power cut, the display and keyboard pass).
+2. [firmware/WORKFLOW.md](firmware/WORKFLOW.md): ten diagrams (the parts, start-up, the main loop, a request and its answer, the states, a fill, how a fill ends, the memory over a power cut, the display and keyboard pass, a manual fill typed on the keyboard).
 3. [PROTOCOL.md](PROTOCOL.md) for the frames and the commands. [FIRMWARE_LOGIC.md](FIRMWARE_LOGIC.md) is the older design document: its status box at the top says what the code does differently.
 
 ## What the firmware does (all of it tested on the PC)
