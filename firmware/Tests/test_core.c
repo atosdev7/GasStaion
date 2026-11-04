@@ -34,7 +34,10 @@ typedef struct {
     Persist stored;
     int has_record;     /* 1 a record exists, 0 none, -1 damaged */
     int fail_save;      /* the memory refuses */
+    int fail_save_now;  /* the save without an erase refuses (the sector was not prepared) */
     int saves;
+    int saves_now;      /* the saves without an erase (the fill in progress, the power cut) */
+    int idle_work;      /* housekeeping calls */
     uint32_t pulses;
     int pump_on;
     int pump_changes;
@@ -70,6 +73,25 @@ static int f_save(void *ctx, const Persist *in)
     ++f->saves;
 
     return 1;
+}
+
+static int f_save_now(void *ctx, const Persist *in)
+{
+    Fake *f = (Fake *)ctx;
+
+    if (f->fail_save_now) {
+        return 0;
+    }
+    f->stored = *in;
+    f->has_record = 1;
+    ++f->saves_now;
+
+    return 1;
+}
+
+static void f_housekeeping(void *ctx)
+{
+    ++((Fake *)ctx)->idle_work;
 }
 
 static uint32_t f_pulses(void *ctx)
@@ -121,9 +143,12 @@ static Hal hal_of(Fake *f)
 {
     Hal h;
 
+    memset(&h, 0, sizeof(h));
     h.ctx = f;
     h.load = f_load;
     h.save = f_save;
+    h.save_now = f_save_now;
+    h.housekeeping = f_housekeeping;
     h.pulses = f_pulses;
     h.pump = f_pump;
     h.hook = f_hook;
@@ -1120,6 +1145,66 @@ static void test_memory(void)
 
 }
 
+/* The memory: a save that erases takes 45 to 400 ms, so the fill in progress and the power cut are written without an erase, the long work waits for an idle moment, and
+   a refused save without an erase is not a fault. */
+static void test_memory_timing(void)
+{
+    Rig r;
+    int saves, now;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+
+    /* housekeeping only in IDLE and DONE, and never while the supply is going */
+    board_idle_work(&r.board);
+    CHECK_EQ(r.fake.idle_work, 1);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 15000), CMD_SET_PRESET | 0x80);
+    board_idle_work(&r.board);
+    CHECK_EQ(r.fake.idle_work, 1);                    /* SET: a fill may start any moment */
+    CHECK_EQ(ask_u32(&r, CMD_START, 1), CMD_START | 0x80);
+    board_idle_work(&r.board);
+    CHECK_EQ(r.fake.idle_work, 1);                    /* DISPENSING */
+
+    /* the periodic save of the fill (every 2 s) is a save without an erase */
+    saves = r.fake.saves;
+    now = r.fake.saves_now;
+    run(&r, 250, 20);                                 /* 2.5 s of flow */
+    CHECK(r.fake.saves_now > now);
+    CHECK_EQ(r.fake.saves, saves);                    /* the one that may erase was not used */
+
+    /* a refused save without an erase is not a fault: the fill goes on, the last record stays */
+    r.fake.fail_save_now = 1;
+    run(&r, 250, 20);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
+    CHECK_EQ(r.board.fault, FAULT_NONE);
+
+    /* the power cut: one save without an erase, at once */
+    r.fake.fail_save_now = 0;
+    saves = r.fake.saves;
+    now = r.fake.saves_now;
+    board_power_fail(&r.board);
+    CHECK_EQ(r.fake.saves_now, now + 1);
+    CHECK_EQ(r.fake.saves, saves);
+    board_idle_work(&r.board);
+    CHECK_EQ(r.fake.idle_work, 1);                    /* and no long work while the supply is going */
+
+    /* the end of the fill, an acknowledgement and a config are saves that may take long: they use the other one (and a refusal is a fault) */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 5000);
+    run(&r, 100, 100);
+    run(&r, 30, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    board_idle_work(&r.board);
+    CHECK_EQ(r.fake.idle_work, 1);                    /* DONE: nothing runs */
+    saves = r.fake.saves;
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, r.session), CMD_ACK_RESULT | 0x80);
+    CHECK_EQ(r.fake.saves, saves + 1);
+    r.fake.fail_save = 1;
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 3000), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(ask_u32(&r, CMD_START, 9), CMD_NAK);     /* START has to be saved: the memory refuses it */
+    CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
+}
 static void test_unknown_and_lengths(void)
 {
     Rig r;
@@ -1390,6 +1475,7 @@ int main(void)
     test_power_fail_signal();
     test_faults();
     test_memory();
+    test_memory_timing();
     test_unknown_and_lengths();
 
     printf("core: %d checks, %d failed\n", checks, failures);

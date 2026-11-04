@@ -136,6 +136,7 @@ void store_init(Store *s, const Flash *flash, uint32_t base, int autoformat)
     s->flash = flash;
     s->base = base;
     s->autoformat = autoformat;
+    s->blank_sector = STORE_SECTORS;
 }
 
 int store_format(Store *s)
@@ -150,6 +151,7 @@ int store_format(Store *s)
     s->ready = 1;
     s->seq = 0;
     s->next = 0;
+    s->blank_sector = STORE_SECTORS;   /* (all of them are: the ring starts in sector 0, which is the sector that is written first) */
 
     return 1;
 }
@@ -165,6 +167,7 @@ int store_load(Store *s, Persist *out)
     uint32_t best_slot = 0;
 
     s->ready = 0;
+    s->blank_sector = STORE_SECTORS;
     for (slot = 0; slot < STORE_SLOTS; ++slot) {
         if (!s->flash->read(s->flash->ctx, slot_addr(s, slot), rec, STORE_SLOT)) {
             return -1;
@@ -205,7 +208,22 @@ int store_load(Store *s, Persist *out)
     return -1;
 }
 
-int store_save(Store *s, const Persist *in)
+/* a sector that is blank all through (a sector that an erase was cut short in can hold bytes in the middle) */
+static int sector_blank(const Store *s, uint32_t sector)
+{
+    uint8_t rec[STORE_SLOT];
+    uint32_t slot;
+
+    for (slot = 0; slot < STORE_SLOTS_PER_SECTOR; ++slot) {
+        if (!s->flash->read(s->flash->ctx, s->base + sector * STORE_SECTOR + slot * STORE_SLOT, rec, STORE_SLOT) || !blank(rec)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int save_record(Store *s, const Persist *in, int allow_erase)
 {
     uint8_t rec[STORE_SLOT];
     uint8_t check[STORE_SLOT];
@@ -221,9 +239,9 @@ int store_save(Store *s, const Persist *in)
     for (tries = 0; tries < STORE_SLOTS; ++tries) {
         const uint32_t addr = slot_addr(s, slot);
 
-        if (slot % STORE_SLOTS_PER_SECTOR == 0) {
-            /* the ring enters a sector again: what is in it is the oldest; the newest is in the sector before */
-            if (!s->flash->erase(s->flash->ctx, addr)) {
+        if (slot % STORE_SLOTS_PER_SECTOR == 0 && s->blank_sector != slot / STORE_SLOTS_PER_SECTOR) {
+            /* the ring enters a sector again and it was not erased ahead of time: what is in it is the oldest; the newest is in the sector before */
+            if (!allow_erase || !s->flash->erase(s->flash->ctx, addr)) {
                 return 0;
             }
         }
@@ -232,6 +250,9 @@ int store_save(Store *s, const Persist *in)
                 && memcmp(check, rec, STORE_SLOT) == 0) {
                 s->seq = seq;
                 s->next = (slot + 1) % STORE_SLOTS;
+                if (slot % STORE_SLOTS_PER_SECTOR == 0) {
+                    s->blank_sector = STORE_SECTORS;   /* the sector is in use now */
+                }
 
                 return 1;
             }
@@ -240,4 +261,39 @@ int store_save(Store *s, const Persist *in)
     }
 
     return 0;
+}
+
+int store_save(Store *s, const Persist *in)
+{
+    return save_record(s, in, 1);
+}
+
+int store_save_noerase(Store *s, const Persist *in)
+{
+    return save_record(s, in, 0);
+}
+
+int store_erase_ahead(Store *s)
+{
+    uint32_t sector;
+
+    if (!s->ready) {
+        return 0;
+    }
+    /* the sector the ring needs blank next: the one it is about to enter, or the one after the sector it is writing (that holds the oldest records) */
+    sector = (s->next % STORE_SLOTS_PER_SECTOR == 0) ? s->next / STORE_SLOTS_PER_SECTOR : ((s->next / STORE_SLOTS_PER_SECTOR) + 1) % STORE_SECTORS;
+    if (s->blank_sector == sector) {
+        return 0;
+    }
+    if (sector_blank(s, sector)) {
+        s->blank_sector = sector;
+
+        return 0;
+    }
+    if (!s->flash->erase(s->flash->ctx, s->base + sector * STORE_SECTOR)) {
+        return -1;
+    }
+    s->blank_sector = sector;
+
+    return 1;
 }

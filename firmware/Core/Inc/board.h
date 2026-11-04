@@ -131,6 +131,10 @@ int board_manual_amount(Board *b, uint32_t grams);
 uint32_t board_shown_grams(const Board *b);
 void board_set_fault(Board *b, uint8_t code);
 void board_power_fail(Board *b);
+
+/* Call it in the main loop when no byte waits in the receive ring: in IDLE and DONE (no fill runs, no preset waits) it lets the hardware do its long work (the erase of
+   the memory sector that is needed next, which takes up to 400 ms and would otherwise come at a bad moment: a power cut, a fill). Does nothing in the other states. */
+void board_idle_work(Board *b);
 void board_power_restored(Board *b);
 
 /* Conversions of the calibration, exposed for the tests and for the display. */

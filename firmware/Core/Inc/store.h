@@ -7,6 +7,11 @@
  * interrupts leaves a record with a wrong CRC, which is ignored, so the previous record is still there. A sector is erased only when the
  * ring reaches it again, and the newest record is never in the sector that is erased.
  *
+ * ERASING TAKES LONG (a 4 KB sector of the 25Q32: about 45 ms, up to 400 ms; a 64-byte program: under a millisecond, up to 3 ms), so the sector that the ring
+ * enters next is erased AHEAD OF TIME, when the board is idle (store_erase_ahead), and the saves while a fill runs and at a power cut never erase
+ * (store_save_noerase): they only program a blank slot. store_save, which may still erase when the sector was not prepared, is for the saves that
+ * can wait (START, a config, an acknowledgement).
+ *
  * The region is STORE_SECTORS sectors of 4 KB from `base`: it must be flash that nothing else uses.
  */
 
@@ -36,6 +41,7 @@ typedef struct {
     int ready;
     uint32_t seq;        /* sequence number of the newest record */
     uint32_t next;       /* the slot to try next */
+    uint32_t blank_sector;   /* the sector that is known to be blank (erased ahead of time), STORE_SECTORS when none */
 } Store;
 
 void store_init(Store *s, const Flash *flash, uint32_t base, int autoformat);
@@ -44,8 +50,16 @@ void store_init(Store *s, const Flash *flash, uint32_t base, int autoformat);
    -1 when it is not blank and holds no good record (damaged, or not ours when autoformat is 0). */
 int store_load(Store *s, Persist *out);
 
-/* Appends the record. Returns 1 when it is stored and read back right, 0 otherwise. */
+/* Appends the record. Returns 1 when it is stored and read back right, 0 otherwise. Erases the sector that the ring enters when it was not erased ahead of time. */
 int store_save(Store *s, const Persist *in);
+
+/* The same without ever erasing: 1 when it is stored, 0 when the next slot is the start of a sector that was not erased ahead of time (nothing is written then). A program
+   takes under a millisecond: this is the save for a power cut and for the saves while a fill runs. */
+int store_save_noerase(Store *s, const Persist *in);
+
+/* Makes sure that the sector the ring needs next is blank: when the next slot starts a sector, that one, else the sector after the one being written. Call it when the
+   board is idle: an erase takes 45 to 400 ms. Returns 1 when it erased, 0 when there was nothing to do, -1 when the erase failed. Cheap when there is nothing to do. */
+int store_erase_ahead(Store *s);
 
 /* Erases the whole region. */
 int store_format(Store *s);

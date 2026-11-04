@@ -133,6 +133,20 @@ static int port_save(void *ctx, const Persist *in)
     return store_save(&store_, in);
 }
 
+static int port_save_now(void *ctx, const Persist *in)
+{
+    (void)ctx;
+
+    return store_save_noerase(&store_, in);
+}
+
+/* the sector of the memory that the ring needs next is erased here, while nothing runs: 45 to 400 ms, a pass of the main loop that takes long, once in 64 saves */
+static void port_housekeeping(void *ctx)
+{
+    (void)ctx;
+    store_erase_ahead(&store_);
+}
+
 /* ---------------------------------------------------------------- the RS-485 line */
 
 /* The ring must hold what the line carries while the main loop is busy with the display and the keyboard (about 30 ms): at 115200 baud that is up to 350 bytes
@@ -331,6 +345,8 @@ void port_init(Hal *hal, UiHal *ui)
     hal->ctx = 0;
     hal->load = port_load;
     hal->save = port_save;
+    hal->save_now = port_save_now;
+    hal->housekeeping = port_housekeeping;
     hal->pulses = port_pulses;
     hal->pump = port_pump;
     hal->hook = port_hook;

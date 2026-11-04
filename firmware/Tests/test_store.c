@@ -302,6 +302,98 @@ static void test_ring_and_wear(void)
     }
 }
 
+/* An erase takes 45 to 400 ms: the sector the ring enters next is erased ahead of time (store_erase_ahead, in an idle moment) and the saves that must be fast
+   (the fill in progress, the power cut) never erase (store_save_noerase). */
+static void test_erase_ahead(void)
+{
+    Chip c;
+    Flash f;
+    Store s;
+    Persist p, out;
+    uint32_t n;
+    int erases_before;
+    int total_erases = 0;
+    uint32_t i;
+
+    chip_new(&c);
+    f = flash_of(&c);
+    store_init(&s, &f, BASE, 0);
+    CHECK_EQ(store_load(&s, &out), 0);                      /* a new board */
+    p = sample(1);
+
+    /* the first record is in a sector that was never erased: the save that does not erase refuses and writes nothing, the other one erases it */
+    CHECK_EQ(store_save_noerase(&s, &p), 0);
+    CHECK_EQ(c.programs, 0);
+    /* ... unless it was prepared: erase ahead makes the sector blank (it is, on a new chip, so nothing is erased) and then the first record goes */
+    CHECK_EQ(store_erase_ahead(&s), 0);
+    CHECK_EQ(store_save_noerase(&s, &p), 1);
+    CHECK_EQ(c.erases[BASE / 4096], 0);
+
+    /* inside the sector the next record needs nothing: the sector after it is what is prepared */
+    for (n = 2; n <= 5; ++n) {
+        p = sample(n);
+        CHECK_EQ(store_save_noerase(&s, &p), 1);
+    }
+    erases_before = c.erases[BASE / 4096 + 1];
+    memset(c.mem + BASE + 4096 + 100, 0x00, 8);             /* old data in the next sector (it was used before) */
+    CHECK_EQ(store_erase_ahead(&s), 1);                     /* erased now, while nothing runs */
+    CHECK_EQ(c.erases[BASE / 4096 + 1], erases_before + 1);
+    CHECK_EQ(store_erase_ahead(&s), 0);                     /* and the second call does nothing: no erase, no wear */
+    CHECK_EQ(c.erases[BASE / 4096 + 1], erases_before + 1);
+
+    /* the newest record is never in the sector that is erased ahead */
+    p = sample(6);
+    CHECK_EQ(store_save_noerase(&s, &p), 1);
+    store_init(&s, &f, BASE, 0);
+    CHECK_EQ(store_load(&s, &out), 1);
+    CHECK_EQ(out.result.id, 6);
+
+    /* a sector that an erase was cut short in has bytes in the middle: it is not taken for blank */
+    chip_new(&c);
+    f = flash_of(&c);
+    store_init(&s, &f, BASE, 0);
+    store_load(&s, &out);
+    p = sample(1);
+    CHECK_EQ(store_save(&s, &p), 1);
+    memset(c.mem + BASE + 4096 + 2000, 0xA5, 4);
+    CHECK_EQ(store_erase_ahead(&s), 1);
+    for (i = 0; i < 4096; ++i) {
+        CHECK(c.mem[BASE + 4096 + i] == 0xFF);
+    }
+
+    /* the whole life: a save in every idle moment and an erase ahead in between: no save ever had to erase, and every record is the newest after a restart */
+    chip_new(&c);
+    f = flash_of(&c);
+    store_init(&s, &f, BASE, 0);
+    store_load(&s, &out);
+    p = sample(1);
+    CHECK_EQ(store_save(&s, &p), 1);                        /* the first one: the board is new */
+    for (n = 2; n <= 3000; ++n) {
+        p = sample(n);
+        store_erase_ahead(&s);                              /* in the idle moment before */
+        CHECK_EQ(store_save_noerase(&s, &p), 1);
+        if (n % 500 == 0) {
+            store_init(&s, &f, BASE, 0);
+            CHECK_EQ(store_load(&s, &out), 1);
+            CHECK_EQ(out.result.id, n);
+            store_erase_ahead(&s);
+        }
+    }
+    for (i = 0; i < STORE_SECTORS; ++i) {
+        total_erases += c.erases[BASE / 4096 + i];
+    }
+    CHECK(total_erases <= (int)(3000 / STORE_SLOTS_PER_SECTOR) + 20);   /* one erase for each sector the ring entered (and a few for the restarts) */
+
+    /* a power cut during the save without an erase: the record is ignored, the previous one is the state, and the next sector was prepared already */
+    p = sample(5000);
+    store_erase_ahead(&s);
+    c.power_cut_after_bytes = 20;
+    CHECK_EQ(store_save_noerase(&s, &p), 0);
+    c.dead = 0;
+    store_init(&s, &f, BASE, 0);
+    CHECK_EQ(store_load(&s, &out), 1);
+    CHECK_EQ(out.result.id, 3000);
+}
 static void test_foreign_data_and_damage(void)
 {
     Chip c;
@@ -369,6 +461,7 @@ int main(void)
     test_blank_and_roundtrip();
     test_power_cut_in_a_write();
     test_ring_and_wear();
+    test_erase_ahead();
     test_foreign_data_and_damage();
 
     printf("store: %d checks, %d failed\n", checks, failures);

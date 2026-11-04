@@ -46,6 +46,7 @@ void app_loop(void)
     if (elapsed > 0) {
         last_ms_ = now;
         board_tick(&board_, elapsed);
+        board_idle_work(&board_);              /* the long work of the memory, in a pass where nothing runs */
         ui_tick(&ui_, elapsed);
         port_poll();
     }

@@ -173,6 +173,17 @@ static void nak(Board *b, uint8_t seq, uint8_t cmd, uint8_t error)
 
 /* ---------------------------------------------------------------- the memory */
 
+/* The record of the fill in progress, and at a power cut: written without an erase (a program takes under a millisecond). It may be refused when the memory was not
+   prepared; then the last record stays and nothing is lost but the counts since it. Never a fault. */
+static void save_progress(Board *b)
+{
+    if (b->hal->save_now) {
+        b->hal->save_now(b->hal->ctx, &b->p);
+    } else {
+        b->hal->save(b->hal->ctx, &b->p);
+    }
+}
+
 static int save(Board *b)
 {
     if (b->hal->save(b->hal->ctx, &b->p)) {
@@ -395,7 +406,7 @@ static void run_fill(Board *b, uint32_t elapsed_ms)
         b->since_save_ms = 0;
         if (seen != b->saved_pulses) {
             b->saved_pulses = seen;
-            save(b);
+            save_progress(b);
         }
     }
 }
@@ -911,7 +922,14 @@ void board_power_fail(Board *b)
     if (b->state == STATE_DISPENSING) {
         b->pulses_seen = counts_since_start(b);
         b->p.inflight.pulses = b->pulses_seen;
-        b->hal->save(b->hal->ctx, &b->p);
+        save_progress(b);                  /* no erase: it is only a program, which the supply still lasts for */
+    }
+}
+
+void board_idle_work(Board *b)
+{
+    if (b->hal->housekeeping && !b->powering_down && (b->state == STATE_IDLE || b->state == STATE_DONE)) {
+        b->hal->housekeeping(b->hal->ctx);
     }
 }
 
