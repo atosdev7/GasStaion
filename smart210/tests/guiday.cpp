@@ -15,12 +15,16 @@
 //                  board, the tickets are typed at the Supply screen, the gun is lifted on the simulated board and the fill runs (most to the preset, some stopped
 //                  short: a remainder ticket, some using a remainder ticket)
 //   --manual-supplies=M  M supplies at the manual nozzle 5: the supplier types the amount at the board, the cashier types the reading and the tickets at Manual input
+//   --ticket-sales=N  N ticket sales at the Ticket sale screen to customers who keep the tickets (the supplier's own purchases are made as the supplies need them)
+//   --cards=N    N card sales (top-ups) at the Cards screen: the card number is typed (a new card is registered with a name, phone and PIN first), the weight and the
+//                price are typed and OK is pressed in the question; most are followed by a card fill (kg and PIN typed) and the supply of the card ticket at a nozzle
 //   --first-run-only  stop after the first run and the login
 //
 // The first run is what a new terminal does: the server address page, the test of the connection, the first download of the web app's data, the login page.
 
 #include "AppConfig.h"
 #include "Barcode.h"
+#include "Cards.h"
 #include "FakeBoards.h"
 #include "Database.h"
 #include "MachineConfig.h"
@@ -38,6 +42,8 @@
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QTimer>
 #include <QPushButton>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -594,6 +600,203 @@ static bool supplyStage(MainWindow &window, QSqlDatabase db, FakeBoards &boards,
     return failed == 0;
 }
 
+// ---- ticket sales ----
+
+static bool ticketSalesStage(MainWindow &window, QSqlDatabase db, int sales)
+{
+    out << "\nticket sales\n";
+    QStringList people;
+    QSqlQuery q(db);
+    q.exec("SELECT name FROM customers WHERE deleted = 0 ORDER BY is_self DESC, name");
+    while (q.next()) {
+        people << q.value(0).toString();
+    }
+    const qlonglong before = count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'ticket'");
+    int saved = 0;
+    for (int i = 0; i < sales; ++i) {
+        const bool diesel = next(10) < 6;
+        const int spec = next(10) < 7 ? 1 : (next(2) ? 0 : 2);
+        if (sellTicketsAtScreen(window, db, people.at(next(people.size())), diesel ? "Diesel" : "Gasoline", spec, 1 + next(6))) {
+            ++saved;
+        } else {
+            out << "  FAIL  ticket sale " << i + 1 << " could not be saved at the Ticket sale screen\n";
+        }
+    }
+    ok(saved == sales, QString::number(saved) + " of " + QString::number(sales) + " ticket sales saved");
+    ok(count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'ticket'") - before == saved, "the database holds " + QString::number(saved) + " new ticket sales");
+
+    return saved == sales;
+}
+
+// ---- card sales ----
+
+// a question window (Confirm, or a message box) is answered the way a person does: OK is pressed
+static void answerQuestions()
+{
+    QWidget *modal = QApplication::activeModalWidget();
+    if (!modal) {
+        return;
+    }
+    if (QPushButton *okButton = modal->findChild<QPushButton *>("confirmOkButton")) {
+        QTest::mouseClick(okButton, Qt::LeftButton);
+    } else if (QMessageBox *box = qobject_cast<QMessageBox *>(modal)) {
+        if (QAbstractButton *b = box->defaultButton()) {
+            QTest::mouseClick(b, Qt::LeftButton);
+        } else {
+            box->accept();
+        }
+    }
+}
+
+static bool cardStage(MainWindow &window, QSqlDatabase db, FakeBoards &boards, int cards)
+{
+    out << "\ncard sales\n";
+    QTimer questions;
+    QObject::connect(&questions, &QTimer::timeout, &answerQuestions);
+    questions.start(40);
+
+    int topUps = 0;
+    int fills = 0;
+    int supplied = 0;
+    int registered = 0;
+    int failed = 0;
+    const qlonglong cardsBefore = count(db, "SELECT COUNT(*) FROM cards");
+    for (int i = 0; i < cards; ++i) {
+        const bool diesel = next(10) < 6;
+        const QString fuelName = diesel ? "Diesel" : "Gasoline";
+        const QString fuelCode = diesel ? "D" : "A";
+        const QString price = diesel ? "750" : "820";
+
+        // a card that exists (about half of the time) or a new one
+        QString uid;
+        QSqlQuery q(db);
+        q.prepare("SELECT uid FROM cards WHERE fuel_type = ? AND status = 'active' AND deleted = 0 ORDER BY uid");
+        q.addBindValue(fuelCode);
+        QStringList owned;
+        if (q.exec()) {
+            while (q.next()) {
+                owned << q.value(0).toString();
+            }
+        }
+        if (!owned.isEmpty() && next(100) < 50) {
+            uid = owned.at(next(owned.size()));
+        } else {
+            uid = QString("GD%1").arg(count(db, "SELECT COUNT(*) FROM cards") + 1000001);
+        }
+
+        QPushButton *nav = shown<QPushButton>(window, "navCards");
+        if (nav) {
+            press(nav);
+            QTest::qWait(250);
+        }
+        QLineEdit *idField = shown<QLineEdit>(window, "cardIdField");
+        if (!idField) {
+            out << "  FAIL  card " << i + 1 << ": the id box is not on the screen\n";
+            ++failed;
+
+            continue;
+        }
+        typeInto(idField, uid);
+        QTest::keyClick(idField, Qt::Key_Return);   // no reader on this PC: the typed number is read like one from the reader
+        QTest::qWait(300);
+
+        // a new card is registered first
+        if (QLineEdit *name = shown<QLineEdit>(window, "registerNameField")) {
+            QComboBox *fuel = shown<QComboBox>(window, "registerFuelCombo");
+            typeInto(name, "Holder " + uid);
+            typeInto(shown<QLineEdit>(window, "registerPhoneField"), "01000" + uid.right(5));
+            pick(fuel, fuelName);
+            typeInto(shown<QLineEdit>(window, "registerPinField"), "1234");
+            typeInto(shown<QLineEdit>(window, "registerPinAgainField"), "1234");
+            press(shown<QPushButton>(window, "registerButton"));
+            QTest::qWait(300);
+            ++registered;
+        }
+        QLabel *balanceLabel = shown<QLabel>(window, "cardBalance");
+        if (!balanceLabel) {
+            out << "  FAIL  card " << i + 1 << " (" << uid << "): the card did not open\n";
+            ++failed;
+
+            continue;
+        }
+
+        // top up: the weight and the price are typed, the question is answered with OK
+        QPushButton *switchButton = shown<QPushButton>(window, "cardTopUpButton");
+        if (!shown<QLineEdit>(window, "topUpKgField") && switchButton) {
+            press(switchButton);
+            QTest::qWait(200);
+        }
+        QLineEdit *topKg = shown<QLineEdit>(window, "topUpKgField");
+        QLineEdit *topPrice = shown<QLineEdit>(window, "topUpPriceField");
+        QPushButton *topButton = shown<QPushButton>(window, "topUpButton");
+        if (!topKg || !topPrice || !topButton) {
+            out << "  FAIL  card " << i + 1 << ": the top-up form is not on the screen\n";
+            ++failed;
+
+            continue;
+        }
+        const qlonglong salesBefore = count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'card'");
+        const int topKgValue = 20 + next(81);
+        typeInto(topKg, QString::number(topKgValue));
+        typeInto(topPrice, price);
+        press(topButton);
+        if (!waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'card'") > salesBefore; }, 10000)) {
+            out << "  FAIL  card " << i + 1 << " (" << uid << "): the top-up was not saved\n";
+            ++failed;
+
+            continue;
+        }
+        ++topUps;
+
+        // most card sales are followed by a fill: the ticket is made on the Fill page and the supplier uses it at a nozzle
+        if (next(100) < 75) {
+            QPushButton *toFill = shown<QPushButton>(window, "cardTopUpButton");
+            if (!shown<QLineEdit>(window, "fillKgField") && toFill) {
+                press(toFill);
+                QTest::qWait(200);
+            }
+            QLineEdit *fillKg = shown<QLineEdit>(window, "fillKgField");
+            QLineEdit *fillPin = shown<QLineEdit>(window, "fillPinField");
+            QPushButton *fillOk = shown<QPushButton>(window, "fillOkButton");
+            if (!fillKg || !fillPin || !fillOk) {
+                out << "  FAIL  card " << i + 1 << ": the fill form is not on the screen\n";
+                ++failed;
+
+                continue;
+            }
+            const qlonglong ticketsBefore = count(db, "SELECT COUNT(*) FROM tickets WHERE card_id = (SELECT id FROM cards WHERE uid = '" + uid + "')");
+            const int fillKgValue = 10 + next(21);
+            typeInto(fillKg, QString::number(fillKgValue));
+            typeInto(fillPin, "1234");
+            press(fillOk);
+            if (!waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM tickets WHERE card_id = (SELECT id FROM cards WHERE uid = '" + uid + "')") > ticketsBefore; }, 10000)) {
+                out << "  FAIL  card " << i + 1 << " (" << uid << "): the card ticket was not made\n";
+                ++failed;
+
+                continue;
+            }
+            ++fills;
+            QSqlQuery idq(db);
+            idq.exec("SELECT id FROM cards WHERE uid = '" + uid + "'");
+            const QString ticket = idq.next() ? Cards::lastTicket(db, idq.value(0).toString()) : QString();
+            const int nozzle = diesel ? 3 + next(2) : 1 + next(2);
+            const SupplyResult r = autoSupply(window, db, boards, nozzle, QStringList() << ticket, 0, next(100) < 20 ? 60 + next(35) : 0);
+            if (r.done) {
+                ++supplied;
+            } else {
+                out << "  FAIL  card " << i + 1 << " (" << uid << "): the card ticket " << ticket << " could not be supplied: " << r.why << "\n";
+                ++failed;
+            }
+        }
+    }
+    questions.stop();
+    ok(failed == 0 && topUps == cards, QString::number(topUps) + " of " + QString::number(cards) + " card sales saved (" + QString::number(registered) + " new cards, "
+                                           + QString::number(fills) + " card tickets made, " + QString::number(supplied) + " supplied at a nozzle)");
+    ok(count(db, "SELECT COUNT(*) FROM cards") - cardsBefore == registered, QString::number(registered) + " new cards are in the database");
+
+    return failed == 0;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -621,7 +824,7 @@ int main(int argc, char *argv[])
     }
     QSqlDatabase db = QSqlDatabase::database(Database::DefaultConnection);
 
-    const bool withBoards = args.contains("--nozzles") || args.contains("--boards") || !arg(args, "supplies").isEmpty() || !arg(args, "manual-supplies").isEmpty();
+    const bool withBoards = args.contains("--nozzles") || args.contains("--boards") || !arg(args, "supplies").isEmpty() || !arg(args, "manual-supplies").isEmpty() || !arg(args, "cards").isEmpty();
     const int converterPort = arg(args, "converter-port", "4001").toInt();
     if (withBoards) {
         Settings(db).setInt(SettingKey::ConverterPort, converterPort);
@@ -759,10 +962,34 @@ int main(int argc, char *argv[])
         ok(count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'spot'") - before == spot, "the database holds " + QString::number(spot) + " new spot sales");
     }
 
+    const int ticketSaleCount = arg(args, "ticket-sales", "0").toInt();
+    if (ticketSaleCount > 0) {
+        ticketSalesStage(window, db, ticketSaleCount);
+    }
+
     const int supplyCount = arg(args, "supplies", "0").toInt();
     const int manualCount = arg(args, "manual-supplies", "0").toInt();
     if (supplyCount > 0 || manualCount > 0) {
         supplyStage(window, db, boards, supplyCount, manualCount);
+    }
+
+    const int cardCount = arg(args, "cards", "0").toInt();
+    if (cardCount > 0) {
+        if (supplyCount == 0 && manualCount == 0) {
+            // the boards are given their config back (see the supplies)
+            MachineConfig mc(db);
+            foreach (const MachineConfig::Nozzle &nozzle, mc.nozzles()) {
+                BoardProtocol::BoardConfig config;
+                config.mode = nozzle.mode;
+                config.fuelType = nozzle.fuelType;
+                config.density = quint16(nozzle.density);
+                config.pulsesX100 = quint32(nozzle.pulsesPerLiter);
+                boards.board(nozzle.number).config = config;
+                boards.board(nozzle.number).flowGramsPerSecond = 600 + next(800);
+            }
+            QTest::qWait(2000);
+        }
+        cardStage(window, db, boards, cardCount);
     }
 
     // ---- check and upload ----
