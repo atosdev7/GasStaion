@@ -4,7 +4,6 @@
 #include "board.h"
 #include "port.h"
 #include "ui.h"
-#include "ui_drivers.h"
 
 static Hal hal_;
 static UiHal ui_hal_;

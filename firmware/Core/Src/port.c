@@ -4,7 +4,8 @@
 #include "pinfilter.h"
 #include "store.h"
 #include "w25q.h"
-#include "ui_drivers.h"
+#include "display.h"
+#include "keyboard.h"
 
 #include <string.h>
 
@@ -441,7 +442,7 @@ static void port_select_beep(void *ctx)
     port_beep(ctx, 150);
 }
 
-/* ---------------------------------------------------------------- the display and the keyboard (ui_drivers.h) */
+/* ---------------------------------------------------------------- the display and the keyboard (display.h, keyboard.h) */
 
 static void port_display_update(void *ctx, const char *kg, const char *litres, const char *density)
 {
