@@ -11,16 +11,24 @@
 //   --upload     at the end open Review and press Upload data
 //   --nozzles    open Machine Config (Settings on the login page, the PIN) and add nozzles 1 to 5 (1, 2 gasoline on T1; 3, 4 diesel and 5 diesel manual on T2), Update and Read each
 //   --pin        the PIN of Machine Config (default 4821); --converter-port the port the simulated boards connect to (default 4001)
+//   --supplies=N   N supplies at the nozzles 1 to 4 (auto): the supplier's tickets are sold at the Ticket sale screen, the nozzle is chosen with the select key of the
+//                  board, the tickets are typed at the Supply screen, the gun is lifted on the simulated board and the fill runs (most to the preset, some stopped
+//                  short: a remainder ticket, some using a remainder ticket)
+//   --manual-supplies=M  M supplies at the manual nozzle 5: the supplier types the amount at the board, the cashier types the reading and the tickets at Manual input
 //   --first-run-only  stop after the first run and the login
 //
 // The first run is what a new terminal does: the server address page, the test of the connection, the first download of the web app's data, the login page.
 
 #include "AppConfig.h"
+#include "Barcode.h"
 #include "FakeBoards.h"
 #include "Database.h"
+#include "MachineConfig.h"
 #include "MainWindow.h"
 #include "Migrator.h"
 #include "Settings.h"
+#include "SupplyQueue.h"
+#include "Uploader.h"
 
 #include <QAbstractButton>
 #include <QApplication>
@@ -33,6 +41,7 @@
 #include <QPushButton>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTest>
@@ -249,6 +258,342 @@ static bool machineConfigStage(MainWindow &window, QSqlDatabase db, FakeBoards &
     return true;
 }
 
+// ---- supplies ----
+
+// the screen of a sidebar button, with the tab named: the button is pressed and the tab is clicked
+static bool openTab(MainWindow &window, const char *nav, const QString &tabText)
+{
+    QPushButton *button = shown<QPushButton>(window, nav);
+    if (!button) {
+        return false;
+    }
+    press(button);
+    QTest::qWait(150);
+    foreach (QTabWidget *tabs, window.findChildren<QTabWidget *>()) {
+        if (!tabs->isVisibleTo(&window)) {
+            continue;
+        }
+        for (int i = 0; i < tabs->count(); ++i) {
+            if (tabs->tabText(i) == tabText) {
+                if (tabs->currentIndex() != i) {
+                    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier, tabs->tabBar()->tabRect(i).center());
+                    QTest::qWait(150);
+                }
+
+                return tabs->currentIndex() == i;
+            }
+        }
+    }
+
+    return false;
+}
+
+// the tickets that are sold and not used yet (what the supplier holds), of a fuel and a size, lowest numbers first
+static QStringList heldTickets(QSqlDatabase db, const QString &fuel, int spec, int howMany)
+{
+    QStringList list;
+    QSqlQuery q(db);
+    q.prepare("SELECT barcode FROM tickets WHERE status = 1 AND fuel_type = ? AND spec = ? ORDER BY barcode LIMIT ?");
+    q.addBindValue(fuel);
+    q.addBindValue(spec);
+    q.addBindValue(howMany);
+    if (q.exec()) {
+        while (q.next()) {
+            list << Barcode::fromKey(q.value(0).toLongLong());
+        }
+    }
+
+    return list;
+}
+
+static int specKg(int spec)
+{
+    static const int kg[] = {5, 10, 15, 50};
+
+    return kg[spec];
+}
+
+// the customer buys tickets at the Ticket sale screen: customer, fuel, the size, the count, Add, Save
+static bool sellTicketsAtScreen(MainWindow &window, QSqlDatabase db, const QString &customerName, const QString &fuelName, int spec, int howMany)
+{
+    if (!openTab(window, "navSales", "Ticket sale")) {
+        return false;
+    }
+    QComboBox *customer = shown<QComboBox>(window, "tsCustomerCombo");
+    QComboBox *fuel = shown<QComboBox>(window, "tsFuelCombo");
+    QComboBox *size = shown<QComboBox>(window, "tsSpecCombo");
+    QLineEdit *countField = shown<QLineEdit>(window, "tsCountField");
+    QPushButton *add = shown<QPushButton>(window, "tsAddButton");
+    QPushButton *save = shown<QPushButton>(window, "saveTicketSaleButton");
+    if (!customer || !fuel || !size || !countField || !add || !save) {
+        return false;
+    }
+    const qlonglong before = count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'ticket'");
+    pick(customer, customerName);
+    pick(fuel, fuelName);
+    if (!pick(size, QString::number(specKg(spec)) + ".00 kg")) {
+        return false;
+    }
+    typeInto(countField, QString::number(howMany));
+    press(add);
+    press(save);
+
+    return waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'ticket'") > before; }, 15000);
+}
+
+// one supply at an auto nozzle, as the supplier does it
+struct SupplyResult {
+    SupplyResult() : done(false), remainder(false), grams(0) {}
+    bool done;
+    bool remainder;
+    int grams;
+    QString why;
+};
+
+static SupplyResult autoSupply(MainWindow &window, QSqlDatabase db, FakeBoards &boards, int nozzle, const QStringList &tickets, int presetKgX100, int stopPercent)
+{
+    SupplyResult r;
+    if (!openTab(window, "navSupplies", "Sessions")) {
+        r.why = "the Supplies screen did not open";
+
+        return r;
+    }
+    if (boards.board(nozzle).state != BoardProtocol::StateIdle || SupplyQueue::totalX100(db, nozzle) > 0) {
+        QPushButton *clear = shown<QPushButton>(window, "supplyClearButton");
+        if (clear) {
+            press(clear);   // a queue that is left from before is cleared
+        }
+    }
+    if (!waitUntil([&]() { return boards.board(nozzle).state == BoardProtocol::StateIdle; }, 20000)) {
+        r.why = "the nozzle is not idle";
+
+        return r;
+    }
+    QTest::qWait(200);   // the terminal has polled the idle board
+    boards.pressSelect(nozzle);   // the supplier presses the select key of the dispenser (the screen follows: a nozzle that is chosen already stays chosen)
+    QLineEdit *field = shown<QLineEdit>(window, "supplyTicketField");
+    QPushButton *addTicket = shown<QPushButton>(window, "supplyTicketButton");
+    QTableWidget *queue = shown<QTableWidget>(window, "supplyQueueTable");
+    QLabel *current = shown<QLabel>(window, "supplyCurrent");
+    if (!field || !addTicket || !queue || !current) {
+        r.why = "the ticket box is not on the screen";
+
+        return r;
+    }
+    // the supplier looks at the screen: it names the nozzle that was chosen
+    if (!waitUntil([&]() { return current->text().contains(QRegExp("\\b" + QString::number(nozzle) + "\\b")); }, 10000)) {
+        r.why = "the screen does not show nozzle " + QString::number(nozzle) + " as chosen (it says: " + current->text() + ")";
+
+        return r;
+    }
+    QTest::qWait(150);
+    Q_UNUSED(queue);
+    foreach (const QString &ticket, tickets) {
+        const qlonglong before = SupplyQueue::totalX100(db, nozzle);
+        typeInto(field, ticket);
+        press(addTicket);
+        if (!waitUntil([&]() { return SupplyQueue::totalX100(db, nozzle) > before; }, 5000)) {
+            QLabel *message = shown<QLabel>(window, "supplyMessage");
+            r.why = "ticket " + ticket + " was refused" + (message ? ": " + message->text() : QString());
+
+            return r;
+        }
+    }
+    if (!waitUntil([&]() { return boards.board(nozzle).state == BoardProtocol::StateArmed && boards.board(nozzle).presetG > 0; }, 10000)) {
+        r.why = "the preset did not reach the board";
+
+        return r;
+    }
+    const qlonglong supplies = count(db, "SELECT COUNT(*) FROM supplements");
+    const qlonglong remainders = count(db, "SELECT COUNT(*) FROM remainders");
+    boards.simulator().liftGun(nozzle);   // the supplier takes the gun up; the terminal sees it and starts the fill
+    if (!waitUntil([&]() { return boards.board(nozzle).state == BoardProtocol::StateDispensing; }, 10000)) {
+        r.why = "the fill did not start";
+
+        return r;
+    }
+    QTest::qWait(150);
+    const int preset = int(boards.board(nozzle).presetG);
+    if (stopPercent > 0 && stopPercent < 100) {
+        const int grams = preset * stopPercent / 100;
+        boards.simulator().tick(grams * 1000 / qMax(1, boards.board(nozzle).flowGramsPerSecond));
+        boards.simulator().stopFill(nozzle);
+    } else {
+        boards.simulator().tick(1800000);
+    }
+    if (!waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM supplements") > supplies && boards.board(nozzle).state == BoardProtocol::StateIdle; }, 30000)) {
+        r.why = "the result was not recorded";
+
+        return r;
+    }
+    r.done = true;
+    r.grams = int(boards.board(nozzle).dispensedG);
+    r.remainder = count(db, "SELECT COUNT(*) FROM remainders") > remainders;
+    Q_UNUSED(presetKgX100);
+
+    return r;
+}
+
+static bool supplyStage(MainWindow &window, QSqlDatabase db, FakeBoards &boards, int supplies, int manualSupplies)
+{
+    out << "\nsupplies\n";
+    // the boards keep their config in flash: the simulated ones are given back what Machine Config stored
+    MachineConfig mc(db);
+    foreach (const MachineConfig::Nozzle &nozzle, mc.nozzles()) {
+        BoardProtocol::BoardConfig config;
+        config.mode = nozzle.mode;
+        config.fuelType = nozzle.fuelType;
+        config.density = quint16(nozzle.density);
+        config.pulsesX100 = quint32(nozzle.pulsesPerLiter);
+        boards.board(nozzle.number).config = config;
+        boards.board(nozzle.number).flowGramsPerSecond = 600 + next(800);
+    }
+    ok(waitUntil([&]() {
+        for (int n = 1; n <= 4; ++n) {
+            if (!boards.isConnected() || boards.board(n).config.pulsesX100 == 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }, 20000), "the simulated boards hold the config of the nozzles");
+    QTest::qWait(1500);   // the terminal polls them
+
+    QStringList people;
+    QSqlQuery q(db);
+    q.exec("SELECT name FROM customers WHERE deleted = 0 AND is_self = 0 ORDER BY name");
+    while (q.next()) {
+        people << q.value(0).toString();
+    }
+
+    // sizes and counts of the tickets of a supply
+    const struct { int spec; int howMany; } shapes[] = {{1, 1}, {1, 1}, {1, 2}, {2, 1}, {2, 2}, {0, 2}, {0, 3}, {3, 1}, {1, 3}, {2, 1}};
+    int done = 0;
+    int short_ = 0;
+    int reused = 0;
+    int remainders = 0;
+    int failed = 0;
+    QElapsedTimer timer;
+    timer.start();
+    for (int i = 0; i < supplies; ++i) {
+        const int nozzle = 1 + next(4);
+        const QString fuelCode = nozzle <= 2 ? "A" : "D";
+        const QString fuelName = nozzle <= 2 ? "Gasoline" : "Diesel";
+        const int shape = next(10);
+        const int spec = shapes[shape].spec;
+        const int howMany = shapes[shape].howMany;
+
+        QStringList tickets;
+        // sometimes the supplier brings a remainder ticket of the last supply
+        if (next(100) < 8) {
+            QSqlQuery rq(db);
+            rq.prepare("SELECT r.ticket_barcode FROM remainders r JOIN tickets t ON t.barcode = r.ticket_barcode WHERE t.status = 1 AND r.fuel_type = ? ORDER BY r.created_at LIMIT 1");
+            rq.addBindValue(fuelCode);
+            if (rq.exec() && rq.next()) {
+                tickets << Barcode::fromKey(rq.value(0).toLongLong());
+                ++reused;
+            }
+        }
+        // the tickets are held, or bought at the Ticket sale screen
+        QStringList held = heldTickets(db, fuelCode, spec, howMany);
+        if (held.size() < howMany) {
+            if (!sellTicketsAtScreen(window, db, people.isEmpty() ? "Individual" : people.at(next(people.size())), fuelName, spec, qMax(10, howMany))) {
+                out << "  FAIL  supply " << i + 1 << ": the tickets could not be bought at the Ticket sale screen\n";
+                ++failed;
+
+                continue;
+            }
+            held = heldTickets(db, fuelCode, spec, howMany);
+        }
+        tickets += held;
+        const int stop = next(100) < 12 ? 40 + next(55) : 0;
+        const SupplyResult r = autoSupply(window, db, boards, nozzle, tickets, 0, stop);
+        if (!r.done) {
+            out << "  FAIL  supply " << i + 1 << " at nozzle " << nozzle << ": " << r.why << "\n";
+            ++failed;
+
+            continue;
+        }
+        ++done;
+        short_ += stop > 0 ? 1 : 0;
+        remainders += r.remainder ? 1 : 0;
+        if ((i + 1) % 10 == 0 || i + 1 == supplies) {
+            out << "        " << i + 1 << " supplies, " << QString::number(timer.elapsed() / 1000.0 / (i + 1), 'f', 1) << " s each\n";
+            out.flush();
+        }
+    }
+    if (supplies > 0) {
+        ok(failed == 0 && done == supplies, QString::number(done) + " of " + QString::number(supplies) + " supplies recorded (" + QString::number(short_) + " stopped short, "
+                                                + QString::number(remainders) + " remainder tickets made, " + QString::number(reused) + " remainder tickets used again)");
+    }
+
+    // the manual nozzle: the supplier types the amount at the board, fills; the cashier types the reading and the tickets at Manual input
+    int manualDone = 0;
+    for (int i = 0; i < manualSupplies; ++i) {
+        const quint32 grams = quint32(10000 + next(30) * 1000);
+        if (!waitUntil([&]() { return boards.board(5).state == BoardProtocol::StateIdle; }, 10000)) {
+            ok(false, "manual nozzle 5 is idle");
+
+            break;
+        }
+        boards.simulator().typeAmount(5, grams);
+        boards.simulator().liftGun(5);
+        QTest::qWait(300);
+        boards.simulator().tick(1800000);
+        waitUntil([&]() { return boards.board(5).state == BoardProtocol::StateIdle; }, 10000);
+        const qlonglong dispensedG = boards.board(5).dispensedG;
+        const qlonglong dispensedMl = boards.board(5).dispensedMl;
+        // the reading from the dispenser's display, and tickets that cover it (15 kg tickets)
+        const int needed = int((dispensedG + 14999) / 15000);
+        QStringList held = heldTickets(db, "D", 2, needed);
+        if (held.size() < needed) {
+            sellTicketsAtScreen(window, db, "Individual", "Diesel", 2, qMax(10, needed));
+            held = heldTickets(db, "D", 2, needed);
+        }
+        if (!openTab(window, "navSupplies", "Manual input") || held.size() < needed) {
+            ok(false, "the Manual input screen opens and the tickets are held");
+
+            break;
+        }
+        QComboBox *nozzle = shown<QComboBox>(window, "msNozzleCombo");
+        QLineEdit *kg = shown<QLineEdit>(window, "msKgField");
+        QLineEdit *liters = shown<QLineEdit>(window, "msLitersField");
+        QLineEdit *preset = shown<QLineEdit>(window, "msPresetField");
+        QLineEdit *barcode = shown<QLineEdit>(window, "msBarcode");
+        QPushButton *addTicket = shown<QPushButton>(window, "msAddButton");
+        QPushButton *save = shown<QPushButton>(window, "msSaveButton");
+        if (!nozzle || !kg || !liters || !barcode || !addTicket || !save) {
+            ok(false, "the fields of the Manual input screen are on the screen");
+
+            break;
+        }
+        pick(nozzle, "5");
+        typeInto(kg, QString::number(dispensedG / 1000.0, 'f', 2));
+        typeInto(liters, QString::number(dispensedMl / 1000.0, 'f', 2));
+        if (preset) {
+            typeInto(preset, QString::number(grams / 1000.0, 'f', 2));
+        }
+        foreach (const QString &ticket, held) {
+            typeInto(barcode, ticket);
+            press(addTicket);
+        }
+        const qlonglong before = count(db, "SELECT COUNT(*) FROM supplements");
+        press(save);
+        if (waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM supplements") > before; }, 10000)) {
+            ++manualDone;
+        } else {
+            QLabel *status = shown<QLabel>(window, "msStatus");
+            out << "  FAIL  manual supply " << i + 1 << ": " << (status ? status->text() : QString("not saved")) << "\n";
+        }
+    }
+    if (manualSupplies > 0) {
+        ok(manualDone == manualSupplies, QString::number(manualDone) + " of " + QString::number(manualSupplies) + " manual-nozzle supplies typed in at Manual input");
+    }
+    ok(count(db, "SELECT COUNT(*) FROM supplements WHERE synced = 0") >= done + manualDone, "the supplies wait for the upload");
+
+    return failed == 0;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -276,7 +621,7 @@ int main(int argc, char *argv[])
     }
     QSqlDatabase db = QSqlDatabase::database(Database::DefaultConnection);
 
-    const bool withBoards = args.contains("--nozzles") || args.contains("--boards");
+    const bool withBoards = args.contains("--nozzles") || args.contains("--boards") || !arg(args, "supplies").isEmpty() || !arg(args, "manual-supplies").isEmpty();
     const int converterPort = arg(args, "converter-port", "4001").toInt();
     if (withBoards) {
         Settings(db).setInt(SettingKey::ConverterPort, converterPort);
@@ -414,6 +759,12 @@ int main(int argc, char *argv[])
         ok(count(db, "SELECT COUNT(*) FROM sales WHERE sale_type = 'spot'") - before == spot, "the database holds " + QString::number(spot) + " new spot sales");
     }
 
+    const int supplyCount = arg(args, "supplies", "0").toInt();
+    const int manualCount = arg(args, "manual-supplies", "0").toInt();
+    if (supplyCount > 0 || manualCount > 0) {
+        supplyStage(window, db, boards, supplyCount, manualCount);
+    }
+
     // ---- check and upload ----
     if (args.contains("--upload")) {
         out << "\nupload\n";
@@ -422,10 +773,10 @@ int main(int argc, char *argv[])
         QPushButton *upload = shown<QPushButton>(window, "uploadButton");
         ok(upload && window.currentPage() == "review", "the Review screen is open with the Upload data button");
         if (upload) {
-            const qlonglong waiting = count(db, "SELECT COUNT(*) FROM sales WHERE synced = 0");
+            const int waiting = Uploader::pendingTotal(db);
             press(upload);
-            ok(waitUntil([&]() { return count(db, "SELECT COUNT(*) FROM sales WHERE synced = 0") == 0; }, 600000, 200),
-               QString::number(waiting) + " sales waited and all of them were uploaded");
+            ok(waitUntil([&]() { return Uploader::pendingTotal(db) == 0; }, 1800000, 500),
+               QString::number(waiting) + " records waited (sales, supplies, remainders, tickets, loans) and all of them were uploaded");
             QLabel *status = shown<QLabel>(window, "uploadStatus");
             if (status) {
                 out << "        " << status->text() << "\n";
