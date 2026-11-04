@@ -9,11 +9,14 @@
 //   --data       the folder that holds the terminal's smart210.db (made if it is not there); --device=<file> names another settings file than the usual one
 //   --spot       how many spot sales to make at the Spot sale screen (60% diesel, 40% gasoline, 1 to 40 kg; a few own uses, gifts and loans)
 //   --upload     at the end open Review and press Upload data
+//   --nozzles    open Machine Config (Settings on the login page, the PIN) and add nozzles 1 to 5 (1, 2 gasoline on T1; 3, 4 diesel and 5 diesel manual on T2), Update and Read each
+//   --pin        the PIN of Machine Config (default 4821); --converter-port the port the simulated boards connect to (default 4001)
 //   --first-run-only  stop after the first run and the login
 //
 // The first run is what a new terminal does: the server address page, the test of the connection, the first download of the web app's data, the login page.
 
 #include "AppConfig.h"
+#include "FakeBoards.h"
 #include "Database.h"
 #include "MainWindow.h"
 #include "Migrator.h"
@@ -30,6 +33,8 @@
 #include <QPushButton>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QTabWidget>
+#include <QTableWidget>
 #include <QTest>
 #include <QTextStream>
 
@@ -95,6 +100,7 @@ static bool pick(QComboBox *combo, const QString &textPart)
     for (int i = 0; i < combo->count(); ++i) {
         if (combo->itemText(i).contains(textPart, Qt::CaseInsensitive)) {
             combo->setCurrentIndex(i);
+            emit combo->activated(i);   // what a click on the item gives
 
             return true;
         }
@@ -131,6 +137,118 @@ static qlonglong count(QSqlDatabase db, const QString &sql)
     return q.next() ? q.value(0).toLongLong() : -1;
 }
 
+// Machine Config, as the technician does it: from the login screen (Settings), the PIN, the Nozzle tab; each nozzle is added, its config typed and sent to its
+// board (Update: the board must answer and keep it) and read back (Read).
+static bool machineConfigStage(MainWindow &window, QSqlDatabase db, FakeBoards &boards, const QString &pin)
+{
+    out << "\nMachine Config\n";
+    if (window.currentPage() != "login") {
+        press(shown<QPushButton>(window, "navSettings"));
+        QTest::qWait(300);
+        QPushButton *logout = shown<QPushButton>(window, "logoutButton");
+        ok(logout != 0, "the cashier opens Settings and finds Logout");
+        if (!logout) {
+            return false;
+        }
+        press(logout);
+        ok(waitUntil([&]() { return window.currentPage() == "login"; }, 10000), "after Logout the login page is open");
+    }
+    press(shown<QPushButton>(window, "loginSettingsButton"));
+    ok(waitUntil([&]() { return window.currentPage() == "pin"; }, 10000), "the Settings button of the login page asks for the PIN");
+    QLineEdit *pinField = shown<QLineEdit>(window, "pinField");
+    if (!pinField) {
+        return false;
+    }
+    typeInto(pinField, pin);
+    press(shown<QPushButton>(window, "pinOkButton"));
+    ok(waitUntil([&]() { return window.currentPage() == "machine"; }, 10000), "the PIN is accepted and Machine Config opens");
+    if (window.currentPage() != "machine") {
+        return false;
+    }
+    QTabWidget *tabs = shown<QTabWidget>(window, "machineTabs");
+    QWidget *nozzleTab = window.findChild<QWidget *>("machineNozzleTab");
+    if (tabs && nozzleTab) {
+        tabs->setCurrentWidget(nozzleTab);   // the technician clicks the Nozzle tab
+    }
+    QLabel *status = shown<QLabel>(window, "machineStatus");
+    QTableWidget *table = shown<QTableWidget>(window, "nozzleTable");
+    ok(status && table, "the Nozzle tab is open");
+    if (!status || !table) {
+        return false;
+    }
+
+    // the boards: five, straight from the factory, behind the converter that connects to this terminal
+    ok(waitUntil([&]() { return boards.isConnected(); }, 20000), "the converter with the five boards connects to the terminal");
+
+    const struct { int number; const char *fuel; const char *tank; bool manual; } plan[] = {
+        {1, "Gasoline", "T1", false}, {2, "Gasoline", "T1", false}, {3, "Diesel", "T2", false}, {4, "Diesel", "T2", false}, {5, "Diesel", "T2", true}
+    };
+    for (int i = 0; i < 5; ++i) {
+        QComboBox *number = shown<QComboBox>(window, "addNozzleNumber");
+        QComboBox *fuel = shown<QComboBox>(window, "addNozzleFuel");
+        QComboBox *tank = shown<QComboBox>(window, "addNozzleTank");
+        QPushButton *add = shown<QPushButton>(window, "addNozzleButton");
+        if (!number || !fuel || !tank || !add) {
+            ok(false, "the Add a nozzle form is on the screen");
+
+            return false;
+        }
+        if (number->findText(QString::number(plan[i].number)) < 0) {
+            out << "  --    nozzle " << plan[i].number << " is already added\n";
+
+            continue;
+        }
+        pick(number, QString::number(plan[i].number));
+        pick(fuel, plan[i].fuel);
+        pick(tank, plan[i].tank);
+        status->setText(QString());
+        press(add);
+        ok(status->text().contains("Nozzle " + QString::number(plan[i].number) + " was added"), "nozzle " + QString::number(plan[i].number) + " added: " + plan[i].fuel + " on " + plan[i].tank + " (" + status->text() + ")");
+    }
+    ok(table->rowCount() == 5, "the nozzle table lists five nozzles");
+    for (int i = 0; i < 5; ++i) {
+        table->selectRow(i);   // a click on the row of the nozzle
+        QComboBox *mode = shown<QComboBox>(window, "nozzleMode");
+        QComboBox *fuel = shown<QComboBox>(window, "nozzleFuel");
+        QLineEdit *density = shown<QLineEdit>(window, "nozzleDensity");
+        QLineEdit *pulses = shown<QLineEdit>(window, "nozzlePulses");
+        QPushButton *update = shown<QPushButton>(window, "updateNozzleButton");
+        QPushButton *read = shown<QPushButton>(window, "readNozzlesButton");
+        if (!mode || !fuel || !density || !pulses || !update || !read) {
+            ok(false, "the nozzle form is on the screen");
+
+            return false;
+        }
+        pick(mode, plan[i].manual ? "Manual" : "Auto");
+        pick(fuel, plan[i].fuel);
+        typeInto(density, QString(plan[i].fuel) == "Gasoline" ? "0.7400" : "0.8300");
+        typeInto(pulses, "1000");
+        press(update);
+        const bool verified = waitUntil([&]() { return status->text().contains("Verified"); }, 20000);
+        ok(verified, "nozzle " + QString::number(plan[i].number) + ": Update is sent and the board keeps it (" + status->text() + ")");
+        status->setText(QString());
+        QTest::qWait(500);
+        press(read);
+        const bool readBack = waitUntil([&]() { return status->text().contains("was read from its board and saved"); }, 20000);
+        ok(readBack, "nozzle " + QString::number(plan[i].number) + ": Read brings the same config back (" + status->text() + ")");
+        const BoardProtocol::BoardConfig held = boards.board(plan[i].number).config;
+        ok(held.mode == (plan[i].manual ? BoardProtocol::ModeManual : BoardProtocol::ModeAuto) && held.fuelType == (QString(plan[i].fuel) == "Gasoline" ? "A" : "D") && held.pulsesX100 == 100000,
+           "board " + QString::number(plan[i].number) + " holds " + (plan[i].manual ? "manual" : "auto") + " " + held.fuelType + ", " + QString::number(held.pulsesX100 / 100) + " counts per litre");
+    }
+    ok(count(db, "SELECT COUNT(*) FROM nozzles WHERE deleted = 0") == 5, "five nozzles are saved on the terminal");
+    ok(count(db, "SELECT COUNT(*) FROM nozzles WHERE deleted = 0 AND mode = " + QString::number(BoardProtocol::ModeManual)) == 1, "one of them is manual");
+    for (int i = 0; i < 5; ++i) {
+        const QString want = plan[i].manual ? "Not polled" : "Online";
+        ok(waitUntil([&]() { return table->item(i, 2) && table->item(i, 2)->text() == want; }, 20000),
+           "nozzle " + QString::number(i + 1) + " shows " + want + (table->item(i, 2) ? " (" + table->item(i, 2)->text() + ")" : QString()));
+    }
+
+    press(shown<QPushButton>(window, "machineBackButton"));
+    ok(waitUntil([&]() { return window.currentPage() == "login"; }, 10000), "Back leaves Machine Config for the login page");
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -158,14 +276,26 @@ int main(int argc, char *argv[])
     }
     QSqlDatabase db = QSqlDatabase::database(Database::DefaultConnection);
 
+    const bool withBoards = args.contains("--nozzles") || args.contains("--boards");
+    const int converterPort = arg(args, "converter-port", "4001").toInt();
+    if (withBoards) {
+        Settings(db).setInt(SettingKey::ConverterPort, converterPort);
+    }
     AppConfig config;
-    config.setBoardLink(false);
+    config.setBoardLink(withBoards);
     config.setChangeLogFile(data + "/changes.log");
     MainWindow window(config, QString(), "db", db);
     window.resize(1280, 720);
     window.show();
     QTest::qWaitForWindowExposed(&window);
     out << "the terminal window is open (" << data << ")\n";
+    FakeBoards boards;
+    if (withBoards) {
+        for (int number = 1; number <= 5; ++number) {
+            boards.addBlank(number);   // straight from the factory: the technician gives them their config on Machine Config
+        }
+        boards.connectTo(quint16(converterPort));
+    }
 
     // ---- the first run ----
     out << "\nfirst run\n";
@@ -200,6 +330,14 @@ int main(int argc, char *argv[])
     }
     ok(count(db, "SELECT COUNT(*) FROM tickets") > 40000, "the terminal holds the tickets of the web app (" + QString::number(count(db, "SELECT COUNT(*) FROM tickets")) + ")");
     ok(count(db, "SELECT COUNT(*) FROM users WHERE role = 'cashier'") >= 2, "the cashiers came down with the download");
+
+    if (args.contains("--nozzles")) {
+        if (!machineConfigStage(window, db, boards, arg(args, "pin", "4821"))) {
+            out << "\n" << checks << " checks, " << fails << " failed\n";
+
+            return 1;
+        }
+    }
 
     // ---- login ----
     out << "\nlogin\n";
