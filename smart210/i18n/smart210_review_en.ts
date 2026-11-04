@@ -205,10 +205,12 @@
         <location filename="../src/review/ReviewPage.cpp" line="241"/>
         <source>Spot sales: %1 records, %2 kg, amount %3
 Ticket sales: %4 records, %5 kg, amount %6
-Total paid: %7, unpaid: %8</source>
+Card sales: %7 records, %8 kg, amount %9
+Total paid: %10, unpaid: %11</source>
         <translation>Spot sales: %1 records, %2 kg, amount %3
 Ticket sales: %4 records, %5 kg, amount %6
-Total paid: %7, unpaid: %8</translation>
+Card sales: %7 records, %8 kg, amount %9
+Total paid: %10, unpaid: %11</translation>
     </message>
     <message>
         <location filename="../src/review/ReviewPage.cpp" line="246"/>

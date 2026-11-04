@@ -317,6 +317,7 @@ private slots:
     void withNothingWaitingTheUploadButtonIsOff();
     void theReviewListsTheRecordsOfTheChosenDateWithTotals();
     void theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen();
+    void theReviewSalesTotalsHaveALineForTheCardSales();
     void cleanDataErasesTheDatabaseAndIsRefusedWhileRecordsWait();
     void clearConfigErasesTheMachineSettingsAndKeepsTheData();
     void machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoResets();
@@ -3656,6 +3657,41 @@ void Smart210Test::machineConfigIsOutsideTheShellWithRearrangedTabsAndTheTwoRese
     QVERIFY(window.findChild<QListWidget *>("changeLog")->item(0)->text().contains("Reset: - -> clear config"));
     QVERIFY(restart.wait(4000));
     QVERIFY(window.restartWanted());
+}
+// the Sales totals of the Review screen have a line of their own for the card fills; they are not counted with the ticket sales
+void Smart210Test::theReviewSalesTotalsHaveALineForTheCardSales()
+{
+    setUpLoggedInTerminalWithAPin();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    const QString columns = "(id, created_at, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, usage, user_id, sale_date, receipt) ";
+    run("INSERT INTO sales " + columns + "VALUES ('s1', '2026-10-09 10:00:00', 'spot', 'D', 750, 1000, 'cash', 7500, 7500, 'sale', 7, '2026-10-09', '1')");
+    run("INSERT INTO sales " + columns + "VALUES ('t1', '2026-10-09 10:30:00', 'ticket', 'D', 750, 2000, 'cash', 15000, 15000, 'sale', 7, '2026-10-09', '1')");
+    run("INSERT INTO sales " + columns + "VALUES ('c1', '2026-10-09 11:00:00', 'card', 'D', 750, 500, 'cash', 3750, 3750, 'sale', 7, '2026-10-09', '1')");
+    run("INSERT INTO sales " + columns + "VALUES ('c2', '2026-10-09 12:00:00', 'card', 'D', 750, 500, 'cash', 3750, 3750, 'sale', 7, '2026-10-09', '1')");
+
+    const ReviewData::Totals t = ReviewData::totals(db, "2026-10-09");
+    QCOMPARE(t.spotCount, 1);
+    QCOMPARE(t.ticketCount, 1);                                  // the card fills are not ticket sales here
+    QCOMPARE(t.ticketKgX100, qlonglong(2000));
+    QCOMPARE(t.cardCount, 2);
+    QCOMPARE(t.cardKgX100, qlonglong(1000));
+    QCOMPARE(t.cardAmountX100, qlonglong(7500));
+    QCOMPARE(t.paidX100, qlonglong(30000));                      // the paid total still counts them all
+
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", db);
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
+    QLabel *totals = window.findChild<QLabel *>("reviewSalesTotals");
+    QVERIFY2(totals->text().contains("Spot sales: 1 records, 10.00 kg, amount 75.00"), qPrintable(totals->text()));
+    QVERIFY2(totals->text().contains("Ticket sales: 1 records, 20.00 kg, amount 150.00"), qPrintable(totals->text()));
+    QVERIFY2(totals->text().contains("Card sales: 2 records, 10.00 kg, amount 75.00"), qPrintable(totals->text()));
+    QVERIFY2(totals->text().contains("Total paid: 300.00, unpaid: 0.00"), qPrintable(totals->text()));
+    QTableWidget *table = window.findChild<QTableWidget *>("reviewSalesTable");
+    QCOMPARE(table->rowCount(), 4);
+    QCOMPARE(table->item(2, 1)->text(), QString("Card / Sale"));  // and the rows say Card in the Type column
 }
 void Smart210Test::theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen()
 {

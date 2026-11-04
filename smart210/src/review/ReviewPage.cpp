@@ -269,9 +269,10 @@ void ReviewPage::reload()
     fillRecords(debts_, ReviewData::debts(db_, date));
 
     const ReviewData::Totals t = ReviewData::totals(db_, date);
-    salesTotals_->setText(tr("Spot sales: %1 records, %2 kg, amount %3\nTicket sales: %4 records, %5 kg, amount %6\nTotal paid: %7, unpaid: %8")
+    salesTotals_->setText(tr("Spot sales: %1 records, %2 kg, amount %3\nTicket sales: %4 records, %5 kg, amount %6\nCard sales: %7 records, %8 kg, amount %9\nTotal paid: %10, unpaid: %11")
                               .arg(t.spotCount).arg(money(t.spotKgX100)).arg(money(t.spotAmountX100)).arg(t.ticketCount).arg(money(t.ticketKgX100))
-                              .arg(money(t.ticketAmountX100)).arg(money(t.paidX100)).arg(money(t.unpaidX100)));
+                              .arg(money(t.ticketAmountX100)).arg(t.cardCount).arg(money(t.cardKgX100)).arg(money(t.cardAmountX100))
+                              .arg(money(t.paidX100)).arg(money(t.unpaidX100)));
     const int hidden = showNoReceipt ? 0 : ReviewData::salesWithoutReceipt(db_, date);
     if (hidden > 0) {
         salesTotals_->setText(salesTotals_->text() + "\n" + tr("%1 sales without a receipt are not listed (Machine Config).").arg(hidden));

@@ -62,7 +62,7 @@ public:
     };
 
     struct Totals {
-        Totals() : spotCount(0), spotKgX100(0), spotAmountX100(0), ticketCount(0), ticketKgX100(0), ticketAmountX100(0), paidX100(0), unpaidX100(0),
+        Totals() : spotCount(0), spotKgX100(0), spotAmountX100(0), ticketCount(0), ticketKgX100(0), ticketAmountX100(0), cardCount(0), cardKgX100(0), cardAmountX100(0), paidX100(0), unpaidX100(0),
                    supplements(0), litersX100(0), supplementKgX100(0), remainders(0), remainderKgX100(0), loans(0), loanKgX100(0), settlements(0),
                    settlementKgX100(0), waiting(0), refused(0) {}
 
@@ -72,6 +72,9 @@ public:
         int ticketCount;
         qlonglong ticketKgX100;
         qlonglong ticketAmountX100;
+        int cardCount;                  // the fills paid from a card (sale type card): not counted with the ticket sales
+        qlonglong cardKgX100;
+        qlonglong cardAmountX100;
         qlonglong paidX100;
         qlonglong unpaidX100;
         int supplements;

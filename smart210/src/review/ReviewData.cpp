@@ -262,6 +262,10 @@ ReviewData::Totals ReviewData::totals(QSqlDatabase db, const QString &date)
             ++t.spotCount;
             t.spotKgX100 += r.kgX100;
             t.spotAmountX100 += r.amountX100;
+        } else if (r.saleType == "card") {
+            ++t.cardCount;
+            t.cardKgX100 += r.kgX100;
+            t.cardAmountX100 += r.amountX100;
         } else {
             ++t.ticketCount;
             t.ticketKgX100 += r.kgX100;
