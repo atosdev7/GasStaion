@@ -443,10 +443,10 @@ static void port_select_beep(void *ctx)
 
 /* ---------------------------------------------------------------- the display and the keyboard (ui_drivers.h) */
 
-static void port_display_update(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad)
+static void port_display_update(void *ctx, const char *kg, const char *litres, const char *density)
 {
     (void)ctx;
-    UpdateDisplay(kg, litres, density, keypad);
+    UpdateDisplay(kg, litres, density);
 }
 
 static void port_display_refresh(void *ctx)
@@ -455,11 +455,11 @@ static void port_display_refresh(void *ctx)
     RefreshDisplay();
 }
 
-static int port_key(void *ctx)
+static int port_key(void *ctx, char code, const char *value)
 {
     (void)ctx;
 
-    return ScanKeyboardAndRefreshDisplay();
+    return ScanKeyboardAndRefreshDisplay(code, value);
 }
 
 /* ---------------------------------------------------------------- start up */

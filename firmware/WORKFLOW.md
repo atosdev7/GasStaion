@@ -232,7 +232,7 @@ A record that a power cut interrupts has a wrong CRC and is ignored, so the prev
 
 ```mermaid
 flowchart TD
-    A["ui_tick(elapsed)"] --> B["ScanKeyboardAndRefreshDisplay()<br/>about 20 ms, returns a key code"]
+    A["ui_tick(elapsed)"] --> B["ScanKeyboardAndRefreshDisplay(code, value)<br/>about 20 ms, returns a key code"]
     B --> C{"a key?"}
     C -- "select" --> D["board_key_select(): only the event<br/>SELECT_KEY for the next POLL"]
     C -- "clear" --> E{"auto mode?"}
@@ -254,8 +254,8 @@ flowchart TD
     M --> O
     N --> O
     C -- none --> O
-    O --> P{"a text changed?"}
-    P -- yes --> Q["UpdateDisplay(kg, litres, density, keypad)"]
+    O --> P{"a text of the display board changed?"}
+    P -- yes --> Q["UpdateDisplay(kg, litres, density)"]
     P -- no --> R["LEDs"]
     Q --> R
     R --> S["RefreshDisplay()<br/>8 to 10 ms"]

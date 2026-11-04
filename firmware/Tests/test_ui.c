@@ -41,6 +41,16 @@ static int failures = 0;
 
 enum { KG = 0, LITRES, DENSITY, KEYPAD };
 
+/* what the UI composed for the value of the keyboard's LCD (it reaches the driver at the next scan) */
+#define CHECK_KEYPAD(text)                                                             \
+    do {                                                                               \
+        ++checks;                                                                      \
+        if (strcmp(rig.ui.shown[KEYPAD], text) != 0) {                                 \
+            ++failures;                                                                \
+            printf("  FAIL %s:%d: keypad value is \"%s\", wanted \"%s\"\n", __FILE__, __LINE__, rig.ui.shown[KEYPAD], text); \
+        }                                                                              \
+    } while (0)
+
 typedef struct {
     Persist stored;
     int has_record;
@@ -89,9 +99,11 @@ typedef struct {
     int key_count, key_at;
     int beeps, last_beep_ms;
     int led[4];
+    char scan_code;         /* what the last scan was given for the first digit of the keyboard's LCD */
+    char scan_value[UI_TEXT_MAX + 1];   /* ... and for its other digits */
 } Rig;
 
-static void u_update(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad)
+static void u_update(void *ctx, const char *kg, const char *litres, const char *density)
 {
     Rig *r = (Rig *)ctx;
 
@@ -99,7 +111,6 @@ static void u_update(void *ctx, const char *kg, const char *litres, const char *
     strcpy(r->disp[KG], kg);
     strcpy(r->disp[LITRES], litres);
     strcpy(r->disp[DENSITY], density);
-    strcpy(r->disp[KEYPAD], keypad);
 }
 
 static void u_refresh(void *ctx)
@@ -107,11 +118,13 @@ static void u_refresh(void *ctx)
     ++((Rig *)ctx)->refreshes;
 }
 
-static int u_scan(void *ctx)
+static int u_scan(void *ctx, char code, const char *value)
 {
     Rig *r = (Rig *)ctx;
 
     ++r->scans;
+    r->scan_code = code;
+    strcpy(r->scan_value, value);
 
     return r->key_at < r->key_count ? r->keys[r->key_at++] : UI_KEY_NONE;
 }
@@ -227,7 +240,7 @@ static void test_auto_screens(void)
     CHECK_DISPLAY(KG, "   0.00");
     CHECK_DISPLAY(LITRES, "   0.00");
     CHECK_DISPLAY(DENSITY, "----");
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
 
     /* configured, auto: the density of the config */
     rig_new(&rig);
@@ -252,7 +265,7 @@ static void test_auto_screens(void)
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "  40.00");
     CHECK_DISPLAY(LITRES, "   bAL");
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
     request(&rig, 2, CMD_SHOW_BALANCE, 0, 1);
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "   0.00");
@@ -263,7 +276,7 @@ static void test_auto_screens(void)
     tick(&rig, 10);
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_DISPLAY(KG, "  15.00");
-    CHECK_DISPLAY(KEYPAD, "    15.00");
+    CHECK_KEYPAD("   15.00");
     CHECK_EQ(rig.led[1], 1);
 
     /* START with the session id; 5000 counts = 5 L = 4150 g */
@@ -272,7 +285,7 @@ static void test_auto_screens(void)
     CHECK_EQ(rig.board.state, STATE_DISPENSING);
     CHECK_DISPLAY(KG, "   4.15");
     CHECK_DISPLAY(LITRES, "   5.00");
-    CHECK_DISPLAY(KEYPAD, "    15.00");
+    CHECK_KEYPAD("   15.00");
     CHECK_EQ(rig.led[2], 1);
     CHECK_EQ(rig.led[1], 0);
 
@@ -281,7 +294,7 @@ static void test_auto_screens(void)
     CHECK_EQ(rig.board.state, STATE_DONE);
     CHECK_DISPLAY(KG, "  15.00");
     CHECK_DISPLAY(LITRES, "  18.07");     /* 18.072 L: the third decimal is dropped */
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
     CHECK_EQ(rig.led[3], 1);              /* LED4 is steady for a result */
     CHECK_EQ(rig.led[2], 0);
     tick(&rig, 130);
@@ -360,7 +373,7 @@ static void test_numbers(void)
     request(&rig, 6, CMD_SET_PRESET, 20000000UL, 1);
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "----.--");
-    CHECK_DISPLAY(KEYPAD, " 20000.00");
+    CHECK_KEYPAD("20000.00");
 
     /* the density in 4 digits */
     rig_new(&rig);
@@ -381,39 +394,39 @@ static void test_manual_entry(void)
     boot(&rig, MODE_MANUAL, 2);
 
     /* the typed amount is on the keyboard's display */
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
     type(&rig, UI_KEY_1);
-    CHECK_DISPLAY(KEYPAD, "       1");
+    CHECK_KEYPAD("      1");
     type(&rig, UI_KEY_2);
     type(&rig, UI_KEY_POINT);
-    CHECK_DISPLAY(KEYPAD, "      12.");
+    CHECK_KEYPAD("     12.");
     type(&rig, UI_KEY_5);
     type(&rig, UI_KEY_7);
     type(&rig, UI_KEY_9);        /* a third decimal is not taken */
     type(&rig, UI_KEY_POINT);    /* nor a second point */
-    CHECK_DISPLAY(KEYPAD, "    12.57");
+    CHECK_KEYPAD("   12.57");
     CHECK_EQ(ui_entry_grams(&rig.ui), 12570);
     CHECK_DISPLAY(KG, "   0.00");   /* the kg display waits for the fill */
 
     type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_CLEAR);
-    CHECK_DISPLAY(KEYPAD, "      12");
+    CHECK_KEYPAD("     12");
     type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_CLEAR);    /* more clears than characters */
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
     CHECK_EQ(ui_entry_grams(&rig.ui), 0);
 
     /* three digits before the point at most; a point first is 0. */
     type(&rig, UI_KEY_POINT);
     type(&rig, UI_KEY_2);
     type(&rig, UI_KEY_5);
-    CHECK_DISPLAY(KEYPAD, "     0.25");
+    CHECK_KEYPAD("    0.25");
     CHECK_EQ(ui_entry_grams(&rig.ui), 250);
     type(&rig, UI_KEY_CLEAR); type(&rig, UI_KEY_CLEAR); type(&rig, UI_KEY_CLEAR); type(&rig, UI_KEY_CLEAR);
     type(&rig, UI_KEY_1); type(&rig, UI_KEY_2); type(&rig, UI_KEY_3); type(&rig, UI_KEY_4);
-    CHECK_DISPLAY(KEYPAD, "     123");
+    CHECK_KEYPAD("    123");
 
     /* ENTER with nothing typed is refused: Err for a moment, no fill */
     rig_new(&rig);
@@ -432,7 +445,7 @@ static void test_manual_entry(void)
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_EQ(rig.board.preset_g, 8300);
     CHECK_DISPLAY(KG, "   8.30");
-    CHECK_DISPLAY(KEYPAD, "     8.30");
+    CHECK_KEYPAD("    8.30");
     CHECK_EQ(rig.ui.entry_len, 0);
     flow(&rig, 1, 0);                                        /* the gun is up (the rig's hook): the board starts by itself */
     CHECK_EQ(rig.board.state, STATE_DISPENSING);
@@ -447,7 +460,7 @@ static void test_manual_entry(void)
     flow(&rig, 30, 0);
     CHECK_EQ(rig.board.state, STATE_IDLE);
     CHECK_DISPLAY(KG, "   0.00");
-    CHECK_DISPLAY(KEYPAD, "        ");
+    CHECK_KEYPAD("       ");
 
     /* the select key does nothing in manual mode, and it reports nothing */
     type(&rig, UI_KEY_FUNCTION);
@@ -493,7 +506,7 @@ static void test_total_key(void)
     /* any other key puts the usual display back and works as usual */
     type(&rig, UI_KEY_5);
     CHECK_DISPLAY(KG, "   0.00");
-    CHECK_DISPLAY(KEYPAD, "       5");
+    CHECK_KEYPAD("      5");
 
     /* 12 digits over the two displays: the kg display holds the upper six */
     rig.board.p.total_g = 123456789012ULL * 1000 + 999;
@@ -537,6 +550,51 @@ static void test_total_key(void)
     type(&rig, UI_KEY_SET);
     CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
 }
+/* the keyboard's LCD: the first digit is the mode or the status, the other seven the value; both go to ScanKeyboardAndRefreshDisplay at the next scan */
+static void test_keyboard_lcd(void)
+{
+    Rig rig;
+
+#define CHECK_SCAN(c, v) do { tick(&rig, 10); tick(&rig, 10); ++checks; if (rig.scan_code != (c) || strcmp(rig.scan_value, (v)) != 0) { ++failures; \
+        printf("  FAIL %s:%d: the scan was given '%c' \"%s\", wanted '%c' \"%s\"\n", __FILE__, __LINE__, rig.scan_code, rig.scan_value, (c), (v)); } } while (0)
+
+    /* an auto board shows the number of its state */
+    rig_new(&rig);
+    boot(&rig, MODE_AUTO, 2);
+    CHECK_SCAN('0', "       ");                                 /* idle: 0, no value */
+    request(&rig, 1, CMD_SET_PRESET, 15000, 1);
+    CHECK_SCAN('2', "   15.00");                               /* a preset waits */
+    request(&rig, 2, CMD_START, 1, 1);
+    flow(&rig, 10, 500);
+    CHECK_SCAN('3', "   15.00");                               /* a fill runs */
+    flow(&rig, 90, 500);
+    flow(&rig, 30, 0);
+    CHECK_SCAN('4', "       ");                                /* a result waits */
+    request(&rig, 3, CMD_ACK_RESULT, 1, 1);
+    board_set_fault(&rig.board, FAULT_FLOW_SENSOR);
+    CHECK_SCAN('E', "       ");                                /* a fault */
+
+    /* a manual board shows a letter, and the amount that is being typed */
+    rig_new(&rig);
+    boot(&rig, MODE_MANUAL, 2);
+    CHECK_SCAN('H', "       ");
+    type(&rig, UI_KEY_1);
+    type(&rig, UI_KEY_2);
+    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_5);
+    CHECK_SCAN('H', "    12.5");
+    type(&rig, UI_KEY_TOTAL);
+    CHECK_SCAN('t', "    12.5");                                /* the total is on the two numeric displays */
+    tick(&rig, 5100);
+    rig.fake.hook = 0;
+    type(&rig, UI_KEY_SET);
+    CHECK_SCAN('P', "   12.50");                               /* the preset waits for the gun */
+    rig.fake.hook = 1;
+    flow(&rig, 2, 0);
+    CHECK_SCAN('F', "   12.50");                               /* a fill runs */
+#undef CHECK_SCAN
+}
+
 /* every pass of ui_tick scans the keyboard (20 ms) and refreshes the display board (8 to 10 ms); UpdateDisplay is only called when a text changed */
 static void test_scan_refresh_and_update(void)
 {
@@ -571,6 +629,7 @@ int main(void)
     test_total_key();
     test_heartbeat();
     test_scan_refresh_and_update();
+    test_keyboard_lcd();
 
     printf("ui: %d checks, %d failed\n", checks, failures);
 

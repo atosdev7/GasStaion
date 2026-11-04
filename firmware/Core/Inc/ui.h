@@ -32,14 +32,14 @@ enum {
     UI_KEY_FUNCTION    /* auto mode: the select key (beeps, reported to the Smart210) */
 };
 
-#define UI_TEXT_MAX (UI_KEYPAD_DIGITS + UI_KEYPAD_DIGITS + 1)   /* the characters of a text: a digit each and, at most, a point each */
-#define UI_DISPLAYS 4                                           /* kg, litres, density, keypad */
+#define UI_TEXT_MAX (UI_KEYPAD_VALUE_DIGITS + UI_KEYPAD_VALUE_DIGITS + 1)   /* the characters of a text: a digit each and, at most, a point each */
+#define UI_DISPLAYS 4                                           /* kg, litres, density, and the value of the keyboard's LCD */
 
 typedef struct {
     void *ctx;
-    void (*update)(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad);   /* UpdateDisplay */
+    void (*update)(void *ctx, const char *kg, const char *litres, const char *density);                      /* UpdateDisplay */
     void (*refresh)(void *ctx);                                                                              /* RefreshDisplay: 8 to 10 ms */
-    int (*scan)(void *ctx);                                                                                  /* ScanKeyboardAndRefreshDisplay: 20 ms; a UI_KEY_* code, UI_KEY_NONE when no new press */
+    int (*scan)(void *ctx, char code, const char *value);                                                    /* ScanKeyboardAndRefreshDisplay(code, value): 20 ms; a UI_KEY_* code, UI_KEY_NONE when no new press */
     void (*beep)(void *ctx, uint16_t ms);
     void (*led)(void *ctx, uint8_t index, int on);                              /* 0 heartbeat, 1 preset set, 2 dispensing, 3 result (steady) or fault (blinking) */
 } UiHal;
@@ -52,6 +52,7 @@ typedef struct {
     Board *board;
     char shown[UI_DISPLAYS][UI_TEXT_MAX + 1];   /* what the displays were last given */
     int drawn;
+    char code;                      /* the first digit of the keyboard's LCD: the mode or the status */
     char entry[UI_ENTRY_MAX + 1];
     uint8_t entry_len;
     uint32_t note_ms;               /* while it runs the kg display says "Err": a key was refused */
