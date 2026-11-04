@@ -250,6 +250,23 @@ class PushApiTest extends TestCase
         $this->assertSame([$first['id']], $this->push('remainders', [$first])['saved']);          // the same row again is fine
     }
 
+    // A remainder made and used again between two uploads: the web app first hears of its ticket already supplied (the ticket is created in its final status)
+    // and the remainder must still be completed on the day of the supply (F4 of the test run of 2026-11-04).
+    public function testTheRemainderOfATicketThatArrivesAlreadySuppliedIsComplete()
+    {
+        $made = $this->supplement();
+        $this->push('supplements', [$made]);
+        $barcode = $this->deviceBarcode(5);
+        $remainder = $this->remainder($made['id'], ['ticket_barcode' => $barcode]);
+        $this->push('remainders', [$remainder]);
+        $this->assertNull(Remainder::find($remainder['id'])->complete_date);
+
+        $used = $this->supplyRow($barcode);
+        $this->assertSame([$barcode], $this->push('tickets', [$used])['saved']);
+
+        $this->assertSame(config('ticket_statuses.supply'), (int) Ticket::find($barcode)->status);
+        $this->assertSame('2026-10-06', substr((string) Remainder::find($remainder['id'])->complete_date, 0, 10));
+    }
     public function testARemainderTakesItsMomentAndDayFromTheNewNamesOrTheOlderTerminalsNames()
     {
         $supplement = $this->supplement();

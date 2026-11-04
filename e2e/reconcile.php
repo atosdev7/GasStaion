@@ -8,7 +8,7 @@
 // --from/--to limit the checks of the day-bound records (default: everything). The tanks, tickets and debts are checked as they stand now.
 // Lines "ok" / "FAIL" / "note"; the exit code is 1 when a check failed.
 
-$terminalDb = __DIR__ . '/../smart210/build/Desktop_Qt_5_15_2_MinGW_64_bit_Debug/debug/data/smart210.db';
+$terminalDb = __DIR__ . '/../smart210/build/Desktop_Qt_5_15_2_MinGW_64_bit_Debug/debug/data-day1/smart210.db';
 $from = '0000-01-01';
 $to = '9999-12-31';
 foreach (array_slice($argv, 1) as $a) {
@@ -130,6 +130,8 @@ ok((int) val($web, 'SELECT COUNT(*) FROM tickets WHERE status = 0 AND sale_id IS
 ok((int) val($web, 'SELECT COUNT(*) FROM tickets x WHERE status = 1 AND sale_id IS NULL AND card_id IS NULL AND NOT EXISTS (SELECT 1 FROM remainders r WHERE r.ticket_barcode = x.barcode)') === 0, 'every sold ticket belongs to a sale, a card or is a remainder ticket');
 $rem = (int) val($web, 'SELECT COUNT(*) FROM remainders r WHERE NOT EXISTS (SELECT 1 FROM tickets t WHERE t.barcode = r.ticket_barcode)');
 ok($rem === 0, 'every remainder has its ticket' . ($rem ? " ($rem missing)" : ''));
+$open = (int) val($web, 'SELECT COUNT(*) FROM remainders r JOIN tickets t ON t.barcode = r.ticket_barcode WHERE t.status = 2 AND r.complete_date IS NULL');
+ok($open === 0, 'every remainder whose ticket was supplied is complete' . ($open ? " ($open are still open)" : ''));
 $dup = (int) val($web, 'SELECT COUNT(*) FROM (SELECT barcode FROM tickets GROUP BY barcode HAVING COUNT(*) > 1) x');
 ok($dup === 0, 'no barcode exists twice');
 

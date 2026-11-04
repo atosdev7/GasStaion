@@ -44,8 +44,10 @@ class Ticket extends Model
             }
         });
 
+        // (a ticket that is created already supplied counts too: a Smart210 that made a remainder ticket and used it again between two uploads reports it
+        // for the first time in its final status, and Eloquent reports no change of status on a create)
         static::saved(function (Ticket $ticket) {
-            if (!$ticket->wasChanged('status')) {
+            if (!$ticket->wasChanged('status') && !$ticket->wasRecentlyCreated) {
                 return;
             }
             if ((int) $ticket->status === (int) config('ticket_statuses.supply')) {
@@ -53,7 +55,7 @@ class Ticket extends Model
                 foreach (Remainder::where('ticket_barcode', $ticket->barcode)->whereNull('complete_date')->get() as $remainder) {
                     $remainder->forceFill(['complete_date' => $day])->save();
                 }
-            } else {
+            } elseif (!$ticket->wasRecentlyCreated) {
                 foreach (Remainder::where('ticket_barcode', $ticket->barcode)->whereNotNull('complete_date')->get() as $remainder) {
                     $remainder->forceFill(['complete_date' => null])->save();
                 }
