@@ -4,9 +4,8 @@
 /*
  * The driver of the keyboard board (keyboard.c). It is called from the main loop only, never from an interrupt, and it BLOCKS for the time given below.
  *
- * The keyboard has 17 keys and an LED display of its own, 8 seven-segment digits (UI_KEYPAD_DIGITS) that the board refreshes while it scans the keys: the first digit
- * shows the mode or the status of the dispenser (a number or a letter, the `code`), the other 7 (UI_KEYPAD_VALUE_DIGITS) show the number of the amount that is
- * set (the `value`).
+ * The keyboard has 17 keys and an LED display of its own, 5 seven-segment digits (UI_KEYPAD_DIGITS) that the board refreshes while it scans the keys: they show the
+ * number of the amount that is set or typed (the `value`).
  */
 
 #include <stdint.h>
@@ -26,7 +25,7 @@ enum {
 
 /* The keys as the board reports them: the three bytes that it clocks out (column 0 first) are joined into a 32 bit word as byte0 << 24 | byte1 << 16 | byte2 << 8, and
    a pressed key is a 1. The 17 keys use the 5 low bits of the first byte, all 8 bits of the second and the 4 high bits of the third. (The names are the ones of the
-   keyboard board; keyboard.c says which UI_KEY_* each one gives.) */
+   keyboard board; keyboard.c says which UI_KEY_* each one gives: PRINT is FUNCTION, START is SET, STOP is TOTAL.) */
 #define KEY_1                      0x00001000
 #define KEY_2                      0x00002000
 #define KEY_3                      0x00004000
@@ -45,20 +44,17 @@ enum {
 #define KEY_STOP                   0x08000000
 #define KEY_PREV                   0x10000000
 
-#define UI_KEYPAD_DIGITS 8          /* the display of the keyboard board: the code + the value */
-#define UI_KEYPAD_VALUE_DIGITS 7    /* its digits for the value */
+#define UI_KEYPAD_DIGITS 5          /* the digits of the display of the keyboard board */
 
 /* Scans the keyboard and, in the same time, refreshes the display of the keyboard board. Takes about 20 ms (the waits of the scan are 17 ms of HAL_Delay, which
-   each wait a tick longer, and about 1 ms of the link: 948 us of waits and the pin writes). Called at every pass of the main loop with what the display has to show now:
-     code   the first digit, the mode or the status: '0'..'9' or a letter ('A'..'Z'; show what the 7 segments can, a lower-case letter is the same letter);
-            ui.c says which (keypad_code): '0' idle, '2' a preset waits, '3' a fill runs, '4' a result waits, 'E' a fault, 't' the total is shown (auto board);
-            'H' idle, 'P' a preset waits, 'F' a fill runs (manual board);
-     value  the other 7 digits as a text, right aligned: UI_KEYPAD_VALUE_DIGITS digits ('0'..'9', ' ', '-'; a '.' after a digit lights the point of that digit and
-            takes no digit), for example "   15.00" or "    12.5" (the amount being typed); all blanks when there is nothing to show.
+   each wait a tick longer, and about 1 ms of the link: 876 us of waits and the pin writes). Called at every pass of the main loop with what the display has to show
+   now:
+     value  the digits as a text, right aligned: UI_KEYPAD_DIGITS digits ('0'..'9', ' ', '-'; a '.' after a digit lights the point of that digit and takes no digit),
+            for example " 15.00" or "  12.5" (the amount being typed); all blanks when there is nothing to show. A text longer than the digits loses its left end.
    Returns one UI_KEY_* code for each new press and UI_KEY_NONE (0) otherwise. A key counts as pressed when three scans in a row (60 ms) found it so, and as
    released when three scans in a row found it up, so a bounce of a contact gives nothing and a key that is held gives its code once. Keys that went down together
    are given one by one at the next scans. */
-int ScanKeyboardAndRefreshDisplay(char code, const char *value);
+int ScanKeyboardAndRefreshDisplay(const char *value);
 
 /* The link of the keyboard board (kept public for the tests; the main loop only calls ScanKeyboardAndRefreshDisplay): strobe (KEY_SEL), clock (KEY_CLK) and one
    data line (KEY_DATA) that is an output while the commands and the display go out and an input while the keys are read. */

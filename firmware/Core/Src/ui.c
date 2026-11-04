@@ -254,7 +254,7 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
     text_fixed2(text[SHOW_KG], UI_KG_DIGITS, 0);
     text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, 0);
     text_density(text[SHOW_DENSITY], &b->p.config);
-    text_right(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, "");
+    text_right(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, "");
 
     switch (b->state) {
     case STATE_IDLE:
@@ -263,7 +263,7 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
             text_right(text[SHOW_LITRES], UI_LITRES_DIGITS, "bAL");
         } else {
             if (manual) {
-                text_right(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, ui->entry);   /* the amount that is being typed: only on the keyboard's LCD */
+                text_right(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, ui->entry);   /* the amount that is being typed: only on the keyboard's LCD */
             }
             if (board_held_grams(b) > 0 || board_held_ml(b) > 0) {
                 text_kg(text[SHOW_KG], UI_KG_DIGITS, board_held_grams(b));           /* the last fill (manual or auto) stays until the next preset is set */
@@ -274,12 +274,12 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
     case STATE_SET:
         text_kg(text[SHOW_KG], UI_KG_DIGITS, b->preset_g);
         text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_ml_of_grams(&b->p.config, b->preset_g) / 10);   /* the same amount in litres, by the density */
-        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, b->preset_g);
+        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, b->preset_g);
         break;
     case STATE_DISPENSING:
         text_kg(text[SHOW_KG], UI_KG_DIGITS, board_live_grams(b));
         text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_live_ml(b) / 10);
-        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, b->preset_g);
+        text_kg(text[SHOW_KEYPAD], UI_KEYPAD_DIGITS, b->preset_g);
         break;
     case STATE_DONE:
         text_kg(text[SHOW_KG], UI_KG_DIGITS, b->p.result.dispensed_g);
@@ -307,31 +307,6 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
     }
 }
 
-/* The first digit of the keyboard's LCD: the mode and the status. An auto board shows the number of its state (the same as the state of POLL: 0 idle, 2 a preset
-   waits, 3 a fill runs, 4 a result waits), a manual board a letter (H idle, P a preset waits, F a fill runs); E for a fault; t while the Total key shows the total. */
-static char keypad_code(const Ui *ui)
-{
-    const Board *b = ui->board;
-    const int manual = b->p.config.mode == MODE_MANUAL;
-
-    if (b->state == STATE_FAULT || b->fault != 0) {
-        return 'E';
-    }
-    if (ui->total_ms > 0) {
-        return 't';
-    }
-    switch (b->state) {
-    case STATE_SET:
-        return manual ? 'P' : '2';
-    case STATE_DISPENSING:
-        return manual ? 'F' : '3';
-    case STATE_DONE:
-        return '4';
-    default:
-        return manual ? 'H' : '0';
-    }
-}
-
 static void draw(Ui *ui)
 {
     char text[UI_DISPLAYS][UI_TEXT_MAX + 1];
@@ -348,7 +323,6 @@ static void draw(Ui *ui)
         ui->hal->update(ui->hal->ctx, text[SHOW_KG], text[SHOW_LITRES], text[SHOW_DENSITY]);   /* the display board: only when a text changed */
     }
     memcpy(ui->shown, text, sizeof(ui->shown));
-    ui->code = keypad_code(ui);                            /* the keyboard's LCD is given at every scan (below) */
     ui->drawn = 1;
 }
 
@@ -433,7 +407,7 @@ void ui_init(Ui *ui, Board *board, const UiHal *hal)
 
 void ui_tick(Ui *ui, uint32_t elapsed_ms)
 {
-    on_key(ui, ui->hal->scan(ui->hal->ctx, ui->code, ui->shown[SHOW_KEYPAD]));   /* about 20 ms: the keys are scanned and the LCD of the keyboard board refreshed */
+    on_key(ui, ui->hal->scan(ui->hal->ctx, ui->shown[SHOW_KEYPAD]));   /* about 20 ms: the keys are scanned and the display of the keyboard board refreshed */
 
     if (ui->note_ms > 0) {
         ui->note_ms = ui->note_ms > elapsed_ms ? ui->note_ms - elapsed_ms : 0;

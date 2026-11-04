@@ -266,11 +266,11 @@ flowchart TD
 | kg (6 digits) | 0.00 idle, the balance (SHOW_BALANCE), the preset (SET), the kg so far, the kg of the result, `Err` |
 | litres (6 digits) | 0.00, `bAL` while a balance shows, the litres so far, the fault code |
 | density (4 digits) | the density of the config, `0.830`; `----` when never configured |
-| keyboard board (8 digits) | the amount being typed (manual), the preset while SET and DISPENSING |
+| keyboard board (5 digits) | the amount being typed (manual), the preset while SET and DISPENSING |
 
 ## 10. A fill, manual mode (the amount typed on the keyboard)
 
-The supplier does everything at the dispenser; the Smart210 only watches. The first digit of the keyboard's LCD (`code`) shows where the board is: `H` idle, `P` a preset waits, `F` a fill runs (`t` while the Total key shows the total, `E` for a fault); the other seven digits (`value`) show the amount.
+The supplier does everything at the dispenser; the Smart210 only watches. The keyboard's display has 5 digits (`value`, 999.99 at most) and no digit for the status: it shows the amount being typed, or the preset while SET and DISPENSING; the status is shown by the four LEDs.
 
 ```mermaid
 flowchart TD

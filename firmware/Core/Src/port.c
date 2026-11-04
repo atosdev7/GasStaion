@@ -456,11 +456,11 @@ static void port_display_refresh(void *ctx)
     RefreshDisplay();
 }
 
-static int port_key(void *ctx, char code, const char *value)
+static int port_key(void *ctx, const char *value)
 {
     (void)ctx;
 
-    return ScanKeyboardAndRefreshDisplay(code, value);
+    return ScanKeyboardAndRefreshDisplay(value);
 }
 
 /* ---------------------------------------------------------------- start up */

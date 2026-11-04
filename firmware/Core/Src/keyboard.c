@@ -5,10 +5,10 @@
 #include <string.h>
 
 /*
- * The driver of the keyboard board: 17 keys and an LED display of 8 digits behind one three-wire link (strobe, clock, one data line).
+ * The driver of the keyboard board: 17 keys and an LED display of 5 digits behind one three-wire link (strobe, clock, one data line).
  *
- * One scan (ScanKeyboardAndRefreshDisplay) is: the display memory goes out (SendLcdDataToKeyboard), two commands that start the key scan (SendCommand1ToKeyboard,
- * SendCommand2ToKeyboard), and the board clocks out three bytes of keys (ScanKeyColumn). The pins, the commands and the waits are the ones of the old driver that
+ * One scan (ScanKeyboardAndRefreshDisplay) is: the display memory goes out (SendLcdDataToKeyboard: 5 bytes), two commands that start the key scan
+ * (SendCommand1ToKeyboard, SendCommand2ToKeyboard), and the board clocks out three bytes of keys (ScanKeyColumn). The pins, the commands and the waits are the ones of the old driver that
  * worked with the keyboard; what is new is how the keys are judged (three scans, a code for each new press) and how the display memory is made from a text.
  */
 
@@ -75,39 +75,40 @@ static void keyboard_wait_ms(uint32_t ms)
 
 /* ---------------------------------------------------------------- the display memory */
 
-/* The display: 8 digits of 7 segments and a point, a byte for each. The wiring of the segments on the byte is the one the old driver had for these digits (the
-   table kbcd_map[0] of the old keyboard.c; the second table of the old file, which is the wiring of the lowest digit of the display board, is not used here). */
+/* The display: 5 digits of 7 segments and a point, in a memory of 5 bytes. Digits 2, 3 and 4 have a byte each; digits 0 and 1 (the two on the right) share bytes 0 and
+   1 by their nibbles: the low half of the glyph of digit 0 is in byte 0 and its high half in byte 1, the high half of the glyph of digit 1 is in byte 0 and its low half
+   in byte 1 (each half stays where it is in the glyph). The segments are not wired alike on every digit: digit 1 has its own wiring, the others have the first one
+   (these are the two tables kbcd_map of the old keyboard.c, as segments). */
 #define LCD_BYTES UI_KEYPAD_DIGITS
 
-static const uint8_t seg_bit[7] = {0x08, 0x80, 0x20, 0x01, 0x02, 0x04, 0x40};      /* the bits of the segments a to g */
-static const uint8_t dot_bit = 0x10;
+enum { WIRING_A = 0, WIRING_B = 1 };
+
+static const uint8_t seg_bit[2][7] = {                                 /* the bits of the segments a to g on each wiring */
+    {0x08, 0x80, 0x20, 0x01, 0x02, 0x04, 0x40},
+    {0x80, 0x08, 0x02, 0x10, 0x20, 0x40, 0x04}
+};
+static const uint8_t dot_bit[2] = {0x10, 0x01};                        /* the point on each wiring */
+
+/* for each digit, counted from the right: its wiring and the bytes of the low and of the high half of its glyph */
+static const struct {
+    uint8_t wiring;
+    uint8_t low_byte;
+    uint8_t high_byte;
+} digit_layout[UI_KEYPAD_DIGITS] = {
+    {WIRING_A, 0, 1}, {WIRING_B, 1, 0}, {WIRING_A, 2, 2}, {WIRING_A, 3, 3}, {WIRING_A, 4, 4}
+};
 
 /* the display memory that SendLcdDataToKeyboard sends */
 static uint8_t keylcd_buf[LCD_BYTES];
 
-/* The byte of each digit, counted from the right: digit 0 is the last digit of the value, digit 6 the first one, digit 7 (the left end) the code. */
-static const uint8_t digit_byte[UI_KEYPAD_DIGITS] = {0, 1, 2, 3, 4, 5, 6, 7};
-
 /* the digits 0 to 9 as segments a (bit 0) to g (bit 6) */
 static const uint8_t digit_segments[10] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f};
-
-/* the letters A to Z as segments (a lower-case letter is the same letter); 0 where seven segments cannot make it */
-static const uint8_t letter_segments[26] = {
-    0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71, 0x3d, 0x76, 0x30, 0x1e, 0x00, 0x38, 0x00,     /* A b C d E F G H I J K L M */
-    0x54, 0x5c, 0x73, 0x67, 0x50, 0x6d, 0x78, 0x3e, 0x3e, 0x00, 0x00, 0x6e, 0x5b      /* n o P q r S t U V W X y Z */
-};
 
 /* a character as segments (a blank, or a character that cannot be shown, is dark) */
 static uint8_t character_segments(char c)
 {
     if (c >= '0' && c <= '9') {
         return digit_segments[c - '0'];
-    }
-    if (c >= 'A' && c <= 'Z') {
-        return letter_segments[c - 'A'];
-    }
-    if (c >= 'a' && c <= 'z') {
-        return letter_segments[c - 'a'];
     }
     if (c == '-') {
         return 0x40;
@@ -116,44 +117,53 @@ static uint8_t character_segments(char c)
     return 0;
 }
 
-static uint8_t segments_to_byte(uint8_t segments)
+static uint8_t segments_to_byte(uint8_t wiring, uint8_t segments)
 {
     uint8_t out = 0;
     int s;
 
     for (s = 0; s < 7; ++s) {
         if (segments & (1u << s)) {
-            out = (uint8_t)(out | seg_bit[s]);
+            out = (uint8_t)(out | seg_bit[wiring][s]);
         }
     }
 
     return out;
 }
 
-/* The code digit and the text of the value into the display memory. The value is right aligned, one character for each digit, and a '.' lights the point of the
-   digit before it and takes no digit; a text longer than the digits loses its left end. */
-static void render(char code, const char *value)
+/* a glyph (its 8 bits) of a digit into the display memory */
+static void put_glyph(uint8_t digit, uint8_t glyph)
+{
+    keylcd_buf[digit_layout[digit].low_byte] = (uint8_t)(keylcd_buf[digit_layout[digit].low_byte] | (glyph & 0x0f));
+    keylcd_buf[digit_layout[digit].high_byte] = (uint8_t)(keylcd_buf[digit_layout[digit].high_byte] | (glyph & 0xf0));
+}
+
+/* The text of the value into the display memory: right aligned, one character for each digit; a '.' lights the point of the digit before it and takes no digit; a text
+   longer than the digits loses its left end. */
+static void render(const char *value)
 {
     size_t at = value ? strlen(value) : 0;
     uint8_t digit = 0;
     int point = 0;
 
     memset(keylcd_buf, 0, sizeof keylcd_buf);
-    while (at > 0 && digit < UI_KEYPAD_VALUE_DIGITS) {
+    while (at > 0 && digit < UI_KEYPAD_DIGITS) {
         const char c = value[--at];
+        const uint8_t wiring = digit_layout[digit].wiring;
+        uint8_t glyph;
 
         if (c == '.') {
             point = 1;
             continue;
         }
-        keylcd_buf[digit_byte[digit]] = segments_to_byte(character_segments(c));
+        glyph = segments_to_byte(wiring, character_segments(c));
         if (point) {
-            keylcd_buf[digit_byte[digit]] = (uint8_t)(keylcd_buf[digit_byte[digit]] | dot_bit);
+            glyph = (uint8_t)(glyph | dot_bit[wiring]);
             point = 0;
         }
+        put_glyph(digit, glyph);
         ++digit;
     }
-    keylcd_buf[digit_byte[UI_KEYPAD_VALUE_DIGITS]] = segments_to_byte(character_segments(code));
 }
 
 /* ---------------------------------------------------------------- the link */
@@ -261,7 +271,7 @@ static const struct {
     {KEY_0, UI_KEY_0}, {KEY_1, UI_KEY_1}, {KEY_2, UI_KEY_2}, {KEY_3, UI_KEY_3}, {KEY_4, UI_KEY_4},
     {KEY_5, UI_KEY_5}, {KEY_6, UI_KEY_6}, {KEY_7, UI_KEY_7}, {KEY_8, UI_KEY_8}, {KEY_9, UI_KEY_9},
     {KEY_DOT, UI_KEY_POINT}, {KEY_CLEAR, UI_KEY_CLEAR}, {KEY_NEXT, UI_KEY_NEXT}, {KEY_PREV, UI_KEY_PREV},
-    {KEY_PRINT, UI_KEY_TOTAL}, {KEY_START, UI_KEY_SET}, {KEY_STOP, UI_KEY_FUNCTION}
+    {KEY_PRINT, UI_KEY_FUNCTION}, {KEY_START, UI_KEY_SET}, {KEY_STOP, UI_KEY_TOTAL}
 };
 
 static uint32_t scan_window[DEBOUNCE_SCANS];     /* the keys found by the last scans (the 17 key bits) */
@@ -288,12 +298,12 @@ static uint32_t judge(uint32_t keys)
     return key_state & ~before;
 }
 
-int ScanKeyboardAndRefreshDisplay(char code, const char *value)
+int ScanKeyboardAndRefreshDisplay(const char *value)
 {
     uint32_t keys = 0;
     unsigned int i;
 
-    render(code, value);
+    render(value);
 
     SendLcdDataToKeyboard();
     keyboard_wait_ms(2);

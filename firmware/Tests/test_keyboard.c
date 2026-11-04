@@ -3,8 +3,7 @@
  * reads), so the link can be compared with the one of the old functions, pin by pin and wait by wait, and the keys can be tried with scripted scans.
  *
  * The old functions are copied below as they were (SendLcdDataToKeyboard, SendCommand1ToKeyboard, SendCommand2ToKeyboard, ScanKeyColumn, WriteByteToKeyboard and the
- * scan), written for the recorder instead of HAL, with the two compile errors put right (ScanKeyColumn is void in the old file and returns a value) and the number of
- * display bytes taken from LCD_BYTES (the old keyboard had 5; the new one has 8 digits).
+ * scan, and ShowNumberKeyLcd), written for the recorder instead of HAL, with the compile error put right (ScanKeyColumn is void in the old file and returns a value).
  */
 
 #define KEYBOARD_HOST_TEST
@@ -135,7 +134,38 @@ static uint32_t old_key_code = 0;
 static uint8_t old_scan_window[5][3] = {{0x00, 0x00, 0x00}};
 static uint8_t old_w_index = 0;
 
-static uint8_t old_kbcd_map_0[10] = {0xaf, 0xa0, 0xcb, 0xe9, 0xe4, 0x6d, 0x6f, 0xa8, 0xef, 0xed};
+static uint8_t old_kbcd_map[2][10] = {
+    {0xaf, 0xa0, 0xcb, 0xe9, 0xe4, 0x6d, 0x6f, 0xa8, 0xef, 0xed},
+    {0xfa, 0x0a, 0xbc, 0x9e, 0x4e, 0xd6, 0xf6, 0x8a, 0xfe, 0xde}
+};
+static uint8_t old_kbcd_dot[2] = {0x10, 0x01};
+static uint8_t old_klcd_bcd[5] = {0, 0, 0, 0, 0};
+
+/* the old number function as it was (a float cut to hundredths, here the number of hundredths) */
+static void old_ShowNumberKeyLcd(int intval)
+{
+    unsigned char i, digit;
+
+    for (i = 0; i < 5; i++) {
+        digit = (unsigned char)(intval % 10);
+
+        if (i == 0) {
+            old_keylcd_buf[0] = old_kbcd_map[0][digit] & 0x0F;
+            old_keylcd_buf[1] = old_kbcd_map[0][digit] & 0xF0;
+        } else if (i == 1) {
+            old_keylcd_buf[1] = old_kbcd_map[1][digit] | (old_kbcd_map[1][digit] & 0xF0);
+            old_keylcd_buf[0] = old_kbcd_map[0][digit] | (old_kbcd_map[1][digit] & 0xF0);
+        } else {
+            old_keylcd_buf[i] = old_kbcd_map[0][digit];
+        }
+
+        if (i == 2) {
+            old_keylcd_buf[i] |= old_kbcd_dot[old_klcd_bcd[i]];
+        }
+
+        intval /= 10;
+    }
+}
 
 static int old_ScanKeyboardAndRefreshDisplay(char code, const char *value)
 {
@@ -315,7 +345,7 @@ static int scan_keys(uint8_t b0, uint8_t b1, uint8_t b2)
     feed_byte(b1);
     feed_byte(b2);
 
-    return ScanKeyboardAndRefreshDisplay('0', "");
+    return ScanKeyboardAndRefreshDisplay("");
 }
 
 static void forget_keys(void)
@@ -405,7 +435,7 @@ static void test_the_link_like_the_old_functions(void)
     record_reset();
     scan_window[0] = scan_window[1] = scan_window[2] = 0;
     window_at = 0;
-    ScanKeyboardAndRefreshDisplay('\0', NULL);       /* the new one makes its display memory from the text: blank here, like the old buffer */
+    ScanKeyboardAndRefreshDisplay(NULL);             /* the new one makes its display memory from the text: blank here, like the old buffer */
     CHECK_EQ(same_as_saved(), 1);
     printf("  (one scan: %ld ms of HAL_Delay, %ld us of waits, %d steps of the link)\n", waited_ms, waited_us, event_count);
     CHECK_EQ(waited_ms, 2 + 5 + 5 + 5);
@@ -423,7 +453,7 @@ static void test_the_data_line_modes(void)
     feed_byte(0);
     feed_byte(0);
     record_reset();
-    ScanKeyboardAndRefreshDisplay('0', "");
+    ScanKeyboardAndRefreshDisplay("");
     for (i = 0; i < event_count; ++i) {
         if (events[i] == MODE_EVENT || events[i] == MODE_EVENT + 1) {
             modes[found++] = events[i] - MODE_EVENT;
@@ -531,7 +561,7 @@ static void test_every_key(void)
         {0, 0, 0x10, UI_KEY_1}, {0, 0, 0x20, UI_KEY_2}, {0, 0, 0x40, UI_KEY_3}, {0, 0, 0x80, UI_KEY_4},
         {0, 0x01, 0, UI_KEY_5}, {0, 0x02, 0, UI_KEY_6}, {0, 0x04, 0, UI_KEY_7}, {0, 0x08, 0, UI_KEY_8}, {0, 0x10, 0, UI_KEY_9}, {0, 0x20, 0, UI_KEY_0},
         {0, 0x40, 0, UI_KEY_POINT}, {0, 0x80, 0, UI_KEY_CLEAR},
-        {0x01, 0, 0, UI_KEY_NEXT}, {0x02, 0, 0, UI_KEY_TOTAL}, {0x04, 0, 0, UI_KEY_SET}, {0x08, 0, 0, UI_KEY_FUNCTION}, {0x10, 0, 0, UI_KEY_PREV}
+        {0x01, 0, 0, UI_KEY_NEXT}, {0x02, 0, 0, UI_KEY_FUNCTION}, {0x04, 0, 0, UI_KEY_SET}, {0x08, 0, 0, UI_KEY_TOTAL}, {0x10, 0, 0, UI_KEY_PREV}
     };
     int i, j;
 
@@ -627,69 +657,110 @@ static void test_the_masks_are_the_old_word(void)
 /* the display memory */
 static void test_display_memory(void)
 {
-    int d;
+    int d, n;
+    char text[16];
 
-    /* the segment table is the old wiring */
+    /* the segment tables are the two old wirings, for all ten digits (the old file has them as kbcd_map[0] and kbcd_map[1]) */
     for (d = 0; d < 10; ++d) {
-        CHECK_EQ(segments_to_byte(digit_segments[d]), old_kbcd_map_0[d]);
+        CHECK_EQ(segments_to_byte(WIRING_A, digit_segments[d]), old_kbcd_map[0][d]);
+        CHECK_EQ(segments_to_byte(WIRING_B, digit_segments[d]), old_kbcd_map[1][d]);
+    }
+    CHECK_EQ(dot_bit[WIRING_A], old_kbcd_dot[0]);
+    CHECK_EQ(dot_bit[WIRING_B], old_kbcd_dot[1]);
+    /* the eight bits of a wiring: the seven segments and the point, each once */
+    {
+        int w, s;
+
+        for (w = 0; w < 2; ++w) {
+            uint8_t all = dot_bit[w];
+
+            for (s = 0; s < 7; ++s) {
+                CHECK_EQ(all & seg_bit[w][s], 0);
+                all = (uint8_t)(all | seg_bit[w][s]);
+            }
+            CHECK_EQ(all, 0xff);
+        }
     }
 
-    /* "   15.00" with the code 0: the value from the right, the point on the third digit, the code on the left */
-    render('0', "   15.00");
-    CHECK_EQ(keylcd_buf[0], old_kbcd_map_0[0]);
-    CHECK_EQ(keylcd_buf[1], old_kbcd_map_0[0]);
-    CHECK_EQ(keylcd_buf[2], old_kbcd_map_0[5] | dot_bit);
-    CHECK_EQ(keylcd_buf[3], old_kbcd_map_0[1]);
+    /* " 15.00": digit 0 (0, the first wiring) gives its low half to byte 0 and its high half to byte 1; digit 1 (0, the second wiring) its high half to byte 0 and its low
+       half to byte 1; digit 2 (5 with the point), digit 3 (1) and digit 4 (blank) have their bytes */
+    render(" 15.00");
+    CHECK_EQ(keylcd_buf[0], (old_kbcd_map[0][0] & 0x0f) | (old_kbcd_map[1][0] & 0xf0));
+    CHECK_EQ(keylcd_buf[1], (old_kbcd_map[0][0] & 0xf0) | (old_kbcd_map[1][0] & 0x0f));
+    CHECK_EQ(keylcd_buf[2], old_kbcd_map[0][5] | old_kbcd_dot[0]);
+    CHECK_EQ(keylcd_buf[3], old_kbcd_map[0][1]);
     CHECK_EQ(keylcd_buf[4], 0);
-    CHECK_EQ(keylcd_buf[5], 0);
-    CHECK_EQ(keylcd_buf[6], 0);
-    CHECK_EQ(keylcd_buf[7], old_kbcd_map_0[0]);
+    CHECK_EQ(keylcd_buf[0], 0xff);                          /* worked out by hand: 0xaf & 0x0f = 0x0f, 0xfa & 0xf0 = 0xf0 */
+    CHECK_EQ(keylcd_buf[1], 0xaa);                          /* 0xaf & 0xf0 = 0xa0, 0xfa & 0x0f = 0x0a */
+    CHECK_EQ(keylcd_buf[2], 0x7d);
 
-    /* "    12.5" */
-    render('3', "    12.5");
-    CHECK_EQ(keylcd_buf[0], old_kbcd_map_0[5]);
-    CHECK_EQ(keylcd_buf[1], old_kbcd_map_0[2] | dot_bit);
-    CHECK_EQ(keylcd_buf[2], old_kbcd_map_0[1]);
-    CHECK_EQ(keylcd_buf[7], old_kbcd_map_0[3]);
+    /* every number of five digits with the point after the third: the digits 2, 3 and 4 are the bytes of the old function; the digits 0 and 1 are the two halves each */
+    for (n = 0; n <= 99999; ++n) {
+        const int d0 = n % 10;
+        const int d1 = (n / 10) % 10;
 
-    /* the letters of the codes */
-    render('E', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x79));
-    render('t', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x78));
-    render('H', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x76));
-    render('P', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x73));
-    render('F', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x71));
-    render('h', "");
-    CHECK_EQ(keylcd_buf[7], segments_to_byte(0x76));          /* a lower-case letter is the same letter */
-    render('x', "");
-    CHECK_EQ(keylcd_buf[7], 0);                               /* what seven segments cannot make is dark */
+        old_ShowNumberKeyLcd(n);
+        snprintf(text, sizeof text, "%03d.%02d", n / 100, n % 100);
+        render(text);
+        if (keylcd_buf[2] != old_keylcd_buf[2] || keylcd_buf[3] != old_keylcd_buf[3] || keylcd_buf[4] != old_keylcd_buf[4]) {
+            CHECK_EQ(keylcd_buf[2], old_keylcd_buf[2]);
+            printf("    number %d\n", n);
+            break;
+        }
+        if (keylcd_buf[0] != ((old_kbcd_map[0][d0] & 0x0f) | (old_kbcd_map[1][d1] & 0xf0)) || keylcd_buf[1] != ((old_kbcd_map[0][d0] & 0xf0) | (old_kbcd_map[1][d1] & 0x0f))) {
+            CHECK_EQ(keylcd_buf[0], (old_kbcd_map[0][d0] & 0x0f) | (old_kbcd_map[1][d1] & 0xf0));
+            printf("    number %d\n", n);
+            break;
+        }
+        ++checks;
+    }
+    /* what the old function did with digit 0: it was not in the memory at all (the lines for digit 1 wrote over it) */
+    {
+        int same = 0;
 
-    /* blank, dashes, too long, nothing */
-    render(' ', "       ");
-    for (d = 0; d < 8; ++d) {
+        for (n = 0; n <= 99999; ++n) {
+            old_ShowNumberKeyLcd(n);
+            snprintf(text, sizeof text, "%03d.%02d", n / 100, n % 100);
+            render(text);
+            same += keylcd_buf[0] == old_keylcd_buf[0] && keylcd_buf[1] == old_keylcd_buf[1];
+        }
+        printf("  (bytes 0 and 1 of the old function equal the new ones for %d of the 100000 numbers: the old lines for digit 1 overwrote digit 0)\n", same);
+        CHECK_EQ(same < 100000, 1);
+    }
+
+    /* blanks, dashes, a number that does not fit */
+    render("     ");
+    for (d = 0; d < 5; ++d) {
         CHECK_EQ(keylcd_buf[d], 0);
     }
-    render('0', "-------");
-    for (d = 0; d < 7; ++d) {
-        CHECK_EQ(keylcd_buf[d], segments_to_byte(0x40));
-    }
-    render('0', "123456789");
-    CHECK_EQ(keylcd_buf[0], old_kbcd_map_0[9]);
-    CHECK_EQ(keylcd_buf[6], old_kbcd_map_0[3]);
-    render('0', NULL);
-    for (d = 0; d < 7; ++d) {
+    render("---.--");
+    CHECK_EQ(keylcd_buf[2], segments_to_byte(WIRING_A, 0x40) | dot_bit[WIRING_A]);
+    CHECK_EQ(keylcd_buf[3], segments_to_byte(WIRING_A, 0x40));
+    CHECK_EQ(keylcd_buf[4], segments_to_byte(WIRING_A, 0x40));
+    CHECK_EQ(keylcd_buf[0], (segments_to_byte(WIRING_A, 0x40) & 0x0f) | (segments_to_byte(WIRING_B, 0x40) & 0xf0));
+    render("1234567.89");                                  /* too long: the left end is lost, the last five digits stay: 5 6 7. 8 9 */
+    CHECK_EQ(keylcd_buf[4], old_kbcd_map[0][5]);
+    CHECK_EQ(keylcd_buf[3], old_kbcd_map[0][6]);
+    CHECK_EQ(keylcd_buf[2], old_kbcd_map[0][7] | old_kbcd_dot[0]);
+    render(NULL);
+    for (d = 0; d < 5; ++d) {
         CHECK_EQ(keylcd_buf[d], 0);
     }
-    render('0', ".");
+    render(".");
     CHECK_EQ(keylcd_buf[0], 0);
-    render('0', "..5");
-    CHECK_EQ(keylcd_buf[0], old_kbcd_map_0[5]);
+    render("..5");                                         /* a point belongs to the digit on its left, which is not there */
+    CHECK_EQ(keylcd_buf[0], old_kbcd_map[0][5] & 0x0f);
+    CHECK_EQ(keylcd_buf[1], old_kbcd_map[0][5] & 0xf0);
+    /* a letter or any other character is dark (the keyboard's display shows no status) */
+    render("  E  ");
+    for (d = 0; d < 5; ++d) {
+        CHECK_EQ(keylcd_buf[d], 0);
+    }
+    /* the point of the digit 1 (second wiring) and of the digit 0 */
+    render("  1.2");                                        /* the 1 is digit 1 and carries the point: its glyph is on the second wiring, with the point of that wiring */
+    CHECK_EQ(keylcd_buf[0], (old_kbcd_map[0][2] & 0x0f) | ((old_kbcd_map[1][1] | old_kbcd_dot[1]) & 0xf0));
+    CHECK_EQ(keylcd_buf[1], (old_kbcd_map[0][2] & 0xf0) | ((old_kbcd_map[1][1] | old_kbcd_dot[1]) & 0x0f));
 }
-
 int main(void)
 {
     test_the_link_like_the_old_functions();
