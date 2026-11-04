@@ -41,7 +41,7 @@ typedef struct {
     void (*refresh)(void *ctx);                                                                              /* RefreshDisplay: 8 to 10 ms */
     int (*scan)(void *ctx);                                                                                  /* ScanKeyboardAndRefreshDisplay: 20 ms; a UI_KEY_* code, UI_KEY_NONE when no new press */
     void (*beep)(void *ctx, uint16_t ms);
-    void (*led)(void *ctx, uint8_t index, int on);                              /* 0 selected/armed, 1 dispensing, 2 result, 3 fault */
+    void (*led)(void *ctx, uint8_t index, int on);                              /* 0 heartbeat, 1 preset set, 2 dispensing, 3 result (steady) or fault (blinking) */
 } UiHal;
 
 #define UI_ENTRY_MAX 7   /* 999.99 */
@@ -57,6 +57,7 @@ typedef struct {
     uint32_t note_ms;               /* while it runs the kg display says "Err": a key was refused */
     uint32_t total_ms;              /* while it runs the two numeric displays show the total of the board (the Total key) */
     uint8_t last_state;
+    uint32_t clock_ms;              /* 0..1999: the clock of the LEDs (the heartbeat and the blink of a fault) */
 } Ui;
 
 void ui_init(Ui *ui, Board *board, const UiHal *hal);

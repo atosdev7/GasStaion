@@ -264,7 +264,7 @@ static void test_auto_screens(void)
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_DISPLAY(KG, "  15.00");
     CHECK_DISPLAY(KEYPAD, "    15.00");
-    CHECK_EQ(rig.led[0], 1);
+    CHECK_EQ(rig.led[1], 1);
 
     /* START with the session id; 5000 counts = 5 L = 4150 g */
     request(&rig, 4, CMD_START, 1, 1);
@@ -273,8 +273,8 @@ static void test_auto_screens(void)
     CHECK_DISPLAY(KG, "   4.15");
     CHECK_DISPLAY(LITRES, "   5.00");
     CHECK_DISPLAY(KEYPAD, "    15.00");
-    CHECK_EQ(rig.led[1], 1);
-    CHECK_EQ(rig.led[0], 0);
+    CHECK_EQ(rig.led[2], 1);
+    CHECK_EQ(rig.led[1], 0);
 
     flow(&rig, 60, 500);
     flow(&rig, 30, 0);
@@ -282,7 +282,12 @@ static void test_auto_screens(void)
     CHECK_DISPLAY(KG, "  15.00");
     CHECK_DISPLAY(LITRES, "  18.07");     /* 18.072 L: the third decimal is dropped */
     CHECK_DISPLAY(KEYPAD, "        ");
-    CHECK_EQ(rig.led[2], 1);
+    CHECK_EQ(rig.led[3], 1);              /* LED4 is steady for a result */
+    CHECK_EQ(rig.led[2], 0);
+    tick(&rig, 130);
+    CHECK_EQ(rig.led[3], 1);
+    tick(&rig, 130);
+    CHECK_EQ(rig.led[3], 1);
     CHECK_EQ(rig.last_beep_ms, 400);      /* the end of a fill is heard */
 
     /* a fault */
@@ -292,8 +297,42 @@ static void test_auto_screens(void)
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "   Err");
     CHECK_DISPLAY(LITRES, "     1");      /* the fault code */
-    CHECK_EQ(rig.led[3], 1);
     CHECK_EQ(rig.last_beep_ms, 800);
+    {   /* a fault: LED4 blinks, 250 ms on and 250 ms off; the others are off */
+        int on = 0, off = 0, i;
+
+        for (i = 0; i < 100; ++i) {
+            tick(&rig, 10);
+            on += rig.led[3];
+            off += !rig.led[3];
+            CHECK_EQ(rig.led[1] + rig.led[2], 0);
+        }
+        CHECK(on >= 45 && on <= 55);
+        CHECK(off >= 45 && off <= 55);
+    }
+}
+
+/* LED1 is the heartbeat: one second on, one second off, by the time the main loop gives the UI */
+static void test_heartbeat(void)
+{
+    Rig rig;
+    int i, on = 0, off = 0, changes = 0, last;
+
+    rig_new(&rig);
+    boot(&rig, MODE_AUTO, 2);
+    tick(&rig, 10);
+    last = rig.led[0];
+    for (i = 0; i < 400; ++i) {          /* 4 s in steps of 10 ms */
+        tick(&rig, 10);
+        on += rig.led[0];
+        off += !rig.led[0];
+        changes += rig.led[0] != last;
+        last = rig.led[0];
+    }
+    CHECK(on >= 190 && on <= 210);
+    CHECK(off >= 190 && off <= 210);
+    CHECK_EQ(changes, 4);                 /* a change every second */
+    CHECK_EQ(rig.led[1] + rig.led[2] + rig.led[3], 0);   /* IDLE: the state LEDs are off */
 }
 
 static void test_numbers(void)
@@ -530,6 +569,7 @@ int main(void)
     test_numbers();
     test_manual_entry();
     test_total_key();
+    test_heartbeat();
     test_scan_refresh_and_update();
 
     printf("ui: %d checks, %d failed\n", checks, failures);

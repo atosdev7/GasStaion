@@ -322,11 +322,14 @@ static void draw(Ui *ui)
 static void leds(const Ui *ui)
 {
     const uint8_t s = ui->board->state;
+    const int fault = s == STATE_FAULT || ui->board->fault != 0;
 
-    ui->hal->led(ui->hal->ctx, 0, s == STATE_SET);
-    ui->hal->led(ui->hal->ctx, 1, s == STATE_DISPENSING);
-    ui->hal->led(ui->hal->ctx, 2, s == STATE_DONE);
-    ui->hal->led(ui->hal->ctx, 3, s == STATE_FAULT || ui->board->fault != 0);
+    /* LED1: the heartbeat, one second on and one second off, driven by the main loop: it stops when the loop hangs */
+    ui->hal->led(ui->hal->ctx, 0, ui->clock_ms < 1000);
+    /* LED2 to LED4: the state; a fault makes LED4 blink (about 2 Hz) */
+    ui->hal->led(ui->hal->ctx, 1, s == STATE_SET);
+    ui->hal->led(ui->hal->ctx, 2, s == STATE_DISPENSING);
+    ui->hal->led(ui->hal->ctx, 3, fault ? (ui->clock_ms % 500) < 250 : s == STATE_DONE);
 }
 /* ---------------------------------------------------------------- keys */
 
@@ -415,6 +418,7 @@ void ui_tick(Ui *ui, uint32_t elapsed_ms)
         }
         ui->last_state = ui->board->state;
     }
+    ui->clock_ms = (ui->clock_ms + elapsed_ms) % 2000;
     draw(ui);
     leds(ui);
     ui->hal->refresh(ui->hal->ctx);                /* 8 to 10 ms: the display board gets its digits */

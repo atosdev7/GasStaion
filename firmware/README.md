@@ -32,6 +32,10 @@ The board of one nozzle: it talks to the Smart210 over RS-485 by [PROTOCOL.md](.
 - Manual: the supplier types the amount and presses **Set** -> the board is SET with that preset (`board_manual_amount`) -> when the gun is up the board starts, runs and ends the fill by itself. It reports no keys, **holds no result and reports no end of a fill** (back to IDLE, preset cleared), refuses SELECT, SET_PRESET, START and SHOW_BALANCE with WRONG_STATE and answers only POLL, INFO, the config and the time. The clear key drops an amount that waits for the gun. A power cut in the middle of a manual fill just drops the fill.
 - The fill ends by itself (result reason 1) when: no count for 30 s after the flow began; the nozzle is put back on its hook for 3 s after the flow began; or no count at all 10 minutes after START. The values are in `Params` (`board_default_params()`), to be tuned on the bench.
 - The result of a fill that reached its preset says exactly the preset (the calibration decides what was dispensed); a fill that stopped early says what the counts say, never more than the preset.
+### The LEDs
+
+LED1 (PE12) is the **heartbeat**: one second on and one second off, driven by the time the main loop gives to the UI, so it stops when the main loop hangs. LED2 to LED4 show the state: **LED2** a preset waits (SET), **LED3** a fill runs (DISPENSING), **LED4** a result waits (DONE, steady); a **fault** makes LED4 blink (about 2 Hz). All off in IDLE.
+
 ### The keyboard (17 keys)
 
 The keyboard driver returns one code per press (`ui.h`): `UI_KEY_0` .. `UI_KEY_9`, `UI_KEY_POINT` (Dot), `UI_KEY_NEXT`, `UI_KEY_PREV`, `UI_KEY_TOTAL`, `UI_KEY_CLEAR`, `UI_KEY_SET`, `UI_KEY_FUNCTION`. A key beeps shortly when it is pressed.
