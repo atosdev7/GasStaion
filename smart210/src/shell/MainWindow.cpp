@@ -14,7 +14,7 @@
 #include "FirstSyncPage.h"
 #include "LoanSettlePage.h"
 #include "LoginPage.h"
-#include "HangulInput.h"
+#include "KoreanInput.h"
 #include "MachineConfig.h"
 #include "BoardBus.h"
 #include "BoardClock.h"
@@ -139,7 +139,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
 
     shell_ = new AppShell;
     // the Hangul input method: off until the Hangul key or Ctrl+Space; the footer shows the mode
-    hangulInput_ = config.hangulInput() ? new HangulInput(this) : 0;
+    hangulInput_ = config.hangulInput() ? new KoreanInput(this) : 0;
     shell_->footer()->setInputMode(hangulInput_ != 0, false);
     if (hangulInput_) {
         connect(hangulInput_, SIGNAL(hangulModeChanged(bool)), this, SLOT(hangulModeChanged(bool)));

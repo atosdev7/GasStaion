@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QWidget>
 
-class HangulInput;
+class KoreanInput;
 class AppConfig;
 class AppShell;
 class CardPage;
@@ -139,7 +139,7 @@ private:
     PrintService *printer_;
     SetupFlow *setup_;
     SyncClient *sync_;
-    HangulInput *hangulInput_; // the Hangul input method; null when config.ini says hangul=false
+    KoreanInput *hangulInput_; // the Hangul input method; null when config.ini says hangul=false
     Uploader *uploader_;
     QStackedWidget *pages_;
     SetupPage *setupPage_;

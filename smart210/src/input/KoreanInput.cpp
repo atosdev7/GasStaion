@@ -1,24 +1,24 @@
-#include "HangulInput.h"
+#include "KoreanInput.h"
 
-#include "HangulKeyMap.h"
+#include "KoreanKeyMap.h"
 
 #include <QGuiApplication>
 #include <QInputMethodEvent>
 #include <QInputMethodQueryEvent>
 #include <QKeyEvent>
 
-HangulInput::HangulInput(QObject *parent)
+KoreanInput::KoreanInput(QObject *parent)
     : QObject(parent), hangul_(false), sending_(false)
 {
-    addKeys(hangulRow1, HANGUL_KEY_COUNT(hangulRow1));
-    addKeys(hangulRow2, HANGUL_KEY_COUNT(hangulRow2));
-    addKeys(hangulRow3, HANGUL_KEY_COUNT(hangulRow3));
+    addKeys(koreanRow1, KOREAN_KEY_COUNT(koreanRow1));
+    addKeys(koreanRow2, KOREAN_KEY_COUNT(koreanRow2));
+    addKeys(koreanRow3, KOREAN_KEY_COUNT(koreanRow3));
 
     qApp->installEventFilter(this);
     connect(qApp, SIGNAL(focusObjectChanged(QObject*)), this, SLOT(focusChanged()));
 }
 
-void HangulInput::addKeys(const HangulKeyDef *keys, int count)
+void KoreanInput::addKeys(const KoreanKeyDef *keys, int count)
 {
     for (int i = 0; i < count; ++i) {
         const char letter = keys[i].label[0];   // "q" is Qt::Key_Q
@@ -29,7 +29,7 @@ void HangulInput::addKeys(const HangulKeyDef *keys, int count)
     }
 }
 
-void HangulInput::setHangulMode(bool on)
+void KoreanInput::setHangulMode(bool on)
 {
     if (on == hangul_) {
         return;
@@ -42,19 +42,19 @@ void HangulInput::setHangulMode(bool on)
 }
 
 // The field that lost the focus commits or drops its own preedit; the composer starts again.
-void HangulInput::focusChanged()
+void KoreanInput::focusChanged()
 {
     composer_.clear();
 }
 
-bool HangulInput::isModifierKey(int key)
+bool KoreanInput::isModifierKey(int key)
 {
     return (key >= Qt::Key_Shift && key <= Qt::Key_ScrollLock) || key == Qt::Key_AltGr || key == Qt::Key_Super_L || key == Qt::Key_Super_R
         || key == Qt::Key_Hangul;
 }
 
 // The focused object takes text, and does not hide it (a PIN or a password is never typed in Hangul).
-bool HangulInput::focusAcceptsText()
+bool KoreanInput::focusAcceptsText()
 {
     QObject *focus = QGuiApplication::focusObject();
     if (!focus) {
@@ -66,7 +66,7 @@ bool HangulInput::focusAcceptsText()
     return query.value(Qt::ImEnabled).toBool() && !(query.value(Qt::ImHints).toInt() & Qt::ImhHiddenText);
 }
 
-bool HangulInput::eventFilter(QObject *object, QEvent *event)
+bool KoreanInput::eventFilter(QObject *object, QEvent *event)
 {
     if (sending_ || (event->type() != QEvent::KeyPress && event->type() != QEvent::KeyRelease) || object != QGuiApplication::focusObject()) {
         return false;
@@ -103,7 +103,7 @@ bool HangulInput::eventFilter(QObject *object, QEvent *event)
     QMap<int, int>::const_iterator found = keyIndex_.constFind(code);
     if (found != keyIndex_.constEnd()) {
         if (press) {
-            const HangulKeyDef *def = keys_.at(found.value());
+            const KoreanKeyDef *def = keys_.at(found.value());
             const char *text = ((modifiers & Qt::ShiftModifier) && *def->shifted) ? def->shifted : def->normal;
             const QString jamo = QString::fromUtf8(text);
             if (!jamo.isEmpty()) {
@@ -130,7 +130,7 @@ bool HangulInput::eventFilter(QObject *object, QEvent *event)
 }
 
 // Commits what is finished and shows the syllable being composed as the preedit of the focused field.
-void HangulInput::send(const QString &commit)
+void KoreanInput::send(const QString &commit)
 {
     QObject *focus = QGuiApplication::focusObject();
     if (!focus) {

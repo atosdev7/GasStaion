@@ -85,7 +85,7 @@ SOURCES += \
     src/sales/TicketSalePage.cpp \
     src/core/Translations.cpp \
     src/sync/AutoUpload.cpp \
-    src/input/HangulInput.cpp \
+    src/input/KoreanInput.cpp \
     src/input/EnterChain.cpp \
     src/review/UploadSummary.cpp \
     src/sync/Uploader.cpp
@@ -165,10 +165,10 @@ HEADERS += \
     src/sales/TicketSalePage.h \
     src/core/Translations.h \
     src/review/UploadSummary.h \
-    src/input/HangulComposer.h \
-    src/input/HangulInput.h \
+    src/input/KoreanComposer.h \
+    src/input/KoreanInput.h \
     src/input/EnterChain.h \
-    src/input/HangulKeyMap.h \
+    src/input/KoreanKeyMap.h \
     src/sync/Uploader.h \
     src/sync/AutoUpload.h
 

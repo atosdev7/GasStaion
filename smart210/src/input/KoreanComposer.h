@@ -1,17 +1,17 @@
-#ifndef HANGULCOMPOSER_H
-#define HANGULCOMPOSER_H
+#ifndef KOREANCOMPOSER_H
+#define KOREANCOMPOSER_H
 
 #include <QChar>
 #include <QString>
 #include <QStringList>
 
 // Dubeolsik-style Hangul syllable composer. Feed it compatibility jamo (U+3131..U+3163): it builds the precomposed syllables
-// (U+AC00..U+D7A3). The jamo are fed by HangulInput, which turns the keys into jamo with the table of HangulKeyMap.h; the composer itself knows
+// (U+AC00..U+D7A3). The jamo are fed by KoreanInput, which turns the keys into jamo with the table of KoreanKeyMap.h; the composer itself knows
 // nothing about keys. Header only, C++03.
-class HangulComposer
+class KoreanComposer
 {
 public:
-    HangulComposer() : l_(-1), v_(-1), t_(0) {}
+    KoreanComposer() : l_(-1), v_(-1), t_(0) {}
 
     // Feeds one jamo. Returns the text that has to be committed now; the syllable still being composed is preedit().
     QString input(QChar c)

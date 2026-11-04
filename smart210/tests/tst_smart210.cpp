@@ -36,8 +36,8 @@
 #include "AppConfig.h"
 #include "AppShell.h"
 #include "AutoUpload.h"
-#include "HangulComposer.h"
-#include "HangulInput.h"
+#include "KoreanComposer.h"
+#include "KoreanInput.h"
 #include "Barcode.h"
 #include "Checkout.h"
 #include "Clock.h"
@@ -299,8 +299,8 @@ private slots:
     void anEmptyDayHasAnEmptySummary();
     void theFooterCountsWhatWaitsAndTheReviewScreenListsIt();
     void thereIsNoHomePageAndTheDownloadRunsEveryMinute();
-    void theHangulComposerBuildsSyllables();
-    void theHangulInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode();
+    void theKoreanComposerBuildsSyllables();
+    void theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode();
     void aNewRecordHasItsDateAtOnce();
     void theUploadModesSayUpToWhenRecordsGoByThemselves();
     void anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedOnes();
@@ -3311,7 +3311,7 @@ void Smart210Test::thereIsNoHomePageAndTheDownloadRunsEveryMinute()
 // Feeds the jamo to the composer and returns what is committed, with the syllable that is still being composed at the end.
 static QString composeAll(const QString &jamo)
 {
-    HangulComposer composer;
+    KoreanComposer composer;
     QString out;
     for (int i = 0; i < jamo.size(); ++i) {
         out += composer.input(jamo[i]);
@@ -3320,7 +3320,7 @@ static QString composeAll(const QString &jamo)
     return out + composer.flush();
 }
 
-void Smart210Test::theHangulComposerBuildsSyllables()
+void Smart210Test::theKoreanComposerBuildsSyllables()
 {
     QCOMPARE(composeAll(QString::fromUtf8("ㅇㅏㄴㄴㅕㅇ")), QString::fromUtf8("안녕"));              // dkssud
     QCOMPARE(composeAll(QString::fromUtf8("ㄱㅏㄴㅏㄷㅏ")), QString::fromUtf8("가나다"));            // rkskek
@@ -3332,7 +3332,7 @@ void Smart210Test::theHangulComposerBuildsSyllables()
     QCOMPARE(composeAll(QString::fromUtf8("ㅏ")), QString::fromUtf8("ㅏ"));                             // a vowel on its own
     QCOMPARE(composeAll(QString::fromUtf8("ㅂㅣㄸㅏ")), QString::fromUtf8("비따")); // ㄸ cannot be final
 
-    HangulComposer composer;
+    KoreanComposer composer;
     composer.input(QString::fromUtf8("ㄷ")[0]);
     composer.input(QString::fromUtf8("ㅏ")[0]);
     composer.input(QString::fromUtf8("ㄹ")[0]);
@@ -3352,9 +3352,9 @@ void Smart210Test::theHangulComposerBuildsSyllables()
     QCOMPARE(composer.input(QChar('1')), QString::fromUtf8("ㄱ") + "1");                                // a character that is no jamo commits and goes on
 }
 
-void Smart210Test::theHangulInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode()
+void Smart210Test::theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode()
 {
-    HangulInput input;
+    KoreanInput input;
     QVERIFY(!input.hangulMode());                                                                        // English at first
 
     QWidget host;
@@ -3413,7 +3413,7 @@ void Smart210Test::theHangulInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhi
     QVERIFY(footer != 0);
     QVERIFY(!footer->isHidden());
     QCOMPARE(footer->text(), QString("A"));
-    window.findChild<HangulInput *>()->setHangulMode(true);
+    window.findChild<KoreanInput *>()->setHangulMode(true);
     QCOMPARE(footer->text(), QString::fromUtf8("한"));
 
     AppConfig off;
@@ -3421,7 +3421,7 @@ void Smart210Test::theHangulInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhi
     off.setChangeLogFile(changeLog());
     off.setHangulInput(false);
     MainWindow plain(off, QString(), "db", QSqlDatabase::database(connection_));
-    QVERIFY(plain.findChild<HangulInput *>() == 0);                                                      // hangul=false: no input method at all
+    QVERIFY(plain.findChild<KoreanInput *>() == 0);                                                      // hangul=false: no input method at all
     QVERIFY(plain.findChild<QLabel *>("footerInput")->isHidden());
 }
 
