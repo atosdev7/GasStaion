@@ -172,7 +172,7 @@ if ($part === 'day') {
         'sales' => rows('SELECT id FROM sales WHERE sale_date = ? AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
         'supplements' => rows('SELECT id FROM supplements WHERE supply_date = ? AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
         'debt_payments' => rows('SELECT id FROM debt_payments WHERE paid_date = ? AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
-        'fuel_outbounds' => rows('SELECT id FROM fuel_outbounds WHERE outbound_date = ? AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
+        'fuel_outbounds' => rows('SELECT id FROM fuel_outbounds WHERE outbound_date = ? AND supplement_id IS NULL AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
         'fuel_inbounds' => rows('SELECT id FROM fuel_inbounds WHERE inbound_date = ? AND confirmed_at IS NULL AND deleted_at IS NULL', [$date]),
     ];
     foreach ($sets as $k => $v) {
