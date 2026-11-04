@@ -616,8 +616,12 @@ static void test_early_close(void)
     start_auto(&r, 15000);
     run(&r, 1, 18000);
     CHECK_EQ(r.fake.pump_on, 1);
+    CHECK(board_live_grams(&r.board) < 15000);                       /* on the way: what the counts say */
     run(&r, 1, 32); /* 18032 = target - 40 */
     CHECK_EQ(r.fake.pump_on, 0);
+    /* the pump stopped 40 counts (about 33 g) before the target: the display is the preset, not 14.97 kg */
+    CHECK_EQ(board_live_grams(&r.board), 15000);
+    CHECK_EQ(board_live_ml(&r.board), board_ml_of_grams(&r.board.p.config, 15000));
     /* 60 more counts come while the pump stops: they are counted but the result is still the preset */
     r.fake.pulses += 60;
     run(&r, 40, 0);

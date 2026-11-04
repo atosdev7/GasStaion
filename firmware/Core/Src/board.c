@@ -280,6 +280,13 @@ static void partial_amounts(const Config *c, uint32_t pulses, uint32_t preset_g,
     }
 }
 
+/* The preset is reached and the pump is stopping: the fill is the preset (the result will say so too), whatever the last counts are, so the display does not stop a few grams
+   short of it (the pump stops a little before the target: the lead, and the counts are whole). */
+static int reached_preset(const Board *b)
+{
+    return b->state == STATE_DISPENSING && b->closing && b->closing_reason == REASON_PRESET;
+}
+
 uint32_t board_live_grams(const Board *b)
 {
     uint32_t g, ml;
@@ -289,6 +296,9 @@ uint32_t board_live_grams(const Board *b)
     }
     if (b->state != STATE_DISPENSING) {
         return 0;
+    }
+    if (reached_preset(b)) {
+        return b->preset_g;
     }
     partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
 
@@ -304,6 +314,9 @@ uint32_t board_live_ml(const Board *b)
     }
     if (b->state != STATE_DISPENSING) {
         return 0;
+    }
+    if (reached_preset(b)) {
+        return board_ml_of_grams(&b->p.config, b->preset_g);
     }
     partial_amounts(&b->p.config, b->pulses_seen, b->preset_g, &g, &ml);
 
