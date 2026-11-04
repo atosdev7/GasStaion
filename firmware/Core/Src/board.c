@@ -766,6 +766,7 @@ int board_feed(Board *b, uint8_t byte)
     int answered = 0;
 
     b->rx_idle_ms = 0;
+    b->rx_fresh = 1;
     if (b->rx_len < sizeof(b->rx)) {
         b->rx[b->rx_len++] = byte;
     }
@@ -813,9 +814,14 @@ const uint8_t *board_reply(const Board *b, size_t *len)
 
 /* ---------------------------------------------------------------- time, keys, faults, power */
 
+/* A half frame is dropped when no byte follows it for rx_gap_ms. The main loop takes the bytes out of the receive ring in bursts (a pass can last 30 ms while the
+   display and the keyboard are served), so the time between two passes is not quiet time: a pass that took bytes starts the quiet time again, and the rest of a frame that
+   was cut at the end of the ring is not thrown away. */
 void board_tick(Board *b, uint32_t elapsed_ms)
 {
-    if (b->rx_len) {
+    if (b->rx_fresh) {
+        b->rx_fresh = 0;
+    } else if (b->rx_len) {
         b->rx_idle_ms += elapsed_ms;
         if (b->rx_idle_ms >= b->params.rx_gap_ms) {
             b->rx_len = 0; /* a half frame is dropped */

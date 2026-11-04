@@ -133,7 +133,9 @@ static int port_save(void *ctx, const Persist *in)
 
 /* ---------------------------------------------------------------- the RS-485 line */
 
-#define RX_RING 128
+/* The ring must hold what the line carries while the main loop is busy with the display and the keyboard (about 30 ms): at 115200 baud that is up to 350 bytes
+   (every board's requests and answers pass here). A power of two. */
+#define RX_RING 512
 
 static uint8_t rx_byte_;
 static volatile uint8_t ring_[RX_RING];

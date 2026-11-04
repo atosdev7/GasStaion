@@ -406,13 +406,32 @@ static void test_line(void)
     }
     CHECK(board_feed(&r.board, good[n - 1]));
 
-    /* a half frame is thrown away when no byte follows: the next frame is read from its start */
+    /* a half frame is thrown away when no byte follows (a tick that took bytes does not count as quiet time): the next frame is read from its start */
     n = frame(good, 1, 11, CMD_POLL, 0, 0);
     for (i = 0; i < 3; ++i) {
         board_feed(&r.board, good[i]);
     }
     board_tick(&r.board, 50);
+    CHECK_EQ(r.board.rx_len, 3);       /* the pass that took the bytes: not dropped yet */
+    board_tick(&r.board, 50);
+    CHECK_EQ(r.board.rx_len, 0);       /* a quiet pass: dropped */
     CHECK(feed_all(&r, good, n));
+
+    /* the main loop takes the bytes in bursts and a pass can last 30 ms: a frame that is cut at the end of the ring is completed by the next pass */
+    n = frame(good, 1, 14, CMD_POLL, 0, 0);
+    for (i = 0; i < 4; ++i) {
+        CHECK(!board_feed(&r.board, good[i]));
+    }
+    board_tick(&r.board, 30);                                      /* the pass ends, 30 ms go by (the display and the keyboard) */
+    for (i = 4; i + 1 < n; ++i) {
+        CHECK(!board_feed(&r.board, good[i]));
+    }
+    CHECK(board_feed(&r.board, good[n - 1]));
+    {
+        size_t len;
+
+        CHECK_EQ(board_reply(&r.board, &len)[2], 14);   /* the answer to that request */
+    }
 
     /* a LEN above 64 is not a frame */
     buf[0] = 0x02;

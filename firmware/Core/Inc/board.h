@@ -103,6 +103,7 @@ typedef struct {
     uint8_t rx[FRAME_MAX];
     size_t rx_len;
     uint32_t rx_idle_ms;
+    uint8_t rx_fresh;              /* bytes were fed since the last board_tick: the quiet time of a half frame starts again (see board_tick) */
     uint8_t have_seq;
     uint8_t last_seq;
     uint8_t last_reply[FRAME_MAX];
