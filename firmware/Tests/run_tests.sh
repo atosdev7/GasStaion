@@ -11,8 +11,10 @@ gcc $CFLAGS -o "$OUT/test_store" test_store.c ../Core/Src/store.c ../Core/Src/ch
 gcc $CFLAGS -o "$OUT/test_ui" test_ui.c ../Core/Src/ui.c ../Core/Src/board.c ../Core/Src/checksum.c
 gcc $CFLAGS -o "$OUT/test_pinfilter" test_pinfilter.c ../Core/Src/pinfilter.c
 gcc $CFLAGS -o "$OUT/test_display" test_display.c -lm
+gcc $CFLAGS -o "$OUT/test_keyboard" test_keyboard.c
 "$OUT/test_core"
 "$OUT/test_store"
 "$OUT/test_ui"
 "$OUT/test_pinfilter"
 "$OUT/test_display"
+"$OUT/test_keyboard"

@@ -2,13 +2,14 @@
 #define KEYBOARD_H
 
 /*
- * The driver of the keyboard board (keyboard.c is yours: the file in the project only holds an empty function so that it builds before yours is in). It is
- * called from the main loop only, never from an interrupt, and it BLOCKS for the time given below.
+ * The driver of the keyboard board (keyboard.c). It is called from the main loop only, never from an interrupt, and it BLOCKS for the time given below.
  *
- * The keyboard has 17 keys and an LCD of its own, 8 seven-segment digits (UI_KEYPAD_DIGITS) that the board refreshes while it scans the keys: the first digit
+ * The keyboard has 17 keys and an LED display of its own, 8 seven-segment digits (UI_KEYPAD_DIGITS) that the board refreshes while it scans the keys: the first digit
  * shows the mode or the status of the dispenser (a number or a letter, the `code`), the other 7 (UI_KEYPAD_VALUE_DIGITS) show the number of the amount that is
  * set (the `value`).
  */
+
+#include <stdint.h>
 
 /* The key codes the driver returns (one per press). */
 enum {
@@ -23,17 +24,48 @@ enum {
     UI_KEY_FUNCTION    /* auto mode: the select key (beeps, reported to the Smart210) */
 };
 
-#define UI_KEYPAD_DIGITS 8          /* the LCD of the keyboard board: the code + the value */
+/* The keys as the board reports them: the three bytes that it clocks out (column 0 first) are joined into a 32 bit word as byte0 << 24 | byte1 << 16 | byte2 << 8, and
+   a pressed key is a 1. The 17 keys use the 5 low bits of the first byte, all 8 bits of the second and the 4 high bits of the third. (The names are the ones of the
+   keyboard board; keyboard.c says which UI_KEY_* each one gives.) */
+#define KEY_1                      0x00001000
+#define KEY_2                      0x00002000
+#define KEY_3                      0x00004000
+#define KEY_4                      0x00008000
+#define KEY_5                      0x00010000
+#define KEY_6                      0x00020000
+#define KEY_7                      0x00040000
+#define KEY_8                      0x00080000
+#define KEY_9                      0x00100000
+#define KEY_0                      0x00200000
+#define KEY_DOT                    0x00400000
+#define KEY_CLEAR                  0x00800000
+#define KEY_NEXT                   0x01000000
+#define KEY_PRINT                  0x02000000
+#define KEY_START                  0x04000000
+#define KEY_STOP                   0x08000000
+#define KEY_PREV                   0x10000000
+
+#define UI_KEYPAD_DIGITS 8          /* the display of the keyboard board: the code + the value */
 #define UI_KEYPAD_VALUE_DIGITS 7    /* its digits for the value */
 
-/* Scans the keyboard and, in the same time, refreshes the LCD of the keyboard board. Takes about 20 ms. Called at every pass of the main loop with what the
-   LCD has to show now:
+/* Scans the keyboard and, in the same time, refreshes the display of the keyboard board. Takes about 20 ms (the waits of the scan are 17 ms of HAL_Delay, which
+   each wait a tick longer, and about 1 ms of the link: 948 us of waits and the pin writes). Called at every pass of the main loop with what the display has to show now:
      code   the first digit, the mode or the status: '0'..'9' or a letter ('A'..'Z'; show what the 7 segments can, a lower-case letter is the same letter);
             ui.c says which (keypad_code): '0' idle, '2' a preset waits, '3' a fill runs, '4' a result waits, 'E' a fault, 't' the total is shown (auto board);
             'H' idle, 'P' a preset waits, 'F' a fill runs (manual board);
      value  the other 7 digits as a text, right aligned: UI_KEYPAD_VALUE_DIGITS digits ('0'..'9', ' ', '-'; a '.' after a digit lights the point of that digit and
             takes no digit), for example "   15.00" or "    12.5" (the amount being typed); all blanks when there is nothing to show.
-   Returns one UI_KEY_* code for each new press and UI_KEY_NONE (0) otherwise: it debounces itself, so a key that is held gives its code once. */
+   Returns one UI_KEY_* code for each new press and UI_KEY_NONE (0) otherwise. A key counts as pressed when three scans in a row (60 ms) found it so, and as
+   released when three scans in a row found it up, so a bounce of a contact gives nothing and a key that is held gives its code once. Keys that went down together
+   are given one by one at the next scans. */
 int ScanKeyboardAndRefreshDisplay(char code, const char *value);
+
+/* The link of the keyboard board (kept public for the tests; the main loop only calls ScanKeyboardAndRefreshDisplay): strobe (KEY_SEL), clock (KEY_CLK) and one
+   data line (KEY_DATA) that is an output while the commands and the display go out and an input while the keys are read. */
+void SendLcdDataToKeyboard(void);
+void SendCommand1ToKeyboard(void);
+void SendCommand2ToKeyboard(void);
+uint8_t ScanKeyColumn(uint8_t col);
+void WriteByteToKeyboard(uint8_t data);
 
 #endif
