@@ -9,8 +9,13 @@
 #define CMD_JEDEC_ID 0x9F
 
 #define SPI_TIMEOUT_MS 100
+/* The W25Q32BV (datasheet Rev I, 2013): a page program takes 0.7 ms typically, 3 ms at most (64 bytes: 20 us for the first byte and 2.5 us for each one after it, 0.8 ms at most);
+   a 4 KB sector erase takes 30 ms typically and 200 ms at most (400 ms after 50,000 cycles of the sector); after power-up the chip ignores every write, erase and
+   Write Enable for tPUW, 10 ms at most; the status register has the busy bit S0, the write enable latch S1 and the block protect bits BP S2..S4 (0 from the factory). */
 #define PROGRAM_TIMEOUT_MS 20      /* a page takes 3 ms at most */
 #define ERASE_TIMEOUT_MS 800       /* a 4 KB sector takes 400 ms at most */
+#define POWER_UP_WRITE_MS 10       /* no write or erase before this long after the start of the program (tPUW) */
+#define STATUS_PROTECT_BITS 0x7C   /* SEC S6, TB S5 and BP2..0 S4..S2: any of them set may protect a part of the memory */
 
 static SPI_HandleTypeDef *spi_;
 
@@ -78,6 +83,8 @@ int w25q_init(SPI_HandleTypeDef *spi)
 {
     uint8_t cmd = CMD_JEDEC_ID;
     uint8_t id[3] = {0, 0, 0};
+    uint8_t status_cmd = CMD_READ_STATUS;
+    uint8_t status = 0xFF;
     int ok;
 
     spi_ = spi;
@@ -87,8 +94,17 @@ int w25q_init(SPI_HandleTypeDef *spi)
     select();
     ok = send(&cmd, 1) && HAL_SPI_Receive(spi_, id, 3, SPI_TIMEOUT_MS) == HAL_OK;
     deselect();
+    /* the 25Q32 of Winbond: manufacturer EFh, capacity 16h (32 Mbit); a chip that is not there reads all 0 or all 1 */
+    if (!ok || id[0] != 0xEF || id[2] != 0x16) {
+        return 0;
+    }
 
-    return ok && !(id[0] == 0x00 && id[1] == 0x00 && id[2] == 0x00) && !(id[0] == 0xFF && id[1] == 0xFF && id[2] == 0xFF);
+    /* a block that is protected (BP, TB, SEC) would ignore the writes without a word: the board reports a memory fault instead of working without its memory */
+    select();
+    ok = send(&status_cmd, 1) && HAL_SPI_Receive(spi_, &status, 1, SPI_TIMEOUT_MS) == HAL_OK;
+    deselect();
+
+    return ok && !(status & STATUS_PROTECT_BITS);
 }
 
 static int w_read(void *ctx, uint32_t addr, uint8_t *buf, uint32_t len)
@@ -103,11 +119,19 @@ static int w_read(void *ctx, uint32_t addr, uint8_t *buf, uint32_t len)
     return ok;
 }
 
+/* right after the power came on the chip ignores writes (tPUW): the tick of the HAL counts from the start of the program, which comes after the reset of the supply */
+static void wait_power_up(void)
+{
+    while (HAL_GetTick() < POWER_UP_WRITE_MS) {
+    }
+}
+
 static int w_program(void *ctx, uint32_t addr, const uint8_t *buf, uint32_t len)
 {
     int ok;
 
     (void)ctx;
+    wait_power_up();
     if (!wait_ready(PROGRAM_TIMEOUT_MS) || !command(CMD_WRITE_ENABLE)) {
         return 0;
     }
@@ -123,6 +147,7 @@ static int w_erase(void *ctx, uint32_t addr)
     int ok;
 
     (void)ctx;
+    wait_power_up();
     if (!wait_ready(PROGRAM_TIMEOUT_MS) || !command(CMD_WRITE_ENABLE)) {
         return 0;
     }

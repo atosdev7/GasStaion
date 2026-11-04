@@ -119,9 +119,15 @@ static uint32_t port_serial(void *ctx)
 
 static Store store_;
 
+/* 1 when the flash answered as a 25Q32 and is not write protected (w25q_init): otherwise the memory is reported as damaged (fault 3) and the board does not work */
+static int flash_ok_;
+
 static int port_load(void *ctx, Persist *out)
 {
     (void)ctx;
+    if (!flash_ok_) {
+        return -1;
+    }
 
     return store_load(&store_, out);
 }
@@ -130,21 +136,23 @@ static int port_save(void *ctx, const Persist *in)
 {
     (void)ctx;
 
-    return store_save(&store_, in);
+    return flash_ok_ && store_save(&store_, in);
 }
 
 static int port_save_now(void *ctx, const Persist *in)
 {
     (void)ctx;
 
-    return store_save_noerase(&store_, in);
+    return flash_ok_ && store_save_noerase(&store_, in);
 }
 
 /* the sector of the memory that the ring needs next is erased here, while nothing runs: 45 to 400 ms, a pass of the main loop that takes long, once in 64 saves */
 static void port_housekeeping(void *ctx)
 {
     (void)ctx;
-    store_erase_ahead(&store_);
+    if (flash_ok_) {
+        store_erase_ahead(&store_);
+    }
 }
 
 /* ---------------------------------------------------------------- the RS-485 line */
@@ -339,7 +347,7 @@ void port_init(Hal *hal, UiHal *ui)
     port_tx_dma_init();
     HAL_UART_Receive_IT(&huart6, &rx_byte_, 1);
 
-    w25q_init(&hspi3);
+    flash_ok_ = w25q_init(&hspi3);
     store_init(&store_, w25q_flash(), STORE_BASE, STORE_AUTOFORMAT);
 
     hal->ctx = 0;

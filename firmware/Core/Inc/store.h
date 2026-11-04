@@ -7,7 +7,8 @@
  * interrupts leaves a record with a wrong CRC, which is ignored, so the previous record is still there. A sector is erased only when the
  * ring reaches it again, and the newest record is never in the sector that is erased.
  *
- * ERASING TAKES LONG (a 4 KB sector of the 25Q32: about 45 ms, up to 400 ms; a 64-byte program: under a millisecond, up to 3 ms), so the sector that the ring
+ * ERASING TAKES LONG (the W25Q32BV datasheet: a 4 KB sector erase takes 30 ms typically and 200 ms at most, 400 ms after 50,000 cycles of the sector; a 64-byte
+ * program 0.2 ms typically and 0.8 ms at most), so the sector that the ring
  * enters next is erased AHEAD OF TIME, when the board is idle (store_erase_ahead), and the saves while a fill runs and at a power cut never erase
  * (store_save_noerase): they only program a blank slot. store_save, which may still erase when the sector was not prepared, is for the saves that
  * can wait (START, a config, an acknowledgement).
