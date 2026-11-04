@@ -278,4 +278,4 @@ flowchart TD
 | `board_idle_work` | 0, or 30-200 ms once in 64 saves | only in IDLE or DONE, never while the supply goes |
 | `ScanKeyboardAndRefreshDisplay` | about 20 ms | blocks |
 | `RefreshDisplay` | 8 to 10 ms | blocks |
-| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; the pump stop and POWER_OFF are read once per pass (see README) |
+| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; POWER_OFF is read once per pass; the pump stop of a fill is the TIM1 compare interrupt (see README) |

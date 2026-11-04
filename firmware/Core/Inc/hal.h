@@ -77,6 +77,11 @@ typedef struct {
     uint32_t (*pulses)(void *ctx);
     /* The pump (relays 1 and 2): 1 runs it, 0 stops it. The core calls it only when the wish changes, and stops it at start up. */
     void (*pump)(void *ctx, int on);
+    /* The hardware stops the pump by itself when the flow counter reaches this count (the value pulses() has then: 32 bit, wrapping): an interrupt on a compare channel of the
+       flow meter's timer, so that the end of a fill does not wait for the main loop (a pass can last 30 ms, which at a fast flow is a few grams past the preset). The core arms
+       it at START and again at every tick (the timer is 16 bit: a stop that is far off is armed when it comes near) and disarms it when the pump is stopped. Both may be 0. */
+    void (*arm_stop)(void *ctx, uint32_t at_count);
+    void (*disarm_stop)(void *ctx);
     /* The nozzle hook sensor: 1 when the nozzle is lifted from its holder. May be 0 (a board without the sensor: the nozzle counts as lifted). */
     int (*hook)(void *ctx);
 

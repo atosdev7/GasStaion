@@ -14,20 +14,118 @@ extern UART_HandleTypeDef huart6;
 
 /* ---------------------------------------------------------------- the flow meter */
 
-/* TIM1 counts the A/B signals of the flow meter (all four edges); it is 16 bit, so it is widened here. The count goes down with a backflow.
-   Called at every tick, which is far more often than the 16 bit counter can wrap. */
+/* TIM1 is the encoder counter of the flow meter (encoder mode on CH1 and CH2, both edges of A and B, so 4 counts for each cycle; the count goes down with a backflow). It is
+   16 bit, so it is widened here to 32 bit: the main loop and the compare interrupt below both read it, so the widening runs with the interrupts off. The main loop must come round
+   before 32767 counts have passed (at 30 ms a pass that is 1.09 million counts a second, far above any flow meter). */
 static uint16_t last_count_;
 static uint32_t total_count_;
 
-static uint32_t port_pulses(void *ctx)
+static void port_pump(void *ctx, int on);
+
+static uint32_t irq_off(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    return primask;
+}
+
+static void irq_restore(uint32_t primask)
+{
+    if (!primask) {
+        __enable_irq();
+    }
+}
+
+/* the widened count; the interrupts are off */
+static uint32_t widen_locked(void)
 {
     const uint16_t now = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
 
-    (void)ctx;
     total_count_ += (uint32_t)(int32_t)(int16_t)(uint16_t)(now - last_count_);
     last_count_ = now;
 
     return total_count_;
+}
+
+static uint32_t port_pulses(void *ctx)
+{
+    uint32_t count;
+    const uint32_t primask = irq_off();
+
+    (void)ctx;
+    count = widen_locked();
+    irq_restore(primask);
+
+    return count;
+}
+
+/* The hardware stop of the pump (Hal.arm_stop): the compare channel 3 of TIM1 (CH1 and CH2 are the encoder inputs; a compare works in the encoder mode and needs no pin)
+   interrupts when the counter reaches the count of the stop, and the interrupt switches the pump off at once, whatever the main loop is doing (a pass lasts about 30 ms while
+   the display and the keyboard are served). The counter is 16 bit: a stop that is more than STOP_WINDOW counts ahead is not armed in the compare yet, the core arms it again at
+   every tick. */
+#define STOP_WINDOW 30000L
+
+static volatile uint8_t stop_armed_;
+static uint32_t stop_at_;
+
+/* sets the compare for the stop (or stops the pump when the count is there); the interrupts are off or this is the interrupt itself */
+static void stop_compare_locked(void)
+{
+    const uint32_t now = widen_locked();
+    const int32_t left = (int32_t)(stop_at_ - now);
+
+    if (!stop_armed_) {
+        TIM1->DIER &= ~TIM_DIER_CC3IE;
+
+        return;
+    }
+    if (left <= 0) {
+        port_pump(0, 0);                     /* the count is there: the pump is off now */
+        stop_armed_ = 0;
+        TIM1->DIER &= ~TIM_DIER_CC3IE;
+
+        return;
+    }
+    if (left > STOP_WINDOW) {
+        TIM1->DIER &= ~TIM_DIER_CC3IE;      /* too far for the 16 bit counter: armed when it comes near */
+
+        return;
+    }
+    TIM1->CCR3 = (uint16_t)(last_count_ + (uint32_t)left);
+    TIM1->SR = ~TIM_SR_CC3IF;
+    TIM1->DIER |= TIM_DIER_CC3IE;
+}
+
+static void port_arm_stop(void *ctx, uint32_t at_count)
+{
+    const uint32_t primask = irq_off();
+
+    (void)ctx;
+    stop_at_ = at_count;
+    stop_armed_ = 1;
+    stop_compare_locked();
+    irq_restore(primask);
+}
+
+static void port_disarm_stop(void *ctx)
+{
+    const uint32_t primask = irq_off();
+
+    (void)ctx;
+    stop_armed_ = 0;
+    TIM1->DIER &= ~TIM_DIER_CC3IE;
+    irq_restore(primask);
+}
+
+/* (here and not in stm32f4xx_it.c: CubeMX writes that file again) */
+void TIM1_CC_IRQHandler(void)
+{
+    if (TIM1->SR & TIM_SR_CC3IF) {
+        TIM1->SR = ~TIM_SR_CC3IF;
+        stop_compare_locked();               /* the counter is at the compare value: the pump stops; a match that is not the stop (a jitter of the encoder) sets the compare again */
+    }
 }
 
 /* ---------------------------------------------------------------- pump, hook */
@@ -343,6 +441,10 @@ void port_init(Hal *hal, UiHal *ui)
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
     last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
     total_count_ = 0;
+    TIM1->CCMR2 &= ~(TIM_CCMR2_OC3M | TIM_CCMR2_CC3S);   /* channel 3: a compare that changes no pin (frozen), no input */
+    TIM1->CCER &= ~TIM_CCER_CC3E;
+    HAL_NVIC_SetPriority(TIM1_CC_IRQn, 0, 0);            /* the pump stop is the most urgent thing on the board */
+    HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
 
     port_tx_dma_init();
     HAL_UART_Receive_IT(&huart6, &rx_byte_, 1);
@@ -357,6 +459,8 @@ void port_init(Hal *hal, UiHal *ui)
     hal->housekeeping = port_housekeeping;
     hal->pulses = port_pulses;
     hal->pump = port_pump;
+    hal->arm_stop = port_arm_stop;
+    hal->disarm_stop = port_disarm_stop;
     hal->hook = port_hook;
     hal->beep = port_select_beep;
     hal->rtc_get = port_rtc_get;

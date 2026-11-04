@@ -38,6 +38,9 @@ typedef struct {
     int saves;
     int saves_now;      /* the saves without an erase (the fill in progress, the power cut) */
     int idle_work;      /* housekeeping calls */
+    int stop_armed;     /* the hardware stop of the pump (Hal.arm_stop) */
+    uint32_t stop_at;
+    int arms, disarms;
     uint32_t pulses;
     int pump_on;
     int pump_changes;
@@ -87,6 +90,23 @@ static int f_save_now(void *ctx, const Persist *in)
     ++f->saves_now;
 
     return 1;
+}
+
+static void f_arm_stop(void *ctx, uint32_t at)
+{
+    Fake *f = (Fake *)ctx;
+
+    f->stop_armed = 1;
+    f->stop_at = at;
+    ++f->arms;
+}
+
+static void f_disarm_stop(void *ctx)
+{
+    Fake *f = (Fake *)ctx;
+
+    f->stop_armed = 0;
+    ++f->disarms;
 }
 
 static void f_housekeeping(void *ctx)
@@ -149,6 +169,8 @@ static Hal hal_of(Fake *f)
     h.save = f_save;
     h.save_now = f_save_now;
     h.housekeeping = f_housekeeping;
+    h.arm_stop = f_arm_stop;
+    h.disarm_stop = f_disarm_stop;
     h.pulses = f_pulses;
     h.pump = f_pump;
     h.hook = f_hook;
@@ -1205,6 +1227,93 @@ static void test_memory_timing(void)
     CHECK_EQ(ask_u32(&r, CMD_START, 9), CMD_NAK);     /* START has to be saved: the memory refuses it */
     CHECK_EQ(NAK_ERROR(&r), ERR_FAULT);
 }
+/* The pump is stopped by the hardware too (a compare interrupt of the flow meter timer, Hal.arm_stop): the core arms it at START with the count where the fill must stop
+   and again at every tick, disarms it when the pump is stopped, and does not switch the pump on again after the hardware stopped it. */
+static void test_hardware_stop(void)
+{
+    Rig r;
+    Params p;
+    int arms;
+    int changes;
+
+    /* armed at START: the count of START plus the target (18072 counts for 15 kg), the counter wraps */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    r.fake.pulses = 1000;
+    start_auto(&r, 15000);
+    CHECK_EQ(r.fake.stop_armed, 1);
+    CHECK_EQ(r.fake.stop_at, 1000 + 18072);
+    arms = r.fake.arms;
+    run(&r, 10, 100);
+    CHECK(r.fake.arms > arms);                           /* again at every tick */
+    CHECK_EQ(r.fake.stop_at, 1000 + 18072);
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    r.fake.pulses = 0xFFFFFF00UL;
+    start_auto(&r, 15000);
+    CHECK_EQ(r.fake.stop_at, (uint32_t)(0xFFFFFF00UL + 18072UL));      /* modulo 2^32 */
+
+    /* with an early close the stop is that many counts before the target */
+    memset(&r, 0, sizeof(r));
+    r.fake.hook = 1;
+    r.hal = hal_of(&r.fake);
+    board_default_params(&p);
+    p.early_close_pulses = 40;
+    board_init(&r.board, &r.hal, 1, &p);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 15000);
+    CHECK_EQ(r.fake.stop_at, 18072 - 40);
+
+    /* it is disarmed when the pump is stopped by the core: the end of the fill */
+    run(&r, 200, 200);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(r.fake.stop_armed, 0);
+
+    /* the hardware stops the pump between two ticks (what the interrupt does): the core then closes the fill and does not switch the pump on again, also when the nozzle was
+       put back and lifted again at that moment */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 15000);
+    run(&r, 170, 100);                                   /* 17000 counts */
+    r.fake.hook = 0;
+    run(&r, 1, 0);
+    CHECK_EQ(r.fake.pump_on, 0);                         /* the nozzle is down: no pump */
+    r.fake.hook = 1;                                     /* lifted again ... */
+    r.fake.pulses += 1100;                               /* ... and the target is passed before the next tick (18100) */
+    r.fake.pump_on = 0;                                  /* the interrupt stopped the pump at 18072 */
+    changes = r.fake.pump_changes;
+    board_tick(&r.board, 30);
+    CHECK_EQ(r.fake.pump_on, 0);
+    CHECK_EQ(r.fake.pump_changes, changes);              /* the pump was not switched on for a moment */
+    run(&r, 30, 0);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(r.board.p.result.reason, REASON_PRESET);
+    CHECK_EQ(r.board.p.result.dispensed_g, 15000);
+
+    /* the power cut and a fault disarm it too */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 15000);
+    CHECK_EQ(r.fake.stop_armed, 1);
+    board_power_fail(&r.board);
+    CHECK_EQ(r.fake.stop_armed, 0);
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 15000);
+    board_set_fault(&r.board, FAULT_FLOW_SENSOR);
+    CHECK_EQ(r.fake.stop_armed, 0);
+
+    /* a manual fill is armed the same way */
+    rig_new(&r, 1);
+    configure(&r, MODE_MANUAL, 8300, 100000);
+    r.fake.pulses = 500;
+    CHECK(board_manual_amount(&r.board, 8300));
+    run(&r, 1, 0);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
+    CHECK_EQ(r.fake.stop_armed, 1);
+    CHECK_EQ(r.fake.stop_at, 500 + 10000);
+}
 static void test_unknown_and_lengths(void)
 {
     Rig r;
@@ -1476,6 +1585,7 @@ int main(void)
     test_faults();
     test_memory();
     test_memory_timing();
+    test_hardware_stop();
     test_unknown_and_lengths();
 
     printf("core: %d checks, %d failed\n", checks, failures);

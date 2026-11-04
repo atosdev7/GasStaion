@@ -204,6 +204,24 @@ static int hook_lifted(const Board *b)
     return b->hal->hook ? b->hal->hook(b->hal->ctx) != 0 : 1;
 }
 
+/* The pump is stopped by the hardware too, at the count where the core would stop it (see Hal.arm_stop): the count of START plus the target, less the early close. */
+static void arm_stop(Board *b)
+{
+    if (b->hal->arm_stop) {
+        const uint32_t target = b->p.inflight.target_pulses;
+        const uint32_t early = target > b->params.early_close_pulses ? b->params.early_close_pulses : 0;
+
+        b->hal->arm_stop(b->hal->ctx, b->pulse_base + (target - early));
+    }
+}
+
+static void disarm_stop(Board *b)
+{
+    if (b->hal->disarm_stop) {
+        b->hal->disarm_stop(b->hal->ctx);
+    }
+}
+
 static void set_pump(Board *b, int on)
 {
     if (b->pump_on != (uint8_t)(on != 0)) {
@@ -297,6 +315,7 @@ static void finish_fill(Board *b, uint8_t reason)
     const Config *c = &b->p.config;
 
     set_pump(b, 0);
+    disarm_stop(b);
     if (reason == REASON_PRESET) {
         /* the target was reached: by the calibration that is the preset, whatever the last few counts while the pump stops say */
         g = b->preset_g;
@@ -318,6 +337,7 @@ static void finish_fill(Board *b, uint8_t reason)
 static void begin_closing(Board *b, uint8_t reason)
 {
     set_pump(b, 0);
+    disarm_stop(b);
     b->closing = 1;
     b->closing_reason = reason;
     b->closing_ms = 0;
@@ -348,6 +368,7 @@ static int start_fill(Board *b, uint32_t session_id)
     b->since_save_ms = 0;
     b->saved_pulses = 0;
     b->state = STATE_DISPENSING;
+    arm_stop(b);                       /* the hardware stops the pump at the target, whatever the main loop is doing then */
     set_pump(b, hook_lifted(b) && !b->powering_down);
 
     return 1;
@@ -382,17 +403,19 @@ static void run_fill(Board *b, uint32_t elapsed_ms)
         b->no_flow_for_ms += elapsed_ms;
     }
 
-    /* the pump runs only while the nozzle is lifted */
-    lifted = hook_lifted(b);
-    set_pump(b, lifted && !b->powering_down);
-    b->hook_down_ms = lifted ? 0 : b->hook_down_ms + elapsed_ms;
-
+    /* the target first: when it is reached the pump is not switched on again (the hardware may have stopped it already) */
     early = target > b->params.early_close_pulses ? b->params.early_close_pulses : 0;
     if (seen >= target - early) {
         begin_closing(b, REASON_PRESET);
 
         return;
     }
+
+    /* the pump runs only while the nozzle is lifted */
+    lifted = hook_lifted(b);
+    set_pump(b, lifted && !b->powering_down);
+    b->hook_down_ms = lifted ? 0 : b->hook_down_ms + elapsed_ms;
+    arm_stop(b);                       /* (again: a stop that was too far off for the 16 bit timer is armed when it comes near) */
     if ((b->flow_started && !lifted && b->hook_down_ms >= b->params.hook_down_end_ms)
         || (b->flow_started && b->no_flow_for_ms >= b->params.no_flow_ms)
         || (!b->flow_started && b->since_start_ms >= b->params.start_wait_ms)) {
@@ -919,6 +942,7 @@ void board_power_fail(Board *b)
     }
     b->powering_down = 1;
     set_pump(b, 0);
+    disarm_stop(b);
     if (b->state == STATE_DISPENSING) {
         b->pulses_seen = counts_since_start(b);
         b->p.inflight.pulses = b->pulses_seen;
