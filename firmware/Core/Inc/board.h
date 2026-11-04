@@ -83,6 +83,7 @@ typedef struct {
     uint32_t preset_g;
     uint32_t shown_g;              /* the balance of a card shown with SHOW_BALANCE (not a preset); 0: none */
     uint32_t shown_left_ms;
+    uint32_t held_g, held_ml;      /* manual mode: the last fill, kept on the displays until the next preset is set (0: none) */
     uint8_t pump_on;               /* what the pump has been told */
     uint8_t powering_down;         /* board_power_fail() was called and the supply has not come back */
 
@@ -130,6 +131,9 @@ int board_manual_amount(Board *b, uint32_t grams);
 
 /* The balance the display shows (SHOW_BALANCE), 0 when none. */
 uint32_t board_shown_grams(const Board *b);
+/* Manual mode: the kg and the ml of the last fill, which the displays keep until the next preset is set (0 when there is none). */
+uint32_t board_held_grams(const Board *b);
+uint32_t board_held_ml(const Board *b);
 /* Everything this board has dispensed, in whole kg (what the Total key shows). */
 uint64_t board_total_kg(const Board *b);
 void board_set_fault(Board *b, uint8_t code);

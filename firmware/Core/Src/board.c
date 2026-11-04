@@ -369,6 +369,8 @@ static void finish_fill(Board *b, uint8_t reason)
     hold_result(b, b->p.inflight.id, b->preset_g, g, ml, reason);
     if (b->p.config.mode == MODE_MANUAL) {
         b->preset_g = 0;                  /* the fill is over and nothing waits: the dispenser is free for the next amount */
+        b->held_g = g;                    /* ... and the displays keep what was dispensed until the next preset is set */
+        b->held_ml = ml;
         b->state = STATE_IDLE;
     } else {
         b->state = STATE_DONE;
@@ -975,6 +977,16 @@ uint32_t board_shown_grams(const Board *b)
     return b->shown_g;
 }
 
+uint32_t board_held_grams(const Board *b)
+{
+    return b->held_g;
+}
+
+uint32_t board_held_ml(const Board *b)
+{
+    return b->held_ml;
+}
+
 uint64_t board_total_kg(const Board *b)
 {
     return b->p.total_g / 1000;
@@ -988,6 +1000,8 @@ int board_manual_amount(Board *b, uint32_t grams)
         return 0;
     }
     b->preset_g = grams;
+    b->held_g = 0;                        /* the last fill goes from the displays: they show this preset now */
+    b->held_ml = 0;
     b->state = STATE_SET;
 
     return 1;

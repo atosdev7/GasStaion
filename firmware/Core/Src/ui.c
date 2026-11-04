@@ -262,7 +262,11 @@ static void compose(const Ui *ui, char text[UI_DISPLAYS][UI_TEXT_MAX + 1])
             text_kg(text[SHOW_KG], UI_KG_DIGITS, board_shown_grams(b));      /* SHOW_BALANCE: a card's balance, not an amount to dispense */
             text_right(text[SHOW_LITRES], UI_LITRES_DIGITS, "bAL");
         } else if (manual) {
-            text_right(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, ui->entry);       /* the amount that is being typed */
+            text_right(text[SHOW_KEYPAD], UI_KEYPAD_VALUE_DIGITS, ui->entry);       /* the amount that is being typed: only on the keyboard's LCD */
+            if (board_held_grams(b) > 0 || board_held_ml(b) > 0) {
+                text_kg(text[SHOW_KG], UI_KG_DIGITS, board_held_grams(b));           /* the last fill stays until the next preset is set */
+                text_fixed2(text[SHOW_LITRES], UI_LITRES_DIGITS, board_held_ml(b) / 10);
+            }
         }
         break;
     case STATE_SET:

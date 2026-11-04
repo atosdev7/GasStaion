@@ -1044,6 +1044,25 @@ static void test_manual_mode(void)
     CHECK(!board_manual_amount(&r.board, 1000));
 }
 
+/* manual mode: the last fill is kept for the displays until the next preset is set */
+static void test_manual_hold(void)
+{
+    Rig r;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_MANUAL, 8300, 100000);
+    CHECK_EQ(board_held_grams(&r.board), 0);
+    CHECK(board_manual_amount(&r.board, 8300));
+    run(&r, 1200, 10);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(board_held_grams(&r.board), 8300);                      /* the preset was reached: the preset */
+    CHECK_EQ(board_held_ml(&r.board), 10000);
+    run(&r, 500, 0);
+    CHECK_EQ(board_held_grams(&r.board), 8300);                      /* it stays, whatever the time */
+    CHECK(board_manual_amount(&r.board, 5000));                      /* the next preset: gone */
+    CHECK_EQ(board_held_grams(&r.board), 0);
+    CHECK_EQ(board_held_ml(&r.board), 0);
+}
 static void test_power_cut(void)
 {
     Rig r;
@@ -1709,6 +1728,7 @@ int main(void)
     test_show_balance();
     test_poll_status();
     test_manual_mode();
+    test_manual_hold();
     test_total();
     test_power_cut();
     test_power_fail_signal();

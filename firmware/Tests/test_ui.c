@@ -462,7 +462,8 @@ static void test_manual_entry(void)
     flow(&rig, 100, 100);
     flow(&rig, 30, 0);
     CHECK_EQ(rig.board.state, STATE_IDLE);
-    CHECK_DISPLAY(KG, "   0.00");
+    CHECK_DISPLAY(KG, "   8.30");      /* the last fill stays on the displays until the next preset is set */
+    CHECK_DISPLAY(LITRES, "  10.00");
     CHECK_KEYPAD("       ");
 
     /* the select key does nothing in manual mode, and it reports nothing */
@@ -473,10 +474,15 @@ static void test_manual_entry(void)
     /* the clear key with nothing typed and an amount waiting for the gun drops that amount */
     rig.fake.hook = 0;
     type(&rig, UI_KEY_4);
+    CHECK_DISPLAY(KG, "   8.30");      /* typing digits only changes the keyboard's LCD: the last fill is still there */
+    CHECK_KEYPAD("      4");
     type(&rig, UI_KEY_SET);
     CHECK_EQ(rig.board.state, STATE_SET);
+    CHECK_DISPLAY(KG, "   4.00");      /* the new preset replaces it, in kg and in litres */
+    CHECK_DISPLAY(LITRES, "   4.81");
     type(&rig, UI_KEY_CLEAR);
     CHECK_EQ(rig.board.state, STATE_IDLE);
+    CHECK_DISPLAY(KG, "   0.00");      /* the amount was dropped: nothing is held */
 }
 
 /* the keyboard of 17 keys: the Total key shows the total of the board over the two numeric displays (manual mode), Function is the select key, Set takes an amount */
@@ -508,7 +514,7 @@ static void test_total_key(void)
 
     /* any other key puts the usual display back and works as usual */
     type(&rig, UI_KEY_5);
-    CHECK_DISPLAY(KG, "   0.00");
+    CHECK_DISPLAY(KG, "   8.30");      /* the usual display: the last fill is still on it */
     CHECK_KEYPAD("      5");
 
     /* 12 digits over the two displays: the kg display holds the upper six */

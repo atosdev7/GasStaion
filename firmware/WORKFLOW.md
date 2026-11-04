@@ -284,12 +284,14 @@ flowchart TD
     E -- "gun hung" --> P["Pump stops, the fill waits<br/>3 s on the hook after the flow began ends it"]
     P -- "gun up again" --> E
     P -- "3 s on the hook" --> F
-    E -- "preset reached, TIM1 compare stops the pump<br/>or no flow 30 s, tank full, fault" --> F["Fill ends<br/>grams added to the total of the board<br/>no result held, nothing reported<br/>preset cleared"]
+    E -- "preset reached, TIM1 compare stops the pump<br/>or no flow 30 s, tank full, fault" --> F["Fill ends<br/>grams added to the total of the board<br/>no result held, nothing reported<br/>preset cleared<br/>kg and litres of the fill stay on the displays"]
     F --> A
+    A -. "the next preset is set: the displays show it" .-> D
     T["Total key, idle or preset waits<br/>kg and litres show the total for 5 s<br/>LCD: t"] -.-> B
 ```
 
 - No key does anything while a fill runs. There is no cancel: the supplier stops by hanging the gun.
+- **The last fill stays on the kg and litres displays until the next preset is set** (the Set key takes an amount): typing digits in between only changes the keyboard's LCD, and the Clear key that drops a preset leaves the displays at zero. It is kept in RAM only (a restart clears it).
 - A power cut in the middle of a manual fill drops the fill (nothing is reported), but what it dispensed up to the last save is added to the total.
 - The Function, Next and Prev keys do nothing in manual mode.
 ## 11. Where the time goes in one pass of the main loop
