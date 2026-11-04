@@ -140,21 +140,35 @@ static void port_pump(void *ctx, int on)
     HAL_GPIO_WritePin(RELAY2_GPIO_Port, RELAY2_Pin, level);
 }
 
-static PinFilter hook_;
+static PinFilter power_;
+static PinFilter gun_;
 
-/* the filtered state of the hook switch (check_hook_status): 1 when the nozzle is lifted */
+/* the filtered state of the gun's switch (check_gun_status): 1 when the nozzle is lifted */
 static int port_hook(void *ctx)
 {
     (void)ctx;
 
-    return hook_.state;
+    return gun_.state;
 }
 
-static PinFilter power_;
+/* The timer: every INPUT_PICK_MS one pick of each pin goes into its buffer. It decides nothing and changes no state of the board (the state changes in check_*_status,
+   in the main loop, where the board can save). It is the 1 ms tick of the HAL (SysTick) counted to INPUT_PICK_MS, so TIM6 and TIM7 stay free for the display and
+   keyboard drivers. HAL_IncTick is weak in the HAL: this one does what it does and the picks. */
+void HAL_IncTick(void)
+{
+    static uint8_t ms;
+
+    uwTick += uwTickFreq;
+    if (++ms >= INPUT_PICK_MS) {
+        ms = 0;
+        pin_filter_pick(&power_, HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL);
+        pin_filter_pick(&gun_, HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);
+    }
+}
 
 void check_power_status(void)
 {
-    pin_filter_check(&power_, HAL_GetTick(), HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL);
+    pin_filter_check(&power_);
 }
 
 int port_power_cut(void)
@@ -162,9 +176,9 @@ int port_power_cut(void)
     return power_.state;
 }
 
-void check_hook_status(void)
+void check_gun_status(void)
 {
-    pin_filter_check(&hook_, HAL_GetTick(), HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);
+    pin_filter_check(&gun_);
 }
 
 /* ---------------------------------------------------------------- the clock, the serial number */
@@ -453,8 +467,8 @@ static int port_key(void *ctx)
 void port_init(Hal *hal, UiHal *ui)
 {
     port_pump(0, 0); /* the pump is off before anything else */
-    pin_filter_init(&power_, POWER_PICK_MS, POWER_PICKS, 0);   /* the supply is on until the picks of the POWER_OFF input say it is cut */
-    pin_filter_init(&hook_, HOOK_PICK_MS, HOOK_PICKS, HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);   /* the hook starts as the pin says */
+    pin_filter_init(&power_, POWER_PICKS, 0);   /* the supply is on until the picks of the POWER_OFF input say it is cut */
+    pin_filter_init(&gun_, GUN_PICKS, HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);   /* the gun starts as the pin says */
 
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
     last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);

@@ -1,34 +1,31 @@
 #include "pinfilter.h"
 
-#include <string.h>
-
-void pin_filter_init(PinFilter *f, uint32_t interval_ms, uint8_t picks, int state)
+static uint32_t mask_of(uint8_t picks)
 {
-    memset(f, 0, sizeof(*f));
-    f->interval_ms = interval_ms;
-    f->picks = picks > 0 ? picks : 1;
-    f->state = state != 0;
+    return picks >= PIN_FILTER_MAX_PICKS ? 0xFFFFFFFFu : ((1u << picks) - 1u);
 }
 
-int pin_filter_check(PinFilter *f, uint32_t now_ms, int level)
+void pin_filter_init(PinFilter *f, uint8_t picks, int state)
 {
-    const uint8_t v = level != 0;
+    f->picks = picks < 1 ? 1 : (picks > PIN_FILTER_MAX_PICKS ? PIN_FILTER_MAX_PICKS : picks);
+    f->state = state != 0;
+    f->bits = state ? mask_of(f->picks) : 0;
+}
 
-    if (f->started && (uint32_t)(now_ms - f->last_ms) < f->interval_ms) {
-        return f->state;                    /* not yet: the previous pick is too near */
-    }
-    if (f->started && v == f->last) {
-        if (f->run < 255) {
-            ++f->run;
-        }
-    } else {
-        f->run = 1;
-        f->last = v;
-    }
-    f->started = 1;
-    f->last_ms = now_ms;
-    if (f->run >= f->picks) {
-        f->state = v;                       /* all of the last picks agree */
+void pin_filter_pick(PinFilter *f, int level)
+{
+    f->bits = (f->bits << 1) | (level != 0 ? 1u : 0u);
+}
+
+int pin_filter_check(PinFilter *f)
+{
+    const uint32_t mask = mask_of(f->picks);
+    const uint32_t last = f->bits & mask;
+
+    if (last == mask) {
+        f->state = 1;                       /* all of the last picks say active */
+    } else if (last == 0) {
+        f->state = 0;                       /* all of them say not active */
     }                                       /* mixed: the state stays */
 
     return f->state;

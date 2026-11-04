@@ -37,8 +37,8 @@ void app_loop(void)
         }
     }
 
-    check_power_status();                       /* a pick of the POWER_OFF input if its time has come; the status is acted on here, where the board is not busy */
-    check_hook_status();                        /* the same for the hook switch (10 picks that agree change it) */
+    check_power_status();                       /* a look at the picks of the POWER_OFF input (a timer takes them); the status is acted on here, where the board is not busy */
+    check_gun_status();                         /* the same for the switch of the gun */
     if (port_power_cut()) {
         board_power_fail(&board_);
     } else {

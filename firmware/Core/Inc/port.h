@@ -25,12 +25,12 @@ uint16_t port_tx_dropped(void);
 
 #define PORT_TX_MAX 71   /* the longest frame: STX ADDR SEQ CMD LEN 64 data CRC CRC */
 
-/* Takes a pick of the POWER_OFF input when POWER_PICK_MS have passed since the last one and returns at once (pinfilter.h: POWER_PICKS picks that agree change the
-   status). Call it once in each pass of the main loop; it does nothing else. */
+/* Look at the buffer of picks of the POWER_OFF input (a timer fills it every INPUT_PICK_MS, see port.c) and change the status when the last POWER_PICKS agree. Never waits.
+   Call it once in each pass of the main loop, where the board can act on the status. */
 void check_power_status(void);
 
-/* The same for the hook switch of the gun (HOOK_PICK_MS, HOOK_PICKS); the buffered state is what Hal.hook answers. */
-void check_hook_status(void);
+/* The same for the switch of the gun (GUN_PICKS); the state is what Hal.hook answers. */
+void check_gun_status(void);
 
 /* The buffered status: 1 while the last 3 picks of the POWER_OFF input said the supply is cut. The main loop reads it where the board can save its state. */
 int port_power_cut(void);

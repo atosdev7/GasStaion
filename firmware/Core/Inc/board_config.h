@@ -17,13 +17,12 @@
 /* POWER_OFF is high when the supply is cut. */
 #define POWER_CUT_LEVEL GPIO_PIN_SET
 
-/* The filters of the inputs (pinfilter.h): one pick every ..._PICK_MS, and the state changes when the last ..._PICKS picks agree. The power input:
-   3 picks, 3 ms apart. The hook switch of the gun: 10 picks, 10 ms apart (10 picks per 100 ms). The main loop calls each filter once in a pass, so a pass
-   of 30 ms makes the real time between the picks 30 ms (see README). */
-#define POWER_PICK_MS 3
+/* The filters of the inputs (pinfilter.h). A timer (SysTick, every INPUT_PICK_MS) puts one pick of each pin into its buffer; the main loop looks at the
+   buffer once in a pass (check_power_status, check_gun_status) and the state changes when the last picks all agree. The power input: POWER_PICKS picks (3 x 10 ms =
+   30 ms). The switch of the gun: GUN_PICKS picks (10 x 10 ms = 100 ms). Both numbers are 1 to 32. */
+#define INPUT_PICK_MS 10
 #define POWER_PICKS 3
-#define HOOK_PICK_MS 10
-#define HOOK_PICKS 10
+#define GUN_PICKS 10
 
 /* Beeper and LEDs: the level that switches them on (check on the board: the LEDs of many boards are lit by a low level). */
 #define BEEP_ON_LEVEL GPIO_PIN_SET
