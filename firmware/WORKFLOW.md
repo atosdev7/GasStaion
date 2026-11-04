@@ -278,4 +278,4 @@ flowchart TD
 | `board_idle_work` | 0, or 30-200 ms once in 64 saves | only in IDLE or DONE, never while the supply goes |
 | `ScanKeyboardAndRefreshDisplay` | about 20 ms | blocks |
 | `RefreshDisplay` | 8 to 10 ms | blocks |
-| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; POWER_OFF is picked every 3 ms at most, 3 picks decide (about 30 to 45 ms), and the status is acted on once per pass; the pump stop of a fill is the TIM1 compare interrupt (see README) |
+| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; POWER_OFF (3 picks) and the hook (10 picks) are picked once per pass, so a cut takes 60 to 90 ms and the hook about 300 ms to be seen; the pump stop of a fill is the TIM1 compare interrupt (see README) |

@@ -9,8 +9,8 @@ CFLAGS="-std=c99 -Wall -Wextra -pedantic -Werror -I../Core/Inc"
 gcc $CFLAGS -o "$OUT/test_core" test_core.c ../Core/Src/board.c ../Core/Src/checksum.c
 gcc $CFLAGS -o "$OUT/test_store" test_store.c ../Core/Src/store.c ../Core/Src/checksum.c
 gcc $CFLAGS -o "$OUT/test_ui" test_ui.c ../Core/Src/ui.c ../Core/Src/board.c ../Core/Src/checksum.c
-gcc $CFLAGS -o "$OUT/test_power" test_power.c ../Core/Src/power.c
+gcc $CFLAGS -o "$OUT/test_pinfilter" test_pinfilter.c ../Core/Src/pinfilter.c
 "$OUT/test_core"
 "$OUT/test_store"
 "$OUT/test_ui"
-"$OUT/test_power"
+"$OUT/test_pinfilter"

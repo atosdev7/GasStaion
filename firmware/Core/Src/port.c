@@ -1,7 +1,7 @@
 #include "port.h"
 
 #include "board_config.h"
-#include "power.h"
+#include "pinfilter.h"
 #include "store.h"
 #include "w25q.h"
 #include "ui_drivers.h"
@@ -140,30 +140,31 @@ static void port_pump(void *ctx, int on)
     HAL_GPIO_WritePin(RELAY2_GPIO_Port, RELAY2_Pin, level);
 }
 
+static PinFilter hook_;
+
+/* the filtered state of the hook switch (check_hook_status): 1 when the nozzle is lifted */
 static int port_hook(void *ctx)
 {
     (void)ctx;
 
-    return HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL;
+    return hook_.state;
 }
 
-static PowerStatus power_;
+static PinFilter power_;
 
 void check_power_status(void)
 {
-    power_check(&power_, HAL_GetTick(), HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL);
+    pin_filter_check(&power_, HAL_GetTick(), HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL);
 }
 
 int port_power_cut(void)
 {
-    return power_.cut;
+    return power_.state;
 }
 
-/* called by the UI between its blocking calls: the main loop cannot come round for about 30 ms, and the picks must go on */
-static void port_service(void *ctx)
+void check_hook_status(void)
 {
-    (void)ctx;
-    check_power_status();
+    pin_filter_check(&hook_, HAL_GetTick(), HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);
 }
 
 /* ---------------------------------------------------------------- the clock, the serial number */
@@ -452,7 +453,8 @@ static int port_key(void *ctx)
 void port_init(Hal *hal, UiHal *ui)
 {
     port_pump(0, 0); /* the pump is off before anything else */
-    power_init(&power_, 0);   /* the supply is on until 3 picks of the POWER_OFF input say it is cut */
+    pin_filter_init(&power_, POWER_PICK_MS, POWER_PICKS, 0);   /* the supply is on until the picks of the POWER_OFF input say it is cut */
+    pin_filter_init(&hook_, HOOK_PICK_MS, HOOK_PICKS, HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL);   /* the hook starts as the pin says */
 
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
     last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
@@ -489,5 +491,4 @@ void port_init(Hal *hal, UiHal *ui)
     ui->scan = port_key;
     ui->beep = port_beep;
     ui->led = port_led;
-    ui->service = port_service;
 }

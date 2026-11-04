@@ -319,14 +319,6 @@ static void draw(Ui *ui)
     ui->drawn = 1;
 }
 
-/* the quick jobs of the main loop go on between the blocking calls of the drivers */
-static void service(const Ui *ui)
-{
-    if (ui->hal->service) {
-        ui->hal->service(ui->hal->ctx);
-    }
-}
-
 static void leds(const Ui *ui)
 {
     const uint8_t s = ui->board->state;
@@ -409,7 +401,6 @@ void ui_init(Ui *ui, Board *board, const UiHal *hal)
 void ui_tick(Ui *ui, uint32_t elapsed_ms)
 {
     on_key(ui, ui->hal->scan(ui->hal->ctx));      /* about 20 ms: the keys are scanned and the keyboard board's display refreshed */
-    service(ui);
 
     if (ui->note_ms > 0) {
         ui->note_ms = ui->note_ms > elapsed_ms ? ui->note_ms - elapsed_ms : 0;
@@ -431,5 +422,4 @@ void ui_tick(Ui *ui, uint32_t elapsed_ms)
     draw(ui);
     leds(ui);
     ui->hal->refresh(ui->hal->ctx);                /* 8 to 10 ms: the display board gets its digits */
-    service(ui);
 }

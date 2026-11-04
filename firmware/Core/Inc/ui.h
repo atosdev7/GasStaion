@@ -41,7 +41,6 @@ typedef struct {
     void (*refresh)(void *ctx);                                                                              /* RefreshDisplay: 8 to 10 ms */
     int (*scan)(void *ctx);                                                                                  /* ScanKeyboardAndRefreshDisplay: 20 ms; a UI_KEY_* code, UI_KEY_NONE when no new press */
     void (*beep)(void *ctx, uint16_t ms);
-    void (*service)(void *ctx);                                                 /* quick jobs of the main loop (the power picks), called between the blocking calls; may be 0 */
     void (*led)(void *ctx, uint8_t index, int on);                              /* 0 heartbeat, 1 preset set, 2 dispensing, 3 result (steady) or fault (blinking) */
 } UiHal;
 
