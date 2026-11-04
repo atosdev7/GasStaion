@@ -25,7 +25,11 @@ uint16_t port_tx_dropped(void);
 
 #define PORT_TX_MAX 71   /* the longest frame: STX ADDR SEQ CMD LEN 64 data CRC CRC */
 
-/* 1 while the POWER_OFF input says the supply is cut. */
+/* Takes a pick of the POWER_OFF input when 3 ms have passed since the last one and returns at once (power.h: 3 picks that agree change the status). Call it as
+   often as the main loop can; it does nothing else. */
+void check_power_status(void);
+
+/* The buffered status: 1 while the last 3 picks of the POWER_OFF input said the supply is cut. The main loop reads it where the board can save its state. */
 int port_power_cut(void);
 
 /* Housekeeping that has a time: switches the beeper off when its time is over. */

@@ -89,6 +89,7 @@ typedef struct {
     int key_count, key_at;
     int beeps, last_beep_ms;
     int led[4];
+    int services;           /* how many times the quick jobs were given a turn */
 } Rig;
 
 static void u_update(void *ctx, const char *kg, const char *litres, const char *density, const char *keypad)
@@ -124,6 +125,11 @@ static void u_beep(void *ctx, uint16_t ms)
     r->last_beep_ms = ms;
 }
 
+static void u_service(void *ctx)
+{
+    ++((Rig *)ctx)->services;
+}
+
 static void u_led(void *ctx, uint8_t index, int on)
 {
     ((Rig *)ctx)->led[index] = on;
@@ -148,6 +154,7 @@ static void rig_new(Rig *r)
     r->uihal.scan = u_scan;
     r->uihal.beep = u_beep;
     r->uihal.led = u_led;
+    r->uihal.service = u_service;
 }
 
 static void boot(Rig *r, int mode, uint8_t address)
@@ -310,6 +317,20 @@ static void test_auto_screens(void)
         CHECK(on >= 45 && on <= 55);
         CHECK(off >= 45 && off <= 55);
     }
+}
+
+/* the quick jobs (the power picks) get a turn after each of the two blocking calls of a pass */
+static void test_service_between_blocking_calls(void)
+{
+    Rig rig;
+
+    rig_new(&rig);
+    boot(&rig, MODE_AUTO, 2);
+    rig.services = 0;
+    tick(&rig, 10);
+    CHECK_EQ(rig.services, 2);
+    tick(&rig, 10);
+    CHECK_EQ(rig.services, 4);
 }
 
 /* LED1 is the heartbeat: one second on, one second off, by the time the main loop gives the UI */
@@ -570,6 +591,7 @@ int main(void)
     test_manual_entry();
     test_total_key();
     test_heartbeat();
+    test_service_between_blocking_calls();
     test_scan_refresh_and_update();
 
     printf("ui: %d checks, %d failed\n", checks, failures);

@@ -37,6 +37,7 @@ void app_loop(void)
         }
     }
 
+    check_power_status();                       /* one pick of the POWER_OFF input if 3 ms have passed; the status is acted on here, where the board is not busy */
     if (port_power_cut()) {
         board_power_fail(&board_);
     } else {

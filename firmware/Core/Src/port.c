@@ -1,6 +1,7 @@
 #include "port.h"
 
 #include "board_config.h"
+#include "power.h"
 #include "store.h"
 #include "w25q.h"
 #include "ui_drivers.h"
@@ -146,9 +147,23 @@ static int port_hook(void *ctx)
     return HAL_GPIO_ReadPin(SWITCH_GPIO_Port, SWITCH_Pin) == HOOK_LIFTED_LEVEL;
 }
 
+static PowerStatus power_;
+
+void check_power_status(void)
+{
+    power_check(&power_, HAL_GetTick(), HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL);
+}
+
 int port_power_cut(void)
 {
-    return HAL_GPIO_ReadPin(POWER_OFF_GPIO_Port, POWER_OFF_Pin) == POWER_CUT_LEVEL;
+    return power_.cut;
+}
+
+/* called by the UI between its blocking calls: the main loop cannot come round for about 30 ms, and the picks must go on */
+static void port_service(void *ctx)
+{
+    (void)ctx;
+    check_power_status();
 }
 
 /* ---------------------------------------------------------------- the clock, the serial number */
@@ -437,6 +452,7 @@ static int port_key(void *ctx)
 void port_init(Hal *hal, UiHal *ui)
 {
     port_pump(0, 0); /* the pump is off before anything else */
+    power_init(&power_, 0);   /* the supply is on until 3 picks of the POWER_OFF input say it is cut */
 
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
     last_count_ = (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
@@ -473,4 +489,5 @@ void port_init(Hal *hal, UiHal *ui)
     ui->scan = port_key;
     ui->beep = port_beep;
     ui->led = port_led;
+    ui->service = port_service;
 }

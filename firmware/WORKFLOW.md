@@ -63,7 +63,7 @@ flowchart TD
     D -- yes --> E["port_send(): copy the answer,<br/>driver on, DMA starts"]
     D -- no --> B
     E --> B
-    B -- no --> F{"POWER_OFF input<br/>high?"}
+    B -- no --> F{"power status CUT?<br/>(check_power_status(),<br/>3 picks, 3 ms apart)"}
     F -- yes --> G["board_power_fail():<br/>pump off, one save without erase"]
     F -- no --> H["board_power_restored()"]
     G --> I{"milliseconds<br/>passed?"}
@@ -278,4 +278,4 @@ flowchart TD
 | `board_idle_work` | 0, or 30-200 ms once in 64 saves | only in IDLE or DONE, never while the supply goes |
 | `ScanKeyboardAndRefreshDisplay` | about 20 ms | blocks |
 | `RefreshDisplay` | 8 to 10 ms | blocks |
-| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; POWER_OFF is read once per pass; the pump stop of a fill is the TIM1 compare interrupt (see README) |
+| **one pass** | **about 30 ms** | an answer can be up to 20 ms late; POWER_OFF is picked every 3 ms at most, 3 picks decide (about 30 to 45 ms), and the status is acted on once per pass; the pump stop of a fill is the TIM1 compare interrupt (see README) |
