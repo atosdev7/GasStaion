@@ -1,5 +1,7 @@
 # Nozzle board firmware: logic and diagrams (protocol v0.4)
 
+> **Status, 2026-11-04.** This document was written before the firmware existed. The firmware is now in `firmware/` (see `FIRMWARE_BRIEF.md`, `firmware/README.md`, `firmware/WORKFLOW.md`); where this document and the code differ, **the code and PROTOCOL.md win**. What the code does differently from the text below: the bytes of a request arrive by interrupt into a 512-byte ring (not DMA) and the answer is sent by DMA; the state is kept in the SPI flash 25Q32 as a ring of 64-byte records with the next sector erased ahead in idle moments (not in the STM32 flash or the battery-backed SRAM); the pump is stopped by a compare interrupt of the flow meter timer at the preset count; the gun switch and POWER_OFF are filtered (ten and three picks, 10 ms apart); the dispenser has a 17-key keyboard, four displays and four LEDs through three driver functions; a manual fill cut by the power is dropped (section 9 of this document is right, item 4 of section 9 of PROTOCOL.md is the old answer, replaced by its section 10); and the commands SHOW_BALANCE (0x0E), GET_TOTAL (0x0F) and RESET_TOTAL (0x10) exist (PROTOCOL.md section 5; they are not in the table of section 4 below).
+
 For the firmware developer (STM32F407, one board per nozzle). It turns [PROTOCOL.md](PROTOCOL.md) into the logic the board runs: the main loop, the frame handler, the state machine, the fill control, the manual mode and the power-up. The reference that already behaves like this is `simulator/src/BoardSimulator.cpp` (the terminal's tests run against it).
 
 What is **fixed by the protocol** is marked as such. What is **proposed** (the protocol does not say, the firmware decides) is marked *proposed*: change it if the hardware says otherwise and tell us.
@@ -42,7 +44,7 @@ flowchart LR
     RTC <--> CMD
 ```
 
-Timing that matters (protocol, section 3): the board answers **within 20 ms** of the end of a request, and never speaks first. The master waits 100 ms. So nothing in the request path may block for long: **no flash sector erase inside a request** (an erase of a 128 KB STM32F4 sector takes hundreds of ms). *Proposed:* keep the result id, the progress and the result in a log of pre-erased flash words (or in the battery backed SRAM) and erase a full page in the background when the board is idle.
+Timing that matters (protocol, section 3): the board answers **within 50 ms** of the end of a request (20 ms in the first design; see PROTOCOL.md section 3), and never speaks first. The master waits 100 ms. So nothing in the request path may block for long: **no flash sector erase inside a request** (an erase of a 128 KB STM32F4 sector takes hundreds of ms). *Proposed:* keep the result id, the progress and the result in a log of pre-erased flash words (or in the battery backed SRAM) and erase a full page in the background when the board is idle.
 
 ## 2. Main loop
 
@@ -111,6 +113,9 @@ What every command does in every state. **Fixed by the protocol** (NAK codes in 
 | GET_RESULT | NO_RESULT | NO_RESULT | NO_RESULT | result | NO_RESULT |
 | ACK_RESULT | OK if the id was just acknowledged, else NO_RESULT | same | same | OK and to IDLE (ID_MISMATCH for another id) | same as IDLE |
 | SET_CONFIG | store | WRONG_STATE | WRONG_STATE | WRONG_STATE | WRONG_STATE |
+| SHOW_BALANCE (0x0E) | show the number (0 clears it) | WRONG_STATE | WRONG_STATE | WRONG_STATE | FAULT |
+| GET_TOTAL (0x0F) | answer | answer | answer | answer | answer |
+| RESET_TOTAL (0x10) | reset, answer the old total | reset | WRONG_STATE | reset | FAULT |
 
 Other checks: wrong `LEN` is BAD_LENGTH; a value out of range BAD_VALUE; START with `density` or `pulses_per_litre` 0 is NOT_CONFIGURED (checked before the state); an unknown command BAD_COMMAND. **Manual mode:** SELECT, SET_PRESET, START are WRONG_STATE; GET_RESULT and ACK_RESULT are NO_RESULT (there is no result).
 
