@@ -3439,7 +3439,7 @@ void Smart210Test::theKoreanInputTypesKoreanInTheFocusedFieldAndTheFooterSaysWhi
     QVERIFY(!footer->isHidden());
     QCOMPARE(footer->text(), QString("A"));
     window.findChild<KoreanInput *>()->setKoreanMode(true);
-    QCOMPARE(footer->text(), QString::fromUtf8("한"));
+    QCOMPARE(footer->text(), QString::fromUtf8("가"));
 
     AppConfig off;
     off.setBoardLink(false);

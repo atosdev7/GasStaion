@@ -145,7 +145,7 @@ void ShellFooter::setScanner(bool supported, bool connected)
 void ShellFooter::setInputMode(bool enabled, bool korean)
 {
     ui_->footerInput->setVisible(enabled);
-    ui_->footerInput->setText(korean ? QString::fromUtf8("한") : QString("A"));
+    ui_->footerInput->setText(korean ? QString::fromUtf8("가") : QString("A"));
 }
 
 void ShellFooter::setWaiting(int records)
