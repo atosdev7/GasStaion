@@ -672,6 +672,10 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
             nak(b, seq, cmd, ERR_WRONG_STATE);
         } else {
             b->preset_g = get32(data);
+            if (b->preset_g > 0) {
+                b->held_g = 0;                  /* the last fill goes from the displays: they show this preset */
+                b->held_ml = 0;
+            }
             b->shown_g = 0;                     /* the display shows the preset now, not a balance */
             b->shown_left_ms = 0;
             b->state = b->preset_g == 0 ? STATE_IDLE : STATE_SET;   /* a preset of zero is the cancel */
@@ -728,6 +732,8 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
             b->p.last_acked_id = id;
             b->p.result.held = 0;
             save(b);
+            b->held_g = b->p.result.dispensed_g;   /* the result is gone, the displays keep its amount until the next preset */
+            b->held_ml = b->p.result.dispensed_ml;
             b->preset_g = 0;
             b->state = b->fault != 0 ? STATE_FAULT : STATE_IDLE;
             answer(b, seq, cmd, data, 4);
@@ -758,6 +764,8 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
                 b->p.config = old;
                 nak(b, seq, cmd, ERR_FAULT);
             } else {
+                b->held_g = 0;                  /* another calibration or mode: the last fill is not shown any more */
+                b->held_ml = 0;
                 config_to_bytes(&b->p.config, d);
                 answer(b, seq, cmd, d, CONFIG_SIZE);
             }

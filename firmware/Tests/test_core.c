@@ -1063,6 +1063,28 @@ static void test_manual_hold(void)
     CHECK_EQ(board_held_grams(&r.board), 0);
     CHECK_EQ(board_held_ml(&r.board), 0);
 }
+/* auto mode: the amount of a fill is kept for the displays when its result is acknowledged, until the next preset is set */
+static void test_auto_hold(void)
+{
+    Rig r;
+    uint32_t id;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    id = start_auto(&r, 5000);
+    run(&r, 800, 10);
+    CHECK_EQ(r.board.state, STATE_DONE);
+    CHECK_EQ(board_held_grams(&r.board), 0);                          /* the result itself is shown while it waits */
+    CHECK_EQ(ask_u32(&r, CMD_ACK_RESULT, id), CMD_ACK_RESULT | 0x80);
+    CHECK_EQ(r.board.state, STATE_IDLE);
+    CHECK_EQ(board_held_grams(&r.board), 5000);
+    CHECK_EQ(board_held_ml(&r.board), board_ml_of_grams(&r.board.p.config, 5000));
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 0), CMD_SET_PRESET | 0x80);  /* a cancel is not a preset: it stays */
+    CHECK_EQ(board_held_grams(&r.board), 5000);
+    CHECK_EQ(ask_u32(&r, CMD_SET_PRESET, 3000), CMD_SET_PRESET | 0x80);
+    CHECK_EQ(board_held_grams(&r.board), 0);                          /* the next preset: gone */
+    CHECK_EQ(r.board.state, STATE_SET);
+}
 static void test_power_cut(void)
 {
     Rig r;
@@ -1729,6 +1751,7 @@ int main(void)
     test_poll_status();
     test_manual_mode();
     test_manual_hold();
+    test_auto_hold();
     test_total();
     test_power_cut();
     test_power_fail_signal();

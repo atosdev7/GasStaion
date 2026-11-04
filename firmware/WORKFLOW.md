@@ -291,7 +291,7 @@ flowchart TD
 ```
 
 - No key does anything while a fill runs. There is no cancel: the supplier stops by hanging the gun.
-- **The last fill stays on the kg and litres displays until the next preset is set** (the Set key takes an amount): typing digits in between only changes the keyboard's LCD, and the Clear key that drops a preset leaves the displays at zero. It is kept in RAM only (a restart clears it).
+- **The last fill stays on the kg and litres displays until the next preset is set** (the Set key takes an amount; an auto board does the same after its result is acknowledged, until the next SET_PRESET above zero): typing digits in between only changes the keyboard's LCD, and the Clear key that drops a preset leaves the displays at zero. It is kept in RAM only (a restart clears it).
 - A power cut in the middle of a manual fill drops the fill (nothing is reported), but what it dispensed up to the last save is added to the total.
 - The Function, Next and Prev keys do nothing in manual mode.
 ## 11. Where the time goes in one pass of the main loop

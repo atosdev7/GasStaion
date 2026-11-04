@@ -307,6 +307,16 @@ static void test_auto_screens(void)
     /* a fault */
     request(&rig, 5, CMD_ACK_RESULT, 1, 1);
     CHECK_EQ(rig.board.state, STATE_IDLE);
+    tick(&rig, 10);
+    CHECK_DISPLAY(KG, "  15.00");        /* the result is acknowledged and gone, the displays keep the end of the fill until the next preset */
+    CHECK_DISPLAY(LITRES, "  18.07");
+    request(&rig, 6, CMD_SET_PRESET, 3000, 1);
+    tick(&rig, 10);
+    CHECK_DISPLAY(KG, "   3.00");        /* the next preset replaces it */
+    CHECK_DISPLAY(LITRES, "   3.61");
+    request(&rig, 7, CMD_SET_PRESET, 0, 1);
+    tick(&rig, 10);
+    CHECK_DISPLAY(KG, "   0.00");        /* cancelled: nothing is held */
     board_set_fault(&rig.board, FAULT_FLOW_SENSOR);
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "   Err");
