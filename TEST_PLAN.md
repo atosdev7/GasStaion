@@ -20,7 +20,7 @@ It is a manual test (people at the screens) that uses the same data and rules as
 
 | Part | How |
 |---|---|
-| Web app | `http://localhost:8123` (the `gasstation-web` launch configuration) or Apache on port 80 of XAMPP; database `gasstation` on MariaDB (XAMPP, PHP 7.4.33). Sign in as `admin` (password in `README.md`). |
+| Web app | **`http://dev.rrdgasstaion.com/`** (this PC: Apache on port 80 of XAMPP answers that name; database `gasstation` on MariaDB, PHP 7.4.33). Sign in as `admin` (password in `README.md`). Everything is entered through its pages, like a person, never in the database. |
 | Terminal (cashier) | The Smart210 program: on the board, or the PC build (`smart210/build/.../debug/smart210.exe`, `config.ini` next to it, `boards=true` to listen for the boards). Data in `data/smart210.db`; its settings in `device.ini`. Roles allowed to sign in: cashier only. |
 | Boards | `simulator/` plays the RS-485 converter and six boards (addresses 1 to 6) by the same protocol; the terminal listens on the converter port (Machine Config, default 4001). Use it to lift and hang the gun, press the keys, set the flow, cut the power. With a real board and dispenser the same steps are the bench test (work plan 6.6). |
 | Printer | The network printer of the terminal (Machine Config), or "Check printer" with a test host; look at the tickets on paper at least once (title, footer, barcode). |
@@ -53,6 +53,8 @@ A business day of this station is **100 to 120 spot sales, 1 to 3 card sales (to
 
 ## 1. Initialize the data of the web app
 
+The order is: the **configuration first** (1.2: fuel types, tanks, POS; and the staff of 1.1 and the customers), then the **old tickets** (1.3), the opening balances and go-live (1.4), the stock (1.5) and the terminal (1.6). Steps 1.1 and 1.2 can be done by hand or with `php e2e\initweb.php --staff --customers`, which signs in as `admin` and fills in the same Users, Fuel Types, Tanks, POS Devices and Customers pages one after the other (it skips what is already there; the nozzles are not entered on the web, the terminal adds them).
+
 Do this in order; the later steps use the earlier ones. All values are test values: change the names if you like, keep the numbers (the totals in part 2 depend on them).
 
 ### 1.1 Staff
@@ -66,6 +68,8 @@ Do this in order; the later steps use the earlier ones. All values are test valu
 
 ### 1.2 Fuel, tanks, nozzles, devices
 
+(`php e2e\initweb.php` enters 1.2.1, 1.2.2 and 1.2.4; run on 2026-11-04 it made fuel types A and D, tanks T1 and T2 and the device POS1 at 127.0.0.1 with PIN 4821, purge days 30.)
+
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
 | 1.2.1 | accountant | **Fuel Types**: `A` Gasoline, price 820, density 0.7400; `D` Diesel, price 750, density 0.8300 | Two fuel types; the prices are the default prices of a sale | |
@@ -76,13 +80,13 @@ Do this in order; the later steps use the earlier ones. All values are test valu
 
 ### 1.3 The old tickets (before go-live): the history of the blank tickets received and published
 
-The station has been selling press tickets for a year, so the web app starts with the **history of the blank tickets received (ticket inbounds)** and of the **tickets published** from them, all dated before go-live: 50,000 blank tickets received in 40 deliveries over the 12 months before 2026-10-31, 47,700 of them published (the rest is blank stock). Do this **before** the go-live date is set (1.4.1), and with the web app running (the `gasstation-web` launch configuration, port 8123).
+The station has been selling press tickets for a year, so the web app starts with the **history of the blank tickets received (ticket inbounds)** and of the **tickets published** from them, all dated before go-live: 50,000 blank tickets received in 40 deliveries over the year 2025-11-04 to 2026-11-03 (every month has deliveries), published in 93 publishes a day to three weeks after their delivery (one to three publishes for each delivery), 47,700 tickets in all (the rest is blank stock). Do it **after the configuration** (1.2) and before the opening balances (1.4); it also sets the **go-live date to today**.
 
 ```
-php e2e\oldtickets.php --end=2026-10-31          (add --dry-run to see the 40 batches first)
+php e2e\oldtickets.php                       (--dry-run shows the 133 steps first; --end=YYYY-MM-DD and --golive=YYYY-MM-DD change the dates; --golive=none leaves go-live alone)
 ```
 
-It signs in as `admin` and uses the Ticket Inbound and Ticket Publish pages, so the rules and the audit log are the real ones. It stops without doing anything if the database already has ticket inbounds or tickets. The numbers are fixed, so every fresh install gets the same history.
+It signs in as `admin` at `http://dev.rrdgasstaion.com/` and fills in the Ticket Inbound, Ticket Publish and Go-live pages one after the other, in the order of the dates, so the rules and the audit log are the real ones. It stops without doing anything if the database already has ticket inbounds or tickets. The numbers are fixed, so every fresh install gets the same history.
 
 | Kind (fuel : size) | Received | Published | Blank stock left |
 |---|---|---|---|
@@ -98,17 +102,17 @@ It signs in as `admin` and uses the Ticket Inbound and Ticket Publish pages, so 
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 1.3.1 | admin | Run the script (above) | "88 checks, 0 failed"; 40 inbounds, 47,700 ticket rows | |
-| 1.3.2 | assistant | **Ticket Management > Blank ticket inbound**: look at the history, filter by a month | 40 records between 2025-11-24 and 2026-10-04, each with a printing cost per ticket and a note (printer, order number); no record is dated after 2026-10-31 | |
-| 1.3.3 | assistant | **Ticket Publish**: look at the history | 40 batches (the newest of each kind only partly published), each two days after its inbound; the serials of a kind follow one another without a gap | |
+| 1.3.1 | admin | Run the script (above) | "147 checks, 0 failed"; 40 inbounds, 93 publishes, 47,700 ticket rows; the go-live date is today | |
+| 1.3.2 | assistant | **Ticket Management > Blank ticket inbound**: look at the history, filter by a month | 40 records between 2025-11-11 and 2026-10-23, in every one of the 12 months, each with a printing cost per ticket and a note (printer, order number); no record is dated after 2026-11-03 | |
+| 1.3.3 | assistant | **Ticket Publish**: look at the history | 93 batches over 13 calendar months, one to three for each delivery (the newest delivery of each kind is only 75% published); the serials of a kind follow one another without a gap, in the order of the dates | |
 | 1.3.4 | assistant | **Summary Tickets** (Ticket Management) | The table above: received, published, blank stock for the 8 kinds; every published ticket is "in stock" (nothing sold or used) | |
 | 1.3.5 | assistant | **Ticket Lookup**: a ticket of the first batch (diesel 10 kg, serial 1) and one of the last (gasoline 10 kg, serial 13470) | Both found, status in stock, with the publish batch and date | |
-| 1.3.6 | accountant | **Daily Confirmation > Ticket stock**: look at an old date, e.g. 2026-01-07 | The old inbound and publish are listed as not confirmed (the history is not confirmed: decide whether the accountant confirms the old dates now or leaves them; write it down) | |
+| 1.3.6 | accountant | **Daily Confirmation > Ticket stock**: look at an old date, e.g. 2026-02-08 | The old inbound and publish are listed as not confirmed (the history is not confirmed: decide whether the accountant confirms the old dates now or leaves them; write it down) | |
 ### 1.4 Opening balances and go-live (the day the system starts)
 
 | # | Who | Action | Expected | Result |
 |---|---|---|---|---|
-| 1.4.1 | admin | **Go-live**: set the go-live date to the first business day of the test | Saved; the page says that 40 publishes are dated before go-live and that 47,700 of their tickets have a record (in the stock) | |
+| 1.4.1 | admin | **Go-live**: look at the date (the script set it to today, 2026-11-04) or set it to the first business day of the test | Saved; the page says that 93 publishes are dated before go-live and that 47,700 of their tickets have a record (in the stock) | |
 | 1.4.2 | admin | Opening tank stock: T1 gasoline 20,000.00 kg at cost 600; T2 diesel 30,000.00 kg at cost 550, dated the day before go-live | **Tank Stock Summary** shows T1 20,000.00 and T2 30,000.00; the cost layers show one layer each | |
 | 1.4.3 | admin | Opening debts: `Acme Transport` 60,000.00 (dated 10 days before go-live), `North Farm` 12,000.00 (3 days before) | **Debts > Summary** shows 72,000.00; **Aging** puts them in the right columns | |
 | 1.4.4 | admin | Opening ticket loans: `Blue Taxi` 40.00 kg diesel (one loan, not settled) | Appears under **Ticket Loans** | |
