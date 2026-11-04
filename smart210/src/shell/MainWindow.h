@@ -83,6 +83,7 @@ signals:
     void restartRequested();
 
 private slots:
+    void noReceiptListingChanged(bool show);   // F8 on the Review screen: logged like the box on Machine Config
     void machineWasReset();
     void updateClock();
     void startFirstDownload();

@@ -204,8 +204,8 @@
     </message>
     <message>
         <location filename="../src/shell/ShellFooter.ui" line="35"/>
-        <source>Korean key or Ctrl+Space: Korean / English</source>
-        <translation>Korean key or Ctrl+Space: Korean / English</translation>
+        <source>Right Alt or Ctrl+Space: Korean / English</source>
+        <translation>Right Alt or Ctrl+Space: Korean / English</translation>
     </message>
 </context>
 <context>

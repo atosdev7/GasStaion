@@ -46,9 +46,11 @@ public:
 signals:
     void uploaded(); // an upload finished: what waits has changed
     void edited();   // a comment or a date was changed: records wait for the upload again
+    void showNoReceiptChanged(bool show); // F8 turned the listing of the sales without a receipt on or off (the setting of Machine Config): the program logs it
     void printRemainderRequested(const QString &barcode); // the remainder ticket of a supply is to be printed again (the program prints it and marks it printed)
 
 private slots:
+    void toggleNoReceipt();   // F8, a hidden shortcut: the same setting as the box on Machine Config
     void dateChanged();
     void tabChanged();
     void selectionChanged();

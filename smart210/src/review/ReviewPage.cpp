@@ -16,7 +16,9 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QKeySequence>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSet>
 #include <QTabWidget>
 #include <QTimer>
@@ -100,12 +102,31 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, Pr
     connect(uploadButton_, SIGNAL(clicked()), this, SLOT(upload()));
     connect(uploader_, SIGNAL(uploadFinished(bool,QString)), this, SLOT(uploadFinished(bool,QString)));
 
+    // F8 turns the listing of the sales without a receipt on and off, as the box on Machine Config does. A hidden shortcut: nothing on the screen names it. It
+    // works while this page is shown (the setting is only used here).
+    QShortcut *toggle = new QShortcut(QKeySequence(Qt::Key_F8), this);
+    connect(toggle, SIGNAL(activated()), this, SLOT(toggleNoReceipt()));
+
     selectionChanged();
 }
 
 ReviewPage::~ReviewPage()
 {
     delete ui_;
+}
+
+void ReviewPage::toggleNoReceipt()
+{
+    Settings settings(db_);
+    const bool show = !settings.boolValue(SettingKey::ShowSalesWithoutReceipt, true);
+
+    if (!settings.setBool(SettingKey::ShowSalesWithoutReceipt, show)) {
+        showStatus(tr("The setting could not be saved."), false);
+
+        return;
+    }
+    reload();   // the list and the line that says how many are left out follow the setting
+    emit showNoReceiptChanged(show);
 }
 
 void ReviewPage::prepareTable(QTableWidget *table, const QStringList &headers)

@@ -3403,6 +3403,31 @@ void Smart210Test::theKoreanInputTypesKoreanInTheFocusedFieldAndTheFooterSaysWhi
     QVERIFY(!input.koreanMode());
     QCOMPARE(modes.size(), 2);
 
+    // the Right Alt key switches too (one press, not held), the Left Alt key does not; Qt reports a Right Alt as Key_AltGr, or as Key_Alt with the native codes of the platform
+    {
+        QKeyEvent leftAlt(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier, 0x38, 0xA4, 0, QString(), false, 1);
+        QApplication::sendEvent(&edit, &leftAlt);
+        QVERIFY(!input.koreanMode());
+        QKeyEvent rightAlt(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier, 0x138, 0xA5, 0, QString(), false, 1);       // Windows: VK_RMENU
+        QApplication::sendEvent(&edit, &rightAlt);
+        QVERIFY(input.koreanMode());
+        QKeyEvent held(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier, 0x138, 0xA5, 0, QString(), true, 1);            // held down: repeated, no switch
+        QApplication::sendEvent(&edit, &held);
+        QKeyEvent released(QEvent::KeyRelease, Qt::Key_Alt, Qt::NoModifier, 0x138, 0xA5, 0, QString(), false, 1);
+        QApplication::sendEvent(&edit, &released);
+        QVERIFY(input.koreanMode());
+        QKeyEvent x11(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier, 108, 0xFFEA, 0, QString(), false, 1);           // X11: Alt_R
+        QApplication::sendEvent(&edit, &x11);
+        QVERIFY(!input.koreanMode());
+        QKeyEvent evdev(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier, 100, 0, 0, QString(), false, 1);              // evdev: KEY_RIGHTALT
+        QApplication::sendEvent(&edit, &evdev);
+        QVERIFY(input.koreanMode());
+        QKeyEvent altGr(QEvent::KeyPress, Qt::Key_AltGr, Qt::NoModifier, 0, 0, 0, QString(), false, 1);               // a layout with AltGr
+        QApplication::sendEvent(&edit, &altGr);
+        QVERIFY(!input.koreanMode());
+        QCOMPARE(modes.size(), 6);
+    }
+
     // the footer of the window shows the mode
     setUpLoggedInTerminalWithAPin();
     AppConfig config;
@@ -3693,6 +3718,28 @@ void Smart210Test::theSalesWithoutAReceiptCanBeLeftOutOfTheReviewScreen()
     window.showPage("review");
     window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 9));
     QCOMPARE(table->rowCount(), 3);
+
+    // F8 on the Review screen turns the listing off and on, like the box (a hidden shortcut), and each change is logged
+    window.show();
+    QApplication::setActiveWindow(&window);
+    QVERIFY(QTest::qWaitForWindowActive(&window));
+    QTest::keyClick(table, Qt::Key_F8);
+    QCOMPARE(Settings(db).value(SettingKey::ShowSalesWithoutReceipt), QString("0"));
+    QCOMPARE(table->rowCount(), 1);
+    QVERIFY(totals->text().contains("2 sales without a receipt are not listed"));
+    QCOMPARE(changes().recentChanges(1).at(0).what, QString("show sales without receipt"));
+    QCOMPARE(changes().recentChanges(1).at(0).oldValue, QString("yes"));
+    QCOMPARE(changes().recentChanges(1).at(0).newValue, QString("no"));
+    QTest::keyClick(table, Qt::Key_F8);
+    QCOMPARE(Settings(db).value(SettingKey::ShowSalesWithoutReceipt), QString("1"));
+    QCOMPARE(table->rowCount(), 3);
+    QVERIFY(!totals->text().contains("not listed"));
+    QCOMPARE(changes().recentChanges(1).at(0).newValue, QString("yes"));
+
+    // on another screen F8 does nothing
+    window.showPage("settings");
+    QTest::keyClick(&window, Qt::Key_F8);
+    QCOMPARE(Settings(db).value(SettingKey::ShowSalesWithoutReceipt), QString("1"));
 }
 void Smart210Test::theUploadModeIsPickedAndSavedOnMachineConfig()
 {

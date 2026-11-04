@@ -138,7 +138,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     supplyPart_->addPage(manualPage_, tr("Manual input"));
 
     shell_ = new AppShell;
-    // the Korean input method: off until the Korean key or Ctrl+Space; the footer shows the mode
+    // the Korean input method: off until the Right Alt key or Ctrl+Space; the footer shows the mode
     koreanInput_ = config.koreanInput() ? new KoreanInput(this) : 0;
     shell_->footer()->setInputMode(koreanInput_ != 0, false);
     if (koreanInput_) {
@@ -193,6 +193,7 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     connect(reviewPage_, SIGNAL(uploaded()), this, SLOT(refreshUploadButton()));
     connect(reviewPage_, SIGNAL(printRemainderRequested(QString)), this, SLOT(printRemainder(QString)));
     connect(reviewPage_, SIGNAL(edited()), this, SLOT(refreshUploadButton()));
+    connect(reviewPage_, SIGNAL(showNoReceiptChanged(bool)), this, SLOT(noReceiptListingChanged(bool)));
     connect(boardBus_, SIGNAL(connectionChanged(bool)), this, SLOT(refreshStatus()));
     connect(boardBus_, SIGNAL(boardOnlineChanged(int,bool)), this, SLOT(refreshStatus()));
     connect(supplierScanner_, SIGNAL(connectedChanged(bool)), this, SLOT(refreshStatus()));
@@ -692,6 +693,11 @@ void MainWindow::showMachineConfig()
 }
 
 // Back from the PIN or from Machine Config: to Settings, or to the login when Machine Config was opened from there.
+void MainWindow::noReceiptListingChanged(bool show)
+{
+    machineConfig_->logChange("show sales without receipt", show ? "no" : "yes", show ? "yes" : "no", session_->userId());
+}
+
 void MainWindow::machineWasReset()
 {
     restartWanted_ = true;

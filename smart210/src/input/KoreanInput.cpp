@@ -49,8 +49,24 @@ void KoreanInput::focusChanged()
 
 bool KoreanInput::isModifierKey(int key)
 {
-    return (key >= Qt::Key_Shift && key <= Qt::Key_ScrollLock) || key == Qt::Key_AltGr || key == Qt::Key_Super_L || key == Qt::Key_Super_R
-        || key == Qt::Key_Hangul;
+    return (key >= Qt::Key_Shift && key <= Qt::Key_ScrollLock) || key == Qt::Key_AltGr || key == Qt::Key_Super_L || key == Qt::Key_Super_R;
+}
+
+// The Right Alt key (not the left one). Qt reports it as Key_AltGr on a layout that has AltGr, and as Key_Alt on the others; the left and the right Alt are told apart
+// by the native codes of the platform: Windows (virtual key VK_RMENU 0xA5, scan code 0x38 with the extended flag 0x100 or 0xE000), X11 (keysym Alt_R 0xFFEA or
+// ISO_Level3_Shift 0xFE03, key code 108) and the evdev keyboard of the board (key code 100, KEY_RIGHTALT).
+bool KoreanInput::isRightAlt(const QKeyEvent *key)
+{
+    if (key->key() == Qt::Key_AltGr) {
+        return true;
+    }
+    if (key->key() != Qt::Key_Alt) {
+        return false;
+    }
+    const quint32 virtualKey = key->nativeVirtualKey();
+    const quint32 scanCode = key->nativeScanCode();
+
+    return virtualKey == 0xA5 || virtualKey == 0xFFEA || virtualKey == 0xFE03 || scanCode == 0x138 || scanCode == 0xE038 || scanCode == 108 || scanCode == 100;
 }
 
 // The focused object takes text, and does not hide it (a PIN or a password is never typed in Korean).
@@ -77,8 +93,8 @@ bool KoreanInput::eventFilter(QObject *object, QEvent *event)
     const int code = key->key();
     const Qt::KeyboardModifiers modifiers = key->modifiers();
 
-    // the Korean key or Ctrl+Space switches between Korean and English
-    if (code == Qt::Key_Hangul || (code == Qt::Key_Space && (modifiers & Qt::ControlModifier))) {
+    // the Right Alt key or Ctrl+Space switches between Korean and English
+    if (isRightAlt(key) || (code == Qt::Key_Space && (modifiers & Qt::ControlModifier))) {
         if (press && !key->isAutoRepeat()) {
             setKoreanMode(!korean_);
         }
