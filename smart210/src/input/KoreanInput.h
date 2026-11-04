@@ -9,9 +9,9 @@
 
 struct KoreanKeyDef;
 
-// Turns the key presses of a keyboard (USB or PS/2) into Hangul text for the widget that has the focus: an event filter on the application,
+// Turns the key presses of a keyboard (USB or PS/2) into Korean text for the widget that has the focus: an event filter on the application,
 // no screen of its own. The mode starts as English (keys pass through untouched: barcodes, numbers, Latin text keeps working);
-// the Hangul key or Ctrl+Space switches Hangul on and off, and the footer shows which is on (MainWindow connects hangulModeChanged). In Hangul
+// the Korean key or Ctrl+Space switches Korean on and off, and the footer shows which is on (MainWindow connects koreanModeChanged). In Korean
 // mode the letter keys give jamo (KoreanKeyMap.h, Dubeolsik) that KoreanComposer builds into syllables; the syllable being composed is shown
 // as the preedit of the field, Space, Enter, digits and the arrows commit it, Backspace takes the last jamo off it. Fields that hide what is
 // typed (PIN, password) and widgets that take no text are never touched.
@@ -22,13 +22,13 @@ class KoreanInput : public QObject
 public:
     explicit KoreanInput(QObject *parent = 0);
 
-    bool hangulMode() const { return hangul_; }
+    bool koreanMode() const { return korean_; }
 
 public slots:
-    void setHangulMode(bool on);
+    void setKoreanMode(bool on);
 
 signals:
-    void hangulModeChanged(bool on);
+    void koreanModeChanged(bool on);
 
 protected:
     bool eventFilter(QObject *object, QEvent *event);
@@ -43,7 +43,7 @@ private:
     void send(const QString &commit);
 
     KoreanComposer composer_;
-    bool hangul_;
+    bool korean_;
     bool sending_;                       // our own events: not filtered again
     QList<const KoreanKeyDef *> keys_;
     QMap<int, int> keyIndex_;            // Qt::Key_A... -> index into keys_

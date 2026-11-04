@@ -8,7 +8,7 @@ Scope: `smart210/src` (about 15,700 lines). This is a first pass: it reads the c
 
 ## Not read in this pass (still to do)
 
-`MachineConfig` and its page, `NozzleConfigSync`, `BoardProtocol`, `TicketSalePage`, `SpotSalePage`, `ManualSupplyPage`, `SupplyPage`, `ReviewPage` and `ReviewData` (except the date check), `CardPage` and `Cards::topUp` / `issueTicket` (both reviewed during the merge review earlier today), `MainWindow`, `AppShell`, `SyncClient`, `Settings`, `Migrator`, `AppReset`, the `input/` readers (scanner, Hangul, card reader).
+`MachineConfig` and its page, `NozzleConfigSync`, `BoardProtocol`, `TicketSalePage`, `SpotSalePage`, `ManualSupplyPage`, `SupplyPage`, `ReviewPage` and `ReviewData` (except the date check), `CardPage` and `Cards::topUp` / `issueTicket` (both reviewed during the merge review earlier today), `MainWindow`, `AppShell`, `SyncClient`, `Settings`, `Migrator`, `AppReset`, the `input/` readers (scanner, Korean, card reader).
 
 ## Findings
 
@@ -32,7 +32,7 @@ Scope: `smart210/src` (about 15,700 lines). This is a first pass: it reads the c
 
 ## Second pass (2026-11-02)
 
-Read in this pass: `SyncClient`, `SyncStore` (config and ticket rows), `Migrator`, `MainWindow` (start, download, upload and purge timing), `ReviewData` (the edit helpers), `Cards` (top-up, ticket, cancel), the card fill in `CardPage`, `MachineConfig` (the blockers and the board config store), `SupplySession` (start, results, failures), `ScanDecoder`. Still not read line by line: the page code of the sale, supply and review screens, `NozzleConfigSync`, `BoardProtocol`, the card reader and the Hangul input.
+Read in this pass: `SyncClient`, `SyncStore` (config and ticket rows), `Migrator`, `MainWindow` (start, download, upload and purge timing), `ReviewData` (the edit helpers), `Cards` (top-up, ticket, cancel), the card fill in `CardPage`, `MachineConfig` (the blockers and the board config store), `SupplySession` (start, results, failures), `ScanDecoder`. Still not read line by line: the page code of the sale, supply and review screens, `NozzleConfigSync`, `BoardProtocol`, the card reader and the Korean input.
 
 | # | Severity | Finding | Where |
 |---|---|---|---|
@@ -56,4 +56,4 @@ No new finding that needs a change. What I checked:
 - A card id read from the reader is cleaned (spaces and unprintable characters removed, upper case) in one place before it is looked up or stored; a line of another kind than the card line is ignored.
 - The scanner is read in its own thread and its barcode reaches the session through a queued signal; stopping it waits for the thread.
 
-Not read: the layout and theme code (`AppShell`, the `.ui` files, `Theme`), `SupplyPage`, `DispensersPage`, `SettingsPage`, `MachineConfigPage` (the page code around the logic above), `HangulInput`. They hold no business rule that the pages read above do not already call. The terminal audit is complete at this level; the next useful check is on the real hardware (task 6.6): the START repeat, a power cut in the middle of a fill, the converter dropping, and a board that is replaced.
+Not read: the layout and theme code (`AppShell`, the `.ui` files, `Theme`), `SupplyPage`, `DispensersPage`, `SettingsPage`, `MachineConfigPage` (the page code around the logic above), `KoreanInput`. They hold no business rule that the pages read above do not already call. The terminal audit is complete at this level; the next useful check is on the real hardware (task 6.6): the START repeat, a power cut in the middle of a fill, the converter dropping, and a board that is replaced.

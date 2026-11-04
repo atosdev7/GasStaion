@@ -32,7 +32,7 @@
    <item>
     <widget class="QLabel" name="footerInput">
      <property name="visible"><bool>false</bool></property>
-     <property name="toolTip"><string>Hangul key or Ctrl+Space: Hangul / English</string></property>
+     <property name="toolTip"><string>Korean key or Ctrl+Space: Korean / English</string></property>
     </widget>
    </item>
    <item>

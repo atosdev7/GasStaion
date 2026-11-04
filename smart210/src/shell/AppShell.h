@@ -75,7 +75,7 @@ public:
     void setBoards(bool linked, int online, int total, bool enabled);
     void setScanner(bool supported, bool connected);
     void setWaiting(int records);
-    void setInputMode(bool enabled, bool hangul); // the Hangul input method: shows "A" or the Hangul syllable (see KoreanInput); hidden when it is off
+    void setInputMode(bool enabled, bool korean); // the Korean input method: shows "A" or the Korean syllable (see KoreanInput); hidden when it is off
     void setClockWarning(const QString &text); // empty: no warning
 
 private:

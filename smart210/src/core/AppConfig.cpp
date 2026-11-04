@@ -30,7 +30,7 @@ AppConfig::AppConfig()
     downloadMinutes_ = 1; // the terminal downloads every minute (fixed)
     setSystemClock_ = settings.value("setSystemClock", Clock::mayDefaultToSettingTheClock()).toBool();
     boardLink_ = settings.value("boards", true).toBool();
-    hangulInput_ = settings.value("hangul", true).toBool();
+    koreanInput_ = settings.value("korean", true).toBool();
     supplierScannerName_ = settings.value("supplierScannerName", "SCANNER SCANNER").toString().trimmed();
     supplierScannerPhys_ = settings.value("supplierScannerPhys").toString().trimmed();
 

@@ -300,7 +300,7 @@ private slots:
     void theFooterCountsWhatWaitsAndTheReviewScreenListsIt();
     void thereIsNoHomePageAndTheDownloadRunsEveryMinute();
     void theKoreanComposerBuildsSyllables();
-    void theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode();
+    void theKoreanInputTypesKoreanInTheFocusedFieldAndTheFooterSaysWhichMode();
     void aNewRecordHasItsDateAtOnce();
     void theUploadModesSayUpToWhenRecordsGoByThemselves();
     void anUploadBeforeAMomentSendsOnlyTheOlderRecordsAndSkipsRefusedOnes();
@@ -3352,10 +3352,10 @@ void Smart210Test::theKoreanComposerBuildsSyllables()
     QCOMPARE(composer.input(QChar('1')), QString::fromUtf8("ㄱ") + "1");                                // a character that is no jamo commits and goes on
 }
 
-void Smart210Test::theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhichMode()
+void Smart210Test::theKoreanInputTypesKoreanInTheFocusedFieldAndTheFooterSaysWhichMode()
 {
     KoreanInput input;
-    QVERIFY(!input.hangulMode());                                                                        // English at first
+    QVERIFY(!input.koreanMode());                                                                        // English at first
 
     QWidget host;
     QVBoxLayout *layout = new QVBoxLayout(&host);
@@ -3370,13 +3370,13 @@ void Smart210Test::theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhi
     edit.setFocus();
     QTRY_VERIFY(edit.hasFocus());
 
-    QSignalSpy modes(&input, SIGNAL(hangulModeChanged(bool)));
+    QSignalSpy modes(&input, SIGNAL(koreanModeChanged(bool)));
     QTest::keyClicks(&edit, "abc");
     QCOMPARE(edit.text(), QString("abc"));                                                               // English: the keys pass through
     edit.clear();
 
-    QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);                                          // Ctrl+Space: Hangul on
-    QVERIFY(input.hangulMode());
+    QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);                                          // Ctrl+Space: Korean on
+    QVERIFY(input.koreanMode());
     QCOMPARE(modes.size(), 1);
     QTest::keyClicks(&edit, "dkssud");
     QTest::keyClick(&edit, Qt::Key_Space);                                                               // Space commits the syllable and is typed
@@ -3400,7 +3400,7 @@ void Smart210Test::theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhi
     edit.setFocus();
     QTRY_VERIFY(edit.hasFocus());
     QTest::keyClick(&edit, Qt::Key_Space, Qt::ControlModifier);                                          // back to English
-    QVERIFY(!input.hangulMode());
+    QVERIFY(!input.koreanMode());
     QCOMPARE(modes.size(), 2);
 
     // the footer of the window shows the mode
@@ -3413,15 +3413,15 @@ void Smart210Test::theKoreanInputTypesHangulInTheFocusedFieldAndTheFooterSaysWhi
     QVERIFY(footer != 0);
     QVERIFY(!footer->isHidden());
     QCOMPARE(footer->text(), QString("A"));
-    window.findChild<KoreanInput *>()->setHangulMode(true);
+    window.findChild<KoreanInput *>()->setKoreanMode(true);
     QCOMPARE(footer->text(), QString::fromUtf8("한"));
 
     AppConfig off;
     off.setBoardLink(false);
     off.setChangeLogFile(changeLog());
-    off.setHangulInput(false);
+    off.setKoreanInput(false);
     MainWindow plain(off, QString(), "db", QSqlDatabase::database(connection_));
-    QVERIFY(plain.findChild<KoreanInput *>() == 0);                                                      // hangul=false: no input method at all
+    QVERIFY(plain.findChild<KoreanInput *>() == 0);                                                      // korean=false: no input method at all
     QVERIFY(plain.findChild<QLabel *>("footerInput")->isHidden());
 }
 

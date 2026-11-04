@@ -90,7 +90,7 @@ private slots:
     void autoUpload();
     void reportNothingWaiting();
     void sendNozzles();
-    void hangulModeChanged(bool on);
+    void koreanModeChanged(bool on);
     void downloadFinished(bool ok, const QString &message);
     void showStartOrLogin();
     void sidebarClicked(const QString &key);
@@ -139,7 +139,7 @@ private:
     PrintService *printer_;
     SetupFlow *setup_;
     SyncClient *sync_;
-    KoreanInput *hangulInput_; // the Hangul input method; null when config.ini says hangul=false
+    KoreanInput *koreanInput_; // the Korean input method; null when config.ini says korean=false
     Uploader *uploader_;
     QStackedWidget *pages_;
     SetupPage *setupPage_;

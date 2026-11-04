@@ -1,7 +1,7 @@
 #ifndef KOREANKEYMAP_H
 #define KOREANKEYMAP_H
 
-// The layout of the Hangul input: which letter key gives which jamo (Dubeolsik). Edit this table to change the layout; the composer
+// The layout of the Korean input: which letter key gives which jamo (Dubeolsik). Edit this table to change the layout; the composer
 // (KoreanComposer) only sees jamo. Include it only from KoreanInput.cpp.
 struct KoreanKeyDef {
     const char *label;   // the letter key (lower case)

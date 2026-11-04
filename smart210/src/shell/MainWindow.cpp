@@ -138,11 +138,11 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     supplyPart_->addPage(manualPage_, tr("Manual input"));
 
     shell_ = new AppShell;
-    // the Hangul input method: off until the Hangul key or Ctrl+Space; the footer shows the mode
-    hangulInput_ = config.hangulInput() ? new KoreanInput(this) : 0;
-    shell_->footer()->setInputMode(hangulInput_ != 0, false);
-    if (hangulInput_) {
-        connect(hangulInput_, SIGNAL(hangulModeChanged(bool)), this, SLOT(hangulModeChanged(bool)));
+    // the Korean input method: off until the Korean key or Ctrl+Space; the footer shows the mode
+    koreanInput_ = config.koreanInput() ? new KoreanInput(this) : 0;
+    shell_->footer()->setInputMode(koreanInput_ != 0, false);
+    if (koreanInput_) {
+        connect(koreanInput_, SIGNAL(koreanModeChanged(bool)), this, SLOT(koreanModeChanged(bool)));
     }
     QStackedWidget *content = shell_->content();
     content->addWidget(salesPage_);
@@ -338,7 +338,7 @@ void MainWindow::setDownloadIntervalMs(int milliseconds)
     downloadTimer_->setInterval(milliseconds);
 }
 
-void MainWindow::hangulModeChanged(bool on)
+void MainWindow::koreanModeChanged(bool on)
 {
     shell_->footer()->setInputMode(true, on);
 }

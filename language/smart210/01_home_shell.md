@@ -35,7 +35,7 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Sessions | MainWindow |
 | The ticket %1 was not printed: %2 | MainWindow |
 | The last download failed, it will be tried again: %1 | MainWindow |
-| Hangul key or Ctrl+Space: Hangul / English | ShellFooter |
+| Korean key or Ctrl+Space: Korean / English | ShellFooter |
 | Gas Station | ShellHeader |
 | Cards | SideBar |
 | Review | SideBar |

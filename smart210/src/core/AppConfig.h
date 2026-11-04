@@ -17,7 +17,7 @@
 //   dataDir    = folder of the database file smart210.db (default: data next to the program; the SD card on the board); the changes made on
 //                Machine Config are written as text lines to changes.log in it (DATE TIME: what: old -> new (cashier))
 //   (no key)         the app downloads from the server by itself every minute: fixed, so that the terminal sees the web app's changes within a minute
-//   hangul           = true (default) | false: the Hangul input method (the Hangul key or Ctrl+Space switches it on at the keyboard, see HangulInput)
+//   korean           = true (default) | false: the Korean input method (the Korean key or Ctrl+Space switches it on at the keyboard, see KoreanInput)
 //   printWidthDots   = 576 (80 mm paper) or 640: the printable width in dots
 //   printBarcode     = image (default: the barcode is drawn as a bitmap, every printer prints it) or printer (the printer's own Code 128 command)
 //   logo             = the logo picture (default: logo.png next to the program); ticketFont = a font file for the ticket text
@@ -50,11 +50,11 @@ public:
     int downloadMinutes() const { return downloadMinutes_; }
     bool setSystemClock() const { return setSystemClock_; }
     bool boardLink() const { return boardLink_; }
-    bool hangulInput() const { return hangulInput_; }
+    bool koreanInput() const { return koreanInput_; }
     QString supplierScannerName() const { return supplierScannerName_; }
     QString supplierScannerPhys() const { return supplierScannerPhys_; }
     void setBoardLink(bool on) { boardLink_ = on; }
-    void setHangulInput(bool on) { hangulInput_ = on; }
+    void setKoreanInput(bool on) { koreanInput_ = on; }
     PrintOptions printOptions() const { return printOptions_; }
 
     static QString normalizeLanguage(const QString &value);
@@ -74,7 +74,7 @@ private:
     int downloadMinutes_;
     bool setSystemClock_;
     bool boardLink_;
-    bool hangulInput_;
+    bool koreanInput_;
     QString supplierScannerName_;
     QString supplierScannerPhys_;
     PrintOptions printOptions_;

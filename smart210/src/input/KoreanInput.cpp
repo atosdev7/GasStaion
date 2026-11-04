@@ -8,7 +8,7 @@
 #include <QKeyEvent>
 
 KoreanInput::KoreanInput(QObject *parent)
-    : QObject(parent), hangul_(false), sending_(false)
+    : QObject(parent), korean_(false), sending_(false)
 {
     addKeys(koreanRow1, KOREAN_KEY_COUNT(koreanRow1));
     addKeys(koreanRow2, KOREAN_KEY_COUNT(koreanRow2));
@@ -29,16 +29,16 @@ void KoreanInput::addKeys(const KoreanKeyDef *keys, int count)
     }
 }
 
-void KoreanInput::setHangulMode(bool on)
+void KoreanInput::setKoreanMode(bool on)
 {
-    if (on == hangul_) {
+    if (on == korean_) {
         return;
     }
     if (!on) {
         send(composer_.flush());   // the syllable being composed is kept as typed
     }
-    hangul_ = on;
-    emit hangulModeChanged(on);
+    korean_ = on;
+    emit koreanModeChanged(on);
 }
 
 // The field that lost the focus commits or drops its own preedit; the composer starts again.
@@ -53,7 +53,7 @@ bool KoreanInput::isModifierKey(int key)
         || key == Qt::Key_Hangul;
 }
 
-// The focused object takes text, and does not hide it (a PIN or a password is never typed in Hangul).
+// The focused object takes text, and does not hide it (a PIN or a password is never typed in Korean).
 bool KoreanInput::focusAcceptsText()
 {
     QObject *focus = QGuiApplication::focusObject();
@@ -77,16 +77,16 @@ bool KoreanInput::eventFilter(QObject *object, QEvent *event)
     const int code = key->key();
     const Qt::KeyboardModifiers modifiers = key->modifiers();
 
-    // the Hangul key or Ctrl+Space switches between Hangul and English
+    // the Korean key or Ctrl+Space switches between Korean and English
     if (code == Qt::Key_Hangul || (code == Qt::Key_Space && (modifiers & Qt::ControlModifier))) {
         if (press && !key->isAutoRepeat()) {
-            setHangulMode(!hangul_);
+            setKoreanMode(!korean_);
         }
 
         return true;
     }
 
-    if (!hangul_ || isModifierKey(code) || !focusAcceptsText()) {
+    if (!korean_ || isModifierKey(code) || !focusAcceptsText()) {
         return false;
     }
 

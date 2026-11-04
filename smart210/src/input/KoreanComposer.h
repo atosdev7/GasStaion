@@ -5,7 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-// Dubeolsik-style Hangul syllable composer. Feed it compatibility jamo (U+3131..U+3163): it builds the precomposed syllables
+// Dubeolsik-style Korean syllable composer. Feed it compatibility jamo (U+3131..U+3163): it builds the precomposed syllables
 // (U+AC00..U+D7A3). The jamo are fed by KoreanInput, which turns the keys into jamo with the table of KoreanKeyMap.h; the composer itself knows
 // nothing about keys. Header only, C++03.
 class KoreanComposer
