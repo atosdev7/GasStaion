@@ -71,6 +71,9 @@ public:
     bool getConfig(int address) { return send(address, BoardProtocol::CmdGetConfig); }
     bool setConfig(int address, const BoardProtocol::BoardConfig &config) { return send(address, BoardProtocol::CmdSetConfig, BoardProtocol::configData(config)); }
     bool info(int address) { return send(address, BoardProtocol::CmdInfo); }
+    // The total of everything the board has dispensed (any state), and its reset (the answer is the total before; refused while a fill runs).
+    bool getTotal(int address) { return send(address, BoardProtocol::CmdGetTotal); }
+    bool resetTotal(int address) { return send(address, BoardProtocol::CmdResetTotal); }
 
 signals:
     void connectionChanged(bool connected);

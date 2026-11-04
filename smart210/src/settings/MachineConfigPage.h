@@ -58,6 +58,11 @@ private slots:
     void nozzlesChanged();
     void updateDone(int number);
     void updateFailed(int number, const QString &message);
+    void resetTotalPressed();
+    void totalRead(int number, quint64 grams);
+    void totalWasReset(int number, quint64 was);
+    void totalFailed(int number, const QString &message);
+    void askTotalAgain();
     void saveConverterPort();
     void saveCardReader();
     void formatPicked();
@@ -88,6 +93,8 @@ private:
     void fillAddForm();
     void alert(const QString &title, const QString &reason);
     void armReset(int which);
+    void askTotal();   // asks the board of the picked nozzle for its total (shown in the Total box)
+    static QString totalText(quint64 grams);
 
     MachineConfig *config_;
     Session *session_;
@@ -126,6 +133,8 @@ private:
     QLabel *status_;
     QString serverBefore_;
     int selectedNumber_; // the nozzle in the form, 0 when none
+    QLabel *total_;
+    QTimer *totalTimer_;
 };
 
 #endif

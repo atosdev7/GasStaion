@@ -23,9 +23,9 @@ class BoardSimulator : public QObject
 public:
     struct Board {
         Board()
-            : state(0), flags(0), fault(0), gunUp(false), beeps(0), sessionId(0), presetG(0), shownG(0), shownMsLeft(0), hookDownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), lastAckedId(0),
+            : state(0), flags(0), fault(0), gunUp(false), beeps(0), sessionId(0), presetG(0), shownG(0), shownMsLeft(0), hookDownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), totalG(0), lastAckedId(0),
               haveSeq(false), lastSeq(0), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
-              silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true),
+              silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true), supportsTotal(true),
               clockOffsetSecs(QDateTime::currentDateTime().secsTo(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0))))
         {
         }
@@ -39,6 +39,7 @@ public:
         int shownMsLeft;        // it goes after this long (the real board takes 60 seconds)
         int hookDownMsLeft;     // the gun was put down while the fill ran: the fill ends after this long (PROTOCOL.md: 3 seconds on its hook), 0: not counting
         int reason;
+        quint64 totalG;         // everything the board has dispensed, in grams (GET_TOTAL / RESET_TOTAL); every fill adds its grams when it ends
         BoardProtocol::BoardConfig config; // what the board holds (a board never configured has density and pulses 0)
         quint32 lastAckedId;
         bool haveSeq;
@@ -54,6 +55,7 @@ public:
         int silentMsLeft;       // when above 0, silent ends after this long (a power cut)
         int flowGramsPerSecond; // how fast a fill runs
         double accumulated;     // grams so far in the fill, with the part of a gram
+        bool supportsTotal;     // false: an older board that does not know GET_TOTAL and RESET_TOTAL (it answers BAD_COMMAND)
         bool supportsTime;      // false: an older board that does not know SET_TIME and GET_TIME (it answers BAD_COMMAND)
         qint64 clockOffsetSecs; // the board's clock is this far from the computer's (a new board starts at 2000-01-01 00:00:00)
         QList<int> commands;    // every command run, in order (not POLL)

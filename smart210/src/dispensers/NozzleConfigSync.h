@@ -48,6 +48,12 @@ public:
     // way. The result comes as readDone() or readFailed().
     bool read(int number, int userId = 0);
 
+    // The total of everything the board has dispensed (GET_TOTAL) and its reset (RESET_TOTAL, logged with the user and the value it had). False when
+    // the board is not answering, a total command is already on its way for it, or the bus is busy with another command for it (try again). The result
+    // comes as totalRead() / totalWasReset() or totalFailed(). A board that does not know the commands (older firmware) fails with BAD_COMMAND.
+    bool readTotal(int number);
+    bool resetTotal(int number, int userId);
+
     // A nozzle whose saved config the board has not confirmed: an Update was saved here but could not be sent, or the board did not keep it. It is
     // kept across restarts (a setting) and cleared by a verified Update, a Read, or removing the nozzle.
     bool differs(int number) const;
@@ -62,6 +68,9 @@ signals:
     void updateFailed(int number, const QString &message);
     void readDone(int number);                       // the board's config is now the nozzle's
     void readFailed(int number, const QString &message);
+    void totalRead(int number, quint64 grams);       // GET_TOTAL answered
+    void totalWasReset(int number, quint64 was);     // RESET_TOTAL answered: the total is 0 now, was is what it held (logged)
+    void totalFailed(int number, const QString &message);
 
 private slots:
     void boardOnline(int address, bool online);
@@ -87,6 +96,7 @@ private:
     QSet<int> reads_;               // the ones of them whose command is not sent yet
     QHash<int, Update> updates_;    // by nozzle number
     QHash<int, QString> errors_;
+    QHash<int, int> totals_;        // boards a GET_TOTAL or RESET_TOTAL was sent to and has not answered yet: nozzle number => the user who asked (-1: a read)
 };
 
 #endif

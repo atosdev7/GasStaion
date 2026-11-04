@@ -100,6 +100,10 @@ QString BoardSimulator::commandName(int command)
         return "GET_TIME";
     case CmdShowBalance:
         return "SHOW_BALANCE";
+    case CmdGetTotal:
+        return "GET_TOTAL";
+    case CmdResetTotal:
+        return "RESET_TOTAL";
     }
 
     return QString("0x%1").arg(command, 2, 16, QChar('0'));
@@ -206,6 +210,7 @@ void BoardSimulator::startFill(Board &b, quint32 sessionId)
 void BoardSimulator::endFill(Board &b, int reason)
 {
     b.dispensedMl = mlOf(b, b.dispensedG);
+    b.totalG += b.dispensedG; // the total of the board counts every fill, also one of a manual board
     b.reason = reason;
     b.gunUp = false; // the fill is over: the gun goes back
     if (b.config.mode == ModeManual) {
@@ -357,6 +362,24 @@ QByteArray BoardSimulator::execute(Board &b, const Frame &f)
         }
         break;
     }
+    case CmdGetTotal:
+    case CmdResetTotal:
+        if (!b.supportsTotal) {
+            reply = nak(f, ErrBadCommand);
+        } else if (!f.data.isEmpty()) {
+            reply = nak(f, ErrBadLength);
+        } else if (cmd == CmdGetTotal) {
+            reply = ok(f, totalData(b.totalG));
+        } else if (b.state == StateFault) {
+            reply = nak(f, ErrFault);
+        } else if (b.state == StateDispensing) {
+            reply = nak(f, ErrWrongState);
+        } else {
+            const quint64 old = b.totalG;
+            b.totalG = 0;
+            reply = ok(f, totalData(old));
+        }
+        break;
     case CmdSetTime:
     case CmdGetTime: {
         QDateTime wanted;
@@ -467,6 +490,7 @@ void BoardSimulator::finish(int address, quint32 dispensedG, quint32 dispensedMl
 {
     Board &b = boards_[address];
     b.dispensedG = dispensedG;
+    b.totalG += dispensedG;
     b.reason = reason;
     b.gunUp = false;
     b.dispensedMl = dispensedMl;
@@ -579,6 +603,7 @@ void BoardSimulator::save(QSettings &settings) const
         settings.setValue(key + "density", int(it.value().config.density));
         settings.setValue(key + "pulses", it.value().config.pulsesX100);
         settings.setValue(key + "flow", it.value().flowGramsPerSecond);
+        settings.setValue(key + "total", it.value().totalG);
     }
 }
 
@@ -594,6 +619,7 @@ void BoardSimulator::load(QSettings &settings)
         it.value().config.density = quint16(settings.value(key + "density").toInt());
         it.value().config.pulsesX100 = settings.value(key + "pulses").toUInt();
         it.value().flowGramsPerSecond = settings.value(key + "flow", 500).toInt();
+        it.value().totalG = settings.value(key + "total", 0).toULongLong();
         emit changed(it.key());
     }
 }

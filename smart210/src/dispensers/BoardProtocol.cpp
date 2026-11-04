@@ -192,6 +192,30 @@ bool parseTime(const QByteArray &data, QDateTime *time)
     return true;
 }
 
+bool parseTotal(const QByteArray &data, quint64 *totalG)
+{
+    if (data.size() != 8) {
+        return false;
+    }
+    quint64 v = 0;
+    for (int i = 7; i >= 0; --i) {
+        v = (v << 8) | quint8(data.at(i));
+    }
+    *totalG = v;
+
+    return true;
+}
+
+QByteArray totalData(quint64 totalG)
+{
+    QByteArray out;
+    for (int i = 0; i < 8; ++i) {
+        out.append(char((totalG >> (8 * i)) & 0xFF));
+    }
+
+    return out;
+}
+
 bool parseSessionId(const QByteArray &data, quint32 *sessionId)
 {
     if (data.size() != 4) {

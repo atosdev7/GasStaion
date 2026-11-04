@@ -27,7 +27,7 @@
 
 #define PROTOCOL_VERSION 4
 #define FW_MAJOR 1
-#define FW_MINOR 1
+#define FW_MINOR 2
 
 #define MAX_DATA 64
 #define FRAME_MAX (MAX_DATA + 7)   /* STX ADDR SEQ CMD LEN DATA CRC CRC */
@@ -51,7 +51,7 @@ enum {
 enum {   /* 0x04 (DESELECT) and 0x07 (CANCEL) are gone: a preset of zero is the cancel */
     CMD_INFO = 0x01, CMD_POLL = 0x02, CMD_SELECT = 0x03, CMD_SET_PRESET = 0x05, CMD_START = 0x06,
     CMD_GET_RESULT = 0x08, CMD_ACK_RESULT = 0x09, CMD_GET_CONFIG = 0x0A, CMD_SET_CONFIG = 0x0B,
-    CMD_SET_TIME = 0x0C, CMD_GET_TIME = 0x0D, CMD_SHOW_BALANCE = 0x0E, CMD_NAK = 0xFF
+    CMD_SET_TIME = 0x0C, CMD_GET_TIME = 0x0D, CMD_SHOW_BALANCE = 0x0E, CMD_GET_TOTAL = 0x0F, CMD_RESET_TOTAL = 0x10, CMD_NAK = 0xFF
 };
 
 /* The most SHOW_BALANCE takes: 9999.99 kg, what the 6 digits of the kg display can show (more is BAD_VALUE). */

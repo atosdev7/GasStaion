@@ -23,7 +23,9 @@ enum Command {
     CmdSetConfig = 0x0B,
     CmdSetTime = 0x0C,
     CmdGetTime = 0x0D,
-    CmdShowBalance = 0x0E   // show the balance of a card on the dispenser (IDLE only; the data are the grams, like a preset; 0 clears it)
+    CmdShowBalance = 0x0E,  // show the balance of a card on the dispenser (IDLE only; the data are the grams, like a preset; 0 clears it)
+    CmdGetTotal = 0x0F,     // everything the board has dispensed, in grams (8 bytes); any state
+    CmdResetTotal = 0x10    // the total goes back to 0; the answer is what it was (refused while a fill runs)
 };
 
 enum State { StateIdle = 0, StateSelected = 1, StateArmed = 2, StateDispensing = 3, StateResult = 4, StateFault = 5 };
@@ -117,6 +119,8 @@ bool parseResult(const QByteArray &data, Result *result);
 bool parseInfo(const QByteArray &data, Info *info);
 bool parseBoardConfig(const QByteArray &data, BoardConfig *config);
 bool parseSessionId(const QByteArray &data, quint32 *sessionId);
+bool parseTotal(const QByteArray &data, quint64 *totalG); // GET_TOTAL / RESET_TOTAL: the grams, 8 bytes little endian
+QByteArray totalData(quint64 totalG);                      // the same, for a board that answers
 bool parseTime(const QByteArray &data, QDateTime *time); // false for a wrong length or a date or time that does not exist
 
 QString errorText(int error); // for the screen

@@ -1085,6 +1085,44 @@ static void test_total(void)
     CHECK_EQ((long long)r.board.p.total_g, (long long)(before + 5000));
     ask_u32(&r, CMD_ACK_RESULT, id);
     CHECK_EQ((long long)r.board.p.total_g, (long long)(before + 5000));
+
+    /* GET_TOTAL: 8 bytes, the grams, little endian; a wrong length is refused */
+    r.board.p.total_g = 0x0000012345678901ULL;
+    CHECK_EQ(ask0(&r, CMD_GET_TOTAL), CMD_GET_TOTAL | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 0x45678901u);
+    CHECK_EQ(u32at(DATA(&r) + 4), 0x0123u);
+    CHECK_EQ(ask_u32(&r, CMD_GET_TOTAL, 1), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+    CHECK_EQ(ask_u32(&r, CMD_RESET_TOTAL, 1), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_BAD_LENGTH);
+
+    /* RESET_TOTAL: the answer is what it was, the total is 0 and stays 0 over a power cut */
+    CHECK_EQ(ask0(&r, CMD_RESET_TOTAL), CMD_RESET_TOTAL | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 0x45678901u);
+    CHECK_EQ(u32at(DATA(&r) + 4), 0x0123u);
+    CHECK_EQ((long long)r.board.p.total_g, 0);
+    rig_power_cycle(&r);
+    CHECK_EQ((long long)r.board.p.total_g, 0);
+    CHECK_EQ(ask0(&r, CMD_GET_TOTAL), CMD_GET_TOTAL | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 0);
+
+    /* not while a fill runs; a manual board answers both (a service command, like the config) */
+    configure(&r, MODE_AUTO, 8300, 100000);
+    id = start_auto(&r, 5000);
+    run(&r, 100, 10);
+    CHECK_EQ(r.board.state, STATE_DISPENSING);
+    CHECK_EQ(ask0(&r, CMD_RESET_TOTAL), CMD_NAK);
+    CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
+    CHECK_EQ(ask0(&r, CMD_GET_TOTAL), CMD_GET_TOTAL | 0x80);      /* reading is always fine */
+    run(&r, 800, 10);
+    ask_u32(&r, CMD_ACK_RESULT, id);
+    configure(&r, MODE_MANUAL, 8300, 100000);
+    r.board.p.total_g = 1234567;
+    CHECK_EQ(ask0(&r, CMD_GET_TOTAL), CMD_GET_TOTAL | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 1234567);
+    CHECK_EQ(ask0(&r, CMD_RESET_TOTAL), CMD_RESET_TOTAL | 0x80);
+    CHECK_EQ(u32at(DATA(&r)), 1234567);
+    CHECK_EQ((long long)r.board.p.total_g, 0);
 }
 static void test_power_fail_signal(void)
 {

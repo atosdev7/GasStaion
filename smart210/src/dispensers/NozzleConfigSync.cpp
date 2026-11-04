@@ -31,6 +31,7 @@ void NozzleConfigSync::syncBoards()
             reads_.remove(number);
             reading_.remove(number);
             updates_.remove(number);
+            totals_.remove(number);
             errors_.remove(number);
             if (differs(number)) {
                 setDiffers(number, false);
@@ -104,6 +105,26 @@ bool NozzleConfigSync::read(int number, int userId)
     return true;
 }
 
+bool NozzleConfigSync::readTotal(int number)
+{
+    if (!config_.isConfigured(number) || !bus_->canTalk(number) || totals_.contains(number) || !bus_->getTotal(number)) {
+        return false;
+    }
+    totals_.insert(number, -1);
+
+    return true;
+}
+
+bool NozzleConfigSync::resetTotal(int number, int userId)
+{
+    if (!config_.isConfigured(number) || !bus_->canTalk(number) || totals_.contains(number) || !bus_->resetTotal(number)) {
+        return false;
+    }
+    totals_.insert(number, userId < 0 ? 0 : userId);
+
+    return true;
+}
+
 // A board that is free gets what waits for it. The bus holds one command per board, so a busy board is tried again when it answers.
 void NozzleConfigSync::work()
 {
@@ -148,6 +169,10 @@ void NozzleConfigSync::boardOnline(int address, bool online)
         if (reading_.contains(address)) {
             failRead(address, errorText(ErrNoAnswer));
         }
+        if (totals_.contains(address)) {
+            totals_.remove(address);
+            emit totalFailed(address, errorText(ErrNoAnswer));
+        }
     }
     emit changed();
     work();
@@ -155,6 +180,23 @@ void NozzleConfigSync::boardOnline(int address, bool online)
 
 void NozzleConfigSync::commandDone(int address, int command, const QByteArray &data)
 {
+    if ((command == CmdGetTotal || command == CmdResetTotal) && totals_.contains(address)) {
+        const int userId = totals_.take(address);
+        quint64 grams = 0;
+        if (!parseTotal(data, &grams)) {
+            emit totalFailed(address, errorText(ErrBadLength));
+        } else if (command == CmdGetTotal) {
+            emit totalRead(address, grams);
+        } else {
+            // logged with what it held: the technician can see afterwards what was cleared
+            config_.logChange(QString("nozzle:%1").arg(address), QString("total %1 kg").arg(Decimal::format(qlonglong(grams), 3)), QString("total 0 kg"), userId);
+            emit totalWasReset(address, grams);
+        }
+        emit changed();
+        work();
+
+        return;
+    }
     const bool isRead = command == CmdGetConfig && reading_.contains(address);
     const bool isUpdate = command == CmdSetConfig && updates_.contains(address);
     if (!isRead && !isUpdate) {
@@ -219,6 +261,14 @@ void NozzleConfigSync::commandDone(int address, int command, const QByteArray &d
 void NozzleConfigSync::commandFailed(int address, int command, int error)
 {
     const QString text = errorText(error);
+    if ((command == CmdGetTotal || command == CmdResetTotal) && totals_.contains(address)) {
+        totals_.remove(address);
+        emit totalFailed(address, text);
+        emit changed();
+        work();
+
+        return;
+    }
     if (command == CmdSetConfig && updates_.contains(address)) {
         failUpdate(address, text);
     } else if (command == CmdGetConfig && reading_.contains(address)) {
@@ -241,6 +291,11 @@ void NozzleConfigSync::linkChanged(bool connected)
         const QList<int> reading = reading_.keys();
         for (int i = 0; i < reading.size(); ++i) {
             failRead(reading.at(i), errorText(ErrNoConnection));
+        }
+        const QList<int> totaling = totals_.keys();
+        totals_.clear();
+        for (int i = 0; i < totaling.size(); ++i) {
+            emit totalFailed(totaling.at(i), errorText(ErrNoConnection));
         }
     }
     emit changed();

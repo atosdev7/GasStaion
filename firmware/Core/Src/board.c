@@ -568,7 +568,7 @@ static void do_poll(Board *b, uint8_t seq)
 static int data_length(uint8_t cmd)
 {
     switch (cmd) {
-    case CMD_INFO: case CMD_POLL: case CMD_SELECT: case CMD_GET_RESULT: case CMD_GET_CONFIG: case CMD_GET_TIME:
+    case CMD_INFO: case CMD_POLL: case CMD_SELECT: case CMD_GET_RESULT: case CMD_GET_CONFIG: case CMD_GET_TIME: case CMD_GET_TOTAL: case CMD_RESET_TOTAL:
         return 0;
     case CMD_SET_PRESET: case CMD_START: case CMD_ACK_RESULT: case CMD_SHOW_BALANCE:
         return 4;
@@ -721,6 +721,31 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
         }
         break;
     }
+    case CMD_GET_TOTAL:
+        put32(d, (uint32_t)(b->p.total_g & 0xFFFFFFFFu));
+        put32(d + 4, (uint32_t)(b->p.total_g >> 32));
+        answer(b, seq, cmd, d, 8);
+        break;
+    case CMD_RESET_TOTAL:
+        /* everything this board has dispensed goes back to 0; the answer is what it was (a manual board answers too: it is a service command, like the config) */
+        if (b->state == STATE_FAULT) {
+            nak(b, seq, cmd, ERR_FAULT);
+        } else if (b->state == STATE_DISPENSING) {
+            nak(b, seq, cmd, ERR_WRONG_STATE);
+        } else {
+            const uint64_t old = b->p.total_g;
+
+            b->p.total_g = 0;
+            if (!save(b)) {
+                b->p.total_g = old;
+                nak(b, seq, cmd, ERR_FAULT);
+            } else {
+                put32(d, (uint32_t)(old & 0xFFFFFFFFu));
+                put32(d + 4, (uint32_t)(old >> 32));
+                answer(b, seq, cmd, d, 8);
+            }
+        }
+        break;
     case CMD_SET_TIME: {
         DateTime t;
 

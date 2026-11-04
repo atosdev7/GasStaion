@@ -74,7 +74,7 @@ QString subject(const QString &what)
 MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Session *session, Settings *settings, PrintService *printer,
                                      NozzleConfigSync *nozzles, QWidget *parent)
     : QWidget(parent), ui_(new Ui::MachineConfigPage), config_(config), session_(session), settings_(settings), printer_(printer), nozzles_(nozzles),
-      checking_(false), armedReset_(0), resetTimer_(0), selectedNumber_(0)
+      checking_(false), armedReset_(0), resetTimer_(0), selectedNumber_(0), total_(0), totalTimer_(0)
 {
     ui_->setupUi(this);
 
@@ -189,6 +189,17 @@ MachineConfigPage::MachineConfigPage(SetupFlow *flow, MachineConfig *config, Ses
     connect(nozzles_, SIGNAL(readFailed(int,QString)), this, SLOT(readFailed(int,QString)));
     connect(nozzles_, SIGNAL(updateDone(int)), this, SLOT(updateDone(int)));
     connect(nozzles_, SIGNAL(updateFailed(int,QString)), this, SLOT(updateFailed(int,QString)));
+
+    // the total of everything the picked nozzle's board has dispensed, and its reset
+    total_ = ui_->nozzleTotal;
+    totalTimer_ = new QTimer(this);
+    totalTimer_->setSingleShot(true);
+    totalTimer_->setInterval(400);
+    connect(totalTimer_, SIGNAL(timeout()), this, SLOT(askTotalAgain()));
+    connect(ui_->resetTotalButton, SIGNAL(clicked()), this, SLOT(resetTotalPressed()));
+    connect(nozzles_, SIGNAL(totalRead(int,quint64)), this, SLOT(totalRead(int,quint64)));
+    connect(nozzles_, SIGNAL(totalWasReset(int,quint64)), this, SLOT(totalWasReset(int,quint64)));
+    connect(nozzles_, SIGNAL(totalFailed(int,QString)), this, SLOT(totalFailed(int,QString)));
 }
 
 MachineConfigPage::~MachineConfigPage()
@@ -328,6 +339,9 @@ void MachineConfigPage::fillTable()
 // The form shows the nozzle's config as this terminal holds it (the density of the fuel type and no pulses yet for a nozzle just added).
 void MachineConfigPage::fillForm(int number)
 {
+    if (total_ && number != selectedNumber_) {
+        total_->setText(QString("-")); // another nozzle: its total is asked for (rowSelected) and shows when the board answers
+    }
     selectedNumber_ = number;
     if (number < 1) {
         selected_->setText(tr("Pick a nozzle in the table to change its config."));
@@ -363,6 +377,7 @@ void MachineConfigPage::rowSelected()
     }
     disarmReset(); // another nozzle: a Remove that was pressed once is not for this one
     fillForm(table_->item(row, 0)->data(Qt::UserRole).toInt());
+    askTotal();
 }
 
 // Another fuel type: its density from the web app when the field is empty.
@@ -419,6 +434,9 @@ void MachineConfigPage::readDone(int number)
     fillLog();
     showStatus(tr("The config of nozzle %1 was read from its board and saved.").arg(number), true);
     emit nozzlesEdited();
+    if (number == selectedNumber_) {
+        askTotal();
+    }
 }
 
 void MachineConfigPage::readFailed(int number, const QString &message)
@@ -528,6 +546,85 @@ void MachineConfigPage::saveNozzleName()
     fillLog();
     showStatus(tr("Nozzle %1: the name was saved.").arg(selectedNumber_), true);
     emit nozzlesEdited();
+}
+
+// ---- the total of a nozzle
+
+// whole kg, as the Total key of the dispenser shows it
+QString MachineConfigPage::totalText(quint64 grams)
+{
+    return QObject::tr("%1 kg").arg(QString::number(grams / 1000));
+}
+
+void MachineConfigPage::askTotal()
+{
+    totalTimer_->stop();
+    total_->setText(QString("-"));
+    if (selectedNumber_ < 1 || !nozzles_->canTalk(selectedNumber_)) {
+        return;
+    }
+    if (!nozzles_->readTotal(selectedNumber_)) {
+        totalTimer_->start(); // the bus is busy with another command for that board: once more in a moment
+    }
+}
+
+void MachineConfigPage::askTotalAgain()
+{
+    if (selectedNumber_ >= 1 && nozzles_->canTalk(selectedNumber_)) {
+        nozzles_->readTotal(selectedNumber_);
+    }
+}
+
+void MachineConfigPage::totalRead(int number, quint64 grams)
+{
+    if (number == selectedNumber_) {
+        total_->setText(totalText(grams));
+    }
+}
+
+void MachineConfigPage::totalFailed(int number, const QString &message)
+{
+    if (number == selectedNumber_) {
+        total_->setText(QString("-"));
+    }
+    showStatus(tr("Nozzle %1: the total could not be read or reset: %2").arg(number).arg(message), false);
+}
+
+// The total goes back to 0 in the board; the change log keeps the value it had.
+void MachineConfigPage::resetTotalPressed()
+{
+    const int number = selectedNumber_;
+    if (number < 1) {
+        showStatus(tr("Pick a nozzle in the table first."), false);
+
+        return;
+    }
+    if (!nozzles_->canTalk(number)) {
+        alert(tr("Reset the total"), tr("Nozzle %1: its board is not answering. The total is reset in the board, so it cannot be reset now.").arg(number));
+
+        return;
+    }
+    const QString shown = total_->text() == "-" ? QString() : tr(" It shows %1 now.").arg(total_->text());
+    if (QMessageBox::question(this, tr("Reset the total"),
+                              tr("Reset the total of nozzle %1 to 0?%2 It is kept in the change log.").arg(number).arg(shown),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    if (!nozzles_->resetTotal(number, session_->userId())) {
+        showStatus(tr("Nozzle %1: the board is busy. Try again in a moment.").arg(number), false);
+
+        return;
+    }
+    showStatus(tr("Nozzle %1: resetting the total...").arg(number), true);
+}
+
+void MachineConfigPage::totalWasReset(int number, quint64 was)
+{
+    if (number == selectedNumber_) {
+        total_->setText(totalText(0));
+    }
+    fillLog();
+    showStatus(tr("The total of nozzle %1 was reset (it was %2).").arg(number).arg(totalText(was)), true);
 }
 
 void MachineConfigPage::updateDone(int number)

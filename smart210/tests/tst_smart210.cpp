@@ -503,6 +503,8 @@ private slots:
     void aSpotSaleSetDirectlyThatIsCancelledKeepsTheSaleAndItsTicket();
     void theSettingsPageChoosesWhatASpotSaleAndACardFillGive();
     void theShowBalanceCommandWorksInIdleOnlyAndNeverArmsTheBoard();
+    void theTotalOfABoardIsReadAndResetWithTheCommandsOfTheProtocol();
+    void theTotalOfANozzleShowsOnMachineConfigAndItsResetAsksFirstAndIsLogged();
     void aCardThatIsReadShowsItsBalanceOnTheDispenserTheSettingsNameOrTheFirstOfItsFuel();
     void theSettingsPageChoosesTheDispenserThatShowsTheBalanceOfACard();
     void aFreePaymentCardIsToppedUpForNothingAndAnotherCardIsNot();
@@ -11885,6 +11887,148 @@ void Smart210Test::aSupplyTypedInTakesTicketsOfOneKindAndOneCardOnly()
     QVERIFY2(SupplyRecord::record(db, 3, reading, now).ok, "two press tickets");
 }
 
+// GET_TOTAL (0x0F) and RESET_TOTAL (0x10): the total of a board is read in any state; the reset answers what it was, is refused while a fill runs, and an older board says BAD_COMMAND
+void Smart210Test::theTotalOfABoardIsReadAndResetWithTheCommandsOfTheProtocol()
+{
+    QSqlDatabase db = openDatabase();
+    run("INSERT INTO tanks (id, name, fuel_type, capacity_kg, stock_kg) VALUES (1, 'T1', 'D', 5000000, 100000)");
+    addNozzleRows(QList<int>() << 1 << 2);
+    NozzleRig rig(db);
+    rig.sync.setLogFile(changeLog());
+    rig.boards.add(1);
+    rig.boards.add(2);
+    QVERIFY(rig.sync.start(freePort()));
+    rig.boards.connectTo(quint16(rig.bus.listenPort()));
+    QTRY_VERIFY_WITH_TIMEOUT(rig.sync.isOnline(1) && rig.sync.isOnline(2), 5000);
+    QSignalSpy read(&rig.sync, SIGNAL(totalRead(int,quint64)));
+    QSignalSpy wasReset(&rig.sync, SIGNAL(totalWasReset(int,quint64)));
+    QSignalSpy failed(&rig.sync, SIGNAL(totalFailed(int,QString)));
+
+    // the bytes: 8, little endian
+    quint64 parsed = 0;
+    QVERIFY(BoardProtocol::parseTotal(BoardProtocol::totalData(Q_UINT64_C(0x0000012345678901)), &parsed));
+    QCOMPARE(parsed, Q_UINT64_C(0x0000012345678901));
+    QVERIFY(!BoardProtocol::parseTotal(QByteArray(4, 'x'), &parsed));
+
+    // every fill adds its grams to the board's total; GET_TOTAL answers it
+    rig.boards.finish(1, 14980, 27740, BoardProtocol::ReasonPresetReached);
+    rig.boards.finish(1, 5020, 9000, BoardProtocol::ReasonPresetReached);
+    QCOMPARE(rig.boards.board(1).totalG, quint64(20000));
+    QVERIFY(!rig.sync.readTotal(3));                                          // a nozzle that was not added
+    QVERIFY(rig.sync.readTotal(1));
+    QVERIFY(!rig.sync.readTotal(1));                                          // one is on its way
+    QTRY_COMPARE_WITH_TIMEOUT(read.size(), 1, 5000);
+    QCOMPARE(read.at(0).at(0).toInt(), 1);
+    QCOMPARE(read.at(0).at(1).toULongLong(), quint64(20000));
+
+    // the reset: the answer is the total before, the board holds 0, the change log keeps what was cleared
+    rig.boards.board(1).totalG = 12345678;
+    QVERIFY(rig.sync.resetTotal(1, 0));
+    QTRY_COMPARE_WITH_TIMEOUT(wasReset.size(), 1, 5000);
+    QCOMPARE(wasReset.at(0).at(1).toULongLong(), quint64(12345678));
+    QCOMPARE(rig.boards.board(1).totalG, quint64(0));
+    MachineConfig logged(db);
+    logged.setLogFile(changeLog());
+    const MachineConfig::Change change = logged.recentChanges(1).at(0);
+    QCOMPARE(change.what, QString("nozzle:1"));
+    QCOMPARE(change.oldValue, QString("total 12345.678 kg"));
+    QCOMPARE(change.newValue, QString("total 0 kg"));
+
+    // not while a fill runs; the total stays and nothing is logged
+    rig.boards.board(2).totalG = 777;
+    rig.boards.board(2).state = BoardProtocol::StateDispensing;
+    QVERIFY(rig.sync.resetTotal(2, 0));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
+    QCOMPARE(failed.at(0).at(0).toInt(), 2);
+    QCOMPARE(failed.at(0).at(1).toString(), BoardProtocol::errorText(BoardProtocol::ErrWrongState));
+    QCOMPARE(rig.boards.board(2).totalG, quint64(777));
+    QCOMPARE(logged.recentChanges(10).size(), 1);
+    QVERIFY(rig.sync.readTotal(2));                                           // reading is fine
+    QTRY_COMPARE_WITH_TIMEOUT(read.size(), 2, 5000);
+    QCOMPARE(read.at(1).at(1).toULongLong(), quint64(777));
+
+    // a board with an older firmware does not know the commands
+    rig.boards.board(2).state = BoardProtocol::StateIdle;
+    rig.boards.board(2).supportsTotal = false;
+    QVERIFY(rig.sync.readTotal(2));
+    QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 2, 5000);
+    QCOMPARE(failed.at(1).at(1).toString(), BoardProtocol::errorText(BoardProtocol::ErrBadCommand));
+}
+
+// Machine Config: the Total box of the picked nozzle shows what its board reports (whole kg); Reset total asks first, sends the reset and logs the value that was cleared
+void Smart210Test::theTotalOfANozzleShowsOnMachineConfigAndItsResetAsksFirstAndIsLogged()
+{
+    setUpLoggedInTerminalWithAPin();
+    FakeBoards boards;
+    boards.add(1);
+    boards.add(2);
+    boards.board(1).totalG = 12345678;
+    boards.board(2).totalG = 2500;
+    const int port = freePort();
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::ConverterPort, port);
+    AppConfig config;
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    boards.connectTo(quint16(port));
+    QTest::qWait(500);
+    {   // the download also brought the web app's PIN: the test's own is put back
+        Settings settings(QSqlDatabase::database(connection_));
+        settings.setValue(SettingKey::PinSalt, "ps");
+        settings.setValue(SettingKey::PinHash, QString::fromLatin1(QCryptographicHash::hash(QByteArray("ps4821"), QCryptographicHash::Sha256).toHex()));
+    }
+    window.showPage("settings");
+    window.showPage("pin");
+    window.findChild<QLineEdit *>("pinField")->setText("4821");
+    window.findChild<QPushButton *>("pinOkButton")->click();
+    QCOMPARE(window.currentPage(), QString("machine"));
+    QTableWidget *table = window.findChild<QTableWidget *>("nozzleTable");
+    QLabel *total = window.findChild<QLabel *>("nozzleTotal");
+    QLabel *status = window.findChild<QLabel *>("machineStatus");
+    QTRY_COMPARE_WITH_TIMEOUT(table->item(0, 2)->text(), QString("Online"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(table->item(1, 2)->text(), QString("Online"), 5000);
+
+    // picking a nozzle asks its board; the other nozzle has its own total
+    table->selectRow(0);
+    QTRY_COMPARE_WITH_TIMEOUT(total->text(), QString("12345 kg"), 5000);
+    table->selectRow(1);
+    QTRY_COMPARE_WITH_TIMEOUT(total->text(), QString("2 kg"), 5000);
+    table->selectRow(0);
+    QTRY_COMPARE_WITH_TIMEOUT(total->text(), QString("12345 kg"), 5000);
+
+    // No: nothing is sent
+    QPushButton *reset = window.findChild<QPushButton *>("resetTotalButton");
+    boxAnswer_ = QMessageBox::No;
+    boxText_.clear();
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    reset->click();
+    QVERIFY2(boxText_.contains("Reset the total of nozzle 1"), qPrintable(boxText_));
+    QVERIFY2(boxText_.contains("12345 kg"), qPrintable(boxText_));               // the box says what is cleared
+    QTest::qWait(300);
+    QCOMPARE(boards.board(1).totalG, quint64(12345678));
+    QVERIFY(!boards.board(1).commands.contains(int(BoardProtocol::CmdResetTotal)));
+
+    // not while a fill runs: the board refuses, the total stays and the page says so
+    boards.board(1).state = BoardProtocol::StateDispensing;
+    boxAnswer_ = QMessageBox::Yes;
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    reset->click();
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(BoardProtocol::errorText(BoardProtocol::ErrWrongState)), 5000);
+    QCOMPARE(boards.board(1).totalG, quint64(12345678));
+    boards.board(1).state = BoardProtocol::StateIdle;
+
+    // Yes: the board is reset, the page shows 0 and the log has the value that was cleared and the cashier
+    boxAnswer_ = QMessageBox::Yes;
+    QTimer::singleShot(50, this, SLOT(answerTheMessageBox()));
+    reset->click();
+    QTRY_COMPARE_WITH_TIMEOUT(boards.board(1).totalG, quint64(0), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains("was reset (it was 12345 kg)"), 5000);
+    QCOMPARE(total->text(), QString("0 kg"));
+    QListWidget *log = window.findChild<QListWidget *>("changeLog");
+    QVERIFY2(log->item(0)->text().contains("Cash One"), qPrintable(log->item(0)->text()));
+    QVERIFY2(log->item(0)->text().contains("Nozzle 1"), qPrintable(log->item(0)->text()));
+    QVERIFY2(log->item(0)->text().contains("total 12345.678 kg"), qPrintable(log->item(0)->text()));
+    QCOMPARE(boards.board(2).totalG, quint64(2500));                           // the other nozzle is untouched
+}
 // SHOW_BALANCE (0x0E): the dispenser shows a number, nothing is armed; the board refuses it unless it is idle (and auto)
 void Smart210Test::theShowBalanceCommandWorksInIdleOnlyAndNeverArmsTheBoard()
 {
