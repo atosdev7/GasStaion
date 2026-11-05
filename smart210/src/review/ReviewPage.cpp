@@ -7,6 +7,7 @@
 #include "Session.h"
 #include "Settings.h"
 #include "Uploader.h"
+#include "ReviewUpdateDialog.h"
 #include "ui_ReviewPage.h"
 #include "Theme.h"
 
@@ -73,14 +74,9 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, Pr
     debtTotals_ = ui_->reviewDebtTotals;
     tabs_ = ui_->reviewTabs;
 
-    // what the cashier may change on the selected records
+    // what the cashier may change on the selected record: the Update button opens the window with its comment and date
     selectedLabel_ = ui_->reviewSelected;
-    comment_ = ui_->reviewComment;
-    comment_->setMaxLength(ReviewData::MaxComment);
-    saveComment_ = ui_->saveCommentButton;
-    newDate_ = ui_->reviewSetDate;
-    newDate_->setDate(date_->date());
-    setDate_ = ui_->setDateButton;
+    updateButton_ = ui_->updateButton;
     printTicket_ = ui_->printTicketButton;
     deleteSale_ = ui_->deleteSaleButton;
     deleteTimer_ = new QTimer(this);
@@ -93,8 +89,7 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, Pr
     connect(sales_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
     connect(supplies_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
     connect(debts_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
-    connect(saveComment_, SIGNAL(clicked()), this, SLOT(saveComment()));
-    connect(setDate_, SIGNAL(clicked()), this, SLOT(setDate()));
+    connect(updateButton_, SIGNAL(clicked()), this, SLOT(updateRecord()));
     connect(printTicket_, SIGNAL(clicked()), this, SLOT(printTicket()));
     connect(printer_, SIGNAL(finished(bool,QString)), this, SLOT(printFinished(bool,QString)));
     connect(deleteSale_, SIGNAL(clicked()), this, SLOT(deleteSale()));
@@ -311,7 +306,6 @@ void ReviewPage::reload()
 void ReviewPage::dateChanged()
 {
     if (!loading_) {
-        newDate_->setDate(date_->date());
         status_->clear();
         reload();
     }
@@ -323,7 +317,7 @@ void ReviewPage::tabChanged()
     selectionChanged();
 }
 
-// What is selected: one record at a time. Its comment and date are in the fields, ready to change.
+// What is selected: one record at a time. Update opens the window with its comment and date.
 void ReviewPage::selectionChanged()
 {
     if (loading_) {
@@ -331,8 +325,7 @@ void ReviewPage::selectionChanged()
     }
     const QList<ReviewData::Ref> refs = selected();
     selectedLabel_->setText(refs.isEmpty() ? tr("Select a record") : tr("1 selected"));
-    saveComment_->setEnabled(!refs.isEmpty());
-    setDate_->setEnabled(!refs.isEmpty());
+    updateButton_->setEnabled(!refs.isEmpty());
 
     // a mistaken spot sale can be deleted: the reason is said at once when it cannot
     resetDelete();
@@ -354,15 +347,6 @@ void ReviewPage::selectionChanged()
     printTicket_->setEnabled(!printable.isEmpty() && !printing_);
     printTicket_->setToolTip(refs.size() == 1 && printable.isEmpty()
                                  ? tr("This record has no ticket to print: a spot sale and a supply with a remainder ticket have one.") : QString());
-    if (refs.size() == 1) {
-        const int row = table->selectionModel()->selectedRows().first().row();
-        const int columns = table->columnCount();
-        comment_->setText(table->item(row, columns - 3)->text());
-        newDate_->setDate(QDate::fromString(table->item(row, columns - 2)->text(), "yyyy-MM-dd"));
-    } else if (refs.isEmpty()) {
-        comment_->clear();
-        newDate_->setDate(date_->date());
-    }
 }
 
 void ReviewPage::showStatus(const QString &message, bool ok)
@@ -449,47 +433,82 @@ void ReviewPage::resetDelete()
     deleteSale_->setText(tr("Delete sale"));
 }
 
-void ReviewPage::saveComment()
+// The Update button: a window with the comment and the date of the selected record, to change.
+void ReviewPage::updateRecord()
 {
     const QList<ReviewData::Ref> refs = selected();
-    if (refs.isEmpty()) {
-        return;
+    if (refs.size() != 1 || (!updateDialog_.isNull() && updateDialog_->isVisible())) {
+        return;                  // (a window that was closed is deleted a moment later: only an open one counts)
     }
-    const int changed = ReviewData::setComment(db_, refs, comment_->text());
+    QTableWidget *table = currentTable();
+    const int row = table->selectionModel()->selectedRows().first().row();
+    const int columns = table->columnCount();
+    QStringList about;
+    for (int column = 0; column < columns - 3; ++column) {
+        if (!table->item(row, column)->text().isEmpty()) {
+            about << table->item(row, column)->text();
+        }
+    }
 
-    reload();
-    if (changed > 0) {
-        showStatus(tr("The comment was saved. The record will be uploaded again."), true);
-        emit edited();
-    } else {
-        showStatus(tr("Nothing changed."), true);
-    }
+    ReviewUpdateDialog *dialog = new ReviewUpdateDialog(about.join("  "), table->item(row, columns - 3)->text(),
+                                                         QDate::fromString(table->item(row, columns - 2)->text(), "yyyy-MM-dd"), ReviewData::MaxComment, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowModality(Qt::ApplicationModal);
+    connect(dialog, SIGNAL(applyRequested(QString,QDate)), this, SLOT(applyUpdate(QString,QDate)));
+    updateDialog_ = dialog;
+    dialog->show();
 }
 
-void ReviewPage::setDate()
+// The Update button of the window: the comment and the date go to the record. A date that is not allowed is said in the window, which stays open; otherwise the window closes.
+void ReviewPage::applyUpdate(const QString &comment, const QDate &newDate)
 {
     const QList<ReviewData::Ref> refs = selected();
     if (refs.isEmpty()) {
-        return;
-    }
-    const QString date = newDate_->date().toString("yyyy-MM-dd");
-    const QString problem = ReviewData::dateProblem(db_, date, QDateTime::currentDateTime());
-    if (!problem.isEmpty()) {
-        showStatus(problem, false);
+        if (!updateDialog_.isNull()) {
+            updateDialog_->reject();
+        }
 
         return;
     }
-    const int changed = ReviewData::setDate(db_, refs, date);
+    QTableWidget *table = currentTable();
+    const int row = table->selectionModel()->selectedRows().first().row();
+    const QString oldDate = table->item(row, table->columnCount() - 2)->text();
+    const QString date = newDate.toString("yyyy-MM-dd");
+    const bool dateChanges = date != oldDate;
+    if (dateChanges) {
+        const QString problem = ReviewData::dateProblem(db_, date, QDateTime::currentDateTime());
+        if (!problem.isEmpty()) {
+            if (!updateDialog_.isNull()) {
+                updateDialog_->showProblem(problem);
+            }
+
+            return;
+        }
+    }
+    const int commentChanged = ReviewData::setComment(db_, refs, comment);
+    const int dateChanged = dateChanges ? ReviewData::setDate(db_, refs, date) : 0;
 
     reload();
-    if (changed > 0) {
+    if (commentChanged > 0 && dateChanged > 0) {
+        showStatus(date == date_->date().toString("yyyy-MM-dd")
+                       ? tr("The record was updated. It will be uploaded again.")
+                       : tr("The record was updated and moved to %1. It will be uploaded again.").arg(date),
+                   true);
+    } else if (commentChanged > 0) {
+        showStatus(tr("The comment was saved. The record will be uploaded again."), true);
+    } else if (dateChanged > 0) {
         showStatus(date == date_->date().toString("yyyy-MM-dd")
                        ? tr("The date was set. The record will be uploaded again.")
                        : tr("The record was moved to %1. It will be uploaded again.").arg(date),
                    true);
-        emit edited();
     } else {
         showStatus(tr("Nothing changed."), true);
+    }
+    if (commentChanged > 0 || dateChanged > 0) {
+        emit edited();
+    }
+    if (!updateDialog_.isNull()) {
+        updateDialog_->accept();
     }
 }
 

@@ -4,6 +4,8 @@
 #include <QScreen>
 #include <QApplication>
 #include <QDateEdit>
+#include <QDialog>
+#include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSqlDatabase>
@@ -329,6 +331,7 @@ private slots:
     void nozzlesAreNotCountedAsWaitingButGoUpWithTheNextUpload();
     void theChangesAreWrittenToATextFile();
     void theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord();
+    void theReviewUpdateWindowCancelsAndSaysWhyADateIsRefused();
     void theUploadOfAChosenDateSendsOnlyWhatWaitsOnThatDate();
     void theUploaderCanBeLimitedToACheckoutDate();
     void aTicketJoinsANozzlesQueueOnlyWhenItPassesTheChecks();
@@ -9460,6 +9463,39 @@ void Smart210Test::theChangesAreWrittenToATextFile()
     QCOMPARE(config.recentChanges(1).size(), 1);
 }
 
+// The Update button of the Review screen: the window opens with the comment and the date of the selected record; the comment (and the date, when it is given) is typed and
+// the Update button of the window pressed. Returns the window when it stays open (the date is refused), 0 when it closed.
+// the window that is open now (one that was closed is deleted a moment later and is still among the children until then)
+static QDialog *openUpdateWindow(MainWindow &window)
+{
+    foreach (QDialog *dialog, window.findChildren<QDialog *>("ReviewUpdateDialog")) {
+        if (dialog->isVisible()) {
+            return dialog;
+        }
+    }
+
+    return 0;
+}
+
+static QDialog *updateReviewRecord(MainWindow &window, const QString &comment, const QDate &date = QDate())
+{
+    QPushButton *button = window.findChild<QPushButton *>("updateButton");
+    if (!button || !button->isEnabled()) {
+        return 0;
+    }
+    button->click();
+    QDialog *dialog = openUpdateWindow(window);
+    if (!dialog) {
+        return 0;
+    }
+    dialog->findChild<QLineEdit *>("updateComment")->setText(comment);
+    if (date.isValid()) {
+        dialog->findChild<QDateEdit *>("updateDate")->setDate(date);
+    }
+    dialog->findChild<QPushButton *>("updateOkButton")->click();
+
+    return openUpdateWindow(window);
+}
 void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
 {
     setUpLoggedInTerminalWithAPin();
@@ -9474,24 +9510,20 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
     window.showPage("review");
     window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 7));
     QTableWidget *sales = window.findChild<QTableWidget *>("reviewSalesTable");
-    QLineEdit *comment = window.findChild<QLineEdit *>("reviewComment");
     QLabel *status = window.findChild<QLabel *>("reviewStatus");
     QLabel *selected = window.findChild<QLabel *>("reviewSelected");
-    QPushButton *saveComment = window.findChild<QPushButton *>("saveCommentButton");
-    QPushButton *setDate = window.findChild<QPushButton *>("setDateButton");
+    QPushButton *update = window.findChild<QPushButton *>("updateButton");
     QPushButton *upload = window.findChild<QPushButton *>("uploadButton");
     QCOMPARE(sales->item(0, 8)->text(), QString("Uploaded"));
-    QVERIFY(!saveComment->isEnabled()); // nothing is selected
-    QVERIFY(!setDate->isEnabled());
+    QVERIFY(!update->isEnabled()); // nothing is selected
     QVERIFY(!sales->item(0, 7)->toolTip().isEmpty()); // made at 09:00: the date is to be checked
     QCOMPARE(upload->text(), QString("Upload data (4 waiting)")); // the remainder, the loan, its settlement and the ticket
 
     // a comment on one record
     sales->selectRow(0);
     QCOMPARE(selected->text(), QString("1 selected"));
-    QVERIFY(saveComment->isEnabled());
-    comment->setText("paid by card");
-    saveComment->click();
+    QVERIFY(update->isEnabled());
+    QVERIFY(updateReviewRecord(window, "paid by card") == 0);      // the window closes when the record is updated
 
     QVERIFY2(status->text().contains("comment was saved"), qPrintable(status->text()));
     QCOMPARE(sales->item(0, 6)->text(), QString("paid by card"));
@@ -9499,12 +9531,11 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
     QCOMPARE(upload->text(), QString("Upload data (5 waiting)"));
     QCOMPARE(selected->text(), QString("1 selected")); // still selected
     QCOMPARE(footerWaiting(window), QString("Waiting for upload: 5"));
-    saveComment->click();
+    QVERIFY(updateReviewRecord(window, "paid by card") == 0);      // the same comment again
     QCOMPARE(status->text(), QString("Nothing changed."));
 
     // another day for it
-    window.findChild<QDateEdit *>("reviewSetDate")->setDate(QDate(2026, 10, 6));
-    setDate->click();
+    QVERIFY(updateReviewRecord(window, "paid by card", QDate(2026, 10, 6)) == 0);
     QVERIFY2(status->text().contains("moved to 2026-10-06"), qPrintable(status->text()));
     QCOMPARE(sales->rowCount(), 0);
     window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 6));
@@ -9524,8 +9555,7 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
     debts->selectRow(1);
     QCOMPARE(debts->selectionModel()->selectedRows().size(), 1);
     QCOMPARE(selected->text(), QString("1 selected"));
-    comment->setText("checked");
-    saveComment->click();
+    QVERIFY(updateReviewRecord(window, "checked") == 0);
     QVERIFY2(status->text().contains("comment was saved"), qPrintable(status->text()));
     QCOMPARE(debts->item(0, 6)->text(), QString(""));        // the other record is untouched
     QCOMPARE(debts->item(1, 6)->text(), QString("checked"));
@@ -9533,12 +9563,94 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
     window.findChild<QTabWidget *>("reviewTabs")->setCurrentIndex(1);
     QTableWidget *supplies = window.findChild<QTableWidget *>("reviewSupplyTable");
     supplies->selectRow(0);
-    comment->setText("manual fill");
-    saveComment->click();
+    QVERIFY(updateReviewRecord(window, "manual fill") == 0);
     QCOMPARE(supplies->item(0, 7)->text(), QString("manual fill"));
     QCOMPARE(supplies->item(0, 9)->text(), QString("Waiting"));
 }
 
+// The window of the Update button: it starts with what the record has, Cancel changes nothing, a date that is not allowed is said in the window (which stays open), and the
+// comment and the date can be changed together.
+void Smart210Test::theReviewUpdateWindowCancelsAndSaysWhyADateIsRefused()
+{
+    setUpLoggedInTerminalWithAPin();
+    recordADay();
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::SaleBackdateDays, 100000);
+    run("UPDATE sales SET synced = 1, comment = 'first' WHERE id = 'sale-1'");
+    AppConfig config;
+    config.setBoardLink(false);
+    config.setChangeLogFile(changeLog());
+    MainWindow window(config, QString(), "db", QSqlDatabase::database(connection_));
+    window.showPage("review");
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 7));
+    QTableWidget *sales = window.findChild<QTableWidget *>("reviewSalesTable");
+    QPushButton *update = window.findChild<QPushButton *>("updateButton");
+    QLabel *status = window.findChild<QLabel *>("reviewStatus");
+
+    // the old fields and buttons are gone: one Update button
+    QVERIFY(window.findChild<QLineEdit *>("reviewComment") == 0);
+    QVERIFY(window.findChild<QPushButton *>("saveCommentButton") == 0);
+    QVERIFY(window.findChild<QPushButton *>("setDateButton") == 0);
+    QVERIFY(!update->isEnabled());
+    QVERIFY(openUpdateWindow(window) == 0);
+
+    sales->selectRow(0);
+    const QString row0Comment = sales->item(0, 6)->text();
+    const QString row0Date = sales->item(0, 7)->text();
+    const QString row0State = sales->item(0, 8)->text();
+
+    // the window opens with what the record has
+    update->click();
+    QDialog *dialog = openUpdateWindow(window);
+    QVERIFY(dialog != 0);
+    QCOMPARE(dialog->findChild<QLineEdit *>("updateComment")->text(), row0Comment);
+    QCOMPARE(dialog->findChild<QDateEdit *>("updateDate")->date().toString("yyyy-MM-dd"), row0Date);
+    QVERIFY(!dialog->findChild<QLabel *>("updateRecord")->text().isEmpty());       // it says which record
+    update->click();                                                                  // a second window is not opened
+    int openWindows = 0;
+    foreach (QDialog *w, window.findChildren<QDialog *>("ReviewUpdateDialog")) {
+        openWindows += w->isVisible() ? 1 : 0;
+    }
+    QCOMPARE(openWindows, 1);
+
+    // Cancel changes nothing
+    dialog->findChild<QLineEdit *>("updateComment")->setText("typed and cancelled");
+    dialog->findChild<QPushButton *>("updateCancelButton")->click();
+    QTRY_VERIFY(openUpdateWindow(window) == 0);
+    QCOMPARE(sales->item(0, 6)->text(), row0Comment);
+    QCOMPARE(sales->item(0, 7)->text(), row0Date);
+    QCOMPARE(sales->item(0, 8)->text(), row0State);
+
+    // a date after today is refused in the window, which stays open with the reason; nothing is changed
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::SaleBackdateDays, 3);
+    QDialog *open = updateReviewRecord(window, "wanted", QDate::currentDate().addDays(5));
+    QVERIFY(open != 0);
+    QVERIFY2(open->findChild<QLabel *>("updateMessage")->text().contains("after today"), qPrintable(open->findChild<QLabel *>("updateMessage")->text()));
+    QVERIFY(open->findChild<QLabel *>("updateMessage")->isVisible());
+    QCOMPARE(sales->item(0, 6)->text(), row0Comment);
+    QCOMPARE(sales->item(0, 8)->text(), row0State);
+    // a date too far back as well
+    open->findChild<QDateEdit *>("updateDate")->setDate(QDate(2020, 1, 1));
+    open->findChild<QPushButton *>("updateOkButton")->click();
+    QVERIFY(openUpdateWindow(window) != 0);
+    QVERIFY2(open->findChild<QLabel *>("updateMessage")->text().contains("days back"), qPrintable(open->findChild<QLabel *>("updateMessage")->text()));
+    // the comment alone is allowed for a record whose own date is out of reach: the date is not checked when it does not change
+    open->findChild<QDateEdit *>("updateDate")->setDate(QDate::fromString(row0Date, "yyyy-MM-dd"));
+    open->findChild<QPushButton *>("updateOkButton")->click();
+    QTRY_VERIFY(openUpdateWindow(window) == 0);
+    QCOMPARE(sales->item(0, 6)->text(), QString("wanted"));
+    QVERIFY2(status->text().contains("comment was saved"), qPrintable(status->text()));
+    QCOMPARE(sales->item(0, 8)->text(), QString("Waiting"));
+
+    // the comment and the date together
+    Settings(QSqlDatabase::database(connection_)).setInt(SettingKey::SaleBackdateDays, 100000);
+    QVERIFY(updateReviewRecord(window, "both", QDate(2026, 10, 6)) == 0);
+    QVERIFY2(status->text().contains("updated and moved to 2026-10-06"), qPrintable(status->text()));
+    QCOMPARE(sales->rowCount(), 0);                                                  // it went to the 6th
+    window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 6));
+    QCOMPARE(sales->rowCount(), 1);
+    QCOMPARE(sales->item(0, 6)->text(), QString("both"));
+    QCOMPARE(sales->item(0, 7)->text(), QString("2026-10-06"));
+}
 // a second day with a sale (and the ticket sold in it) that must stay behind when the first day goes up
 static const char *otherDaySale =
     "INSERT INTO sales (id, created_at, customer_id, sale_type, fuel_type, price, amount_kg, payment_method, total_amount, paid_amount, "
@@ -9598,8 +9710,7 @@ void Smart210Test::theUploadOfAChosenDateSendsOnlyWhatWaitsOnThatDate()
 
     // the cashier edits one record of the 7th and uploads that day
     window.findChild<QTableWidget *>("reviewSalesTable")->selectRow(0);
-    window.findChild<QLineEdit *>("reviewComment")->setText("checked");
-    window.findChild<QPushButton *>("saveCommentButton")->click();
+    QVERIFY(updateReviewRecord(window, "checked") == 0);
     QCOMPARE(upload->text(), QString("Upload data (6 waiting)"));
     upload->click();
 
@@ -11043,6 +11154,9 @@ void Smart210Test::theRemainderTicketsScreenPrintsATicketAgain()
     QCOMPARE(table->item(0, 5)->text(), QString("Not printed"));
     QCOMPARE(table->item(1, 5)->text(), QString("Used"));
     QVERIFY(!print->isEnabled());
+    // the State column is as wide as its text ("Not printed" was cut to "Not ...")
+    QCOMPARE(table->horizontalHeader()->sectionResizeMode(5), QHeaderView::ResizeToContents);
+    QVERIFY2(table->columnWidth(5) >= table->fontMetrics().width("Not printed"), qPrintable(QString::number(table->columnWidth(5))));
 
     // print it
     table->selectRow(0);

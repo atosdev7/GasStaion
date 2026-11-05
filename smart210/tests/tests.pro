@@ -69,6 +69,7 @@ SOURCES += \
     ../src/dispensers/NozzleDialog.cpp \
     ../src/review/ReviewData.cpp \
     ../src/review/ReviewPage.cpp \
+    ../src/review/ReviewUpdateDialog.cpp \
     ../src/sales/SaleDeletion.cpp \
     ../src/core/Session.cpp \
     ../src/core/Settings.cpp \
@@ -153,6 +154,7 @@ HEADERS += \
     ../src/dispensers/NozzleDialog.h \
     ../src/review/ReviewData.h \
     ../src/review/ReviewPage.h \
+    ../src/review/ReviewUpdateDialog.h \
     ../src/sales/SaleDeletion.h \
     ../src/core/Session.h \
     ../src/core/Settings.h \

@@ -33,6 +33,7 @@ RemainderTicketsPage::RemainderTicketsPage(QSqlDatabase db, QWidget *parent)
     table_->setColumnWidth(ColKg, 110);
     table_->setColumnWidth(ColTicket, 250);
     table_->horizontalHeader()->setStretchLastSection(true);
+    table_->horizontalHeader()->setSectionResizeMode(ColState, QHeaderView::ResizeToContents);     // "Not printed" is not cut
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);

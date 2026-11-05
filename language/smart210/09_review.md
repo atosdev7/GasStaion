@@ -58,8 +58,13 @@ Section = a screen of the terminal. Strings are ordered by the source file they 
 | Sales | ReviewPage |
 | Supplies | ReviewPage |
 | Ticket Debt | ReviewPage |
-| Save comment | ReviewPage |
-| Set date | ReviewPage |
+| Update | ReviewPage |
+| The record was updated. It will be uploaded again. | ReviewPage |
+| The record was updated and moved to %1. It will be uploaded again. | ReviewPage |
+| Update record | ReviewUpdateDialog |
+| Comment | ReviewUpdateDialog |
+| Date | ReviewUpdateDialog |
+| Cancel | ReviewUpdateDialog |
 | Delete sale | ReviewPage |
 | The record was moved to %1. It will be uploaded again. | ReviewPage |
 | Print ticket | ReviewPage |

@@ -4,12 +4,12 @@
 #include "ReviewData.h"
 
 #include <QDate>
+#include <QPointer>
 #include <QSqlDatabase>
 #include <QWidget>
 
 class QDateEdit;
 class QLabel;
-class QLineEdit;
 class QPushButton;
 class QTabWidget;
 class QTableWidget;
@@ -17,6 +17,7 @@ class QTimer;
 class PrintService;
 class Session;
 class Uploader;
+class ReviewUpdateDialog;
 
 namespace Ui {
 class ReviewPage;
@@ -24,8 +25,8 @@ class ReviewPage;
 
 // Review: the cashier checks the records of a date before they go up. The date picker chooses the day; the tabs show its Sales
 // (spot and ticket, with the totals paid and unpaid), Supplies and Ticket Debt (loans and settlements). On the selected records the cashier
-// may change the comment and the date (a record made near 9 AM may belong to the day before or after); a changed record waits for
-// the upload again. Upload data sends everything that waits, from all dates, and only that. A mistaken spot sale is deleted here too (Delete
+// may change the comment and the date (a record made near 9 AM may belong to the day before or after) with the Update button, which opens a window with those fields; a changed
+// record waits for the upload again. Upload data sends everything that waits, from all dates, and only that. A mistaken spot sale is deleted here too (Delete
 // sale on the Sales tab, asked twice; the rules are those of SaleDeletion): the cashier enters the correct sale and then deletes the wrong one.
 // Print ticket prints the ticket of the selected record again: the ticket of a spot sale (Sales tab) or the remainder ticket a supply made (Supplies tab).
 class ReviewPage : public QWidget
@@ -54,8 +55,8 @@ private slots:
     void dateChanged();
     void tabChanged();
     void selectionChanged();
-    void saveComment();
-    void setDate();
+    void updateRecord();     // the Update button: the window with the fields
+    void applyUpdate(const QString &comment, const QDate &date);   // its Update button
     void printTicket();
     void printFinished(bool ok, const QString &message);
     void deleteSale();
@@ -88,10 +89,8 @@ private:
     QTableWidget *supplies_;
     QTableWidget *debts_;
     QLabel *selectedLabel_;
-    QLineEdit *comment_;
-    QPushButton *saveComment_;
-    QDateEdit *newDate_;
-    QPushButton *setDate_;
+    QPushButton *updateButton_;
+    QPointer<ReviewUpdateDialog> updateDialog_;   // the window of the Update button while it is open
     QPushButton *printTicket_;
     QPushButton *deleteSale_;
     QTimer *deleteTimer_;   // the first press of Delete sale only asks: the question is taken back after this long

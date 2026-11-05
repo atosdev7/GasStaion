@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ReviewUpdateDialog</class>
+ <widget class="QDialog" name="ReviewUpdateDialog">
+  <property name="windowTitle"><string>Update record</string></property>
+  <property name="modal"><bool>true</bool></property>
+  <property name="minimumSize"><size><width>620</width><height>0</height></size></property>
+  <layout class="QVBoxLayout" name="updateLayout">
+   <property name="leftMargin"><number>20</number></property>
+   <property name="topMargin"><number>20</number></property>
+   <property name="rightMargin"><number>20</number></property>
+   <property name="bottomMargin"><number>20</number></property>
+   <property name="spacing"><number>14</number></property>
+   <item>
+    <widget class="QLabel" name="updateTitle">
+     <property name="text"><string>Update record</string></property>
+     <property name="sub" stdset="0"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="updateRecord">
+     <property name="wordWrap"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QFormLayout" name="updateForm">
+     <property name="horizontalSpacing"><number>12</number></property>
+     <property name="verticalSpacing"><number>10</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="updateCommentLabel">
+       <property name="text"><string>Comment</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="updateComment">
+       <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="updateDateLabel">
+       <property name="text"><string>Date</string></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QDateEdit" name="updateDate">
+       <property name="calendarPopup"><bool>true</bool></property>
+       <property name="displayFormat"><string notr="true">yyyy-MM-dd</string></property>
+       <property name="minimumSize"><size><width>0</width><height>44</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="updateMessage">
+     <property name="wordWrap"><bool>true</bool></property>
+     <property name="visible"><bool>false</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="updateButtons">
+     <property name="spacing"><number>12</number></property>
+     <item>
+      <spacer name="updateSpacer">
+       <property name="orientation"><enum>Qt::Horizontal</enum></property>
+       <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="updateCancelButton">
+       <property name="text"><string>Cancel</string></property>
+       <property name="minimumSize"><size><width>160</width><height>52</height></size></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="updateOkButton">
+       <property name="text"><string>Update</string></property>
+       <property name="minimumSize"><size><width>160</width><height>52</height></size></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
