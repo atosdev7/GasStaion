@@ -523,6 +523,58 @@ static void test_repeat_rule(void)
     CHECK_EQ(NAK_ERROR(&r), ERR_WRONG_STATE);
 }
 
+/* A repeat is the same request, byte for byte. The same SEQ with another command or other data is a new request and is carried out (a master that started again counts its SEQ from
+   the start, and the board must not answer it with the answer of the request before). */
+static void test_repeat_needs_the_same_request(void)
+{
+    Rig r;
+    uint8_t req[FRAME_MAX];
+    uint8_t first[FRAME_MAX];
+    uint8_t d[4];
+    size_t first_len;
+    size_t n;
+
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+
+    /* POLL with SEQ 5, then INFO with the same SEQ: the answer is the answer to INFO */
+    n = frame(req, 1, 5, CMD_POLL, 0, 0);
+    CHECK(feed_all(&r, req, n));
+    CHECK_EQ(r.reply[3], CMD_POLL | 0x80);
+    n = frame(req, 1, 5, CMD_INFO, 0, 0);
+    CHECK(feed_all(&r, req, n));
+    CHECK_EQ(r.reply[3], CMD_INFO | 0x80);
+    CHECK_EQ(r.reply[4], 7);                                   /* the INFO answer has 7 bytes of data, the POLL answer 19 */
+
+    /* the same command with other data and the same SEQ: carried out, the answer holds the new data */
+    put32(d, 5000);
+    n = frame(req, 1, 9, CMD_SET_PRESET, d, 4);
+    CHECK(feed_all(&r, req, n));
+    CHECK_EQ(u32at(r.reply + 5), 5000);
+    CHECK_EQ(r.board.preset_g, 5000);
+    put32(d, 7000);
+    n = frame(req, 1, 9, CMD_SET_PRESET, d, 4);
+    CHECK(feed_all(&r, req, n));
+    CHECK_EQ(u32at(r.reply + 5), 7000);
+    CHECK_EQ(r.board.preset_g, 7000);
+
+    /* the same request again (a lost answer): not carried out again, the same answer; a change in between shows it */
+    memcpy(first, r.reply, r.reply_len);
+    first_len = r.reply_len;
+    r.board.preset_g = 1234;                                   /* (what a second run would overwrite) */
+    CHECK(feed_all(&r, req, n));
+    CHECK(r.reply_len == first_len && memcmp(r.reply, first, first_len) == 0);
+    CHECK_EQ(r.board.preset_g, 1234);
+
+    /* another request in between: the old one is no longer a repeat, it runs again */
+    n = frame(req, 1, 10, CMD_POLL, 0, 0);
+    CHECK(feed_all(&r, req, n));
+    put32(d, 7000);
+    n = frame(req, 1, 9, CMD_SET_PRESET, d, 4);
+    CHECK(feed_all(&r, req, n));
+    CHECK_EQ(r.board.preset_g, 7000);
+}
+
 static void test_auto_fill(void)
 {
     Rig r;
@@ -1763,6 +1815,7 @@ int main(void)
     test_crc_and_examples();
     test_line();
     test_repeat_rule();
+    test_repeat_needs_the_same_request();
     test_auto_fill();
     test_early_close();
     test_preset_tolerance();

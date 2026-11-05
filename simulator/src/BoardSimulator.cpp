@@ -142,13 +142,13 @@ QByteArray BoardSimulator::answer(const Frame &request)
 
     QByteArray reply;
     bool repeat = false;
-    if (b.haveSeq && b.lastSeq == request.seq) {
-        reply = b.lastAnswer; // a repeat: the same answer, nothing runs again
+    if (b.haveSeq && b.lastRequest.seq == request.seq && b.lastRequest.command == request.command && b.lastRequest.data == request.data) {
+        reply = b.lastAnswer; // a repeat (the same request again): the same answer, nothing runs again
         repeat = true;
     } else {
         reply = execute(b, request);
         b.haveSeq = true;
-        b.lastSeq = request.seq;
+        b.lastRequest = request;
         b.lastAnswer = reply;
     }
 

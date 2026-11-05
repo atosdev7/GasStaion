@@ -106,8 +106,8 @@ typedef struct {
     size_t rx_len;
     uint32_t rx_idle_ms;
     uint8_t rx_fresh;              /* bytes were fed since the last board_tick: the quiet time of a half frame starts again (see board_tick) */
-    uint8_t have_seq;
-    uint8_t last_seq;
+    uint8_t last_request[FRAME_MAX];   /* the last frame that was carried out (ADDR, SEQ, command, data, CRC), to tell a repeat from a new request */
+    size_t last_request_len;           /* 0: none yet */
     uint8_t last_reply[FRAME_MAX];
     size_t last_reply_len;
     uint8_t tx[FRAME_MAX];

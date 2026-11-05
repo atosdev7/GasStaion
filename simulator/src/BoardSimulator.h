@@ -24,7 +24,7 @@ public:
     struct Board {
         Board()
             : state(0), flags(0), fault(0), gunUp(false), beeps(0), sessionId(0), presetG(0), shownG(0), shownMsLeft(0), hookDownMsLeft(0), dispensedG(0), dispensedMl(0), reason(0), totalG(0), lastAckedId(0),
-              haveSeq(false), lastSeq(0), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
+              haveSeq(false), executed(0), dropReplies(0), corruptReplies(0), dropCommandOnce(0), corruptCommandOnce(0),
               silent(false), keepsNoConfig(false), silentMsLeft(0), flowGramsPerSecond(500), accumulated(0), supportsTime(true), supportsTotal(true),
               clockOffsetSecs(QDateTime::currentDateTime().secsTo(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0))))
         {
@@ -43,7 +43,7 @@ public:
         BoardProtocol::BoardConfig config; // what the board holds (a board never configured has density and pulses 0)
         quint32 lastAckedId;
         bool haveSeq;
-        int lastSeq;
+        BoardProtocol::Frame lastRequest; // the last request that was carried out: a repeat is the same request (SEQ, command and data), not only the same SEQ (as the firmware)
         QByteArray lastAnswer;
         int executed;           // commands run (not counting a repeated ADDR + SEQ, and not POLL)
         int dropReplies;        // the next n answers are not sent

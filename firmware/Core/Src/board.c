@@ -843,19 +843,19 @@ static void execute(Board *b, uint8_t seq, uint8_t cmd, const uint8_t *data, siz
 
 static void handle_frame(Board *b, const uint8_t *f)
 {
-    const uint8_t seq = f[2];
-    const uint8_t cmd = f[3];
+    const size_t total = (size_t)f[4] + 7;      /* the whole frame, the CRC included */
 
-    if (b->have_seq && b->last_seq == seq) {
-        /* the same ADDR and SEQ again: nothing runs a second time, the last answer goes out again */
+    if (b->last_request_len == total && memcmp(b->last_request, f, total) == 0) {
+        /* The same request again, byte for byte (the same ADDR and SEQ, and the same command and data): a repeat after a lost answer. Nothing runs a second time, the last answer goes out
+           again. The same SEQ with another command or other data is a new request (a master that started again counts its SEQ from the start): it is carried out. */
         memcpy(b->tx, b->last_reply, b->last_reply_len);
         b->tx_len = b->last_reply_len;
 
         return;
     }
-    execute(b, seq, cmd, f + 5, f[4]);
-    b->have_seq = 1;
-    b->last_seq = seq;
+    execute(b, f[2], f[3], f + 5, f[4]);
+    memcpy(b->last_request, f, total);
+    b->last_request_len = total;
     memcpy(b->last_reply, b->tx, b->tx_len);
     b->last_reply_len = b->tx_len;
 }
