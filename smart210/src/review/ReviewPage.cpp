@@ -29,7 +29,7 @@ namespace {
 
 const int IdRole = Qt::UserRole;
 const int KindRole = Qt::UserRole + 1;
-const int PrintRole = Qt::UserRole + 2; // what the Print ticket button prints for the record: "sale" (its own ticket) or "remainder:<16 digits>"; empty: no ticket
+const int PrintRole = Qt::UserRole + 2; // "sale" for a record whose own ticket the Print ticket button prints (a spot sale); empty: no ticket
 
 QString money(qlonglong value)
 {
@@ -75,8 +75,12 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, Pr
     tabs_ = ui_->reviewTabs;
 
     // what the cashier may change on the selected record: the Update button opens the window with its comment and date
-    selectedLabel_ = ui_->reviewSelected;
-    updateButton_ = ui_->updateButton;
+    selectedLabels_[0] = ui_->reviewSelected;
+    selectedLabels_[1] = ui_->supplySelected;
+    selectedLabels_[2] = ui_->debtSelected;
+    updateButtons_[0] = ui_->updateButton;
+    updateButtons_[1] = ui_->supplyUpdateButton;
+    updateButtons_[2] = ui_->debtUpdateButton;
     printTicket_ = ui_->printTicketButton;
     deleteSale_ = ui_->deleteSaleButton;
     deleteTimer_ = new QTimer(this);
@@ -89,7 +93,9 @@ ReviewPage::ReviewPage(QSqlDatabase db, Uploader *uploader, Session *session, Pr
     connect(sales_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
     connect(supplies_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
     connect(debts_, SIGNAL(itemSelectionChanged()), this, SLOT(selectionChanged()));
-    connect(updateButton_, SIGNAL(clicked()), this, SLOT(updateRecord()));
+    for (int i = 0; i < 3; ++i) {
+        connect(updateButtons_[i], SIGNAL(clicked()), this, SLOT(updateRecord()));
+    }
     connect(printTicket_, SIGNAL(clicked()), this, SLOT(printTicket()));
     connect(printer_, SIGNAL(finished(bool,QString)), this, SLOT(printFinished(bool,QString)));
     connect(deleteSale_, SIGNAL(clicked()), this, SLOT(deleteSale()));
@@ -212,8 +218,6 @@ void ReviewPage::fillRecords(QTableWidget *table, const QList<ReviewData::Record
                 item->setData(KindRole, int(r.kind));
                 if (r.kind == ReviewData::Sale && r.saleType == "spot") {
                     item->setData(PrintRole, QString("sale"));
-                } else if (r.kind == ReviewData::Supplement && !r.remainderTicket.isEmpty()) {
-                    item->setData(PrintRole, "remainder:" + r.remainderTicket);
                 }
             }
             if (column == dateColumn && r.nearShiftLine) {
@@ -317,17 +321,21 @@ void ReviewPage::tabChanged()
     selectionChanged();
 }
 
-// What is selected: one record at a time. Update opens the window with its comment and date.
+// What is selected: one record at a time, in the table of each tab. Update is open on the tab that has a record chosen; Print ticket and Delete sale are on the Sales tab.
 void ReviewPage::selectionChanged()
 {
     if (loading_) {
         return;
     }
-    const QList<ReviewData::Ref> refs = selected();
-    selectedLabel_->setText(refs.isEmpty() ? tr("Select a record") : tr("1 selected"));
-    updateButton_->setEnabled(!refs.isEmpty());
+    QTableWidget *const tables[3] = {sales_, supplies_, debts_};
+    for (int i = 0; i < 3; ++i) {
+        const bool chosen = !tables[i]->selectionModel()->selectedRows().isEmpty();
+        selectedLabels_[i]->setText(chosen ? tr("1 selected") : tr("Select a record"));
+        updateButtons_[i]->setEnabled(chosen);
+    }
 
-    // a mistaken spot sale can be deleted: the reason is said at once when it cannot
+    // a mistaken spot sale can be deleted: the reason is said at once when it cannot be
+    const QList<ReviewData::Ref> refs = selected();
     resetDelete();
     bool deletable = false;
     if (refs.size() == 1 && refs.first().kind == ReviewData::Sale) {
@@ -339,14 +347,13 @@ void ReviewPage::selectionChanged()
     }
     deleteSale_->setEnabled(deletable);
 
-    QTableWidget *table = currentTable();
     QString printable;
-    if (refs.size() == 1) {
-        printable = table->item(table->selectionModel()->selectedRows().first().row(), 0)->data(PrintRole).toString();
+    if (refs.size() == 1 && refs.first().kind == ReviewData::Sale) {
+        printable = sales_->item(sales_->selectionModel()->selectedRows().first().row(), 0)->data(PrintRole).toString();
     }
     printTicket_->setEnabled(!printable.isEmpty() && !printing_);
-    printTicket_->setToolTip(refs.size() == 1 && printable.isEmpty()
-                                 ? tr("This record has no ticket to print: a spot sale and a supply with a remainder ticket have one.") : QString());
+    printTicket_->setToolTip(refs.size() == 1 && refs.first().kind == ReviewData::Sale && printable.isEmpty()
+                                 ? tr("This sale has no ticket to print: only a spot sale has one.") : QString());
 }
 
 void ReviewPage::showStatus(const QString &message, bool ok)
@@ -355,11 +362,10 @@ void ReviewPage::showStatus(const QString &message, bool ok)
     status_->setText(message);
 }
 
-// The ticket of the selected record goes to the printer again: the ticket of a spot sale, or the remainder ticket of a supply (the program prints that one and
-// marks it printed, as on the Remainders screen).
+// The ticket of the selected spot sale goes to the printer again.
 void ReviewPage::printTicket()
 {
-    QTableWidget *table = currentTable();
+    QTableWidget *table = sales_;
     const QModelIndexList rows = table->selectionModel()->selectedRows();
     if (rows.size() != 1 || printing_) {
         return;
@@ -371,13 +377,6 @@ void ReviewPage::printTicket()
     }
     if (printer_->isBusy()) {
         showStatus(tr("The printer is busy. Try again in a moment."), false);
-
-        return;
-    }
-
-    if (what.startsWith("remainder:")) {
-        emit printRemainderRequested(what.mid(10));
-        showStatus(tr("The remainder ticket %1 is being printed.").arg(what.mid(10)), true);
 
         return;
     }

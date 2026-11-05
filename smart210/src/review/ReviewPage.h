@@ -28,7 +28,8 @@ class ReviewPage;
 // may change the comment and the date (a record made near 9 AM may belong to the day before or after) with the Update button, which opens a window with those fields; a changed
 // record waits for the upload again. Upload data sends everything that waits, from all dates, and only that. A mistaken spot sale is deleted here too (Delete
 // sale on the Sales tab, asked twice; the rules are those of SaleDeletion): the cashier enters the correct sale and then deletes the wrong one.
-// Print ticket prints the ticket of the selected record again: the ticket of a spot sale (Sales tab) or the remainder ticket a supply made (Supplies tab).
+// Print ticket (Sales tab only) prints the ticket of the selected spot sale again; a remainder ticket is printed again on the Remainder tickets screen. Each tab has its own
+// buttons under its table: Update on all three, Print ticket and Delete sale on Sales.
 class ReviewPage : public QWidget
 {
     Q_OBJECT
@@ -48,7 +49,6 @@ signals:
     void uploaded(); // an upload finished: what waits has changed
     void edited();   // a comment or a date was changed: records wait for the upload again
     void showNoReceiptChanged(bool show); // F8 turned the listing of the sales without a receipt on or off (the setting of Machine Config): the program logs it
-    void printRemainderRequested(const QString &barcode); // the remainder ticket of a supply is to be printed again (the program prints it and marks it printed)
 
 private slots:
     void toggleNoReceipt();   // F8, a hidden shortcut: the same setting as the box on Machine Config
@@ -88,8 +88,8 @@ private:
     QTableWidget *sales_;
     QTableWidget *supplies_;
     QTableWidget *debts_;
-    QLabel *selectedLabel_;
-    QPushButton *updateButton_;
+    QLabel *selectedLabels_[3];     // "Select a record" / "1 selected" of each tab (sales, supplies, ticket debt)
+    QPushButton *updateButtons_[3]; // the Update button of each tab
     QPointer<ReviewUpdateDialog> updateDialog_;   // the window of the Update button while it is open
     QPushButton *printTicket_;
     QPushButton *deleteSale_;

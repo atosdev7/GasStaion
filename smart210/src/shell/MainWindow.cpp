@@ -191,7 +191,6 @@ MainWindow::MainWindow(const AppConfig &config, const QString &fontFamily, const
     connect(remainderPage_, SIGNAL(saved()), this, SLOT(refreshUploadButton()));
     connect(manualPage_, SIGNAL(recorded()), this, SLOT(refreshUploadButton()));
     connect(reviewPage_, SIGNAL(uploaded()), this, SLOT(refreshUploadButton()));
-    connect(reviewPage_, SIGNAL(printRemainderRequested(QString)), this, SLOT(printRemainder(QString)));
     connect(reviewPage_, SIGNAL(edited()), this, SLOT(refreshUploadButton()));
     connect(reviewPage_, SIGNAL(showNoReceiptChanged(bool)), this, SLOT(noReceiptListingChanged(bool)));
     connect(boardBus_, SIGNAL(connectionChanged(bool)), this, SLOT(refreshStatus()));

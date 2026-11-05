@@ -313,7 +313,7 @@ private slots:
     void theTerminalTellsTheWebAppWhenNothingOfAFinishedDayWaits();
     void unsentBeforeCountsTheRefusedRecordsToo();
     void pressingUploadSendsEverythingAndEmptiesTheScreen();
-    void theReviewScreenOffersToPrintTheTicketOfASpotSaleAndTheRemainderTicketOfASupply();
+    void theReviewScreenOffersToPrintTheTicketOfASpotSaleAndEachTabHasItsOwnButtons();
     void aFailedUploadSaysSoAndCanBePressedAgain();
     void refusedRecordsStayListedWithTheirReason();
     void withNothingWaitingTheUploadButtonIsOff();
@@ -3985,7 +3985,7 @@ void Smart210Test::unsentBeforeCountsTheRefusedRecordsToo()
     QCOMPARE(Uploader::unsentBefore(db, "2026-10-03 00:00:00"), 0);                  // nothing was made before that
 }
 
-void Smart210Test::theReviewScreenOffersToPrintTheTicketOfASpotSaleAndTheRemainderTicketOfASupply()
+void Smart210Test::theReviewScreenOffersToPrintTheTicketOfASpotSaleAndEachTabHasItsOwnButtons()
 {
     setUpLoggedInTerminalWithAPin();
     recordADay();                                                       // a spot sale, and a supply with a remainder ticket
@@ -4002,33 +4002,48 @@ void Smart210Test::theReviewScreenOffersToPrintTheTicketOfASpotSaleAndTheRemaind
     window.showPage("review");
     window.findChild<QDateEdit *>("reviewDate")->setDate(QDate(2026, 10, 7));
     QPushButton *print = window.findChild<QPushButton *>("printTicketButton");
+    QPushButton *del = window.findChild<QPushButton *>("deleteSaleButton");
     QTableWidget *sales = window.findChild<QTableWidget *>("reviewSalesTable");
     QTableWidget *supplies = window.findChild<QTableWidget *>("reviewSupplyTable");
     QTabWidget *tabs = window.findChild<QTabWidget *>("reviewTabs");
-    QVERIFY(print != 0 && sales != 0 && supplies != 0 && tabs != 0);
+    QVERIFY(print != 0 && del != 0 && sales != 0 && supplies != 0 && tabs != 0);
     QVERIFY(!print->isEnabled());                                       // nothing is selected
+
+    // each tab has its buttons under its table: Update on all three, Print ticket and Delete sale only on Sales
+    for (int tab = 0; tab < 3; ++tab) {
+        QStringList texts;
+        foreach (QPushButton *b, tabs->widget(tab)->findChildren<QPushButton *>()) {
+            texts << b->text();
+        }
+        texts.sort();
+        QCOMPARE(texts, tab == 0 ? QStringList() << "Delete sale" << "Print ticket" << "Update" : QStringList() << "Update");
+    }
+    QVERIFY(print->parentWidget() != 0);
+    QVERIFY(tabs->widget(0)->isAncestorOf(print) && tabs->widget(0)->isAncestorOf(del) && tabs->widget(0)->isAncestorOf(window.findChild<QPushButton *>("updateButton")));
+    QVERIFY(tabs->widget(1)->isAncestorOf(window.findChild<QPushButton *>("supplyUpdateButton")));
+    QVERIFY(tabs->widget(2)->isAncestorOf(window.findChild<QPushButton *>("debtUpdateButton")));
+    QCOMPARE(window.findChild<QLabel *>("reviewSelected")->text(), QString("Select a record"));
+    QCOMPARE(window.findChild<QLabel *>("supplySelected")->text(), QString("Select a record"));
+    QCOMPARE(window.findChild<QLabel *>("debtSelected")->text(), QString("Select a record"));
 
     QCOMPARE(sales->rowCount(), 3);
     for (int row = 0; row < sales->rowCount(); ++row) {
         sales->selectRow(row);
         const bool spot = sales->item(row, 1)->text().startsWith("Spot");
         QCOMPARE(print->isEnabled(), spot);                             // only a spot sale has a ticket: a ticket sale's tickets are the customer's, a card top-up has none
+        QVERIFY(window.findChild<QPushButton *>("updateButton")->isEnabled());
     }
 
+    // a supply: its own Update button follows the choice of a record, and there is nothing to print here (a remainder ticket is printed on the Remainder tickets screen)
     tabs->setCurrentIndex(1);
     QCOMPARE(supplies->rowCount(), 2);
-    for (int row = 0; row < supplies->rowCount(); ++row) {
-        supplies->selectRow(row);
-        QCOMPARE(print->isEnabled(), supplies->item(row, 3)->text() == "12.65");   // the supply that made a remainder ticket (its litres)
-    }
-
-    // the remainder ticket is printed again by the program: the request reaches it, and the ticket counts as printed once it was sent
-    QSignalSpy requested(window.findChild<ReviewPage *>(), SIGNAL(printRemainderRequested(QString)));
+    QPushButton *supplyUpdate = window.findChild<QPushButton *>("supplyUpdateButton");
+    supplies->clearSelection();
+    QVERIFY(!supplyUpdate->isEnabled());
     supplies->selectRow(0);
-    QVERIFY(print->isEnabled());
-    print->click();
-    QCOMPARE(requested.size(), 1);
-    QCOMPARE(requested.at(0).at(0).toString(), QString("0000021500000001"));
+    QVERIFY(supplyUpdate->isEnabled());
+    QCOMPARE(window.findChild<QLabel *>("supplySelected")->text(), QString("1 selected"));
+    QVERIFY(!print->isEnabled());
 }
 
 void Smart210Test::pressingUploadSendsEverythingAndEmptiesTheScreen()
@@ -9463,7 +9478,7 @@ void Smart210Test::theChangesAreWrittenToATextFile()
     QCOMPARE(config.recentChanges(1).size(), 1);
 }
 
-// The Update button of the Review screen: the window opens with the comment and the date of the selected record; the comment (and the date, when it is given) is typed and
+// The Update button of the Review screen (the one of the open tab): the window opens with the comment and the date of the selected record; the comment (and the date, when it is given) is typed and
 // the Update button of the window pressed. Returns the window when it stays open (the date is refused), 0 when it closed.
 // the window that is open now (one that was closed is deleted a moment later and is still among the children until then)
 static QDialog *openUpdateWindow(MainWindow &window)
@@ -9479,7 +9494,8 @@ static QDialog *openUpdateWindow(MainWindow &window)
 
 static QDialog *updateReviewRecord(MainWindow &window, const QString &comment, const QDate &date = QDate())
 {
-    QPushButton *button = window.findChild<QPushButton *>("updateButton");
+    static const char *const names[3] = {"updateButton", "supplyUpdateButton", "debtUpdateButton"};     // each tab has its own, under its table
+    QPushButton *button = window.findChild<QPushButton *>(names[window.findChild<QTabWidget *>("reviewTabs")->currentIndex()]);
     if (!button || !button->isEnabled()) {
         return 0;
     }
@@ -9554,7 +9570,7 @@ void Smart210Test::theReviewScreenChangesCommentsAndDatesOfTheSelectedRecord()
     debts->selectRow(0);
     debts->selectRow(1);
     QCOMPARE(debts->selectionModel()->selectedRows().size(), 1);
-    QCOMPARE(selected->text(), QString("1 selected"));
+    QCOMPARE(window.findChild<QLabel *>("debtSelected")->text(), QString("1 selected"));           // the label of its own tab
     QVERIFY(updateReviewRecord(window, "checked") == 0);
     QVERIFY2(status->text().contains("comment was saved"), qPrintable(status->text()));
     QCOMPARE(debts->item(0, 6)->text(), QString(""));        // the other record is untouched

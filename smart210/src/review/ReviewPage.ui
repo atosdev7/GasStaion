@@ -2,7 +2,7 @@
 <ui version="4.0">
  <class>ReviewPage</class>
  <widget class="QWidget" name="ReviewPage">
-  <layout class="QVBoxLayout" name="reviewLayout" stretch="0,0,0,1,0,0">
+  <layout class="QVBoxLayout" name="reviewLayout" stretch="0,0,0,1,0">
    <property name="leftMargin"><number>24</number></property>
    <property name="topMargin"><number>12</number></property>
    <property name="rightMargin"><number>24</number></property>
@@ -54,7 +54,7 @@
     <widget class="QTabWidget" name="reviewTabs">
      <widget class="QWidget" name="reviewSalesTab">
       <attribute name="title"><string>Sales</string></attribute>
-      <layout class="QVBoxLayout" name="reviewSalesTabLayout" stretch="0,1">
+      <layout class="QVBoxLayout" name="reviewSalesTabLayout" stretch="0,1,0">
        <property name="leftMargin"><number>9</number></property>
        <property name="topMargin"><number>9</number></property>
        <property name="rightMargin"><number>9</number></property>
@@ -68,48 +68,8 @@
         <widget class="QTableWidget" name="reviewSalesTable">
         </widget>
        </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="reviewSupplyTab">
-      <attribute name="title"><string>Supplies</string></attribute>
-      <layout class="QVBoxLayout" name="reviewSupplyTabLayout" stretch="0,1">
-       <property name="leftMargin"><number>9</number></property>
-       <property name="topMargin"><number>9</number></property>
-       <property name="rightMargin"><number>9</number></property>
-       <property name="bottomMargin"><number>9</number></property>
-       <property name="spacing"><number>6</number></property>
        <item>
-        <widget class="QLabel" name="reviewSupplyTotals">
-        </widget>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="reviewSupplyTable">
-        </widget>
-       </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="reviewDebtTab">
-      <attribute name="title"><string>Ticket Debt</string></attribute>
-      <layout class="QVBoxLayout" name="reviewDebtTabLayout" stretch="0,1">
-       <property name="leftMargin"><number>9</number></property>
-       <property name="topMargin"><number>9</number></property>
-       <property name="rightMargin"><number>9</number></property>
-       <property name="bottomMargin"><number>9</number></property>
-       <property name="spacing"><number>6</number></property>
-       <item>
-        <widget class="QLabel" name="reviewDebtTotals">
-        </widget>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="reviewDebtTable">
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="editRow" stretch="0,1,0,0,0">
+    <layout class="QHBoxLayout" name="salesEditRow" stretch="0,1,0,0,0">
      <property name="leftMargin"><number>0</number></property>
      <property name="topMargin"><number>0</number></property>
      <property name="rightMargin"><number>0</number></property>
@@ -120,7 +80,7 @@
       </widget>
      </item>
      <item>
-      <spacer name="spacer1">
+      <spacer name="salesEditRowSpacer">
        <property name="orientation"><enum>Qt::Horizontal</enum></property>
        <property name="sizeHint" stdset="0"><size><width>12</width><height>20</height></size></property>
       </spacer>
@@ -144,6 +104,96 @@
       </widget>
      </item>
     </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="reviewSupplyTab">
+      <attribute name="title"><string>Supplies</string></attribute>
+      <layout class="QVBoxLayout" name="reviewSupplyTabLayout" stretch="0,1,0">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QLabel" name="reviewSupplyTotals">
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="reviewSupplyTable">
+        </widget>
+       </item>
+       <item>
+    <layout class="QHBoxLayout" name="supplyEditRow" stretch="0,1,0">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QLabel" name="supplySelected">
+      </widget>
+     </item>
+     <item>
+      <spacer name="supplyEditRowSpacer">
+       <property name="orientation"><enum>Qt::Horizontal</enum></property>
+       <property name="sizeHint" stdset="0"><size><width>12</width><height>20</height></size></property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="supplyUpdateButton">
+       <property name="text"><string>Update</string></property>
+       <property name="enabled"><bool>false</bool></property>
+      </widget>
+     </item>
+    </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="reviewDebtTab">
+      <attribute name="title"><string>Ticket Debt</string></attribute>
+      <layout class="QVBoxLayout" name="reviewDebtTabLayout" stretch="0,1,0">
+       <property name="leftMargin"><number>9</number></property>
+       <property name="topMargin"><number>9</number></property>
+       <property name="rightMargin"><number>9</number></property>
+       <property name="bottomMargin"><number>9</number></property>
+       <property name="spacing"><number>6</number></property>
+       <item>
+        <widget class="QLabel" name="reviewDebtTotals">
+        </widget>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="reviewDebtTable">
+        </widget>
+       </item>
+       <item>
+    <layout class="QHBoxLayout" name="debtEditRow" stretch="0,1,0">
+     <property name="leftMargin"><number>0</number></property>
+     <property name="topMargin"><number>0</number></property>
+     <property name="rightMargin"><number>0</number></property>
+     <property name="bottomMargin"><number>0</number></property>
+     <property name="spacing"><number>6</number></property>
+     <item>
+      <widget class="QLabel" name="debtSelected">
+      </widget>
+     </item>
+     <item>
+      <spacer name="debtEditRowSpacer">
+       <property name="orientation"><enum>Qt::Horizontal</enum></property>
+       <property name="sizeHint" stdset="0"><size><width>12</width><height>20</height></size></property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="debtUpdateButton">
+       <property name="text"><string>Update</string></property>
+       <property name="enabled"><bool>false</bool></property>
+      </widget>
+     </item>
+    </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
    </item>
    <item>
     <widget class="QLabel" name="reviewStatus">
