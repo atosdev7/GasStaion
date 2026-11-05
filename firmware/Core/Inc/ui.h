@@ -27,7 +27,7 @@ typedef struct {
     void *ctx;
     void (*update)(void *ctx, const char *kg, const char *litres, const char *density);                      /* UpdateDisplay */
     void (*refresh)(void *ctx);                                                                              /* RefreshDisplay: 8 to 10 ms */
-    int (*scan)(void *ctx, const char *value);                                                               /* ScanKeyboardAndRefreshDisplay(value): 20 ms; a KEY_* code, UI_KEY_NONE when no new press */
+    int (*scan)(void *ctx, const char *value);                                                               /* ScanKeyboardAndRefreshDisplay(value): 20 ms; a KEY_* code, KEY_NONE when no new press */
     void (*beep)(void *ctx, uint16_t ms);
     void (*led)(void *ctx, uint8_t index, int on);                              /* 0 heartbeat, 1 preset set, 2 dispensing, 3 result (steady) or fault (blinking) */
 } UiHal;
