@@ -413,8 +413,27 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     if (!run(find, error)) {
         return false;
     }
-    const bool exists = find.next();
-    if (exists && find.value(0).toInt() == 0) {
+    bool exists = find.next();
+    int localSynced = exists ? find.value(0).toInt() : 1;
+    if (!exists) {
+        // The same card (the same uid) under another id here: it was registered at this terminal and at another one before either had synced, and the web app kept
+        // the other one. The record of the web app stands: the card here takes its id and, below, its fields (found by the uid); what refers to the card follows the id.
+        QSqlQuery sameUid(db_);
+        sameUid.prepare("SELECT id FROM cards WHERE uid = ? AND id <> ?");
+        sameUid.addBindValue(row.value("uid").toString());
+        sameUid.addBindValue(id);
+        if (!run(sameUid, error)) {
+            return false;
+        }
+        if (sameUid.next()) {
+            if (!adoptCardId(sameUid.value(0).toString(), id, error)) {
+                return false;
+            }
+            exists = true;
+            localSynced = 1;
+        }
+    }
+    if (exists && localSynced == 0) {
         *stored = false;
 
         return true;
@@ -477,6 +496,29 @@ bool SyncStore::storeCard(const QJsonObject &row, bool *stored, QString *error)
     query.addBindValue(id);
 
     return run(query, error);
+}
+
+// A card of this terminal takes another id (the one the web app has for the same uid): the card, and every record that names it, here. The card counts as synced: the web
+// app has it (the fields of the web app are stored by the caller).
+bool SyncStore::adoptCardId(const QString &from, const QString &to, QString *error)
+{
+    static const char *const tables[] = {"tickets", "sales", "supplements", "card_transactions", "supply_sessions"};
+
+    for (unsigned int i = 0; i < sizeof tables / sizeof tables[0]; ++i) {
+        QSqlQuery update(db_);
+        update.prepare(QString("UPDATE %1 SET card_id = ? WHERE card_id = ?").arg(tables[i]));
+        update.addBindValue(to);
+        update.addBindValue(from);
+        if (!run(update, error)) {
+            return false;
+        }
+    }
+    QSqlQuery card(db_);
+    card.prepare("UPDATE cards SET id = ?, synced = 1 WHERE id = ?");
+    card.addBindValue(to);
+    card.addBindValue(from);
+
+    return run(card, error);
 }
 
 bool SyncStore::storeLoan(const QJsonObject &row, bool *stored, QString *error)

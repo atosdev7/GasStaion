@@ -480,6 +480,7 @@ private slots:
     void aSupplyRecordsTheModeAndTheDensity();
     void theUploadSendsCardsCardSalesAndCardSupplements();
     void aDownloadStoresCardsWithTheBalanceAndKeepsUnuploadedOnes();
+    void aDownloadedCardWithTheUidOfAnotherLocalCardUpdatesItByUid();
     void theCardScreenRegistersTopsUpAndChecksThePin();
     void theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWithThePinLast();
     void theCardActionsAskForAnOkBeforeTheyDoIt();
@@ -12368,6 +12369,58 @@ void Smart210Test::aDownloadStoresCardsWithTheBalanceAndKeepsUnuploadedOnes()
     QVERIFY(Cards::findById(db, id).deleted);
 }
 
+// A card registered here and at another terminal before either synced: the web app kept the other one, so the download brings the same uid under another id. It must not
+// fail (and then fail for ever): the card here takes the web app's id and fields, and what refers to it follows.
+void Smart210Test::aDownloadedCardWithTheUidOfAnotherLocalCardUpdatesItByUid()
+{
+    setUpSelling();
+    QSqlDatabase db = QSqlDatabase::database(connection_);
+    SyncStore store(db);
+
+    const Cards::Registration li = Cards::registerCard(db, "AA01", "Li Wei", "D", "1234", "");     // made here, not uploaded: synced = 0
+    QVERIFY(li.ok);
+    QVERIFY(Cards::topUp(db, li.cardId, 1000, 800, 7, QDateTime::currentDateTime()).ok);             // a top-up that waits for the upload: +10.00
+    run("INSERT INTO tickets (barcode, fuel_type, spec, amount_kg, status, card_id, synced) VALUES (3000000099, 'D', NULL, 500, 1, '" + li.cardId + "', 0)");
+    const Cards::Card local = Cards::findById(db, li.cardId);
+    QVERIFY(local.exists);
+    QVERIFY(!local.synced);
+    // an unrelated card here must stay as it is
+    const Cards::Registration other = Cards::registerCard(db, "BB02", "Wang Fang", "D", "4321", "");
+    QVERIFY(other.ok);
+
+    const QString webId = "22222222-2222-2222-2222-222222222222";
+    const QString row = "[{'id':'" + webId + "','uid':'AA01','holder_name':'Li Wei (web)','holder_phone':'138 0000 1111','fuel_type':'D','pin_salt':'ab12','pin_hash':'hh',"
+                        "'failed_attempts':0,'status':'active','balance_kg':'40.00','deleted':false}]";
+    SyncStore::PageResult page = store.applyPage("cards", rowsOf(row));
+    QVERIFY2(page.ok, qPrintable(page.error));
+    QCOMPARE(page.keys.size(), 1);                                     // saved and acknowledged, not skipped
+    QCOMPARE(page.skipped, 0);
+
+    // one card with that uid, the web app's id and fields, synced
+    QCOMPARE(one("SELECT COUNT(*) FROM cards WHERE uid = 'AA01'").toLongLong(), qlonglong(1));
+    QVERIFY(!Cards::findById(db, li.cardId).exists);
+    const Cards::Card card = Cards::findById(db, webId);
+    QVERIFY(card.exists);
+    QCOMPARE(card.uid, QString("AA01"));
+    QCOMPARE(card.holderName, QString("Li Wei (web)"));
+    QCOMPARE(card.pinSalt, QString("ab12"));
+    QCOMPARE(card.holderPhone, QString("138 0000 1111"));
+    QVERIFY(card.synced);
+    // what referred to the old id follows the new one, and the balance counts the top-up that the web app does not know yet
+    QCOMPARE(one("SELECT COUNT(*) FROM sales WHERE card_id = '" + webId + "'").toLongLong(), qlonglong(1));
+    QCOMPARE(one("SELECT COUNT(*) FROM sales WHERE card_id = '" + li.cardId + "'").toLongLong(), qlonglong(0));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + webId + "'").toLongLong(), qlonglong(1));
+    QCOMPARE(one("SELECT COUNT(*) FROM tickets WHERE card_id = '" + li.cardId + "'").toLongLong(), qlonglong(0));
+    QCOMPARE(card.balanceX100, qlonglong(4000 + 1000 - 500));          // the web's 40.00 + the top-up 10.00 - the ticket made for the card 5.00 (both not counted by the web app yet)
+    // the other card is untouched
+    QVERIFY(Cards::findById(db, other.cardId).exists);
+    QCOMPARE(Cards::findById(db, other.cardId).uid, QString("BB02"));
+
+    // the same download again changes nothing and does not fail
+    page = store.applyPage("cards", rowsOf(row));
+    QVERIFY(page.ok);
+    QCOMPARE(one("SELECT COUNT(*) FROM cards WHERE uid = 'AA01'").toLongLong(), qlonglong(1));
+}
 // the registered card of the next tests: Li Wei with 50 kg of Diesel
 static const char *CardId = "A2425234";
 

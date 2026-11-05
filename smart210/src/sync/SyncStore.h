@@ -43,6 +43,7 @@ private:
     bool storeTicket(const QJsonObject &row, bool *stored, QString *error);
     bool storeLoan(const QJsonObject &row, bool *stored, QString *error);
     bool storeCard(const QJsonObject &row, bool *stored, QString *error);
+    bool adoptCardId(const QString &from, const QString &to, QString *error);
     bool storeCardTransaction(const QJsonObject &row, QString *error);
 
     // A restore of the web app's database: everything this terminal uploaded after `since` (the time of the restored dump, minus a margin for
