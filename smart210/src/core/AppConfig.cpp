@@ -17,7 +17,13 @@ AppConfig::AppConfig()
         language_ = "en";
     }
 
-    fullscreen_ = settings.value("fullscreen", true).toBool();
+    // The board shows the program in full screen; on a Windows PC it is a window (fullscreen = true in config.ini still gives full screen there).
+#ifdef Q_OS_WIN
+    const bool defaultFullscreen = false;
+#else
+    const bool defaultFullscreen = true;
+#endif
+    fullscreen_ = settings.value("fullscreen", defaultFullscreen).toBool();
     windowSize_ = QSize(settings.value("width", 1280).toInt(), settings.value("height", 720).toInt());
     if (windowSize_.width() < 320 || windowSize_.height() < 240) {
         windowSize_ = QSize(1280, 720);

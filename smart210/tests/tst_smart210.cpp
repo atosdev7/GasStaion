@@ -481,6 +481,7 @@ private slots:
     void theUploadSendsCardsCardSalesAndCardSupplements();
     void aDownloadStoresCardsWithTheBalanceAndKeepsUnuploadedOnes();
     void aDownloadedCardWithTheUidOfAnotherLocalCardUpdatesItByUid();
+    void theProgramIsNotFullScreenOnWindowsByDefault();
     void theCardScreenRegistersTopsUpAndChecksThePin();
     void theCardActionsPutTheCursorInTheirFirstFieldAndEnterMovesOnWithThePinLast();
     void theCardActionsAskForAnOkBeforeTheyDoIt();
@@ -12420,6 +12421,18 @@ void Smart210Test::aDownloadedCardWithTheUidOfAnotherLocalCardUpdatesItByUid()
     page = store.applyPage("cards", rowsOf(row));
     QVERIFY(page.ok);
     QCOMPARE(one("SELECT COUNT(*) FROM cards WHERE uid = 'AA01'").toLongLong(), qlonglong(1));
+}
+// no config.ini next to the program: the board is full screen, a Windows PC runs in a window
+void Smart210Test::theProgramIsNotFullScreenOnWindowsByDefault()
+{
+    const AppConfig config;
+
+#ifdef Q_OS_WIN
+    QVERIFY(!config.fullscreen());
+#else
+    QVERIFY(config.fullscreen());
+#endif
+    QCOMPARE(config.windowSize(), QSize(1280, 720));
 }
 // the registered card of the next tests: Li Wei with 50 kg of Diesel
 static const char *CardId = "A2425234";

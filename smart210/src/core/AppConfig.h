@@ -8,7 +8,7 @@
 
 // Settings that must be known before the database is open, read from config.ini next to the program:
 //   language   = en                   (the only language; default en)
-//   fullscreen = true | false         (true on the board, false for trying it on a PC)
+//   fullscreen = true | false         (default: true on the board, false on Windows, where the program runs in a window)
 //   width, height                     (window size when not fullscreen; default 1280 x 720)
 //   fontDir    = folder holding the .ttf/.otf/.ttc files to load (default: fonts next to the program)
 //   deviceFile = the file (INI) that keeps the machine configuration apart from the SD card, so a new card needs no setup again: server
