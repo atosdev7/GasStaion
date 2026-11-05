@@ -247,7 +247,7 @@ static void test_auto_screens(void)
     CHECK_DISPLAY(DENSITY, "0.830");
 
     /* the select key only reports itself to the Smart210 (the state does not change); the key is heard */
-    type(&rig, UI_KEY_FUNCTION);
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.board.state, STATE_IDLE);
     CHECK_EQ(rig.beeps, 1);
     CHECK(rig.board.key_events & FLAG_SELECT_KEY);
@@ -407,12 +407,12 @@ static void test_manual_entry(void)
     type(&rig, UI_KEY_1);
     CHECK_KEYPAD("    1");
     type(&rig, UI_KEY_2);
-    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_DOT);
     CHECK_KEYPAD("   12.");
     type(&rig, UI_KEY_5);
     type(&rig, UI_KEY_7);
     type(&rig, UI_KEY_9);        /* a third decimal is not taken */
-    type(&rig, UI_KEY_POINT);    /* nor a second point */
+    type(&rig, UI_KEY_DOT);    /* nor a second point */
     CHECK_KEYPAD(" 12.57");
     CHECK_EQ(ui_entry_grams(&rig.ui), 12570);
     CHECK_DISPLAY(KG, "   0.00");   /* the kg display waits for the fill */
@@ -429,7 +429,7 @@ static void test_manual_entry(void)
     CHECK_EQ(ui_entry_grams(&rig.ui), 0);
 
     /* three digits before the point at most; a point first is 0. */
-    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_DOT);
     type(&rig, UI_KEY_2);
     type(&rig, UI_KEY_5);
     CHECK_KEYPAD("  0.25");
@@ -441,7 +441,7 @@ static void test_manual_entry(void)
     /* ENTER with nothing typed is refused: Err for a moment, no fill */
     rig_new(&rig);
     boot(&rig, MODE_MANUAL, 2);
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_START);
     CHECK_DISPLAY(KG, "   Err");
     CHECK_EQ(rig.board.state, STATE_IDLE);
     tick(&rig, 2000);
@@ -449,9 +449,9 @@ static void test_manual_entry(void)
 
     /* ENTER makes the amount the preset (SET); the fill starts when the gun is up, and the pump follows the hook */
     type(&rig, UI_KEY_8);
-    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_DOT);
     type(&rig, UI_KEY_3);
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_EQ(rig.board.preset_g, 8300);
     CHECK_DISPLAY(KG, "   8.30");
@@ -474,17 +474,18 @@ static void test_manual_entry(void)
     CHECK_DISPLAY(LITRES, "  10.00");
     CHECK_KEYPAD("     ");
 
-    /* the select key does nothing in manual mode, and it reports nothing */
-    type(&rig, UI_KEY_FUNCTION);
+    /* the start key with no amount typed is refused in manual mode (it is not a select key there), and it reports nothing */
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.board.state, STATE_IDLE);
     CHECK_EQ(rig.board.key_events, 0);
+    tick(&rig, 2000);
 
     /* the clear key with nothing typed and an amount waiting for the gun drops that amount */
     rig.fake.hook = 0;
     type(&rig, UI_KEY_4);
     CHECK_DISPLAY(KG, "   8.30");      /* typing digits only changes the keyboard's LCD: the last fill is still there */
     CHECK_KEYPAD("    4");
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.board.state, STATE_SET);
     CHECK_DISPLAY(KG, "   4.00");      /* the new preset replaces it, in kg and in litres */
     CHECK_DISPLAY(LITRES, "   4.81");
@@ -502,7 +503,7 @@ static void test_total_key(void)
     boot(&rig, MODE_MANUAL, 2);
 
     /* nothing dispensed yet */
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_DISPLAY(KG, "      ");
     CHECK_DISPLAY(LITRES, "     0");
     tick(&rig, 5100);
@@ -510,13 +511,13 @@ static void test_total_key(void)
 
     /* a fill of 8.3 kg makes the total 8 kg (whole kg) */
     type(&rig, UI_KEY_8);
-    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_DOT);
     type(&rig, UI_KEY_3);
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_START);
     flow(&rig, 1010, 10);
     flow(&rig, 130, 0);
     CHECK_EQ(rig.board.state, STATE_IDLE);
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_DISPLAY(KG, "      ");
     CHECK_DISPLAY(LITRES, "     8");
 
@@ -527,20 +528,20 @@ static void test_total_key(void)
 
     /* 12 digits over the two displays: the kg display holds the upper six */
     rig.board.p.total_g = 123456789012ULL * 1000 + 999;
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_DISPLAY(KG, "123456");
     CHECK_DISPLAY(LITRES, "789012");
     rig.board.p.total_g = 1234ULL * 1000000 * 1000 + 5ULL * 1000;
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     tick(&rig, 10);
     CHECK_DISPLAY(KG, "  1234");
     CHECK_DISPLAY(LITRES, "000005");
 
     /* an amount waiting for the gun: the total can be looked at, and the gun up puts the display of the fill back */
     rig.fake.hook = 0;
-    type(&rig, UI_KEY_SET);                     /* the 5 that was typed: a 5 kg amount */
+    type(&rig, UI_KEY_START);                     /* the 5 that was typed: a 5 kg amount */
     CHECK_EQ(rig.board.state, STATE_SET);
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_DISPLAY(KG, "  1234");
     CHECK_DISPLAY(LITRES, "000005");
     rig.fake.hook = 1;
@@ -552,20 +553,30 @@ static void test_total_key(void)
     rig_new(&rig);
     boot(&rig, MODE_AUTO, 2);
     rig.board.p.total_g = 4567891ULL * 1000;
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_DISPLAY(KG, "     4");
     CHECK_DISPLAY(LITRES, "567891");
     tick(&rig, 5100);
     CHECK_DISPLAY(LITRES, "   0.00");
-    type(&rig, UI_KEY_TOTAL);
-    type(&rig, UI_KEY_FUNCTION);                 /* any other key puts the usual display back, and works as usual */
+    type(&rig, UI_KEY_PRINT);
+    type(&rig, UI_KEY_START);                 /* any other key puts the usual display back, and works as usual */
     CHECK_DISPLAY(LITRES, "   0.00");
-    type(&rig, UI_KEY_FUNCTION);
-    CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
+    type(&rig, UI_KEY_START);
+    CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);          /* the start key of an auto board is its select key */
+    rig.board.key_events = 0;
     type(&rig, UI_KEY_NEXT);
     type(&rig, UI_KEY_PREV);
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_STOP);
+    CHECK_EQ(rig.board.key_events, 0);                        /* the keys that have no job report nothing */
+    CHECK_EQ(rig.board.state, STATE_IDLE);
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.board.key_events, FLAG_SELECT_KEY);
+
+    /* the print key shows the total in auto and in manual mode alike; the stop key is not used: it only beeps and puts the usual display back */
+    type(&rig, UI_KEY_PRINT);
+    CHECK_DISPLAY(LITRES, "567891");
+    type(&rig, UI_KEY_STOP);
+    CHECK_DISPLAY(LITRES, "   0.00");
 }
 /* the keyboard's display: 5 digits for the value (no digit for the mode or the status); the text goes to ScanKeyboardAndRefreshDisplay at the next scan */
 static void test_keyboard_lcd(void)
@@ -597,14 +608,14 @@ static void test_keyboard_lcd(void)
     CHECK_SCAN("     ");
     type(&rig, UI_KEY_1);
     type(&rig, UI_KEY_2);
-    type(&rig, UI_KEY_POINT);
+    type(&rig, UI_KEY_DOT);
     type(&rig, UI_KEY_5);
     CHECK_SCAN("  12.5");
-    type(&rig, UI_KEY_TOTAL);
+    type(&rig, UI_KEY_PRINT);
     CHECK_SCAN("  12.5");                                       /* the total is on the two numeric displays */
     tick(&rig, 5100);
     rig.fake.hook = 0;
-    type(&rig, UI_KEY_SET);
+    type(&rig, UI_KEY_START);
     CHECK_SCAN(" 12.50");                                      /* the preset waits for the gun */
     rig.fake.hook = 1;
     flow(&rig, 2, 0);
@@ -628,7 +639,7 @@ static void test_scan_refresh_and_update(void)
     CHECK_EQ(rig.scans, 2);
     CHECK_EQ(rig.refreshes, 2);        /* but the display board is refreshed at every pass, or the digits would go dark */
 
-    type(&rig, UI_KEY_FUNCTION);
+    type(&rig, UI_KEY_START);
     CHECK_EQ(rig.updates, before);     /* the select key only reports itself: the displays do not change */
 
     request(&rig, 1, CMD_SET_PRESET, 3000, 1);

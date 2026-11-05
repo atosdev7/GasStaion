@@ -350,7 +350,7 @@ static void on_key(Ui *ui, int key)
     }
     ui->hal->beep(ui->hal->ctx, 30);
 
-    if (key == UI_KEY_TOTAL) {
+    if (key == UI_KEY_PRINT) {
         /* both modes, when no fill runs and no result waits: the total of the board for a few seconds */
         if ((b->state == STATE_IDLE || b->state == STATE_SET)) {
             ui->total_ms = UI_TOTAL_SHOW_MS;
@@ -359,12 +359,12 @@ static void on_key(Ui *ui, int key)
         return;
     }
     ui->total_ms = 0;                       /* any other key puts the usual display back */
-    if (key == UI_KEY_FUNCTION) {
-        board_key_select(b);
+    if (key == UI_KEY_START && !manual) {
+        board_key_select(b);                /* the start key of an auto board is its select key: reported to the Smart210 */
 
         return;
     }
-    if (key == UI_KEY_NEXT || key == UI_KEY_PREV) {
+    if (key == UI_KEY_NEXT || key == UI_KEY_PREV || key == UI_KEY_STOP) {
         return;                             /* not used yet */
     }
     if (key == UI_KEY_CLEAR && (!manual || (b->state == STATE_IDLE && ui->entry_len == 0) || b->state == STATE_SET)) {
@@ -377,13 +377,13 @@ static void on_key(Ui *ui, int key)
     }
     if (key >= UI_KEY_0 && key <= UI_KEY_9) {
         entry_add(ui, (char)('0' + (key - UI_KEY_0)));
-    } else if (key == UI_KEY_POINT) {
+    } else if (key == UI_KEY_DOT) {
         entry_add(ui, '.');
     } else if (key == UI_KEY_CLEAR) {
         if (ui->entry_len > 0) {
             ui->entry[--ui->entry_len] = 0;
         }
-    } else if (key == UI_KEY_SET) {
+    } else if (key == UI_KEY_START) {
         const uint32_t grams = ui_entry_grams(ui);
 
         if (grams == 0 || !board_manual_amount(b, grams)) {

@@ -10,22 +10,22 @@
 
 #include <stdint.h>
 
-/* The key codes the driver returns (one per press). */
+/* The key codes the driver returns (one per press): one for each key of the board, named like it (ui.c says what each one does). */
 enum {
     UI_KEY_NONE = 0,
     UI_KEY_0 = 1, UI_KEY_1, UI_KEY_2, UI_KEY_3, UI_KEY_4, UI_KEY_5, UI_KEY_6, UI_KEY_7, UI_KEY_8, UI_KEY_9,
-    UI_KEY_POINT,
+    UI_KEY_DOT,
     UI_KEY_NEXT,       /* not used yet */
     UI_KEY_PREV,       /* not used yet */
-    UI_KEY_TOTAL,      /* shows the total the board has dispensed */
+    UI_KEY_PRINT,      /* shows the total the board has dispensed */
     UI_KEY_CLEAR,
-    UI_KEY_SET,        /* manual mode: takes the typed amount */
-    UI_KEY_FUNCTION    /* auto mode: the select key (beeps, reported to the Smart210) */
+    UI_KEY_START,      /* auto mode: the select key (beeps, reported to the Smart210); manual mode: takes the typed amount */
+    UI_KEY_STOP        /* not used yet */
 };
 
 /* The keys as the board reports them: the three bytes that it clocks out (column 0 first) are joined into a 32 bit word as byte0 << 24 | byte1 << 16 | byte2 << 8, and
    a pressed key is a 1. The 17 keys use the 5 low bits of the first byte, all 8 bits of the second and the 4 high bits of the third. (The names are the ones of the
-   keyboard board; keyboard.c says which UI_KEY_* each one gives: PRINT is FUNCTION, START is SET, STOP is TOTAL.) */
+   keyboard board; the driver gives the UI_KEY_* of the same name.) */
 #define KEY_1                      0x00001000
 #define KEY_2                      0x00002000
 #define KEY_3                      0x00004000

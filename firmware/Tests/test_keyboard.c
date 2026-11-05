@@ -560,8 +560,8 @@ static void test_every_key(void)
     static const struct { uint8_t b0, b1, b2; int key; } keys[17] = {
         {0, 0, 0x10, UI_KEY_1}, {0, 0, 0x20, UI_KEY_2}, {0, 0, 0x40, UI_KEY_3}, {0, 0, 0x80, UI_KEY_4},
         {0, 0x01, 0, UI_KEY_5}, {0, 0x02, 0, UI_KEY_6}, {0, 0x04, 0, UI_KEY_7}, {0, 0x08, 0, UI_KEY_8}, {0, 0x10, 0, UI_KEY_9}, {0, 0x20, 0, UI_KEY_0},
-        {0, 0x40, 0, UI_KEY_POINT}, {0, 0x80, 0, UI_KEY_CLEAR},
-        {0x01, 0, 0, UI_KEY_NEXT}, {0x02, 0, 0, UI_KEY_FUNCTION}, {0x04, 0, 0, UI_KEY_SET}, {0x08, 0, 0, UI_KEY_TOTAL}, {0x10, 0, 0, UI_KEY_PREV}
+        {0, 0x40, 0, UI_KEY_DOT}, {0, 0x80, 0, UI_KEY_CLEAR},
+        {0x01, 0, 0, UI_KEY_NEXT}, {0x02, 0, 0, UI_KEY_PRINT}, {0x04, 0, 0, UI_KEY_START}, {0x08, 0, 0, UI_KEY_STOP}, {0x10, 0, 0, UI_KEY_PREV}
     };
     int i, j;
 
@@ -601,7 +601,7 @@ static void test_two_keys_together(void)
     /* all 17 at once: all 17 codes, once each, in the order of the map */
     forget_keys();
     {
-        int seen[UI_KEY_FUNCTION + 1] = {0};
+        int seen[UI_KEY_STOP + 1] = {0};
         int i, total = 0;
 
         for (i = 0; i < 40; ++i) {
@@ -613,7 +613,7 @@ static void test_two_keys_together(void)
             }
         }
         CHECK_EQ(total, 17);
-        for (i = UI_KEY_0; i <= UI_KEY_FUNCTION; ++i) {
+        for (i = UI_KEY_0; i <= UI_KEY_STOP; ++i) {
             CHECK_EQ(seen[i], 1);
         }
     }

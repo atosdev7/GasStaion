@@ -164,10 +164,10 @@ The numbers are fixed so that the totals can be checked at the end (2.5). `kg` a
 | 2.1.5 | cashier | terminal, Sales > Ticket sale | **T1** `Acme Transport`: 6 diesel tickets of 10 kg (60.00 kg), receipt on | Amount 45,000.00, paid in full; the 6 tickets are marked sold | |
 | 2.1.6 | cashier | terminal, Sales > Ticket sale | **T2** `Individual`: 2 gasoline tickets of 10 kg (20.00 kg), receipt **off** | Amount 16,400.00; the sale has no receipt (see 2.4 for F8) | |
 | **Supplies** | | | | | |
-| 2.1.7 | cashier + simulator | terminal, Supply | **P1** nozzle 3 (diesel, auto): press the select key on board 3 (or Select on screen); scan four of the diesel tickets of T1 (4 x 10 kg = 40 kg); lift the gun on the simulator; wait for the fill | Preset 40.00 kg; the board starts when the gun is up; the fill ends at 40.00 kg (dispensed = preset); no remainder | |
+| 2.1.7 | cashier + simulator | terminal, Supply | **P1** nozzle 3 (diesel, auto): press the select key (Start) on board 3 (or Select on screen); scan four of the diesel tickets of T1 (4 x 10 kg = 40 kg); lift the gun on the simulator; wait for the fill | Preset 40.00 kg; the board starts when the gun is up; the fill ends at 40.00 kg (dispensed = preset); no remainder | |
 | 2.1.8 | cashier + simulator | terminal, Supply | **P2** nozzle 1 (gasoline, auto): scan the 2 gasoline tickets of T2 (2 x 10 kg = 20 kg); lift the gun; **hang the gun at about 18.50 kg** | The fill ends after 3 s on the hook; result 18.50 kg; a **remainder ticket of 1.50 kg** prints | |
 | 2.1.9 | cashier + simulator | terminal, Supply | **P3** nozzle 1 again: scan the remainder ticket of P2 (1.50 kg) and 1 gasoline ticket of 10 kg (preset 11.50 kg); fill to the preset | The remainder ticket is accepted as a ticket; the preset is the sum; no new remainder | |
-| 2.1.10 | cashier + simulator | boards | **P4** nozzle 5 (manual): type 15 on the keyboard, press Set; lift the gun; fill | Keyboard display (5 digits): the typed text; after Set: kg and litres show the preset (litres by the density); fuel counts up from zero; at the end the displays **keep 15.00 kg** until the next preset; the terminal shows the dispenser, but records nothing | |
+| 2.1.10 | cashier + simulator | boards | **P4** nozzle 5 (manual): type 15 on the keyboard, press Start; lift the gun; fill | Keyboard display (5 digits): the typed text; after Set: kg and litres show the preset (litres by the density); fuel counts up from zero; at the end the displays **keep 15.00 kg** until the next preset; the terminal shows the dispenser, but records nothing | |
 | 2.1.11 | cashier | terminal, Manual supply | Type in the reading of P4: nozzle 5, 15.00 kg, litres by the density, with two 10 kg diesel tickets (20 kg) | The supply is saved with its tickets; a **remainder of 5.00 kg** prints | |
 | 2.1.12 | cashier | terminal, Review | Look at the Supplies tab | One total line + a line for **Gasoline** and one for **Diesel**; remainders counted | |
 | **Cards** | | | | | |
@@ -219,7 +219,7 @@ Do this after the terminal has made its checkout at 9:00 (or move the clock past
 | 2.4.1 | cashier | Review > Sales: press **F8** | The sales without a receipt (T2) disappear from the list, the line "1 sales without a receipt are not listed" shows; press F8 again: they return. The change is in the change log | |
 | 2.4.2 | cashier | On the Settings pages press F8 | Nothing happens | |
 | 2.4.3 | cashier | In a text field press **Right Alt** | The footer letter changes between A and 가; Korean letters are typed; a PIN field stays English | |
-| 2.4.4 | cashier | Press the **Total** key on the dispenser keyboard (idle) | kg and litres show the board's total (whole kg over the two displays) for 5 s | |
+| 2.4.4 | cashier | Press the **Print** key (the total) on the dispenser keyboard (idle) | kg and litres show the board's total (whole kg over the two displays) for 5 s | |
 | 2.4.5 | admin | Machine Config > nozzle 1 > **Reset total** | Asks first; the log has the value that was cleared; refused while a fill runs | |
 
 ### 2.5 Reconciliation of Day 1 (the numbers that must agree)
@@ -314,7 +314,7 @@ The three numbers of a day are drawn inside the ranges of 0.4; the week is **762
 | 3.5.6 | simulator | Hang the gun and lift it again within 3 s; hang it for good | The pump stops and starts with the gun; after 3 s on the hook the fill ends with what came out | |
 | 3.5.7 | simulator | End a fill 20 g short of the preset (hang the gun) and another 100 g short | 20 g: result = preset, no remainder; 100 g: a remainder ticket for the rest | |
 | 3.5.8 | simulator | Raise a fault (flow sensor) in a fill | The fill ends with reason fault; the fault shows on the Dispensers page; the board needs to be acknowledged | |
-| 3.5.9 | cashier | Take the Total key / Reset total of a nozzle after the faults | The total counted every gram (also of the cut fills); the reset is logged | |
+| 3.5.9 | cashier | Take the Print key (total) / Reset total of a nozzle after the faults | The total counted every gram (also of the cut fills); the reset is logged | |
 | 3.5.10 | tester | Power-cut the terminal PC in the middle of a sale | After the restart the database is sound; every sale has its ticket | |
 
 ### 3.6 Day 5 (Fri): volume and limits

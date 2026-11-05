@@ -113,7 +113,7 @@ stateDiagram-v2
     DISPENSING --> DONE: the fill ends, the result is held (auto mode)
     DONE --> IDLE: ACK_RESULT with that session id
     IDLE --> IDLE: SHOW_BALANCE (the display shows a number for 60 s)
-    IDLE --> SET: Set key at the keypad (manual mode, the amount is the preset)
+    IDLE --> SET: Start key at the keypad (manual mode, the amount is the preset)
     SET --> DISPENSING: the gun is up (manual mode, the board starts by itself)
     DISPENSING --> IDLE: the fill ends, nothing is held (manual mode)
     SET --> IDLE: CLEAR key (manual mode, drops the amount)
@@ -275,7 +275,7 @@ The supplier does everything at the dispenser; the Smart210 only watches. The ke
 ```mermaid
 flowchart TD
     A["Idle, manual board<br/>LCD: H and blank"] --> B["Type the amount<br/>digits and Dot, Clear takes the last one off<br/>at most 3 digits before the point, 2 after<br/>LCD: H and the typed text"]
-    B --> C{"Set key"}
+    B --> C{"Start key"}
     C -- "nothing typed or zero" --> X["Err on the kg display for 1.5 s<br/>nothing changes"]
     X --> B
     C -- "an amount" --> D["Preset waits, state SET<br/>long beep, the typed text is cleared<br/>kg and litres show the preset together, by the density<br/>LCD: P and the preset"]
@@ -287,11 +287,11 @@ flowchart TD
     E -- "preset reached, TIM1 compare stops the pump<br/>or no flow 30 s, tank full, fault" --> F["Fill ends<br/>grams added to the total of the board<br/>no result held, nothing reported<br/>preset cleared<br/>kg and litres of the fill stay on the displays"]
     F --> A
     A -. "the next preset is set: the displays show it" .-> D
-    T["Total key, idle or preset waits<br/>kg and litres show the total for 5 s<br/>LCD: t"] -.-> B
+    T["Print key, idle or preset waits<br/>kg and litres show the total for 5 s"] -.-> B
 ```
 
 - No key does anything while a fill runs. There is no cancel: the supplier stops by hanging the gun.
-- **The last fill stays on the kg and litres displays until the next preset is set** (the Set key takes an amount; an auto board does the same after its result is acknowledged, until the next SET_PRESET above zero): typing digits in between only changes the keyboard's LCD, and the Clear key that drops a preset leaves the displays at zero. It is kept in RAM only (a restart clears it).
+- **The last fill stays on the kg and litres displays until the next preset is set** (the Start key takes an amount; an auto board does the same after its result is acknowledged, until the next SET_PRESET above zero): typing digits in between only changes the keyboard's LCD, and the Clear key that drops a preset leaves the displays at zero. It is kept in RAM only (a restart clears it).
 - A power cut in the middle of a manual fill drops the fill (nothing is reported), but what it dispensed up to the last save is added to the total.
 - The Function, Next and Prev keys do nothing in manual mode.
 ## 11. Where the time goes in one pass of the main loop

@@ -263,15 +263,15 @@ uint8_t ScanKeyColumn(uint8_t col)
 #define KEY_BITS (KEY_1 | KEY_2 | KEY_3 | KEY_4 | KEY_5 | KEY_6 | KEY_7 | KEY_8 | KEY_9 | KEY_0 | KEY_DOT | KEY_CLEAR | KEY_NEXT | KEY_PRINT | KEY_START | KEY_STOP | KEY_PREV)
 #define DEBOUNCE_SCANS 3
 
-/* what each key of the board is for the program: the order is the order in which keys that went down together are given */
+/* the code of each key of the board: the order is the order in which keys that went down together are given */
 static const struct {
     uint32_t mask;
     int key;
 } key_map[] = {
     {KEY_0, UI_KEY_0}, {KEY_1, UI_KEY_1}, {KEY_2, UI_KEY_2}, {KEY_3, UI_KEY_3}, {KEY_4, UI_KEY_4},
     {KEY_5, UI_KEY_5}, {KEY_6, UI_KEY_6}, {KEY_7, UI_KEY_7}, {KEY_8, UI_KEY_8}, {KEY_9, UI_KEY_9},
-    {KEY_DOT, UI_KEY_POINT}, {KEY_CLEAR, UI_KEY_CLEAR}, {KEY_NEXT, UI_KEY_NEXT}, {KEY_PREV, UI_KEY_PREV},
-    {KEY_PRINT, UI_KEY_FUNCTION}, {KEY_START, UI_KEY_SET}, {KEY_STOP, UI_KEY_TOTAL}
+    {KEY_DOT, UI_KEY_DOT}, {KEY_CLEAR, UI_KEY_CLEAR}, {KEY_NEXT, UI_KEY_NEXT}, {KEY_PREV, UI_KEY_PREV},
+    {KEY_PRINT, UI_KEY_PRINT}, {KEY_START, UI_KEY_START}, {KEY_STOP, UI_KEY_STOP}
 };
 
 static uint32_t scan_window[DEBOUNCE_SCANS];     /* the keys found by the last scans (the 17 key bits) */
