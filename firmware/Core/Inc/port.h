@@ -38,4 +38,10 @@ int port_power_cut(void);
 /* Housekeeping that has a time: switches the beeper off when its time is over. */
 void port_poll(void);
 
+/* The independent watchdog (IWDG, on its own oscillator, the LSI). port_watchdog_start() once, when everything is ready (it cannot be stopped again); port_watchdog_feed() in every pass
+   of the main loop. A pass that does not come round for 1.4 s at least (2 s at the nominal 32 kHz of the LSI) resets the board: the relays are off after a reset and the fill that was
+   running comes back as a result with reason 2 (board_init). The longest wait of a normal pass is the erase of a sector of the memory, 400 ms at most. */
+void port_watchdog_start(void);
+void port_watchdog_feed(void);
+
 #endif

@@ -1379,6 +1379,33 @@ static void test_memory_timing(void)
     board_idle_work(&r.board);
     CHECK_EQ(r.fake.idle_work, 1);                    /* and no long work while the supply is going */
 
+    /* the power cut when the memory wants an erase first (a long fill has used the blank sectors up): the save without an erase is refused, so the save that may erase is used
+       (the backup battery lasts 1 to 2 minutes): the record is the last one of the fill, and the board is not in fault */
+    rig_new(&r, 1);
+    configure(&r, MODE_AUTO, 8300, 100000);
+    start_auto(&r, 15000);
+    run(&r, 250, 20);
+    r.fake.fail_save_now = 1;
+    run(&r, 250, 20);                                 /* the progress saves are refused from here on */
+    {
+        const uint32_t pulses_at_cut = r.fake.pulses - r.board.pulse_base;
+        const uint32_t stored_before = r.fake.stored.inflight.pulses;
+
+        saves = r.fake.saves;
+        now = r.fake.saves_now;
+        board_power_fail(&r.board);
+        CHECK_EQ(r.fake.saves_now, now);              /* the refused one wrote nothing */
+        CHECK_EQ(r.fake.saves, saves + 1);            /* the one that may erase did */
+        CHECK_EQ(r.fake.stored.inflight.pulses, pulses_at_cut);
+        CHECK(stored_before < pulses_at_cut);         /* more than the last progress record had */
+        CHECK_EQ(r.board.fault, FAULT_NONE);
+        CHECK_EQ(r.board.state, STATE_DISPENSING);
+    }
+    r.fake.fail_save = 1;                             /* even a memory that refuses both is no fault at a power cut */
+    r.board.powering_down = 0;
+    board_power_fail(&r.board);
+    CHECK_EQ(r.board.fault, FAULT_NONE);
+
     /* the end of the fill, an acknowledgement and a config are saves that may take long: they use the other one (and a refusal is a fault) */
     rig_new(&r, 1);
     configure(&r, MODE_AUTO, 8300, 100000);

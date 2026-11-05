@@ -67,8 +67,9 @@ typedef struct {
     /* Stores the record; returns 1 when it is stored, 0 when the memory refused (the core then reports fault 3, memory). It may take long (a flash sector erase, 30 to
        200 ms and more with a worn sector): the core uses it only where that does not matter (START, a config, the end of a fill, an acknowledgement). */
     int (*save)(void *ctx, const Persist *in);
-    /* Stores the record without ever erasing (a few milliseconds at most): for the fill in progress and for the power cut. Returns 1 when it is stored, 0 when it could not be
-       (nothing is written; the core does not treat that as a fault: the last record stays the state). May be 0: then save is used. */
+    /* Stores the record without ever erasing (a few milliseconds at most): for the fill in progress, and first at a power cut. Returns 1 when it is stored, 0 when it could not be
+       (nothing is written; the core does not treat that as a fault: the last record stays the state). At a power cut a refusal is followed by a save (which may erase: the backup
+       battery keeps the board running for 1 to 2 minutes). May be 0: then save is used. */
     int (*save_now)(void *ctx, const Persist *in);
     /* Work that takes long and can wait for an idle moment (erasing the sector of the memory that is needed next). Called by board_idle_work() only when no fill runs and
        nothing waits. May be 0. */

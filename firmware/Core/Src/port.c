@@ -463,6 +463,32 @@ static int port_key(void *ctx, const char *value)
     return ScanKeyboardAndRefreshDisplay(value);
 }
 
+/* ---------------------------------------------------------------- the watchdog */
+
+/* The independent watchdog, set by its registers (not by the HAL module, which CubeMX would have to enable again whenever it writes the project): the LSI (17 to 47 kHz, 32 kHz nominal) divided by 64,
+   counting 1000: 2.0 s at 32 kHz, 1.36 s at the fastest LSI and 3.8 s at the slowest. The longest wait of a pass of the main loop is the erase of a sector of the memory (400 ms at most). */
+#define WATCHDOG_PRESCALER_64 4U        /* IWDG_PR: divider 64 */
+#define WATCHDOG_RELOAD 1000U
+
+void port_watchdog_start(void)
+{
+    const uint32_t began = HAL_GetTick();
+
+    DBGMCU->APB1FZ |= DBGMCU_APB1_FZ_DBG_IWDG_STOP;     /* it stands still while a debugger has the program halted */
+    IWDG->KR = 0x5555U;                                 /* the registers may be written */
+    IWDG->PR = WATCHDOG_PRESCALER_64;
+    IWDG->RLR = WATCHDOG_RELOAD;
+    IWDG->KR = 0xCCCCU;                                 /* start (the LSI is switched on by it) */
+    while (IWDG->SR != 0U && HAL_GetTick() - began < 100U) {
+    }                                                   /* the new values are taken over by the LSI clock; a few milliseconds */
+    IWDG->KR = 0xAAAAU;                                 /* count from the reload value */
+}
+
+void port_watchdog_feed(void)
+{
+    IWDG->KR = 0xAAAAU;
+}
+
 /* ---------------------------------------------------------------- start up */
 
 void port_init(Hal *hal, UiHal *ui)

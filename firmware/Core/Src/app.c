@@ -17,6 +17,7 @@ void app_init(void)
     board_init(&board_, &hal_, BOARD_ADDRESS, 0);
     ui_init(&ui_, &board_, &ui_hal_);
     last_ms_ = HAL_GetTick();
+    port_watchdog_start();                      /* last: the start up (the memory is read, the first display) is over; from here on every pass of the loop feeds it */
 }
 
 /* One pass of the main loop. It must come round at least every few milliseconds: the bytes of a request are taken from the receive ring,
@@ -26,6 +27,8 @@ void app_loop(void)
     const uint32_t now = HAL_GetTick();
     const uint32_t elapsed = now - last_ms_;
     int byte;
+
+    port_watchdog_feed();
 
     while ((byte = port_rx_byte()) >= 0) {
         if (board_feed(&board_, (uint8_t)byte)) {

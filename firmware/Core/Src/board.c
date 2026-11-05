@@ -184,6 +184,17 @@ static void save_progress(Board *b)
     }
 }
 
+/* The save at a power cut. First the save without an erase (a program of under a millisecond); when that is refused because the next slot is the start of a sector that was not
+   erased ahead (a long fill has used the blank sectors up), the save that erases: the backup battery keeps the board running for 1 to 2 minutes after the supply is cut, and an erase takes
+   400 ms at most, so the record that is written is the last one of the fill. A refusal is not a fault: the supply is going. */
+static void save_at_power_cut(Board *b)
+{
+    if (b->hal->save_now && b->hal->save_now(b->hal->ctx, &b->p)) {
+        return;
+    }
+    b->hal->save(b->hal->ctx, &b->p);
+}
+
 static int save(Board *b)
 {
     if (b->hal->save(b->hal->ctx, &b->p)) {
@@ -1045,7 +1056,7 @@ void board_power_fail(Board *b)
     if (b->state == STATE_DISPENSING) {
         b->pulses_seen = counts_since_start(b);
         b->p.inflight.pulses = b->pulses_seen;
-        save_progress(b);                  /* no erase: it is only a program, which the supply still lasts for */
+        save_at_power_cut(b);              /* a program first, an erase when the memory needs one: the backup battery lasts */
     }
 }
 
