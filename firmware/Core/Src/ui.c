@@ -345,12 +345,12 @@ static void on_key(Ui *ui, int key)
     Board *b = ui->board;
     const int manual = b->p.config.mode == MODE_MANUAL;
 
-    if (key == UI_KEY_NONE) {
+    if (key == KEY_NONE) {
         return;
     }
     ui->hal->beep(ui->hal->ctx, 30);
 
-    if (key == UI_KEY_PRINT) {
+    if (key == KEY_PRINT) {
         /* both modes, when no fill runs and no result waits: the total of the board for a few seconds */
         if ((b->state == STATE_IDLE || b->state == STATE_SET)) {
             ui->total_ms = UI_TOTAL_SHOW_MS;
@@ -359,15 +359,15 @@ static void on_key(Ui *ui, int key)
         return;
     }
     ui->total_ms = 0;                       /* any other key puts the usual display back */
-    if (key == UI_KEY_START && !manual) {
+    if (key == KEY_START && !manual) {
         board_key_select(b);                /* the start key of an auto board is its select key: reported to the Smart210 */
 
         return;
     }
-    if (key == UI_KEY_NEXT || key == UI_KEY_PREV || key == UI_KEY_STOP) {
+    if (key == KEY_NEXT || key == KEY_PREV || key == KEY_STOP) {
         return;                             /* not used yet */
     }
-    if (key == UI_KEY_CLEAR && (!manual || (b->state == STATE_IDLE && ui->entry_len == 0) || b->state == STATE_SET)) {
+    if (key == KEY_CLEAR && (!manual || (b->state == STATE_IDLE && ui->entry_len == 0) || b->state == STATE_SET)) {
         board_key_clear(b);   /* auto: reported to the Smart210; manual: drops an amount that waits for the gun */
 
         return;
@@ -375,15 +375,15 @@ static void on_key(Ui *ui, int key)
     if (!manual || b->state != STATE_IDLE) {
         return; /* the keys type an amount only when a manual board waits for one */
     }
-    if (key >= UI_KEY_0 && key <= UI_KEY_9) {
-        entry_add(ui, (char)('0' + (key - UI_KEY_0)));
-    } else if (key == UI_KEY_DOT) {
+    if (key_digit(key) >= 0) {
+        entry_add(ui, (char)('0' + key_digit(key)));
+    } else if (key == KEY_DOT) {
         entry_add(ui, '.');
-    } else if (key == UI_KEY_CLEAR) {
+    } else if (key == KEY_CLEAR) {
         if (ui->entry_len > 0) {
             ui->entry[--ui->entry_len] = 0;
         }
-    } else if (key == UI_KEY_START) {
+    } else if (key == KEY_START) {
         const uint32_t grams = ui_entry_grams(ui);
 
         if (grams == 0 || !board_manual_amount(b, grams)) {

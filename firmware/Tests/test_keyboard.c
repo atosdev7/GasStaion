@@ -483,21 +483,24 @@ static void test_the_masks(void)
     CHECK_EQ((all >> 24) & 0xff, 0x1f);                    /* the first byte: 5 keys */
     CHECK_EQ((all >> 16) & 0xff, 0xff);                    /* the second: 8 keys */
     CHECK_EQ((all >> 8) & 0xff, 0xf0);                     /* the third: 4 keys */
-    CHECK_EQ((int)(sizeof key_map / sizeof key_map[0]), 17);
-    for (i = 0; i < 17; ++i) {
-        int j;
-        int known = 0;
-
-        for (j = 0; j < 17; ++j) {
-            if (key_map[j].mask == masks[i]) {
-                ++known;
-            }
-        }
-        CHECK_EQ(known, 1);                                /* every key is in the map once */
-        for (j = i + 1; j < 17; ++j) {
-            CHECK_EQ(key_map[i].key == key_map[j].key, 0);   /* and gives a code of its own */
-        }
-    }
+    /* the digit keys: the digit of each code, and -1 for the others */
+    CHECK_EQ(key_digit(KEY_0), 0);
+    CHECK_EQ(key_digit(KEY_1), 1);
+    CHECK_EQ(key_digit(KEY_2), 2);
+    CHECK_EQ(key_digit(KEY_3), 3);
+    CHECK_EQ(key_digit(KEY_4), 4);
+    CHECK_EQ(key_digit(KEY_5), 5);
+    CHECK_EQ(key_digit(KEY_6), 6);
+    CHECK_EQ(key_digit(KEY_7), 7);
+    CHECK_EQ(key_digit(KEY_8), 8);
+    CHECK_EQ(key_digit(KEY_9), 9);
+    CHECK_EQ(key_digit(KEY_DOT), -1);
+    CHECK_EQ(key_digit(KEY_CLEAR), -1);
+    CHECK_EQ(key_digit(KEY_PRINT), -1);
+    CHECK_EQ(key_digit(KEY_NONE), -1);
+    CHECK_EQ(key_digit(KEY_1 | KEY_2), -1);
+    CHECK_EQ(key_digit(0x00000800), -1);
+    CHECK_EQ(key_digit(0x00400000 << 1), -1);
 }
 
 /* a key: 1 and 2 scans are nothing, the third gives the code, held gives nothing more, up for three scans and down again gives it again */
@@ -506,49 +509,49 @@ static void test_a_press(void)
     int i;
 
     forget_keys();
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_NONE);            /* KEY_5 is bit 0 of the second byte */
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_5);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_NONE);            /* KEY_5 is bit 0 of the second byte */
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_5);
     for (i = 0; i < 10; ++i) {
-        CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_NONE);        /* held */
+        CHECK_EQ(scan_keys(0, 0x01, 0), KEY_NONE);        /* held */
     }
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x01, 0), UI_KEY_5);               /* pressed again */
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x01, 0), KEY_5);               /* pressed again */
 }
 
 /* a bounce of the contact gives nothing, when the key goes down and when it goes up */
 static void test_bounce(void)
 {
     forget_keys();
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);            /* on, off, on, on, on: the code comes with the third scan in a row */
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_6);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);            /* on, off, on, on, on: the code comes with the third scan in a row */
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_6);
     /* held, one scan off and on again: it is the same press */
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0x02, 0), UI_KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x02, 0), KEY_NONE);
     /* a single scan of a key (noise) is nothing */
     forget_keys();
-    CHECK_EQ(scan_keys(0, 0, 0x10), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
-    CHECK_EQ(scan_keys(0, 0, 0), UI_KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0x10), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0, 0), KEY_NONE);
     /* a key that shows in every other scan is not pressed */
     forget_keys();
     {
         int i, given = 0;
 
         for (i = 0; i < 20; ++i) {
-            given += scan_keys(0, i % 2 ? 0x04 : 0, 0) != UI_KEY_NONE;
+            given += scan_keys(0, i % 2 ? 0x04 : 0, 0) != KEY_NONE;
         }
         CHECK_EQ(given, 0);
     }
@@ -558,10 +561,10 @@ static void test_bounce(void)
 static void test_every_key(void)
 {
     static const struct { uint8_t b0, b1, b2; int key; } keys[17] = {
-        {0, 0, 0x10, UI_KEY_1}, {0, 0, 0x20, UI_KEY_2}, {0, 0, 0x40, UI_KEY_3}, {0, 0, 0x80, UI_KEY_4},
-        {0, 0x01, 0, UI_KEY_5}, {0, 0x02, 0, UI_KEY_6}, {0, 0x04, 0, UI_KEY_7}, {0, 0x08, 0, UI_KEY_8}, {0, 0x10, 0, UI_KEY_9}, {0, 0x20, 0, UI_KEY_0},
-        {0, 0x40, 0, UI_KEY_DOT}, {0, 0x80, 0, UI_KEY_CLEAR},
-        {0x01, 0, 0, UI_KEY_NEXT}, {0x02, 0, 0, UI_KEY_PRINT}, {0x04, 0, 0, UI_KEY_START}, {0x08, 0, 0, UI_KEY_STOP}, {0x10, 0, 0, UI_KEY_PREV}
+        {0, 0, 0x10, KEY_1}, {0, 0, 0x20, KEY_2}, {0, 0, 0x40, KEY_3}, {0, 0, 0x80, KEY_4},
+        {0, 0x01, 0, KEY_5}, {0, 0x02, 0, KEY_6}, {0, 0x04, 0, KEY_7}, {0, 0x08, 0, KEY_8}, {0, 0x10, 0, KEY_9}, {0, 0x20, 0, KEY_0},
+        {0, 0x40, 0, KEY_DOT}, {0, 0x80, 0, KEY_CLEAR},
+        {0x01, 0, 0, KEY_NEXT}, {0x02, 0, 0, KEY_PRINT}, {0x04, 0, 0, KEY_START}, {0x08, 0, 0, KEY_STOP}, {0x10, 0, 0, KEY_PREV}
     };
     int i, j;
 
@@ -572,15 +575,15 @@ static void test_every_key(void)
         for (j = 0; j < 4; ++j) {
             got[j] = scan_keys(keys[i].b0, keys[i].b1, keys[i].b2);
         }
-        CHECK_EQ(got[0], UI_KEY_NONE);
-        CHECK_EQ(got[1], UI_KEY_NONE);
+        CHECK_EQ(got[0], KEY_NONE);
+        CHECK_EQ(got[1], KEY_NONE);
         CHECK_EQ(got[2], keys[i].key);
-        CHECK_EQ(got[3], UI_KEY_NONE);
+        CHECK_EQ(got[3], KEY_NONE);
     }
     /* the bits that are not keys (the low 3 bits of the first byte's top, the low nibble of the third) are never a key */
     forget_keys();
     for (j = 0; j < 8; ++j) {
-        CHECK_EQ(scan_keys(0xe0, 0, 0x0f), UI_KEY_NONE);
+        CHECK_EQ(scan_keys(0xe0, 0, 0x0f), KEY_NONE);
     }
 }
 
@@ -594,39 +597,42 @@ static void test_two_keys_together(void)
     scan_keys(0, 0x10, 0x10);
     a = scan_keys(0, 0x10, 0x10);
     b = scan_keys(0, 0x10, 0x10);
-    CHECK_EQ(a, UI_KEY_1);
-    CHECK_EQ(b, UI_KEY_9);
-    CHECK_EQ(scan_keys(0, 0x10, 0x10), UI_KEY_NONE);
+    CHECK_EQ(a, KEY_1);
+    CHECK_EQ(b, KEY_9);
+    CHECK_EQ(scan_keys(0, 0x10, 0x10), KEY_NONE);
 
     /* all 17 at once: all 17 codes, once each, in the order of the map */
     forget_keys();
     {
-        int seen[UI_KEY_STOP + 1] = {0};
+        uint32_t seen = 0;
         int i, total = 0;
+        int last = 0;
 
         for (i = 0; i < 40; ++i) {
             const int k = scan_keys(0x1f, 0xff, 0xf0);
 
-            if (k != UI_KEY_NONE) {
-                ++seen[k];
+            if (k != KEY_NONE) {
+                CHECK_EQ(k & (k - 1), 0);               /* one key at a time */
+                CHECK_EQ(k > last, 1);                   /* the lowest bit first */
+                CHECK_EQ(seen & (uint32_t)k, 0);         /* each once */
+                seen |= (uint32_t)k;
+                last = k;
                 ++total;
             }
         }
         CHECK_EQ(total, 17);
-        for (i = UI_KEY_0; i <= UI_KEY_STOP; ++i) {
-            CHECK_EQ(seen[i], 1);
-        }
+        CHECK_EQ(seen, KEY_BITS);
     }
 
     /* a key that is let go before its code was given is forgotten */
     forget_keys();
     scan_keys(0, 0x10, 0x10);
     scan_keys(0, 0x10, 0x10);
-    CHECK_EQ(scan_keys(0, 0x10, 0x10), UI_KEY_1);
+    CHECK_EQ(scan_keys(0, 0x10, 0x10), KEY_1);
     scan_keys(0, 0x10, 0);
     scan_keys(0, 0x10, 0);
     scan_keys(0, 0x10, 0);
-    CHECK_EQ(scan_keys(0, 0x10, 0), UI_KEY_NONE);
+    CHECK_EQ(scan_keys(0, 0x10, 0), KEY_NONE);
 }
 
 /* the old logic gave the keys as byte0 << 24 | byte1 << 16 | byte2 << 8 when three scans in a row had them (the shifts push the value of the scan before out again, so
